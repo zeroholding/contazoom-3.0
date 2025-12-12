@@ -1,0 +1,30 @@
+# Database (Local Docker)
+DATABASE_URL="postgresql://contazoom:contazoom123@127.0.0.1:5433/contazoom?schema=public"
+
+# Redis (Local Docker)
+REDIS_URL="redis://127.0.0.1:6379"
+REDIS_ENABLED="true"
+
+# JWT Authentication
+JWT_SECRET="test-jwt-secret-key"
+
+# API URL (usando backend remoto)
+NEXT_PUBLIC_API_URL="https://project-backend-rjoh.onrender.com"
+
+# Mercado Livre API (placeholders)
+MELI_CLIENT_ID="test-meli-client-id"
+MELI_CLIENT_SECRET="test-meli-client-secret"
+MELI_REDIRECT_URI="http://127.0.0.1:3000/api/meli/callback"
+
+# Shopee API (placeholders)
+SHOPEE_CLIENT_ID="test-shopee-client-id"
+SHOPEE_CLIENT_SECRET="test-shopee-client-secret"
+SHOPEE_REDIRECT_URI="http://127.0.0.1:3000/api/shopee/callback"
+
+# Bling API (placeholders)
+BLING_CLIENT_ID="test-bling-client-id"
+BLING_CLIENT_SECRET="test-bling-client-secret"
+BLING_REDIRECT_URI="http://127.0.0.1:3000/api/bling/callback"
+
+# Cron Jobs
+CRON_SECRET="test-cron-secret-key"
