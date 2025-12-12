@@ -14,8 +14,7 @@ export async function GET(req: NextRequest) {
     "";
 
   // Se não há backend configurado ou é localhost, usar SSE local
-  const isLocalMode = !backendUrl || backendUrl.includes("localhost") || backendUrl.includes("127.0.0.1");
-
+  const isLocalMode = process.env.SYNC_PROCESS_MODE === "local" || (!backendUrl || backendUrl.includes("localhost") || backendUrl.includes("127.0.0.1"));
   if (isLocalMode) {
     console.log(`[SSE Local] Usando SSE local para progresso de sincronização`);
 
