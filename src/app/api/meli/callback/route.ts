@@ -28,10 +28,6 @@ export async function GET(req: NextRequest) {
     `meli_oauth_state=; Path=/; Max-Age=0; SameSite=Lax;${secure ? " Secure;" : ""} HttpOnly${domain ? `; Domain=${domain}` : ""}`
   );
 
-  console.log("----------------------------------------------")
-  console.log(redirectUri)
-  console.log(cookieState, state, code)
-
   if (!code || !state || !cookieState || state !== cookieState) {
     return new NextResponse("Invalid state/code", { status: 400, headers });
   }
