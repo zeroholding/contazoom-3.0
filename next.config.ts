@@ -1,4 +1,3 @@
-/** @type {import('next').NextConfig} */
 import type { NextConfig } from "next";
 
 const rawStaticTimeout = Number(process.env.NEXT_STATIC_PAGE_GENERATION_TIMEOUT ?? 600);
