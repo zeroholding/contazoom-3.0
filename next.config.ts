@@ -45,6 +45,7 @@ const nextConfig: NextConfig & { turbopack?: { root?: string } } = {
       ],
     },
   }),
+  output: 'standalone',
 };
 
 export default nextConfig;
