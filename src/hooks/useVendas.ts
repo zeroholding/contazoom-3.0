@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { useVendasSyncProgress } from "@/hooks/useVendasSyncProgress";
+import { useVendasSyncProgress, VendasSyncProgress } from "@/hooks/useVendasSyncProgress";
 import {
   loadVendasFromCache,
   saveVendasToCache
@@ -98,6 +98,7 @@ export function useVendas(
   const [isTableLoading, setIsTableLoading] = useState(false);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [syncProgress, setSyncProgress] = useState({ fetched: 0, expected: 0 });
+  const [mirrorProgress, setMirrorProgress] = useState<VendasSyncProgress | null>(null);
   const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
   
   // Hook para progresso em tempo real
@@ -113,6 +114,10 @@ export function useVendas(
       disconnect();
     };
   }, [autoConnectSSE, platform, connect, disconnect]);
+
+  useEffect(() => {
+    setMirrorProgress(progress)
+  }, [progress])
 
   // Ref para rastrear se sync_complete já foi processado
   const syncCompleteProcessedRef = useRef(false);
@@ -175,8 +180,8 @@ export function useVendas(
 
       if (progress.type === "sync_progress" || progress.type === "sync_continue") {
         // Atualizar progresso usando fetched/expected ou current/total
-        const fetched = progress.fetched || progress.current || 0;
-        const expected = progress.expected || progress.total || 0;
+        const fetched = progress.current || progress.fetched || 0;
+        const expected = progress.total || progress.expected || 0;
         
         setSyncProgress({
           fetched,
@@ -572,7 +577,7 @@ export function useVendas(
     reloadVendas: loadVendasFromDatabase, // Exportar função de reload
     // Novas propriedades para progresso em tempo real
     isConnected,
-    progress,
+    progress: mirrorProgress,
     connect,
     disconnect,
   };

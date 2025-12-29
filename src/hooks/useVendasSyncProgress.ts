@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { API_CONFIG } from "@/lib/api-config";
 
-interface VendasSyncProgress {
-  type: "connected" | "heartbeat" | "sync_start" | "sync_progress" | "sync_download_progress" | "sync_download_complete" | "sync_save_start" | "sync_save_progress" | "sync_save_complete" | "sync_complete" | "sync_error" | "sync_warning" | "sync_debug" | "sync_continue";
+export interface VendasSyncProgress {
+  type: "connected" | "heartbeat" | "sync_start" | "sync_progress" | "sync_download_progress" | "sync_download_complete" | "sync_save_started" | "sync_save_starting" | "sync_save_progress" | "sync_save_complete" | "sync_complete" | "sync_error" | "sync_warning" | "sync_debug" | "sync_continue";
   message: string;
   current?: number;
   total?: number;

@@ -48,9 +48,18 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { sendProgressToUser, closeUserConnections } from "@/lib/sse-progress";
 import { invalidateVendasCache } from "@/lib/cache";
 import { smartRefreshMeliAccountToken } from "@/lib/meli";
-import { enqueueSales, getQueueStats, type QueuedSale } from "@/lib/redis-queue";
+import {
+  enqueueSales,
+  getQueueStats,
+  type QueuedSale,
+} from "@/lib/redis-queue";
 import { processAllUserSales } from "@/lib/sync-worker";
 import { checkRedisHealth } from "@/lib/redis";
+import { extractOrderIdFromPayload } from "@/utils/sync-prepare-sale-data";
+import { toFiniteNumber } from "@/utils/numeric-functions";
+import { roundCurrency, truncateJsonData, truncateString } from "@/utils/string-utils";
+import { calculateMargemContribuicao } from "@/utils/calc-margem-contribuicao";
+import { adsTags, mapListingTypeToExposure } from "@/utils/meli-functions";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 60 segundos (Vercel Pro)
@@ -61,7 +70,7 @@ const MELI_API_BASE =
 const PAGE_LIMIT = 50;
 const PAGE_FETCH_CONCURRENCY = Math.min(
   5,
-  Math.max(1, Number(process.env.MELI_PAGE_FETCH_CONCURRENCY ?? "2") || 2),
+  Math.max(1, Number(process.env.MELI_PAGE_FETCH_CONCURRENCY ?? "2") || 2)
 );
 const MAX_OFFSET = 9950; // Limite seguro antes do 10k da API
 
@@ -95,30 +104,6 @@ type MeliOrderFreight = {
   adjustmentSource: string | null;
 };
 
-function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string" && value.trim() !== "") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-function roundCurrency(v: number): number {
-  const r = Math.round((v + Number.EPSILON) * 100) / 100;
-  return Object.is(r, -0) ? 0 : r;
-}
-
-function truncateString(str: string | null | undefined, maxLength: number): string {
-  if (!str) return "";
-  return str.length > maxLength ? str.substring(0, maxLength) : str;
-}
-
-// Preserve complete JSON payloads (no truncation to keep shipping data intact)
-function truncateJsonData<T>(data: T): T {
-  return data === undefined ? (null as T) : data;
-}
-
 function extractOrderDate(order: unknown): Date | null {
   if (!order || typeof order !== "object") return null;
   const rawDate =
@@ -131,26 +116,41 @@ function extractOrderDate(order: unknown): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-
 // Função para debug - identificar qual campo está causando o problema
 function debugFieldLengths(data: any, orderId: string) {
   const fieldLengths: { [key: string]: number } = {};
 
   // Verificar todos os campos de string
   const stringFields = [
-    'orderId', 'userId', 'meliAccountId', 'status', 'conta', 'titulo', 'sku',
-    'comprador', 'logisticType', 'envioMode', 'shippingStatus', 'shippingId',
-    'exposicao', 'tipoAnuncio', 'ads', 'plataforma', 'canal'
+    "orderId",
+    "userId",
+    "meliAccountId",
+    "status",
+    "conta",
+    "titulo",
+    "sku",
+    "comprador",
+    "logisticType",
+    "envioMode",
+    "shippingStatus",
+    "shippingId",
+    "exposicao",
+    "tipoAnuncio",
+    "ads",
+    "plataforma",
+    "canal",
   ];
 
-  stringFields.forEach(field => {
-    if (data[field] && typeof data[field] === 'string') {
+  stringFields.forEach((field) => {
+    if (data[field] && typeof data[field] === "string") {
       fieldLengths[field] = data[field].length;
     }
   });
 
   // Log apenas se algum campo for muito longo
-  const longFields = Object.entries(fieldLengths).filter(([_, length]) => length > 100);
+  const longFields = Object.entries(fieldLengths).filter(
+    ([_, length]) => length > 100
+  );
   if (longFields.length > 0) {
     console.log(`[DEBUG] Venda ${orderId} - Campos longos:`, longFields);
   }
@@ -182,23 +182,6 @@ function convertLogisticTypeName(logisticType: string | null): string | null {
   return logisticType;
 }
 
-function mapListingTypeToExposure(listingType: string | null): string | null {
-  if (!listingType) return null;
-  const normalized = listingType.toLowerCase();
-
-  // gold_pro é Premium
-  if (normalized === "gold_pro") return "Premium";
-
-  // gold_special e outros tipos gold são Clássico
-  if (normalized.startsWith("gold")) return "Clássico";
-
-  // Silver é Clássico
-  if (normalized === "silver") return "Clássico";
-
-  // Outros tipos defaultam para Clássico
-  return "Clássico";
-}
-
 function calculateFreightAdjustment(
   logisticType: string | null,
   unitPrice: number | null,
@@ -211,7 +194,8 @@ function calculateFreightAdjustment(
   if (!logisticType) return { adjustedCost: null, adjustmentSource: null };
 
   // order_cost total = unitário * quantidade  (equivalente ao SQL)
-  const orderCost = unitPrice !== null && quantity ? unitPrice * quantity : null;
+  const orderCost =
+    unitPrice !== null && quantity ? unitPrice * quantity : null;
 
   const freteAdjust = calcularFreteAdjust({
     shipment_logistic_type: logisticType,
@@ -232,20 +216,26 @@ function calculateFreightAdjustment(
   const adj = roundCurrency(freteAdjust);
 
   const label =
-    logisticType === 'self_service' ? 'FLEX' :
-      logisticType === 'drop_off' ? 'Correios' :
-        logisticType === 'xd_drop_off' ? 'Agência' :
-          logisticType === 'fulfillment' ? 'FULL' :
-            logisticType === 'cross_docking' ? 'Coleta' : logisticType;
+    logisticType === "self_service"
+      ? "FLEX"
+      : logisticType === "drop_off"
+      ? "Correios"
+      : logisticType === "xd_drop_off"
+      ? "Agência"
+      : logisticType === "fulfillment"
+      ? "FULL"
+      : logisticType === "cross_docking"
+      ? "Coleta"
+      : logisticType;
 
   return { adjustedCost: adj, adjustmentSource: label };
 }
 
-
 function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   const o = order ?? {};
   const s = shipment ?? {};
-  const orderShipping = (o && typeof o.shipping === "object") ? o.shipping ?? {} : {};
+  const orderShipping =
+    o && typeof o.shipping === "object" ? o.shipping ?? {} : {};
 
   const shippingMode: string | null =
     typeof orderShipping.mode === "string" ? orderShipping.mode : null;
@@ -255,10 +245,14 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
 
   const logisticTypeFallback = shippingMode;
   const logisticType = logisticTypeRaw ?? logisticTypeFallback ?? null;
-  const logisticTypeSource: FreightSource =
-    logisticTypeRaw ? "shipment" : logisticTypeFallback ? "order" : null;
+  const logisticTypeSource: FreightSource = logisticTypeRaw
+    ? "shipment"
+    : logisticTypeFallback
+    ? "order"
+    : null;
 
-  const shipOpt = (s && typeof s.shipping_option === "object") ? s.shipping_option ?? {} : {};
+  const shipOpt =
+    s && typeof s.shipping_option === "object" ? s.shipping_option ?? {} : {};
 
   const baseCost = toFiniteNumber(s.base_cost);
   const optCost = toFiniteNumber((shipOpt as any).cost);
@@ -304,7 +298,9 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   }
 
   const diffBaseList =
-    baseCost !== null && listCost !== null ? roundCurrency(baseCost - listCost) : null;
+    baseCost !== null && listCost !== null
+      ? roundCurrency(baseCost - listCost)
+      : null;
 
   const convertedLogisticType = convertLogisticTypeName(logisticType);
   const { adjustedCost, adjustmentSource } = calculateFreightAdjustment(
@@ -337,44 +333,6 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
     diffBaseList,
     adjustedCost,
     adjustmentSource,
-  };
-}
-
-/**
- * Calcula a margem de contribuição seguindo a fórmula:
- * Margem = Valor Total + Taxa Plataforma + Frete - CMV
- * 
- * @param valorTotal - Valor total da venda (POSITIVO)
- * @param taxaPlataforma - Taxa da plataforma (JÁ DEVE VIR NEGATIVA)
- * @param frete - Valor do frete (pode ser + ou -)
- * @param cmv - Custo da Mercadoria Vendida (POSITIVO)
- * @returns Margem de contribuição e se é margem real ou receita líquida
- */
-function calculateMargemContribuicao(
-  valorTotal: number,
-  taxaPlataforma: number | null,
-  frete: number,
-  cmv: number | null
-): { valor: number; isMargemReal: boolean } {
-  // Valores base (taxa já vem negativa, frete pode ser + ou -)
-  const taxa = taxaPlataforma || 0;
-
-  // Se temos CMV, calculamos a margem de contribuição real
-  // Fórmula: Margem = Valor Total + Taxa Plataforma + Frete - CMV
-  if (cmv !== null && cmv !== undefined && cmv > 0) {
-    const margemContribuicao = valorTotal + taxa + frete - cmv;
-    return {
-      valor: roundCurrency(margemContribuicao),
-      isMargemReal: true
-    };
-  }
-
-  // Se não temos CMV, retornamos a receita líquida
-  // Receita Líquida = Valor Total + Taxa Plataforma + Frete
-  const receitaLiquida = valorTotal + taxa + frete;
-  return {
-    valor: roundCurrency(receitaLiquida),
-    isMargemReal: false
   };
 }
 
@@ -421,7 +379,7 @@ type DateRangeWindow = {
 type SyncWindow = {
   from: Date;
   to: Date;
-  mode: 'initial' | 'historical' | 'manual';
+  mode: "initial" | "historical" | "manual";
 };
 
 type SkuCacheEntry = {
@@ -467,7 +425,7 @@ function isRetryableError(status: number): boolean {
  * Aguarda um tempo específico (exponential backoff)
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -494,12 +452,14 @@ async function fetchWithRetry(
 
       // Erros de autenticação (401, 403) não devem ser retryable - falhar imediatamente
       if (response.status === 401 || response.status === 403) {
-        console.error(`[Sync] Erro de autenticação ${response.status} - Token pode estar inválido`);
+        console.error(
+          `[Sync] Erro de autenticação ${response.status} - Token pode estar inválido`
+        );
         if (userId) {
           sendProgressToUser(userId, {
             type: "sync_warning",
             message: `Erro de autenticação ${response.status}. Verifique se a conta está conectada corretamente.`,
-            errorCode: response.status.toString()
+            errorCode: response.status.toString(),
           });
         }
         return response; // Retornar resposta de erro para tratamento específico
@@ -507,7 +467,11 @@ async function fetchWithRetry(
 
       // Se erro não-retryable (exceto auth), retorna imediatamente
       if (!isRetryableError(response.status)) {
-        console.warn(`[Sync] Erro HTTP ${response.status} (não-retryable) em ${url.substring(0, 80)}...`);
+        console.warn(
+          `[Sync] Erro HTTP ${
+            response.status
+          } (não-retryable) em ${url.substring(0, 80)}...`
+        );
         return response;
       }
 
@@ -522,7 +486,9 @@ async function fetchWithRetry(
 
       console.warn(
         `[Retry] Erro ${response.status} em ${url.substring(0, 80)}... ` +
-        `Tentativa ${attempt + 1}/${maxRetries}. Aguardando ${Math.round(totalDelay)}ms`
+          `Tentativa ${attempt + 1}/${maxRetries}. Aguardando ${Math.round(
+            totalDelay
+          )}ms`
       );
 
       // Enviar aviso via SSE apenas na primeira tentativa
@@ -530,18 +496,20 @@ async function fetchWithRetry(
         sendProgressToUser(userId, {
           type: "sync_warning",
           message: `Erro temporário ${response.status} da API do Mercado Livre. Tentando novamente...`,
-          errorCode: response.status.toString()
+          errorCode: response.status.toString(),
         });
       }
 
       // Aguardar antes de tentar novamente
       await sleep(totalDelay);
-
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // Log do erro
-      console.error(`[Retry] Erro na requisição (tentativa ${attempt + 1}/${maxRetries}):`, lastError.message);
+      console.error(
+        `[Retry] Erro na requisição (tentativa ${attempt + 1}/${maxRetries}):`,
+        lastError.message
+      );
 
       // Se é a última tentativa, lançar erro
       if (attempt === maxRetries - 1) {
@@ -549,7 +517,7 @@ async function fetchWithRetry(
           sendProgressToUser(userId, {
             type: "sync_warning",
             message: `Erro de conexão após ${maxRetries} tentativas: ${lastError.message}`,
-            errorCode: "NETWORK_ERROR"
+            errorCode: "NETWORK_ERROR",
           });
         }
         throw lastError;
@@ -562,7 +530,9 @@ async function fetchWithRetry(
 
       console.warn(
         `[Retry] Erro de rede em ${url.substring(0, 80)}... ` +
-        `Tentativa ${attempt + 1}/${maxRetries}. Aguardando ${Math.round(totalDelay)}ms`
+          `Tentativa ${attempt + 1}/${maxRetries}. Aguardando ${Math.round(
+            totalDelay
+          )}ms`
       );
 
       // Enviar aviso via SSE apenas na primeira tentativa
@@ -570,7 +540,7 @@ async function fetchWithRetry(
         sendProgressToUser(userId, {
           type: "sync_warning",
           message: `Erro de conexão. Tentando novamente...`,
-          errorCode: "NETWORK_ERROR"
+          errorCode: "NETWORK_ERROR",
         });
       }
 
@@ -583,7 +553,7 @@ async function fetchWithRetry(
     return lastResponse; // Retornar última resposta de erro
   }
 
-  throw lastError || new Error('Falha após múltiplas tentativas');
+  throw lastError || new Error("Falha após múltiplas tentativas");
 }
 
 async function fetchOrdersPage({
@@ -624,8 +594,9 @@ async function fetchOrdersPage({
     console.error(`[Sync] ⚠️ Erro ao buscar página ${pageNumber}:`, error);
     sendProgressToUser(userId, {
       type: "sync_warning",
-      message: `Erro ao buscar página ${pageNumber}: ${error instanceof Error ? error.message : "Falha desconhecida"
-        }`,
+      message: `Erro ao buscar página ${pageNumber}: ${
+        error instanceof Error ? error.message : "Falha desconhecida"
+      }`,
       errorCode: "PAGE_FETCH_ERROR",
     });
     return result;
@@ -638,13 +609,20 @@ async function fetchOrdersPage({
   }
 
   result.total =
-    typeof payload?.paging?.total === "number" && Number.isFinite(payload.paging.total)
+    typeof payload?.paging?.total === "number" &&
+    Number.isFinite(payload.paging.total)
       ? payload.paging.total
       : null;
 
   if (!response.ok) {
-    const message = typeof payload?.message === "string" ? payload.message : `Status ${response.status}`;
-    console.error(`[Sync] ⚠️ Erro HTTP ${response.status} ao buscar página ${pageNumber}:`, message);
+    const message =
+      typeof payload?.message === "string"
+        ? payload.message
+        : `Status ${response.status}`;
+    console.error(
+      `[Sync] ⚠️ Erro HTTP ${response.status} ao buscar página ${pageNumber}:`,
+      message
+    );
     if (response.status === 400) {
       console.log(`[Sync] ⚠️ Limite da API atingido em offset ${offset}`);
     }
@@ -663,8 +641,13 @@ async function fetchOrdersPage({
   }
 
   console.log(
-    `[Sync] 📄 Página ${pageNumber}: ${orders.length} vendas (offset ${offset})${result.total ? ` (${Math.min(offset + orders.length, result.total)}/${result.total})` : ""
-    }`,
+    `[Sync] 📄 Página ${pageNumber}: ${
+      orders.length
+    } vendas (offset ${offset})${
+      result.total
+        ? ` (${Math.min(offset + orders.length, result.total)}/${result.total})`
+        : ""
+    }`
   );
 
   // OTIMIZA��O: Fetch shipments em batches menores para evitar rate limiting
@@ -681,7 +664,12 @@ async function fetchOrdersPage({
           return typeof order?.shipping === "object" ? order.shipping : null;
         }
         try {
-          const res = await fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}`, { headers }, 3, userId);
+          const res = await fetchWithRetry(
+            `${MELI_API_BASE}/shipments/${shippingId}`,
+            { headers },
+            3,
+            userId
+          );
           if (!res.ok) return null;
           return await res.json();
         } catch {
@@ -696,9 +684,10 @@ async function fetchOrdersPage({
       if (result.status === "fulfilled" && result.value) {
         shipments[originalIdx] = result.value;
       } else {
-        shipments[originalIdx] = typeof orders[originalIdx]?.shipping === "object"
-          ? orders[originalIdx].shipping
-          : null;
+        shipments[originalIdx] =
+          typeof orders[originalIdx]?.shipping === "object"
+            ? orders[originalIdx].shipping
+            : null;
       }
     });
   }
@@ -733,33 +722,42 @@ async function fetchAllOrdersForAccount(
   headers: Record<string, string>,
   userId: string,
   quickMode: boolean = false, // Novo parâmetro para controle de modo
-  fullSync: boolean = false, // Novo parâmetro para sincronização completa desde 01/2025
+  fullSync: boolean = false // Novo parâmetro para sincronização completa desde 01/2025
 ): Promise<FetchOrdersResult> {
   const startTime = Date.now();
   // MUDANÇA CRÍTICA: Em quickMode, buscar em 20s e deixar 40s para salvar no banco (total 60s)
   // Salvamento de 500 vendas ~5s, mas com margem de segurança para contas grandes
   // Em background mode, pode usar até 45s de busca (deixa 15s para salvar ~1500 vendas)
   // OTIMIZA��O: 30s fetch + 20s save = 50s total (margem 10s para 60s timeout)
-  const MAX_EXECUTION_TIME = 30000; // SEMPRE 30 segundos
+  // const MAX_EXECUTION_TIME = 30000; // SEMPRE 30 segundos
+  const MAX_EXECUTION_TIME = 3000000; // SEMPRE 30 minutos
   const results: MeliOrderPayload[] = [];
   const logisticStats = new Map<string, number>();
   let forcedStop = false; // Declarar forcedStop localmente
 
   const modoTexto = fullSync
-    ? 'FULL SYNC (buscar TODAS as vendas)'
-    : (quickMode ? 'QUICK (20s busca + 40s salvar)' : 'BACKGROUND (45s busca + 15s salvar)');
-  console.log(`[Sync] ?? Iniciando busca de vendas para conta ${account.ml_user_id} (${account.nickname}) - Modo: ${modoTexto}`);
+    ? "FULL SYNC (buscar TODAS as vendas)"
+    : quickMode
+    ? "QUICK (20s busca + 40s salvar)"
+    : "BACKGROUND (45s busca + 15s salvar)";
+  console.log(
+    `[Sync] ?? Iniciando busca de vendas para conta ${account.ml_user_id} (${account.nickname}) - Modo: ${modoTexto}`
+  );
 
   // Verificar venda mais antiga já sincronizada para continuar de onde parou
   const oldestSyncedOrder = await prisma.meliVenda.findFirst({
     where: { meliAccountId: account.id },
-    orderBy: { dataVenda: 'asc' },
-    select: { dataVenda: true }
+    orderBy: { dataVenda: "asc" },
+    select: { dataVenda: true },
   });
 
   const oldestSyncedDate = oldestSyncedOrder?.dataVenda;
   if (oldestSyncedDate) {
-    console.log(`[Sync] 📅 Venda mais antiga no banco: ${oldestSyncedDate.toISOString().split('T')[0]}`);
+    console.log(
+      `[Sync] 📅 Venda mais antiga no banco: ${
+        oldestSyncedDate.toISOString().split("T")[0]
+      }`
+    );
   } else {
     console.log(`[Sync] 📅 Primeira sincronização - buscando desde o início`);
   }
@@ -799,7 +797,7 @@ async function fetchAllOrdersForAccount(
           total = discoveredTotal;
           maxOffsetToFetch = Math.min(MAX_OFFSET, discoveredTotal);
           console.log(
-            `[Sync] ?? Conta ${account.ml_user_id}: total estimado ${total} vendas`,
+            `[Sync] ?? Conta ${account.ml_user_id}: total estimado ${total} vendas`
           );
         }
 
@@ -810,10 +808,12 @@ async function fetchAllOrdersForAccount(
         for (const payload of pageResult.orders) {
           results.push(payload);
           const logisticTypeRaw =
-            payload.freight.logisticType || payload.freight.shippingMode || "sem_tipo";
+            payload.freight.logisticType ||
+            payload.freight.shippingMode ||
+            "sem_tipo";
           logisticStats.set(
             logisticTypeRaw,
-            (logisticStats.get(logisticTypeRaw) || 0) + 1,
+            (logisticStats.get(logisticTypeRaw) || 0) + 1
           );
 
           const createdAt = extractOrderDate(payload.order);
@@ -824,8 +824,11 @@ async function fetchAllOrdersForAccount(
 
         sendProgressToUser(userId, {
           type: "sync_progress",
-          message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${results.length
-            }/${discoveredTotal ?? results.length} vendas baixadas (p�gina ${pageNumber})`,
+          message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${
+            results.length
+          }/${
+            discoveredTotal ?? results.length
+          } vendas baixadas (p�gina ${pageNumber})`,
           current: results.length,
           total: discoveredTotal ?? results.length,
           fetched: results.length,
@@ -835,11 +838,15 @@ async function fetchAllOrdersForAccount(
           page: pageNumber,
         });
       } catch (error) {
-        console.error(`[Sync] ?? Erro inesperado na p�gina ${pageNumber}:`, error);
+        console.error(
+          `[Sync] ?? Erro inesperado na p�gina ${pageNumber}:`,
+          error
+        );
         sendProgressToUser(userId, {
           type: "sync_warning",
-          message: `Erro inesperado na p�gina ${pageNumber}: ${error instanceof Error ? error.message : "Falha desconhecida"
-            }`,
+          message: `Erro inesperado na p�gina ${pageNumber}: ${
+            error instanceof Error ? error.message : "Falha desconhecida"
+          }`,
           errorCode: "PAGE_FETCH_ERROR",
         });
       }
@@ -850,10 +857,17 @@ async function fetchAllOrdersForAccount(
   };
 
   // PASSO 1: Buscar vendas recentes (paginação normal)
-  while (activePages.size < PAGE_FETCH_CONCURRENCY && nextOffset < Math.min(MAX_OFFSET, maxOffsetToFetch)) {
+  while (
+    activePages.size < PAGE_FETCH_CONCURRENCY &&
+    nextOffset < Math.min(MAX_OFFSET, maxOffsetToFetch)
+  ) {
     // Verificar tempo antes de continuar
     if (Date.now() - startTime > MAX_EXECUTION_TIME) {
-      console.log(`[Sync] ⏱️ Tempo limite atingido (${Math.round((Date.now() - startTime) / 1000)}s) - parando busca de vendas recentes`);
+      console.log(
+        `[Sync] ⏱️ Tempo limite atingido (${Math.round(
+          (Date.now() - startTime) / 1000
+        )}s) - parando busca de vendas recentes`
+      );
       forcedStop = true;
       break;
     }
@@ -891,7 +905,11 @@ async function fetchAllOrdersForAccount(
   const shouldFetchHistory = !reachedLimit && timeRemaining > 10000;
 
   if (shouldFetchHistory && (total > results.length || oldestSyncedDate)) {
-    console.log(`[Sync] 🔄 Buscando vendas históricas (tempo restante: ${Math.round(timeRemaining / 1000)}s)...`);
+    console.log(
+      `[Sync] 🔄 Buscando vendas históricas (tempo restante: ${Math.round(
+        timeRemaining / 1000
+      )}s)...`
+    );
 
     // Determinar ponto de partida para busca histórica
     let searchStartDate: Date;
@@ -900,7 +918,11 @@ async function fetchAllOrdersForAccount(
       // Continuar de onde a última sincronização parou
       searchStartDate = new Date(oldestSyncedDate);
       searchStartDate.setDate(searchStartDate.getDate() - 1); // Um dia antes da última sincronizada
-      console.log(`[Sync] 📅 Continuando busca histórica a partir de ${searchStartDate.toISOString().split('T')[0]}`);
+      console.log(
+        `[Sync] 📅 Continuando busca histórica a partir de ${
+          searchStartDate.toISOString().split("T")[0]
+        }`
+      );
     } else {
       // Primeira vez: começar da venda mais antiga das recentes
       const fallbackOldest =
@@ -908,7 +930,11 @@ async function fetchAllOrdersForAccount(
           ? extractOrderDate(results[results.length - 1].order) ?? new Date()
           : new Date();
       searchStartDate = oldestOrderDate ?? fallbackOldest;
-      console.log(`[Sync] 📅 Primeira busca histórica a partir de ${searchStartDate.toISOString().split('T')[0]}`);
+      console.log(
+        `[Sync] 📅 Primeira busca histórica a partir de ${
+          searchStartDate.toISOString().split("T")[0]
+        }`
+      );
     }
 
     // Buscar vendas mais antigas em blocos de 1 mês
@@ -918,19 +944,33 @@ async function fetchAllOrdersForAccount(
     currentMonthStart.setMonth(currentMonthStart.getMonth() - 1); // Começar do mês anterior
 
     // NOVA L�"GICA: Se fullSync, buscar TODAS as vendas (desde 2000). Caso contrário, buscar desde 2010.
-    const startDate = fullSync ? new Date('2000-01-01') : new Date('2010-01-01');
-    console.log(`[Sync] ${fullSync ? '?? FULL SYNC ativado - buscando TODAS as vendas (desde 2000)' : '?? Modo incremental - buscando desde 2010'}`);
+    const startDate = fullSync
+      ? new Date("2000-01-01")
+      : new Date("2010-01-01");
+    console.log(
+      `[Sync] ${
+        fullSync
+          ? "?? FULL SYNC ativado - buscando TODAS as vendas (desde 2000)"
+          : "?? Modo incremental - buscando desde 2010"
+      }`
+    );
 
     // Buscar enquanto tiver tempo
-    while (currentMonthStart > startDate && Date.now() - startTime < MAX_EXECUTION_TIME - 5000) {
+    while (
+      currentMonthStart > startDate &&
+      Date.now() - startTime < MAX_EXECUTION_TIME - 5000
+    ) {
       // Calcular fim do mês
       const currentMonthEnd = new Date(currentMonthStart);
       currentMonthEnd.setMonth(currentMonthEnd.getMonth() + 1);
       currentMonthEnd.setDate(0); // Último dia do mês
       currentMonthEnd.setHours(23, 59, 59, 999);
 
-      console.log(`[Sync] 📅 Buscando: ${currentMonthStart.toISOString().split('T')[0]} a ${currentMonthEnd.toISOString().split('T')[0]}`);
-
+      console.log(
+        `[Sync] 📅 Buscando: ${
+          currentMonthStart.toISOString().split("T")[0]
+        } a ${currentMonthEnd.toISOString().split("T")[0]}`
+      );
       // Buscar vendas deste mês
       const monthOrders = await fetchOrdersInDateRange(
         account,
@@ -941,13 +981,19 @@ async function fetchAllOrdersForAccount(
         logisticStats
       );
 
-      console.log(`[Sync] ✅ Encontradas ${monthOrders.length} vendas neste período`);
+      console.log(
+        `[Sync] ✅ Encontradas ${monthOrders.length} vendas neste período`
+      );
 
       results.push(...monthOrders);
 
       sendProgressToUser(userId, {
-        type: 'sync_progress',
-        message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${results.length} vendas baixadas (buscando histórico: ${currentMonthStart.toISOString().split('T')[0]})`,
+        type: "sync_progress",
+        message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${
+          results.length
+        } vendas baixadas (buscando histórico: ${
+          currentMonthStart.toISOString().split("T")[0]
+        })`,
         current: results.length,
         total: Math.max(total, results.length), // Usar o maior valor entre total estimado e vendas baixadas
         fetched: results.length,
@@ -958,7 +1004,9 @@ async function fetchAllOrdersForAccount(
 
       // Se não encontrou vendas neste mês, chegou no início do histórico
       if (monthOrders.length === 0) {
-        console.log(`[Sync] ✅ Nenhuma venda encontrada neste período - histórico completo!`);
+        console.log(
+          `[Sync] ✅ Nenhuma venda encontrada neste período - histórico completo!`
+        );
         break;
       }
 
@@ -967,37 +1015,51 @@ async function fetchAllOrdersForAccount(
     }
 
     const elapsedTime = Math.round((Date.now() - startTime) / 1000);
-    console.log(`[Sync] ✅ Busca por período concluída em ${elapsedTime}s: ${results.length} vendas baixadas`);
-    if (Date.now() - startTime >= MAX_EXECUTION_TIME - 5000 && currentMonthStart > startDate) {
+    console.log(
+      `[Sync] ✅ Busca por período concluída em ${elapsedTime}s: ${results.length} vendas baixadas`
+    );
+    if (
+      Date.now() - startTime >= MAX_EXECUTION_TIME - 5000 &&
+      currentMonthStart > startDate
+    ) {
       forcedStop = true;
     }
   } else if (!shouldFetchHistory && total > results.length) {
     if (timeRemaining <= 10000) {
       forcedStop = true;
     }
-    console.log(`[Sync] ⏱️ Tempo insuficiente para busca histórica - execute sincronização novamente para continuar`);
+    console.log(
+      `[Sync] ⏱️ Tempo insuficiente para busca histórica - execute sincronização novamente para continuar`
+    );
   }
 
   // Calcular estatísticas finais
   const elapsedTime = Math.round((Date.now() - startTime) / 1000);
   const finalTotal = Math.max(total, results.length);
 
-  console.log(`[Sync] 🎉 ${results.length} vendas baixadas em ${elapsedTime}s (total estimado: ${total})`);
-  console.log(`[Sync] 📊 Tipos de logística:`, Array.from(logisticStats.entries()));
+  console.log(
+    `[Sync] 🎉 ${results.length} vendas baixadas em ${elapsedTime}s (total estimado: ${total})`
+  );
+  console.log(
+    `[Sync] 📊 Tipos de logística:`,
+    Array.from(logisticStats.entries())
+  );
 
   // Verificar se há mais vendas para sincronizar
   const totalInDatabase = await prisma.meliVenda.count({
-    where: { meliAccountId: account.id }
+    where: { meliAccountId: account.id },
   });
 
   if (totalInDatabase < total) {
     const remaining = total - totalInDatabase;
-    console.log(`[Sync] 📌 ${remaining} vendas restantes - execute sincronização novamente para continuar`);
+    console.log(
+      `[Sync] 📌 ${remaining} vendas restantes - execute sincronização novamente para continuar`
+    );
     sendProgressToUser(userId, {
-      type: 'sync_warning',
+      type: "sync_warning",
       message: `${remaining} vendas antigas ainda não sincronizadas. Execute sincronização novamente para buscar o restante.`,
       accountId: account.id,
-      accountNickname: account.nickname || undefined
+      accountNickname: account.nickname || undefined,
     });
   } else {
     console.log(`[Sync] ✅ Histórico completo sincronizado!`);
@@ -1016,7 +1078,7 @@ async function fetchOrdersInDateRange(
   userId: string,
   dateFrom: Date,
   dateTo: Date,
-  logisticStats: Map<string, number>,
+  logisticStats: Map<string, number>
 ): Promise<MeliOrderPayload[]> {
   const results: MeliOrderPayload[] = [];
   let offset = 0;
@@ -1034,16 +1096,27 @@ async function fetchOrdersInDateRange(
   checkUrl.searchParams.set("order.date_created.to", dateTo.toISOString());
 
   try {
-    const checkResponse = await fetchWithRetry(checkUrl.toString(), { headers }, 3, userId);
+    const checkResponse = await fetchWithRetry(
+      checkUrl.toString(),
+      { headers },
+      3,
+      userId
+    );
     if (checkResponse.ok) {
       const checkPayload = await checkResponse.json();
       totalInPeriod = checkPayload?.paging?.total || 0;
-      console.log(`[Sync] 📊 Período ${dateFrom.toISOString().split('T')[0]} a ${dateTo.toISOString().split('T')[0]}: ${totalInPeriod} vendas`);
+      console.log(
+        `[Sync] 📊 Período ${dateFrom.toISOString().split("T")[0]} a ${
+          dateTo.toISOString().split("T")[0]
+        }: ${totalInPeriod} vendas`
+      );
 
       // Se período tem mais de 9.950 vendas, precisa dividir
       if (totalInPeriod > MAX_OFFSET) {
         needsSplitting = true;
-        console.log(`[Sync] 🔄 Período tem ${totalInPeriod} vendas (> ${MAX_OFFSET}) - dividindo em sub-períodos`);
+        console.log(
+          `[Sync] 🔄 Período tem ${totalInPeriod} vendas (> ${MAX_OFFSET}) - dividindo em sub-períodos`
+        );
       }
     }
   } catch (error) {
@@ -1057,7 +1130,9 @@ async function fetchOrdersInDateRange(
     const durationMs = dateTo.getTime() - dateFrom.getTime();
     const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
 
-    console.log(`[Sync] 📅 Período de ${durationDays} dias - dividindo em sub-períodos menores`);
+    console.log(
+      `[Sync] 📅 Período de ${durationDays} dias - dividindo em sub-períodos menores`
+    );
 
     // Determinar tamanho ideal do sub-período
     // Se tem mais de 50k vendas, dividir em períodos de 7 dias
@@ -1076,7 +1151,11 @@ async function fetchOrdersInDateRange(
         currentEnd.setTime(dateTo.getTime());
       }
 
-      console.log(`[Sync] 📆 Buscando sub-período: ${currentStart.toISOString().split('T')[0]} a ${currentEnd.toISOString().split('T')[0]}`);
+      console.log(
+        `[Sync] 📆 Buscando sub-período: ${
+          currentStart.toISOString().split("T")[0]
+        } a ${currentEnd.toISOString().split("T")[0]}`
+      );
 
       // Buscar recursivamente (pode precisar dividir mais se ainda tiver >9.950)
       const subResults = await fetchOrdersInDateRange(
@@ -1089,11 +1168,13 @@ async function fetchOrdersInDateRange(
       );
 
       results.push(...subResults);
-      console.log(`[Sync] ✅ Sub-período: ${subResults.length} vendas baixadas (total acumulado: ${results.length})`);
+      console.log(
+        `[Sync] ✅ Sub-período: ${subResults.length} vendas baixadas (total acumulado: ${results.length})`
+      );
 
       // Enviar progresso
       sendProgressToUser(userId, {
-        type: 'sync_progress',
+        type: "sync_progress",
         message: `${results.length}/${totalInPeriod} vendas baixadas (período histórico)`,
         current: results.length,
         total: totalInPeriod,
@@ -1108,7 +1189,9 @@ async function fetchOrdersInDateRange(
       currentStart.setDate(currentStart.getDate() + 1); // Próximo dia após o fim
     }
 
-    console.log(`[Sync] 🎉 Período completo: ${results.length} vendas de ${totalInPeriod} totais`);
+    console.log(
+      `[Sync] 🎉 Período completo: ${results.length} vendas de ${totalInPeriod} totais`
+    );
     return results;
   }
 
@@ -1123,12 +1206,19 @@ async function fetchOrdersInDateRange(
     url.searchParams.set("order.date_created.to", dateTo.toISOString());
 
     try {
-      const response = await fetchWithRetry(url.toString(), { headers }, 3, userId);
+      const response = await fetchWithRetry(
+        url.toString(),
+        { headers },
+        3,
+        userId
+      );
 
       if (!response.ok) {
         // Se der erro 400, parar (atingiu limite)
         if (response.status === 400) {
-          console.log(`[Sync] ⚠️ Atingiu limite no período - baixadas ${results.length} vendas`);
+          console.log(
+            `[Sync] ⚠️ Atingiu limite no período - baixadas ${results.length} vendas`
+          );
         }
         break;
       }
@@ -1141,15 +1231,27 @@ async function fetchOrdersInDateRange(
       // Buscar detalhes dos orders
       const orderDetailsResults = await Promise.allSettled(
         orders.map(async (o: any) => {
-          if (!o?.id) return o;
+          if (!o?.id) {
+            return o
+          };
           try {
-            const r = await fetchWithRetry(`${MELI_API_BASE}/orders/${o.id}`, { headers }, 3, userId);
+            const r = await fetchWithRetry(
+              `${MELI_API_BASE}/orders/${o.id}`,
+              { headers },
+              3,
+              userId
+            );
+
             return r.ok ? await r.json() : o;
-          } catch { return o; }
+          } catch {
+            return o;
+          }
         })
       );
 
-      const detailedOrders = orderDetailsResults.map((r, i) => r.status === "fulfilled" ? r.value : orders[i]);
+      const detailedOrders = orderDetailsResults.map((r, i) =>
+        r.status === "fulfilled" ? r.value : orders[i]
+      );
 
       // OTIMIZA��O: Buscar shipments em batches menores (10 por vez)
       const SHIPMENT_BATCH_SIZE = 10;
@@ -1162,14 +1264,22 @@ async function fetchOrdersInDateRange(
             const sid = o?.shipping?.id;
             if (!sid) return null;
             try {
-              const r = await fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}`, { headers }, 3, userId);
+              const r = await fetchWithRetry(
+                `${MELI_API_BASE}/shipments/${sid}`,
+                { headers },
+                3,
+                userId
+              );
               return r.ok ? await r.json() : null;
-            } catch { return null; }
+            } catch {
+              return null;
+            }
           })
         );
 
         batchResults.forEach((result, idx) => {
-          shipments[i + idx] = result.status === "fulfilled" ? result.value : null;
+          shipments[i + idx] =
+            result.status === "fulfilled" ? result.value : null;
         });
       }
 
@@ -1177,7 +1287,8 @@ async function fetchOrdersInDateRange(
         if (!order) return;
         const shipment = shipments[idx];
         const freight = calculateFreight(order, shipment);
-        const logType = shipment?.logistic_type || order?.shipping?.mode || "sem_tipo";
+        const logType =
+          shipment?.logistic_type || order?.shipping?.mode || "sem_tipo";
         logisticStats.set(logType, (logisticStats.get(logType) || 0) + 1);
 
         results.push({
@@ -1194,7 +1305,9 @@ async function fetchOrdersInDateRange(
 
       // IMPORTANTE: Parar antes de atingir limite
       if (offset >= MAX_OFFSET) {
-        console.log(`[Sync] ⚠️ Atingiu ${offset} vendas no período - parando antes do limite`);
+        console.log(
+          `[Sync] ⚠️ Atingiu ${offset} vendas no período - parando antes do limite`
+        );
         break;
       }
     } catch (error) {
@@ -1205,22 +1318,32 @@ async function fetchOrdersInDateRange(
 
   return results;
 }
-async function fetchOrdersForWindow(account: MeliAccount, userId: string, window?: SyncWindow, specificOrderIds?: string[]): Promise<OrdersFetchResult> {
+async function fetchOrdersForWindow(
+  account: MeliAccount,
+  userId: string,
+  window?: SyncWindow,
+  specificOrderIds?: string[]
+): Promise<OrdersFetchResult> {
   return { orders: [], expectedTotal: 0 };
 }
 
-async function buildSafeDateRanges(account: MeliAccount, headers: Record<string, string>, fetchFrom: Date, now: Date, userId: string): Promise<DateRangeWindow[]> {
+async function buildSafeDateRanges(
+  account: MeliAccount,
+  headers: Record<string, string>,
+  fetchFrom: Date,
+  now: Date,
+  userId: string
+): Promise<DateRangeWindow[]> {
   // Implementação simplificada - retorna um range único
-  return [{
-    from: fetchFrom,
-    to: now,
-    total: 0,
-    depth: 0
-  }];
+  return [
+    {
+      from: fetchFrom,
+      to: now,
+      total: 0,
+      depth: 0,
+    },
+  ];
 }
-
-
-
 
 async function buildSkuCache(
   orders: MeliOrderPayload[],
@@ -1230,10 +1353,13 @@ async function buildSkuCache(
 
   for (const payload of orders) {
     const rawOrder: any = payload.order ?? {};
-    const orderItems: any[] = Array.isArray(rawOrder.order_items) ? rawOrder.order_items : [];
+    const orderItems: any[] = Array.isArray(rawOrder.order_items)
+      ? rawOrder.order_items
+      : [];
 
     for (const item of orderItems) {
-      const itemData = typeof item?.item === "object" && item?.item !== null ? item.item : {};
+      const itemData =
+        typeof item?.item === "object" && item?.item !== null ? item.item : {};
       const candidate =
         itemData?.seller_sku ||
         itemData?.sku ||
@@ -1258,39 +1384,31 @@ async function buildSkuCache(
   const skuRecords = await prisma.sKU.findMany({
     where: {
       userId,
-      sku: { in: skuList }
+      sku: { in: skuList },
     },
     select: {
       sku: true,
       custoUnitario: true,
-      tipo: true
-    }
+      tipo: true,
+    },
   });
 
   const cache = new Map<string, SkuCacheEntry>();
   for (const record of skuRecords) {
     cache.set(record.sku, {
-      custoUnitario: record.custoUnitario !== null ? Number(record.custoUnitario) : null,
-      tipo: record.tipo ?? null
+      custoUnitario:
+        record.custoUnitario !== null ? Number(record.custoUnitario) : null,
+      tipo: record.tipo ?? null,
     });
   }
 
   return cache;
 }
 
-// Função para salvar vendas em lotes - OTIMIZADA
-function extractOrderIdFromPayload(order: MeliOrderPayload): string | null {
-  const rawOrder = (order?.order ?? null) as any;
-  if (!rawOrder || rawOrder.id === undefined || rawOrder.id === null) {
-    return null;
-  }
-  const id = String(rawOrder.id).trim();
-  return id.length === 0 ? null : id;
-}
-
-function deduplicateOrders(
-  orders: MeliOrderPayload[]
-): { uniqueOrders: MeliOrderPayload[]; duplicates: number } {
+function deduplicateOrders(orders: MeliOrderPayload[]): {
+  uniqueOrders: MeliOrderPayload[];
+  duplicates: number;
+} {
   const seen = new Set<string>();
   const uniqueOrders: MeliOrderPayload[] = [];
   let duplicates = 0;
@@ -1345,11 +1463,11 @@ async function saveVendasBatch(
       try {
         // Preparar todos os dados do batch primeiro
         const preparedData = await Promise.all(
-          batch.map(order => prepareVendaData(order, userId, skuCache))
+          batch.map((order) => prepareVendaData(order, userId, skuCache))
         );
 
         // Filtrar dados v�lidos
-        const validData = preparedData.filter(d => d !== null);
+        const validData = preparedData.filter((d) => d !== null);
 
         if (validData.length === 0) {
           errors += batch.length;
@@ -1358,23 +1476,29 @@ async function saveVendasBatch(
         }
 
         // Buscar IDs existentes para dividir em creates vs updates
-        const orderIds = validData.map(d => d!.orderId);
+        const orderIds = validData.map((d) => d!.orderId);
         const existingOrders = await prisma.meliVenda.findMany({
           where: { orderId: { in: orderIds } },
-          select: { orderId: true }
+          select: { orderId: true },
         });
 
-        const existingOrderIdSet = new Set(existingOrders.map((o: any) => o.orderId));
+        const existingOrderIdSet = new Set(
+          existingOrders.map((o: any) => o.orderId)
+        );
 
-        const toCreate = validData.filter(d => !existingOrderIdSet.has(d!.orderId));
-        const toUpdate = validData.filter(d => existingOrderIdSet.has(d!.orderId));
+        const toCreate = validData.filter(
+          (d) => !existingOrderIdSet.has(d!.orderId)
+        );
+        const toUpdate = validData.filter((d) =>
+          existingOrderIdSet.has(d!.orderId)
+        );
 
         // BATCH CREATE: insere m�ltiplos registros de uma vez
         if (toCreate.length > 0) {
           try {
             await prisma.meliVenda.createMany({
-              data: toCreate.map(d => d!.createData),
-              skipDuplicates: true // Evita erro se j� existir
+              data: toCreate.map((d) => d!.createData),
+              skipDuplicates: true, // Evita erro se j� existir
             });
             saved += toCreate.length;
           } catch (createError) {
@@ -1387,10 +1511,10 @@ async function saveVendasBatch(
         if (toUpdate.length > 0) {
           try {
             await prisma.$transaction(
-              toUpdate.map(d =>
+              toUpdate.map((d) =>
                 prisma.meliVenda.update({
                   where: { orderId: d!.orderId },
-                  data: { ...d!.updateData, atualizadoEm: new Date() }
+                  data: { ...d!.updateData, atualizadoEm: new Date() },
                 })
               )
             );
@@ -1400,9 +1524,11 @@ async function saveVendasBatch(
             errors += toUpdate.length;
           }
         }
-
       } catch (batchError) {
-        console.error(`[Sync] Erro cr�tico no batch ${i}-${i + batchSize}:`, batchError);
+        console.error(
+          `[Sync] Erro cr�tico no batch ${i}-${i + batchSize}:`,
+          batchError
+        );
         errors += batch.length;
       }
 
@@ -1416,11 +1542,14 @@ async function saveVendasBatch(
           current: processedCount,
           total: totalOrders,
           fetched: processedCount,
-          expected: totalOrders
+          expected: totalOrders,
         });
       } catch (sseError) {
         // Ignorar erros de SSE - nao sao criticos
-        console.warn(`[Sync] Erro ao enviar progresso SSE (nao critico):`, sseError);
+        console.warn(
+          `[Sync] Erro ao enviar progresso SSE (nao critico):`,
+          sseError
+        );
       }
     }
   } catch (error) {
@@ -1453,18 +1582,22 @@ async function prepareVendaData(
     const normalizedMlUserId =
       (order as any)?.mlUserId ??
       (order as any)?.ml_user_id ??
-      (typeof o?.seller?.id === 'number' ? o.seller.id : null);
+      (typeof o?.seller?.id === "number" ? o.seller.id : null);
 
     const orderItems: any[] = Array.isArray(o.order_items) ? o.order_items : [];
     const firstItem = orderItems[0] ?? {};
-    const orderItem = typeof firstItem === 'object' && firstItem !== null ? firstItem : {};
-    const itemData = typeof orderItem?.item === 'object' && orderItem.item !== null ? orderItem.item : {};
+    const orderItem =
+      typeof firstItem === "object" && firstItem !== null ? firstItem : {};
+    const itemData =
+      typeof orderItem?.item === "object" && orderItem.item !== null
+        ? orderItem.item
+        : {};
 
     const firstItemTitle =
       itemData?.title ??
       orderItems.find((entry: any) => entry?.item?.title)?.item?.title ??
       o.title ??
-      'Pedido';
+      "Pedido";
 
     const quantity = orderItems.reduce((sum, item) => {
       const qty = toFiniteNumber(item?.quantity) ?? 0;
@@ -1481,8 +1614,8 @@ async function prepareVendaData(
 
     const buyerName =
       o?.buyer?.nickname ||
-      [o?.buyer?.first_name, o?.buyer?.last_name].filter(Boolean).join(' ') ||
-      'Comprador';
+      [o?.buyer?.first_name, o?.buyer?.last_name].filter(Boolean).join(" ") ||
+      "Comprador";
 
     const dateString = o.date_closed || o.date_created || o.date_last_updated;
 
@@ -1494,15 +1627,25 @@ async function prepareVendaData(
       ? o.internal_tags.map((t: unknown) => String(t))
       : [];
 
-    const shippingStatus = (order.shipment as any)?.status || o?.shipping?.status || undefined;
-    const shippingId = (order.shipment as any)?.id?.toString() || o?.shipping?.id?.toString();
+    const shippingStatus =
+      (order.shipment as any)?.status || o?.shipping?.status || undefined;
+    const shippingId =
+      (order.shipment as any)?.id?.toString() || o?.shipping?.id?.toString();
 
     const receiverAddress =
       (order.shipment as any)?.receiver_address ??
-      (o?.shipping && typeof o.shipping === 'object' ? (o as any).shipping?.receiver_address : undefined) ??
+      (o?.shipping && typeof o.shipping === "object"
+        ? (o as any).shipping?.receiver_address
+        : undefined) ??
       undefined;
-    const latitude = toFiniteNumber((receiverAddress as any)?.latitude ?? (receiverAddress as any)?.geo?.latitude);
-    const longitude = toFiniteNumber((receiverAddress as any)?.longitude ?? (receiverAddress as any)?.geo?.longitude);
+    const latitude = toFiniteNumber(
+      (receiverAddress as any)?.latitude ??
+        (receiverAddress as any)?.geo?.latitude
+    );
+    const longitude = toFiniteNumber(
+      (receiverAddress as any)?.longitude ??
+        (receiverAddress as any)?.geo?.longitude
+    );
 
     const saleFee = orderItems.reduce((acc, item) => {
       const fee = toFiniteNumber(item?.sale_fee) ?? 0;
@@ -1512,13 +1655,21 @@ async function prepareVendaData(
 
     const unitario =
       toFiniteNumber(orderItem?.unit_price) ??
-      (quantity > 0 && totalAmount !== null ? roundCurrency(totalAmount / quantity) : 0);
+      (quantity > 0 && totalAmount !== null
+        ? roundCurrency(totalAmount / quantity)
+        : 0);
 
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
-    const frete = freight.adjustedCost ?? freight.finalCost ?? freight.orderCostFallback ?? 0;
+    const frete =
+      freight.adjustedCost ??
+      freight.finalCost ??
+      freight.orderCostFallback ??
+      0;
 
     const skuVendaRaw = itemData?.seller_sku || itemData?.sku || null;
-    const skuVenda = skuVendaRaw ? truncateString(String(skuVendaRaw), 255) || null : null;
+    const skuVenda = skuVendaRaw
+      ? truncateString(String(skuVendaRaw), 255) || null
+      : null;
     let cmv: number | null = null;
 
     if (skuVenda) {
@@ -1531,18 +1682,20 @@ async function prepareVendaData(
       }
     }
 
-    const { valor: margemContribuicao, isMargemReal } = calculateMargemContribuicao(
-      totalAmount,
-      taxaPlataforma,
-      frete,
-      cmv
-    );
+    const { valor: margemContribuicao, isMargemReal } =
+      calculateMargemContribuicao(totalAmount, taxaPlataforma, frete, cmv);
 
-    const contaLabel = truncateString(order.accountNickname ?? String(normalizedMlUserId ?? order.accountId), 255);
+    const contaLabel = truncateString(
+      order.accountNickname ?? String(normalizedMlUserId ?? order.accountId),
+      255
+    );
 
     const vendaBaseData = {
       dataVenda: dateString ? new Date(dateString) : new Date(),
-      status: truncateString(String(o.status ?? 'desconhecido').replace(/_/g, ' '), 100),
+      status: truncateString(
+        String(o.status ?? "desconhecido").replace(/_/g, " "),
+        100
+      ),
       conta: contaLabel,
       valorTotal: new Decimal(totalAmount),
       quantidade: quantity > 0 ? quantity : 1,
@@ -1552,47 +1705,51 @@ async function prepareVendaData(
       cmv: cmv !== null ? new Decimal(cmv) : null,
       margemContribuicao: new Decimal(margemContribuicao),
       isMargemReal,
-      titulo: truncateString(firstItemTitle, 500) || 'Produto sem titulo',
+      titulo: truncateString(firstItemTitle, 500) || "Produto sem titulo",
       sku: skuVenda,
-      comprador: truncateString(buyerName, 255) || 'Comprador',
+      comprador: truncateString(buyerName, 255) || "Comprador",
       logisticType: truncateString(freight.logisticType, 100) || null,
       envioMode: truncateString(freight.shippingMode, 100) || null,
       shippingStatus: truncateString(shippingStatus, 100) || null,
       shippingId: truncateString(shippingId, 255) || null,
       exposicao: (() => {
-        const listingTypeId = (orderItem?.listing_type_id ?? itemData?.listing_type_id) ?? null;
+        const listingTypeId =
+          orderItem?.listing_type_id ?? itemData?.listing_type_id ?? null;
         return mapListingTypeToExposure(listingTypeId);
       })(),
-      tipoAnuncio: tags.includes('catalog') ? 'Catalogo' : 'Proprio',
-      ads: internalTags.includes('ads') ? 'ADS' : null,
-      plataforma: 'Mercado Livre',
-      canal: 'ML',
+      tipoAnuncio: tags.includes("catalog") ? "Catalogo" : "Proprio",
+      ads: (internalTags.includes("ads") || tags.some(value => adsTags.includes(value))) ? "ADS" : null,
+      plataforma: "Mercado Livre",
+      canal: "ML",
       tags: truncateJsonData(tags),
       internalTags: truncateJsonData(internalTags),
       rawData: truncateJsonData({
         order: o,
         shipment: order.shipment as any,
-        freight: freight
-      })
+        freight: freight,
+      }),
     };
 
     // Tentar incluir geo se dispon�vel
-    const geoData = latitude !== null && longitude !== null ? {
-      latitude: new Decimal(latitude),
-      longitude: new Decimal(longitude)
-    } : {};
+    const geoData =
+      latitude !== null && longitude !== null
+        ? {
+            latitude: new Decimal(latitude),
+            longitude: new Decimal(longitude),
+          }
+        : {};
 
     const createData = {
       orderId: truncateString(orderId, 255),
       userId: truncateString(userId, 50),
       meliAccountId: truncateString(order.accountId, 25),
       ...vendaBaseData,
-      ...geoData
+      ...geoData,
     };
 
     const updateData = {
       ...vendaBaseData,
-      ...geoData
+      ...geoData,
     };
 
     return { orderId, createData, updateData };
@@ -1607,7 +1764,7 @@ async function prepareVendaData(
 export async function POST(req: NextRequest) {
   // Suportar tanto autentica��o de usu�rio quanto cron job
   const sessionCookie = req.cookies.get("session")?.value;
-  const cronSecret = req.headers.get('x-cron-secret');
+  const cronSecret = req.headers.get("x-cron-secret");
 
   // Ler body primeiro (s� pode ser lido uma vez)
   let requestBody: {
@@ -1623,7 +1780,7 @@ export async function POST(req: NextRequest) {
       requestBody = JSON.parse(bodyText);
     }
   } catch (error) {
-    console.error('[Sync] Erro ao parsear body:', error);
+    console.error("[Sync] Erro ao parsear body:", error);
   }
 
   let userId: string;
@@ -1633,13 +1790,15 @@ export async function POST(req: NextRequest) {
     // Requisi��o de cron job - pegar userId do body
     const accountId = requestBody.accountIds?.[0];
     if (!accountId) {
-      return new NextResponse("Missing accountId for cron job", { status: 400 });
+      return new NextResponse("Missing accountId for cron job", {
+        status: 400,
+      });
     }
 
     // Buscar userId da conta
     const account = await prisma.meliAccount.findUnique({
       where: { id: accountId },
-      select: { userId: true }
+      select: { userId: true },
     });
 
     if (!account) {
@@ -1660,18 +1819,19 @@ export async function POST(req: NextRequest) {
   }
 
   // Por padrão, usar quickMode=true para evitar timeout
-  const quickMode = requestBody.quickMode !== false; // true por padrão, false apenas se explicitamente passado
+  // const quickMode = requestBody.quickMode !== false; // true por padrão, false apenas se explicitamente passado
+  const quickMode = false;
   const fullSync = requestBody.fullSync === true; // fullSync apenas se explicitamente true
 
   console.log(`[Sync] Iniciando sincronização para usuário ${userId}`, {
     accountIds: requestBody.accountIds,
     hasOrderIds: !!requestBody.orderIdsByAccount,
     quickMode: quickMode, // Log do modo
-    fullSync: fullSync // Log do modo fullSync
+    fullSync: fullSync, // Log do modo fullSync
   });
 
   // Dar um delay para garantir que o SSE está conectado
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 500));
 
   // Enviar evento de início da sincronização
   sendProgressToUser(userId, {
@@ -1680,7 +1840,7 @@ export async function POST(req: NextRequest) {
     current: 0,
     total: 0,
     fetched: 0,
-    expected: 0
+    expected: 0,
   });
 
   // Buscar contas - filtrar por IDs se fornecidos
@@ -1694,7 +1854,9 @@ export async function POST(req: NextRequest) {
     orderBy: { created_at: "desc" },
   });
 
-  console.log(`[Sync] Encontradas ${accounts.length} conta(s) do Mercado Livre`);
+  console.log(
+    `[Sync] Encontradas ${accounts.length} conta(s) do Mercado Livre`
+  );
 
   if (accounts.length === 0) {
     sendProgressToUser(userId, {
@@ -1703,7 +1865,7 @@ export async function POST(req: NextRequest) {
       current: 0,
       total: 0,
       fetched: 0,
-      expected: 0
+      expected: 0,
     });
 
     return NextResponse.json({
@@ -1726,11 +1888,16 @@ export async function POST(req: NextRequest) {
   const steps = accounts.map((acc: any) => ({
     accountId: acc.id,
     accountName: acc.nickname || `Conta ${acc.ml_user_id}`,
-    currentStep: 'pending' as 'pending' | 'fetching' | 'saving' | 'completed' | 'error',
+    currentStep: "pending" as
+      | "pending"
+      | "fetching"
+      | "saving"
+      | "completed"
+      | "error",
     progress: 0,
     fetched: 0,
     expected: 0,
-    error: undefined as string | undefined
+    error: undefined as string | undefined,
   }));
 
   for (let accountIndex = 0; accountIndex < accounts.length; accountIndex++) {
@@ -1745,19 +1912,21 @@ export async function POST(req: NextRequest) {
 
     try {
       // Atualizar step para fetching
-      steps[accountIndex].currentStep = 'fetching';
+      steps[accountIndex].currentStep = "fetching";
 
       // Enviar progresso: processando conta
       sendProgressToUser(userId, {
         type: "sync_progress",
-        message: `Buscando vendas da conta ${account.nickname || account.ml_user_id}...`,
+        message: `Buscando vendas da conta ${
+          account.nickname || account.ml_user_id
+        }...`,
         current: accountIndex,
         total: accounts.length,
         fetched: totalFetchedOrders,
         expected: totalExpectedOrders,
         accountId: account.id,
         accountNickname: account.nickname || `Conta ${account.ml_user_id}`,
-        steps: steps
+        steps: steps,
       });
 
       let current = account;
@@ -1765,7 +1934,9 @@ export async function POST(req: NextRequest) {
         // Usar mutex para evitar refresh concorrente
         const mutexKey = `refresh_${account.id}`;
         if (tokenRefreshMutex.has(mutexKey)) {
-          console.log(`[Sync] Aguardando refresh em andamento para conta ${account.id}`);
+          console.log(
+            `[Sync] Aguardando refresh em andamento para conta ${account.id}`
+          );
           current = await tokenRefreshMutex.get(mutexKey)!;
         } else {
           const refreshPromise = smartRefreshMeliAccountToken(account);
@@ -1780,19 +1951,31 @@ export async function POST(req: NextRequest) {
         }
         summary.expires_at = current.expires_at.toISOString();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Erro desconhecido ao renovar token.";
-        errors.push({ accountId: account.id, mlUserId: account.ml_user_id, message });
-        console.error(`[Sync] Erro ao renovar token da conta ${account.id}:`, error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Erro desconhecido ao renovar token.";
+        errors.push({
+          accountId: account.id,
+          mlUserId: account.ml_user_id,
+          message,
+        });
+        console.error(
+          `[Sync] Erro ao renovar token da conta ${account.id}:`,
+          error
+        );
 
         // Atualizar step para erro
-        steps[accountIndex].currentStep = 'error';
+        steps[accountIndex].currentStep = "error";
         steps[accountIndex].error = message;
 
         // Enviar erro via SSE
         sendProgressToUser(userId, {
           type: "sync_warning",
-          message: `Erro ao renovar token da conta ${account.nickname || account.ml_user_id}: ${message}. Continuando com próxima conta...`,
-          errorCode: "TOKEN_REFRESH_FAILED"
+          message: `Erro ao renovar token da conta ${
+            account.nickname || account.ml_user_id
+          }: ${message}. Continuando com próxima conta...`,
+          errorCode: "TOKEN_REFRESH_FAILED",
         });
         continue;
       }
@@ -1801,160 +1984,109 @@ export async function POST(req: NextRequest) {
         const specificOrderIds = requestBody.orderIdsByAccount?.[account.id];
 
         const existingVendasCount = await prisma.meliVenda.count({
-
           where: { meliAccountId: account.id },
-
         });
-
         const now = new Date();
 
-
-
         const processAndSave = async (
-
           fetchedOrders: MeliOrderPayload[],
-
           expectedTotal: number,
-
-          label: string,
-
+          label: string
         ) => {
-
           const effectiveExpected = expectedTotal || fetchedOrders.length;
-
           totalExpectedOrders += effectiveExpected;
-
           totalFetchedOrders += fetchedOrders.length;
 
-
-
           steps[accountIndex].expected += effectiveExpected;
-
           steps[accountIndex].fetched += fetchedOrders.length;
-
-          steps[accountIndex].progress = fetchedOrders.length > 0 ? 50 : steps[accountIndex].progress;
-
-
+          steps[accountIndex].progress =
+            fetchedOrders.length > 0 ? 50 : steps[accountIndex].progress;
 
           console.log(
-
-            `[Sync] Conta ${account.nickname}: ${fetchedOrders.length} venda(s) encontradas na janela ${label}`,
-
+            `[Sync] Conta ${account.nickname}: ${fetchedOrders.length} venda(s) encontradas na janela ${label}`
           );
 
-
-
           if (fetchedOrders.length === 0) {
-
             return;
-
           }
 
-
-
-          steps[accountIndex].currentStep = 'saving';
-
+          steps[accountIndex].currentStep = "saving";
           sendProgressToUser(userId, {
-
             type: "sync_progress",
-
-            message: `Salvando ${fetchedOrders.length} venda(s) (${label}) da conta ${account.nickname || account.ml_user_id}...`,
-
+            message: `Salvando ${
+              fetchedOrders.length
+            } venda(s) (${label}) da conta ${
+              account.nickname || account.ml_user_id
+            }...`,
             current: accountIndex,
-
             total: accounts.length,
-
             fetched: totalFetchedOrders,
-
             expected: totalExpectedOrders,
-
             accountId: account.id,
-
             accountNickname: account.nickname || `Conta ${account.ml_user_id}`,
-
             steps,
-
           });
 
-
-
           try {
-
-            const batchResult = await saveVendasBatch(fetchedOrders, userId, 50);
-
+            const batchResult = await saveVendasBatch(
+              fetchedOrders,
+              userId,
+              50
+            );
             totalSavedOrders += batchResult.saved;
-
-
-
             console.log(
-
-              `[Sync] Conta ${account.nickname}: ${batchResult.saved} vendas salvas (${label}), ${batchResult.errors} erros`,
-
+              `[Sync] Conta ${account.nickname}: ${batchResult.saved} vendas salvas (${label}), ${batchResult.errors} erros`
             );
 
-
-
             if (batchResult.errors > 0) {
-
-              console.warn(`[Sync] ${batchResult.errors} vendas falharam ao salvar para conta ${current.id}`);
-
+              console.warn(
+                `[Sync] ${batchResult.errors} vendas falharam ao salvar para conta ${current.id}`
+              );
               sendProgressToUser(userId, {
-
                 type: "sync_warning",
-
-                message: `${batchResult.errors} vendas da conta ${account.nickname || account.ml_user_id} nao puderam ser salvas (${label})`,
-
+                message: `${batchResult.errors} vendas da conta ${
+                  account.nickname || account.ml_user_id
+                } nao puderam ser salvas (${label})`,
                 errorCode: "SAVE_ERRORS",
-
               });
-
             }
-
           } catch (saveError) {
-
-            const saveErrorMsg = saveError instanceof Error ? saveError.message : 'Erro desconhecido';
-
-            console.error(`[Sync] Erro ao salvar vendas da conta ${current.id}:`, saveError);
-
+            const saveErrorMsg =
+              saveError instanceof Error
+                ? saveError.message
+                : "Erro desconhecido";
+            console.error(
+              `[Sync] Erro ao salvar vendas da conta ${current.id}:`,
+              saveError
+            );
             errors.push({
-
               accountId: current.id,
-
               mlUserId: current.ml_user_id,
-
-              message: `Erro ao salvar vendas: ${saveErrorMsg}`
-
+              message: `Erro ao salvar vendas: ${saveErrorMsg}`,
             });
-
-
 
             sendProgressToUser(userId, {
-
               type: "sync_warning",
-
-              message: `Erro ao salvar vendas da conta ${account.nickname || account.ml_user_id}: ${saveErrorMsg}`,
-
+              message: `Erro ao salvar vendas da conta ${
+                account.nickname || account.ml_user_id
+              }: ${saveErrorMsg}`,
               errorCode: "SAVE_BATCH_ERROR",
-
             });
-
           }
-
         };
 
-
-
         steps[accountIndex].expected = 0;
-
         steps[accountIndex].fetched = 0;
-
-
 
         // NOVA LÓGICA SIMPLES: Buscar TODAS as vendas sem janelas complexas
         const headers = { Authorization: `Bearer ${current.access_token}` };
 
-        console.log(`[Sync] 🚀 Buscando TODAS as vendas da conta ${current.ml_user_id} (${current.nickname})`);
-        console.log(`[Sync] Debug - accountIndex: ${accountIndex}, userId: ${userId}`);
+        console.log(
+          `[Sync] 🚀 Buscando TODAS as vendas da conta ${current.ml_user_id} (${current.nickname})`
+        );
+        console.log(
+          `[Sync] Debug - accountIndex: ${accountIndex}, userId: ${userId}`
+        );
 
         let allOrders: MeliOrderPayload[] = [];
         let expectedTotal = 0;
@@ -1966,41 +2098,59 @@ export async function POST(req: NextRequest) {
             headers,
             userId,
             quickMode, // NOVO: passa o modo de sincronização
-            fullSync, // NOVO: passa o modo fullSync
+            fullSync // NOVO: passa o modo fullSync
           );
           allOrders = result.orders;
           expectedTotal = result.expectedTotal;
           accountForcedStop = result.forcedStop;
           forcedStop = forcedStop || accountForcedStop;
 
-          console.log(`[Sync] ✅ Conta ${current.ml_user_id}: ${allOrders.length} vendas baixadas de ${expectedTotal} totais`);
-          console.log(`[Sync] Debug - allOrders.length: ${allOrders.length}, expectedTotal: ${expectedTotal}`);
+          console.log(
+            `[Sync] ✅ Conta ${current.ml_user_id}: ${allOrders.length} vendas baixadas de ${expectedTotal} totais`
+          );
+          console.log(
+            `[Sync] Debug - allOrders.length: ${allOrders.length}, expectedTotal: ${expectedTotal}`
+          );
         } catch (fetchError) {
-          const fetchMsg = fetchError instanceof Error ? fetchError.message : 'Erro ao buscar vendas';
-          console.error(`[Sync] ❌ Erro ao buscar vendas da conta ${current.ml_user_id}:`, fetchError);
+          const fetchMsg =
+            fetchError instanceof Error
+              ? fetchError.message
+              : "Erro ao buscar vendas";
+          console.error(
+            `[Sync] ❌ Erro ao buscar vendas da conta ${current.ml_user_id}:`,
+            fetchError
+          );
           throw new Error(`Falha ao buscar vendas: ${fetchMsg}`);
         }
 
         // NOVA LÓGICA COM REDIS: Two-phase sync
         const isRedisHealthy = await checkRedisHealth();
-        console.log(`[Sync] Redis status: ${isRedisHealthy ? '✅ Available' : '⚠️ Unavailable - using direct save'}`);
+        console.log(
+          `[Sync] Redis status: ${
+            isRedisHealthy
+              ? "✅ Available"
+              : "⚠️ Unavailable - using direct save"
+          }`
+        );
 
         if (isRedisHealthy && allOrders.length > 0) {
           // === FASE 1: Enqueue no Redis ===
-          console.log(`[Sync] 📦 Fase 1: Enfileirando ${allOrders.length} vendas no Redis...`);
+          console.log(
+            `[Sync] 📦 Fase 1: Enfileirando ${allOrders.length} vendas no Redis...`
+          );
 
           sendProgressToUser(userId, {
             type: "sync_download_progress",
             message: `Salvando ${allOrders.length} vendas no cache...`,
             current: 0,
             total: allOrders.length,
-            phase: 'downloading',
+            phase: "downloading",
             accountId: current.id,
-            accountNickname: current.nickname || `Conta ${current.ml_user_id}`
+            accountNickname: current.nickname || `Conta ${current.ml_user_id}`,
           });
 
           // Convert to QueuedSale format
-          const queuedSales: QueuedSale[] = allOrders.map(order => ({
+          const queuedSales: QueuedSale[] = allOrders.map((order) => ({
             accountId: order.accountId,
             accountNickname: order.accountNickname ?? null,
             mlUserId: Number(order.mlUserId),
@@ -2009,31 +2159,35 @@ export async function POST(req: NextRequest) {
             freight: order.freight,
           }));
 
-          const enqueueResult = await enqueueSales(userId, current.id, queuedSales);
+          const enqueueResult = await enqueueSales(
+            userId,
+            current.id,
+            queuedSales
+          );
 
           if (enqueueResult.success) {
-            console.log(`[Sync] ✅ ${enqueueResult.count} vendas enfileiradas no Redis`);
+            console.log(
+              `[Sync] ✅ ${enqueueResult.count} vendas enfileiradas no Redis`
+            );
 
             sendProgressToUser(userId, {
               type: "sync_download_complete",
               message: `${enqueueResult.count} vendas baixadas e armazenadas`,
               current: enqueueResult.count,
               total: enqueueResult.count,
-              phase: 'downloading',
+              phase: "downloading",
             });
 
             // === FASE 2: Processar Redis → PostgreSQL ===
-            console.log(`[Sync] 💾 Fase 2: Processando fila Redis → PostgreSQL...`);
-
-            sendProgressToUser(userId, {
-              type: "sync_save_start",
-              message: `Iniciando salvamento no banco de dados...`,
-              phase: 'saving',
-            });
+            console.log(
+              `[Sync] 💾 Fase 2: Processando fila Redis → PostgreSQL...`
+            );
 
             try {
               const workerResult = await processAllUserSales(userId);
-              console.log(`[Sync] ✅ Worker completou: ${workerResult.totalProcessed} salvas, ${workerResult.totalErrors} erros`);
+              console.log(
+                `[Sync] ✅ Worker completou: ${workerResult.totalProcessed} salvas, ${workerResult.totalErrors} erros`
+              );
 
               totalSavedOrders += workerResult.totalProcessed;
 
@@ -2042,22 +2196,30 @@ export async function POST(req: NextRequest) {
                 message: `✅ ${workerResult.totalProcessed} vendas salvas no banco`,
                 current: workerResult.totalProcessed,
                 total: workerResult.totalProcessed,
-                phase: 'complete',
+                phase: "complete",
                 accountId: current.id,
-                accountNickname: current.nickname || `Conta ${current.ml_user_id}`
+                accountNickname:
+                  current.nickname || `Conta ${current.ml_user_id}`,
               });
             } catch (workerError) {
-              console.error(`[Sync] ❌ Erro no worker Redis → PostgreSQL:`, workerError);
+              console.error(
+                `[Sync] ❌ Erro no worker Redis → PostgreSQL:`,
+                workerError
+              );
               throw new Error(`Erro ao processar fila: ${workerError}`);
             }
           } else {
             // Redis falhou, usar salvamento direto
-            console.warn(`[Sync] ⚠️ Falha ao enfileirar no Redis, usando salvamento direto`);
-            await processAndSave(allOrders, expectedTotal, 'completo');
+            console.warn(
+              `[Sync] ⚠️ Falha ao enfileirar no Redis, usando salvamento direto`
+            );
+            await processAndSave(allOrders, expectedTotal, "completo");
           }
         } else {
           // Redis indisponível ou sem vendas, usar salvamento direto
-          console.log(`[Sync] 📥 Redis indisponível ou sem vendas, usando salvamento direto`);
+          console.log(
+            `[Sync] 📥 Redis indisponível ou sem vendas, usando salvamento direto`
+          );
 
           sendProgressToUser(userId, {
             type: "sync_progress",
@@ -2065,31 +2227,48 @@ export async function POST(req: NextRequest) {
             current: 0,
             total: allOrders.length,
             accountId: current.id,
-            accountNickname: current.nickname || `Conta ${current.ml_user_id}`
+            accountNickname: current.nickname || `Conta ${current.ml_user_id}`,
           });
 
           try {
-            await processAndSave(allOrders, expectedTotal, 'completo');
-            console.log(`[Sync] ✅ Salvamento direto concluído para conta ${current.ml_user_id}`);
+            await processAndSave(allOrders, expectedTotal, "completo");
+            console.log(
+              `[Sync] ✅ Salvamento direto concluído para conta ${current.ml_user_id}`
+            );
           } catch (saveError) {
-            const saveMsg = saveError instanceof Error ? saveError.message : 'Erro ao salvar vendas';
-            console.error(`[Sync] ❌ Erro ao salvar vendas da conta ${current.ml_user_id}:`, saveError);
+            const saveMsg =
+              saveError instanceof Error
+                ? saveError.message
+                : "Erro ao salvar vendas";
+            console.error(
+              `[Sync] ❌ Erro ao salvar vendas da conta ${current.ml_user_id}:`,
+              saveError
+            );
             throw new Error(`Falha ao salvar vendas: ${saveMsg}`);
           }
         }
-
       } catch (error) {
-        steps[accountIndex].currentStep = 'error';
-        steps[accountIndex].error = error instanceof Error ? error.message : 'Erro desconhecido';
-        const message = error instanceof Error ? error.message : "Erro desconhecido ao processar pedidos.";
-        errors.push({ accountId: current.id, mlUserId: current.ml_user_id, message });
+        steps[accountIndex].currentStep = "error";
+        steps[accountIndex].error =
+          error instanceof Error ? error.message : "Erro desconhecido";
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Erro desconhecido ao processar pedidos.";
+        errors.push({
+          accountId: current.id,
+          mlUserId: current.ml_user_id,
+          message,
+        });
         console.error(`[Sync] Erro ao processar conta ${current.id}:`, error);
 
         // Enviar erro via SSE
         sendProgressToUser(userId, {
           type: "sync_warning",
-          message: `Erro na conta ${current.nickname || current.ml_user_id}: ${message}. Continuando com próxima conta...`,
-          errorCode: "ACCOUNT_PROCESSING_ERROR"
+          message: `Erro na conta ${
+            current.nickname || current.ml_user_id
+          }: ${message}. Continuando com próxima conta...`,
+          errorCode: "ACCOUNT_PROCESSING_ERROR",
         });
 
         // Atualizar progresso mesmo com erro
@@ -2102,22 +2281,32 @@ export async function POST(req: NextRequest) {
           expected: totalExpectedOrders,
           accountId: current.id,
           accountNickname: current.nickname || `Conta ${current.ml_user_id}`,
-          steps: steps
+          steps: steps,
         });
       }
     } catch (error) {
       // Erro catastrófico na conta - continuar com próxima
-      const errorMsg = error instanceof Error ? error.message : 'Erro crítico desconhecido';
-      console.error(`[Sync] Erro catastrófico ao processar conta ${account.id}:`, error);
+      const errorMsg =
+        error instanceof Error ? error.message : "Erro crítico desconhecido";
+      console.error(
+        `[Sync] Erro catastrófico ao processar conta ${account.id}:`,
+        error
+      );
 
-      steps[accountIndex].currentStep = 'error';
+      steps[accountIndex].currentStep = "error";
       steps[accountIndex].error = errorMsg;
-      errors.push({ accountId: account.id, mlUserId: account.ml_user_id, message: errorMsg });
+      errors.push({
+        accountId: account.id,
+        mlUserId: account.ml_user_id,
+        message: errorMsg,
+      });
 
       sendProgressToUser(userId, {
         type: "sync_warning",
-        message: `Erro crítico na conta ${account.nickname || account.ml_user_id}: ${errorMsg}. Continuando com próxima conta...`,
-        errorCode: "CRITICAL_ERROR"
+        message: `Erro crítico na conta ${
+          account.nickname || account.ml_user_id
+        }: ${errorMsg}. Continuando com próxima conta...`,
+        errorCode: "CRITICAL_ERROR",
       });
     }
   }
@@ -2125,10 +2314,11 @@ export async function POST(req: NextRequest) {
   // Verificar se há mais vendas antigas para sincronizar
   // Em fullSync ou quickMode, indicar se ainda faltam vendas
   const pendingVolume = totalFetchedOrders < totalExpectedOrders;
-  const hasMoreToSync = forcedStop || ((fullSync || quickMode) && pendingVolume);
+  const hasMoreToSync =
+    forcedStop || ((fullSync || quickMode) && pendingVolume);
 
   // Enviar evento de conclus�o da sincroniza��o
-  let mensagemFinal = '';
+  let mensagemFinal = "";
   if (forcedStop) {
     mensagemFinal = `?? ${totalSavedOrders} vendas processadas at� agora. Tempo limite atingido, continuaremos automaticamente.`;
   } else if (fullSync && hasMoreToSync) {
@@ -2136,7 +2326,9 @@ export async function POST(req: NextRequest) {
   } else if (fullSync) {
     mensagemFinal = `? Sincroniza��o completa! ${totalSavedOrders} vendas processadas de ${totalExpectedOrders}`;
   } else if (quickMode) {
-    mensagemFinal = `Vendas recentes sincronizadas! ${totalSavedOrders} vendas processadas${hasMoreToSync ? '. Sincronizando vendas antigas em background...' : ''}`;
+    mensagemFinal = `Vendas recentes sincronizadas! ${totalSavedOrders} vendas processadas${
+      hasMoreToSync ? ". Sincronizando vendas antigas em background..." : ""
+    }`;
   } else {
     mensagemFinal = `Sincroniza��o completa! ${totalSavedOrders} vendas processadas de ${totalExpectedOrders} esperadas`;
   }
@@ -2148,7 +2340,7 @@ export async function POST(req: NextRequest) {
     total: totalExpectedOrders,
     fetched: totalSavedOrders,
     expected: totalExpectedOrders,
-    hasMoreToSync // NOVO: indica se há mais vendas antigas
+    hasMoreToSync, // NOVO: indica se há mais vendas antigas
   });
 
   // Invalidar cache de vendas após sincronização
@@ -2165,25 +2357,28 @@ export async function POST(req: NextRequest) {
       current: totalSavedOrders,
       total: totalExpectedOrders,
       fetched: totalFetchedOrders,
-      expected: totalExpectedOrders
+      expected: totalExpectedOrders,
     });
 
     // Trigger pr�ximo sync (fire-and-forget - n�o espera resposta)
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000");
 
     fetch(`${baseUrl}/api/meli/vendas/sync`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Cookie': `session=${sessionCookie}`
+        "Content-Type": "application/json",
+        Cookie: `session=${sessionCookie}`,
       },
       body: JSON.stringify({
         accountIds: requestBody.accountIds,
         quickMode: requestBody.quickMode,
-        fullSync: requestBody.fullSync
-      })
-    }).catch(err => console.error(`[Sync] Erro ao continuar:`, err));
+        fullSync: requestBody.fullSync,
+      }),
+    }).catch((err) => console.error(`[Sync] Erro ao continuar:`, err));
   } else {
     // Fechar SSE apenas quando completar tudo
     setTimeout(() => closeUserConnections(userId), 2000);
@@ -2197,12 +2392,10 @@ export async function POST(req: NextRequest) {
     totals: {
       expected: totalExpectedOrders,
       fetched: totalFetchedOrders,
-      saved: totalSavedOrders
+      saved: totalSavedOrders,
     },
     hasMoreToSync, // NOVO: flag indicando se há vendas antigas pendentes
     quickMode, // NOVO: indica qual modo foi usado
-    autoSyncTriggered: hasMoreToSync
+    autoSyncTriggered: hasMoreToSync,
   });
 }
-
-

@@ -13,6 +13,7 @@ import prisma from './prisma';
 import { dequeueSales, type QueuedSale, getQueueStats } from './redis-queue';
 import { sendProgressToUser } from './sse-progress';
 import { Decimal } from '@prisma/client/runtime/library';
+import { prepareSaleData } from '@/utils/sync-prepare-sale-data';
 
 const BATCH_SIZE = 50;
 const MAX_RETRIES = 3;
@@ -25,6 +26,101 @@ type SkuCacheEntry = {
 
 // In-memory SKU cache (preserved from original implementation)
 const skuCache = new Map<string, SkuCacheEntry>();
+
+function extractOrderIdFromPayload(order: QueuedSale): string | null {
+  const rawOrder = (order?.order ?? null) as any;
+  if (!rawOrder || rawOrder.id === undefined || rawOrder.id === null) {
+    return null;
+  }
+  const id = String(rawOrder.id).trim();
+  return id.length === 0 ? null : id;
+}
+
+function deduplicateOrders(orders: QueuedSale[]): {
+  uniqueOrders: QueuedSale[];
+  duplicates: number;
+} {
+  const seen = new Set<string>();
+  const uniqueOrders: QueuedSale[] = [];
+  let duplicates = 0;
+
+  for (const order of orders) {
+    const orderId = extractOrderIdFromPayload(order);
+    if (!orderId) {
+      uniqueOrders.push(order);
+      continue;
+    }
+    if (seen.has(orderId)) {
+      duplicates += 1;
+      continue;
+    }
+    seen.add(orderId);
+    uniqueOrders.push(order);
+  }
+
+  return { uniqueOrders, duplicates };
+}
+
+
+async function buildSkuCacheFromSales(
+  orders: QueuedSale[],
+  userId: string
+): Promise<Map<string, SkuCacheEntry>> {
+  const skuSet = new Set<string>();
+
+  for (const payload of orders) {
+    const rawOrder: any = payload ?? {};
+    const orderItems: any[] = Array.isArray(rawOrder.order_items)
+      ? rawOrder.order_items
+      : [];
+
+    for (const item of orderItems) {
+      const itemData =
+        typeof item?.item === "object" && item?.item !== null ? item.item : {};
+      const candidate =
+        itemData?.seller_sku ||
+        itemData?.sku ||
+        item?.seller_sku ||
+        item?.sku ||
+        null;
+
+      if (candidate) {
+        const normalized = truncateString(String(candidate), 255);
+        if (normalized) {
+          skuSet.add(normalized);
+        }
+      }
+    }
+  }
+
+  if (skuSet.size === 0) {
+    return new Map();
+  }
+
+  const skuList = Array.from(skuSet);
+  const skuRecords = await prisma.sKU.findMany({
+    where: {
+      userId,
+      sku: { in: skuList },
+    },
+    select: {
+      sku: true,
+      custoUnitario: true,
+      tipo: true,
+    },
+  });
+
+  const cache = new Map<string, SkuCacheEntry>();
+  for (const record of skuRecords) {
+    cache.set(record.sku, {
+      custoUnitario:
+        record.custoUnitario !== null ? Number(record.custoUnitario) : null,
+      tipo: record.tipo ?? null,
+    });
+  }
+
+  return cache;
+}
 
 /**
  * Process a single batch of sales from Redis to PostgreSQL
@@ -109,13 +205,23 @@ export async function processAllUserSales(userId: string): Promise<{
     console.log(`[Sync Worker] 🚀 Starting worker for user ${userId}`);
 
     sendProgressToUser(userId, {
-        type: 'sync_save_start',
+        type: 'sync_save_starting',
         message: 'Iniciando salvamento no banco de dados...',
         phase: 'saving',
     });
 
     while (true) {
         const result = await processSalesBatch(userId);
+
+        if (totalProcessed === 0 && totalErrors === 0) {
+            sendProgressToUser(userId, {
+                type: 'sync_save_started',
+                message: 'Processo de salvamento no banco de dados iniciado!',
+                current: result.processed + result.errors,
+                total: result.remaining + result.processed + result.errors,
+                phase: 'saving',
+            });
+        }
 
         totalProcessed += result.processed;
         totalErrors += result.errors;
@@ -158,21 +264,93 @@ async function saveSalesToDatabase(
     for (let i = 0; i < sales.length; i += BATCH_SIZE) {
         const batch = sales.slice(i, i + BATCH_SIZE);
 
-        try {
-            const savePromises = batch.map(sale => saveSingleSale(userId, sale));
-            const results = await Promise.allSettled(savePromises);
+        // try {
+        //     const savePromises = batch.map(sale => saveSingleSale(userId, sale));
+        //     const results = await Promise.allSettled(savePromises);
 
-            results.forEach(result => {
-                if (result.status === 'fulfilled') {
-                    saved++;
-                } else {
-                    errors++;
-                    console.error('[Sync Worker] Save error:', result.reason);
-                }
+        //     results.forEach(result => {
+        //         if (result.status === 'fulfilled') {
+        //             saved++;
+        //         } else {
+        //             errors++;
+        //             console.error('[Sync Worker] Save error:', result.reason);
+        //         }
+        //     });
+
+        // } catch (error) {
+        //     console.error('[Sync Worker] Batch save error:', error);
+        //     errors += batch.length;
+        // }
+
+        
+        try {
+            // Preparar todos os dados do batch primeiro
+            const preparedData = await Promise.all(
+            batch.map((order) => prepareSaleData(order, userId, skuCache))
+            );
+
+            // Filtrar dados v�lidos
+            const validData = preparedData.filter((d) => d !== null);
+
+            if (validData.length === 0) {
+            errors += batch.length;
+            continue;
+            }
+
+            // Buscar IDs existentes para dividir em creates vs updates
+            const orderIds = validData.map((d) => d!.orderId);
+            const existingOrders = await prisma.meliVenda.findMany({
+            where: { orderId: { in: orderIds } },
+            select: { orderId: true },
             });
 
-        } catch (error) {
-            console.error('[Sync Worker] Batch save error:', error);
+            const existingOrderIdSet = new Set(
+            existingOrders.map((o: any) => o.orderId)
+            );
+
+            const toCreate = validData.filter(
+            (d) => !existingOrderIdSet.has(d!.orderId)
+            );
+            const toUpdate = validData.filter((d) =>
+            existingOrderIdSet.has(d!.orderId)
+            );
+
+            // BATCH CREATE: insere m�ltiplos registros de uma vez
+            if (toCreate.length > 0) {
+            try {
+                await prisma.meliVenda.createMany({
+                data: toCreate.map((d) => d!.createData),
+                skipDuplicates: true, // Evita erro se j� existir
+                });
+                saved += toCreate.length;
+            } catch (createError) {
+                console.error(`[Sync] Erro em batch create:`, createError);
+                errors += toCreate.length;
+            }
+            }
+
+            // BATCH UPDATE: atualiza m�ltiplos registros em uma transa��o
+            if (toUpdate.length > 0) {
+            try {
+                await prisma.$transaction(
+                toUpdate.map((d) =>
+                    prisma.meliVenda.update({
+                    where: { orderId: d!.orderId },
+                    data: { ...d!.updateData, atualizadoEm: new Date() },
+                    })
+                )
+                );
+                saved += toUpdate.length;
+            } catch (updateError) {
+                console.error(`[Sync] Erro em batch update:`, updateError);
+                errors += toUpdate.length;
+            }
+            }
+        } catch (batchError) {
+            console.error(
+            `[Sync] Erro cr�tico no batch ${i}-${i + BATCH_SIZE}:`,
+            batchError
+            );
             errors += batch.length;
         }
     }

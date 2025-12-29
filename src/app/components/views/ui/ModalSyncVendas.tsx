@@ -1,5 +1,7 @@
     "use client";
 
+import { SyncProgressShowcase } from "@/components/ui/sync-progress-showcase";
+import { useProgressAdapter } from "@/hooks/use-progress-adapter";
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
@@ -13,8 +15,10 @@ interface ContaInfo {
 }
 
 interface SyncProgress {
-  type: "sync_start" | "sync_progress" | "sync_complete" | "sync_error";
+  type: "sync_start" | "sync_progress" | "sync_complete" | "sync_error" | "sync_save_progress" | "sync_save_started" | "sync_save_starting";
   message: string;
+  total?: number,
+  current?: number,
   fetched?: number;
   expected?: number;
   accountNickname?: string;
@@ -69,6 +73,17 @@ export default function ModalSyncVendas({
     accountName?: string;
   } | null>(null);
   const [verificationLog, setVerificationLog] = useState<string>('');
+
+  const {
+  progressAdapter,
+  setTotal,
+  setCurrent,
+  setDescription,
+  reset
+  } = useProgressAdapter();
+  const [syncCurrentAccountNickname, setSyncCurrentAccountNickname] = useState<string>('');
+
+  const [saveProgressTotalToProcess, setSaveProgressTotalToProcess] = useState<number>(0);
 
   // Animações de abertura/fechamento
   useEffect(() => {
@@ -164,7 +179,24 @@ export default function ModalSyncVendas({
         console.log('[ModalSyncVendas] Fechando modal agora');
         onClose();
       }, 2000);
+    } else if (progress?.type === "sync_save_started" && progress?.total) {
+      reset()
+      setTotal(progress.total)
+    } else if (progress?.type === "sync_save_progress" && progress?.total) {
+      setCurrent(progressAdapter.total - progress.total)
+      setDescription('Salvando no banco...')
+    } else if (progress?.type === "sync_progress" && progress?.fetched && progress?.expected) {
+      setCurrent(progress.fetched)
+      if (progress?.expected != progressAdapter.total) {
+        setTotal(progress.expected)
+      }
+      setDescription('Buscando vendas...')
     }
+
+    if (progress?.accountNickname) {
+      setSyncCurrentAccountNickname(progress.accountNickname)
+    }
+
   }, [progress, onSyncComplete, platform, onClose]);
 
   const handleVerify = async () => {
@@ -372,7 +404,12 @@ export default function ModalSyncVendas({
   };
 
   const calculateProgress = () => {
-    if (!progress?.expected || !progress?.fetched) return 0;
+    if ((!progress?.expected || !progress?.fetched) || (!progress?.total || !progress?.current)) return 0;
+
+    if (progress.type === 'sync_save_progress') {
+      return Math.round(((saveProgressTotalToProcess - progress.total) / saveProgressTotalToProcess) * 100);
+    }
+
     return Math.round((progress.fetched / progress.expected) * 100);
   };
 
@@ -964,45 +1001,27 @@ export default function ModalSyncVendas({
                             </div>
                           );
                         })
-                      ) : (
+                      ) : progress ? 
+                            <SyncProgressShowcase
+                              key={progress?.accountId}
+                              accountNickname={syncCurrentAccountNickname ?? ""}
+                              description={progressAdapter.description}
+                              current={progressAdapter.current} 
+                              total={progressAdapter.total} 
+                              percentage={progressAdapter.percentage}
+                            /> : (
                         // Fallback para contas selecionadas (se não houver steps ainda)
                         contasInfo
                           .filter((c) => selectedAccountIds.includes(c.id))
                           .map((conta) => (
-                            <div
+                            <SyncProgressShowcase
                               key={conta.id}
-                              className="rounded-lg border-2 border-orange-300 bg-orange-50 p-4"
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500">
-                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-semibold text-gray-900">
-                                      {getAccountLabel(conta)}
-                                    </p>
-                                    <p className="text-xs text-gray-600">Iniciando...</p>
-                                  </div>
-                                </div>
-                                {conta.newOrdersCount !== undefined && (
-                                  <span className="text-xs font-semibold text-gray-700">
-                                    0/{conta.newOrdersCount}
-                                  </span>
-                                )}
-                              </div>
-                              
-                              {/* Barra de progresso inicial */}
-                              <div className="space-y-1">
-                                <div className="w-full bg-orange-200 rounded-full h-2 overflow-hidden">
-                                  <div
-                                    className="h-2 rounded-full bg-orange-500 transition-all duration-300 animate-pulse"
-                                    style={{ width: '10%' }}
-                                  />
-                                </div>
-                                <p className="text-xs text-gray-500 text-right">0%</p>
-                              </div>
-                            </div>
+                              accountNickname={getAccountLabel(conta)}
+                              description={progressAdapter.description}
+                              current={progressAdapter.current} 
+                              total={progressAdapter.total} 
+                              percentage={progressAdapter.percentage}
+                            />
                           ))
                       )}
                     </div>

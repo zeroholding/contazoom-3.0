@@ -335,6 +335,7 @@ export default function VendasMercadolivre() {
     contasConectadas,
     isConnected,
     progress,
+    syncProgress,
     connect,
     disconnect,
     reloadVendas
@@ -448,7 +449,6 @@ export default function VendasMercadolivre() {
     }, 1000);
     return () => clearTimeout(timer);
   }, []);
-
 
   const handleMobileClose = useCallback(() => {
     setIsSidebarMobileOpen(false);
