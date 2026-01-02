@@ -732,6 +732,7 @@ async function fetchAllOrdersForAccount(
   // const MAX_EXECUTION_TIME = 30000; // SEMPRE 30 segundos
   const MAX_EXECUTION_TIME = 3000000; // SEMPRE 30 minutos
   const results: MeliOrderPayload[] = [];
+  const detailsResults: MeliOrderPayload[] = [];
   const logisticStats = new Map<string, number>();
   let forcedStop = false; // Declarar forcedStop localmente
 
@@ -762,7 +763,7 @@ async function fetchAllOrdersForAccount(
     console.log(`[Sync] 📅 Primeira sincronização - buscando desde o início`);
   }
 
-  const MAX_OFFSET = 9950; // Limite seguro antes do 10k da API
+  const MAX_OFFSET = 50000; // Limite seguro antes do 10k da API
   let total = 0;
   let discoveredTotal: number | null = null;
   let nextOffset = 0;
@@ -771,7 +772,7 @@ async function fetchAllOrdersForAccount(
   // Em background, buscar 1500 vendas (mais conservador para evitar timeout)
   // LIMITE SEGURO: 100 vendas por sync (30s fetch + 15s save = 45s total)
   // 12k vendas = 120 syncs autom�ticos
-  const SAFE_BATCH_SIZE = 100;
+  const SAFE_BATCH_SIZE = 50000;
   let maxOffsetToFetch = Math.min(MAX_OFFSET, SAFE_BATCH_SIZE);
   const activePages = new Set<Promise<void>>();
   let oldestOrderDate: Date | null = null;
@@ -875,6 +876,9 @@ async function fetchAllOrdersForAccount(
     nextOffset += PAGE_LIMIT;
   }
 
+  console.log("---------------------------aqui 1")
+  console.log(activePages.size)
+
   while (activePages.size > 0) {
     await Promise.race(activePages);
 
@@ -904,7 +908,7 @@ async function fetchAllOrdersForAccount(
   const reachedLimit = results.length >= SAFE_BATCH_SIZE;
   const shouldFetchHistory = !reachedLimit && timeRemaining > 10000;
 
-  if (shouldFetchHistory && (total > results.length || oldestSyncedDate)) {
+  if (shouldFetchHistory) {
     console.log(
       `[Sync] 🔄 Buscando vendas históricas (tempo restante: ${Math.round(
         timeRemaining / 1000
@@ -929,7 +933,14 @@ async function fetchAllOrdersForAccount(
         results.length > 0
           ? extractOrderDate(results[results.length - 1].order) ?? new Date()
           : new Date();
+
+      // const fallbackOldest =
+      //   results.length > 0
+      //     ? extractOrderDate(results[0].order) ?? new Date()
+      //     : new Date();
       searchStartDate = oldestOrderDate ?? fallbackOldest;
+      console.log("fallback")
+      console.log(fallbackOldest)
       console.log(
         `[Sync] 📅 Primeira busca histórica a partir de ${
           searchStartDate.toISOString().split("T")[0]
@@ -943,10 +954,12 @@ async function fetchAllOrdersForAccount(
     currentMonthStart.setHours(0, 0, 0, 0);
     currentMonthStart.setMonth(currentMonthStart.getMonth() - 1); // Começar do mês anterior
 
-    // NOVA L�"GICA: Se fullSync, buscar TODAS as vendas (desde 2000). Caso contrário, buscar desde 2010.
-    const startDate = fullSync
-      ? new Date("2000-01-01")
-      : new Date("2010-01-01");
+    // // NOVA L�"GICA: Se fullSync, buscar TODAS as vendas (desde 2000). Caso contrário, buscar desde 2010.
+    // const startDate = fullSync
+    //   ? new Date("2000-01-01")
+    //   : new Date("2010-01-01");
+
+    const startDate = new Date();
     console.log(
       `[Sync] ${
         fullSync
@@ -957,7 +970,7 @@ async function fetchAllOrdersForAccount(
 
     // Buscar enquanto tiver tempo
     while (
-      currentMonthStart > startDate &&
+      currentMonthStart < startDate &&
       Date.now() - startTime < MAX_EXECUTION_TIME - 5000
     ) {
       // Calcular fim do mês
@@ -985,18 +998,18 @@ async function fetchAllOrdersForAccount(
         `[Sync] ✅ Encontradas ${monthOrders.length} vendas neste período`
       );
 
-      results.push(...monthOrders);
+      detailsResults.push(...monthOrders);
 
       sendProgressToUser(userId, {
-        type: "sync_progress",
+        type: "sync_details_progress",
         message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${
           results.length
         } vendas baixadas (buscando histórico: ${
           currentMonthStart.toISOString().split("T")[0]
         })`,
-        current: results.length,
+        current: detailsResults.length,
         total: Math.max(total, results.length), // Usar o maior valor entre total estimado e vendas baixadas
-        fetched: results.length,
+        fetched: detailsResults.length,
         expected: Math.max(total, results.length),
         accountId: account.id,
         accountNickname: account.nickname || undefined,
@@ -1007,12 +1020,14 @@ async function fetchAllOrdersForAccount(
         console.log(
           `[Sync] ✅ Nenhuma venda encontrada neste período - histórico completo!`
         );
-        break;
+        // break;
       }
 
       // Ir para o mês anterior
-      currentMonthStart.setMonth(currentMonthStart.getMonth() - 1);
+      currentMonthStart.setMonth(currentMonthStart.getMonth() + 1);
     }
+
+    results.push(...detailsResults)
 
     const elapsedTime = Math.round((Date.now() - startTime) / 1000);
     console.log(
@@ -1082,7 +1097,7 @@ async function fetchOrdersInDateRange(
 ): Promise<MeliOrderPayload[]> {
   const results: MeliOrderPayload[] = [];
   let offset = 0;
-  const MAX_OFFSET = 9950;
+  const MAX_OFFSET = 50000;
   let totalInPeriod = 0;
   let needsSplitting = false;
 

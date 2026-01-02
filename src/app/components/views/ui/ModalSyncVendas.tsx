@@ -15,7 +15,7 @@ interface ContaInfo {
 }
 
 interface SyncProgress {
-  type: "sync_start" | "sync_progress" | "sync_complete" | "sync_error" | "sync_save_progress" | "sync_save_started" | "sync_save_starting";
+  type: "sync_start" | "sync_progress" | "sync_complete" | "sync_error" | "sync_save_progress" | "sync_save_started" | "sync_save_starting" | "sync_details_progress";
   message: string;
   total?: number,
   current?: number,
@@ -191,6 +191,12 @@ export default function ModalSyncVendas({
         setTotal(progress.expected)
       }
       setDescription('Buscando vendas...')
+    } else if (progress?.type === "sync_details_progress" && progress?.fetched && progress?.expected) {
+      setCurrent(progress.fetched)
+      if (progress?.expected != progressAdapter.total) {
+        setTotal(progress.expected)
+      }
+      setDescription('Buscando detalhes das vendas...')
     }
 
     if (progress?.accountNickname) {

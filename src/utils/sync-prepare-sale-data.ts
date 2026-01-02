@@ -210,7 +210,7 @@ export async function prepareSaleData(
         return mapListingTypeToExposure(listingTypeId);
       })(),
       tipoAnuncio: tags.includes("catalog") ? "Catalogo" : "Proprio",
-      ads: (internalTags.includes("ads") || tags.some(value => adsTags.includes(value))) ? "ADS" : null,
+      ads: internalTags.includes("ads") ? "ADS" : null,
       plataforma: "Mercado Livre",
       canal: "ML",
       tags: truncateJsonData(tags),
