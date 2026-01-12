@@ -399,13 +399,13 @@ export default function TabelaVendas({
     if (filtro === "catalogo")
       return (
         tipoAnuncio === "catalog" ||
-        tipoAnuncio === "catálogo" ||
+        tipoAnuncio === "catalogo" ||
         (venda.tags && venda.tags.includes("catalog_product"))
       );
     if (filtro === "proprio")
       return (
         tipoAnuncio !== "catalog" &&
-        tipoAnuncio !== "catálogo" &&
+        tipoAnuncio !== "catalogo" &&
         (!venda.tags || !venda.tags.includes("catalog_product"))
       );
     return true;

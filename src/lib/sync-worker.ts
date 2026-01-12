@@ -286,70 +286,70 @@ async function saveSalesToDatabase(
         try {
             // Preparar todos os dados do batch primeiro
             const preparedData = await Promise.all(
-            batch.map((order) => prepareSaleData(order, userId, skuCache))
+                batch.map((order) => prepareSaleData(order, userId, skuCache))
             );
 
             // Filtrar dados v�lidos
             const validData = preparedData.filter((d) => d !== null);
 
             if (validData.length === 0) {
-            errors += batch.length;
-            continue;
+                errors += batch.length;
+                continue;
             }
 
             // Buscar IDs existentes para dividir em creates vs updates
             const orderIds = validData.map((d) => d!.orderId);
             const existingOrders = await prisma.meliVenda.findMany({
-            where: { orderId: { in: orderIds } },
-            select: { orderId: true },
+                where: { orderId: { in: orderIds } },
+                select: { orderId: true },
             });
 
             const existingOrderIdSet = new Set(
-            existingOrders.map((o: any) => o.orderId)
+                existingOrders.map((o: any) => o.orderId)
             );
 
             const toCreate = validData.filter(
-            (d) => !existingOrderIdSet.has(d!.orderId)
+                (d) => !existingOrderIdSet.has(d!.orderId)
             );
             const toUpdate = validData.filter((d) =>
-            existingOrderIdSet.has(d!.orderId)
+                existingOrderIdSet.has(d!.orderId)
             );
 
             // BATCH CREATE: insere m�ltiplos registros de uma vez
             if (toCreate.length > 0) {
-            try {
-                await prisma.meliVenda.createMany({
-                data: toCreate.map((d) => d!.createData),
-                skipDuplicates: true, // Evita erro se j� existir
-                });
-                saved += toCreate.length;
-            } catch (createError) {
-                console.error(`[Sync] Erro em batch create:`, createError);
-                errors += toCreate.length;
-            }
+                try {
+                    await prisma.meliVenda.createMany({
+                    data: toCreate.map((d) => d!.createData),
+                    skipDuplicates: true, // Evita erro se j� existir
+                    });
+                    saved += toCreate.length;
+                } catch (createError) {
+                    console.error(`[Sync] Erro em batch create:`, createError);
+                    errors += toCreate.length;
+                }
             }
 
             // BATCH UPDATE: atualiza m�ltiplos registros em uma transa��o
             if (toUpdate.length > 0) {
-            try {
-                await prisma.$transaction(
-                toUpdate.map((d) =>
-                    prisma.meliVenda.update({
-                    where: { orderId: d!.orderId },
-                    data: { ...d!.updateData, atualizadoEm: new Date() },
-                    })
-                )
-                );
-                saved += toUpdate.length;
-            } catch (updateError) {
-                console.error(`[Sync] Erro em batch update:`, updateError);
-                errors += toUpdate.length;
-            }
+                try {
+                    await prisma.$transaction(
+                    toUpdate.map((d) =>
+                        prisma.meliVenda.update({
+                        where: { orderId: d!.orderId },
+                        data: { ...d!.updateData, atualizadoEm: new Date() },
+                        })
+                    )
+                    );
+                    saved += toUpdate.length;
+                } catch (updateError) {
+                    console.error(`[Sync] Erro em batch update:`, updateError);
+                    errors += toUpdate.length;
+                }
             }
         } catch (batchError) {
             console.error(
-            `[Sync] Erro cr�tico no batch ${i}-${i + BATCH_SIZE}:`,
-            batchError
+                `[Sync] Erro cr�tico no batch ${i}-${i + BATCH_SIZE}:`,
+                batchError
             );
             errors += batch.length;
         }

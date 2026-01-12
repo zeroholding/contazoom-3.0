@@ -154,9 +154,9 @@ export async function GET(req: NextRequest) {
     console.log(`[FaturamentoPorTipoAnuncio] Período: ${usarTodasVendas ? 'todos' : `${start.toISOString()} - ${end.toISOString()}`}`);
 
     if (vendas.length > 0) {
-      const catalogo = vendas.filter(v => v.tipoAnuncio && v.tipoAnuncio.toLowerCase().includes('catálogo'));
-      const proprio = vendas.filter(v => v.tipoAnuncio && v.tipoAnuncio.toLowerCase().includes('próprio'));
-      const outros = vendas.filter(v => !v.tipoAnuncio || (!v.tipoAnuncio.toLowerCase().includes('catálogo') && !v.tipoAnuncio.toLowerCase().includes('próprio')));
+      const catalogo = vendas.filter(v => v.tipoAnuncio && v.tipoAnuncio.toLowerCase().includes('catalogo'));
+      const proprio = vendas.filter(v => v.tipoAnuncio && v.tipoAnuncio.toLowerCase().includes('proprio'));
+      const outros = vendas.filter(v => !v.tipoAnuncio || (!v.tipoAnuncio.toLowerCase().includes('catalogo') && !v.tipoAnuncio.toLowerCase().includes('proprio')));
       console.log(`[FaturamentoPorTipoAnuncio] Catálogo: ${catalogo.length}, Próprio: ${proprio.length}, Outros/Null: ${outros.length}`);
       console.log(`[FaturamentoPorTipoAnuncio] Exemplos tipo anúncio:`, vendas.slice(0, 5).map(v => ({ tipoAnuncio: v.tipoAnuncio, valor: v.valorTotal })));
     }
@@ -171,7 +171,7 @@ export async function GET(req: NextRequest) {
     for (const venda of vendas) {
       const valor = toNumber(venda.valorTotal);
       const isCatalogo = venda.tipoAnuncio &&
-                        venda.tipoAnuncio.toString().toLowerCase().includes('catálogo');
+                        venda.tipoAnuncio.toString().toLowerCase().includes('catalogo');
 
       if (isCatalogo) {
         faturamentoCatalogo += valor;

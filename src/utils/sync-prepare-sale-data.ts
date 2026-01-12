@@ -152,11 +152,23 @@ export async function prepareSaleData(
         : 0);
 
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
-    const frete =
-      freight.adjustedCost ??
-      freight.finalCost ??
-      freight.orderCostFallback ??
-      0;
+    
+    const logisticTypeAccepted = ["drop_off", "Correios", "Agência", "fulfillment"]
+    let frete = freight.adjustedCost ?? 0;
+
+    if (unitario < 79) {
+      if (freight.logisticType && logisticTypeAccepted.includes(freight.logisticType)) {
+        frete = 0
+      } else if (freight.logisticType === "FLEX") {
+        frete = freight.finalCost && freight.finalCost > 0 ? freight.finalCost : freight.baseCost ?? 0
+
+        if (freight.baseCost === 0) {
+          frete = 11
+        }
+      }
+    } else if (unitario >= 79 && freight.diffBaseList && freight.logisticType === "FLEX") {
+      frete = Math.abs(freight.diffBaseList)
+    }
 
     const skuVendaRaw = itemData?.seller_sku || itemData?.sku || null;
     const skuVenda = skuVendaRaw

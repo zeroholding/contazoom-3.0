@@ -519,6 +519,7 @@ export function useVendas(
 
       console.log(`[useVendas] ✅ Carregamento instantâneo: ${allVendas.length} vendas`);
 
+
       setVendas(allVendas);
       setLastSyncedAt(lastSync);
 

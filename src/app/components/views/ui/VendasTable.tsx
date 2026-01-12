@@ -573,15 +573,28 @@ export default function VendasTable({
                               })()
                             ) : (
                               <>
-                                <div className={classifyFrete(venda.frete).className}>
-                                  {classifyFrete(venda.frete).displayValue}
-                                </div>
-                                {venda.logisticType && (
-                                  <div className="text-xs text-gray-500 capitalize">
-                                    {venda.logisticType.replace(/_/g, ' ')}
-                                  </div>
+                                {venda.frete >= 0 ? (
+                                  <span className="frete-positivo">
+                                    {formatCurrency(venda.frete)}
+                                  </span>
+                                ) : venda.frete < 0 ? (
+                                  <span className="frete-negativo">
+                                    {formatCurrency(venda.frete)}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-gray-400">-</span>
                                 )}
                               </>
+                              // <>
+                              //   <div className="text-xs text-gray-500 capitalize">
+                              //     {classifyFrete(venda.frete)}
+                              //   </div>
+                              //   {venda.logisticType && (
+                              //     <div className="text-xs text-gray-500 capitalize">
+                              //       {venda.logisticType.replace(/_/g, ' ')}
+                              //     </div>
+                              //   )}
+                              // </>
                             )}
                           </div>
                         </FreteDetailsDropdown>

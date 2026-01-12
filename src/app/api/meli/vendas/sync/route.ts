@@ -234,17 +234,19 @@ function calculateFreightAdjustment(
 function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   const o = order ?? {};
   const s = shipment ?? {};
+
   const orderShipping =
     o && typeof o.shipping === "object" ? o.shipping ?? {} : {};
 
-  const shippingMode: string | null =
+  const shippingMode =
     typeof orderShipping.mode === "string" ? orderShipping.mode : null;
 
-  const logisticTypeRaw: string | null =
+  const logisticTypeRaw =
     typeof s.logistic_type === "string" ? s.logistic_type : null;
 
   const logisticTypeFallback = shippingMode;
   const logisticType = logisticTypeRaw ?? logisticTypeFallback ?? null;
+
   const logisticTypeSource: FreightSource = logisticTypeRaw
     ? "shipment"
     : logisticTypeFallback
@@ -285,16 +287,15 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
 
   const items = Array.isArray(o.order_items) ? o.order_items : [];
   let quantity = sumOrderQuantities(items);
+
   if (quantity === null) {
-    if (Array.isArray(items) && items.length > 0) quantity = items.length;
+    if (items.length > 0) quantity = items.length;
     else if (totalAmount !== null) quantity = 1;
   }
 
   let unitPrice: number | null = null;
   if (totalAmount !== null && quantity && quantity > 0) {
     unitPrice = roundCurrency(totalAmount / quantity);
-  } else if (totalAmount !== null) {
-    unitPrice = roundCurrency(totalAmount);
   }
 
   const diffBaseList =
@@ -302,35 +303,44 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
       ? roundCurrency(baseCost - listCost)
       : null;
 
-  const convertedLogisticType = convertLogisticTypeName(logisticType);
-  const { adjustedCost, adjustmentSource } = calculateFreightAdjustment(
-    logisticType,
-    unitPrice,
-    quantity,
-    baseCost,
-    listCost,
-    optCost,
-    shipCost
-  );
+  let adjustedCost: number | null = null;
+  let adjustmentSource: FreightSource = null;
+
+  if (listCost !== null && chargedCost !== null) {
+    const sellerFreightCost = Math.max(
+      roundCurrency(listCost - chargedCost),
+      0
+    );
+
+    adjustedCost = sellerFreightCost > 0
+      ? roundCurrency(-sellerFreightCost)
+      : 0;
+
+    adjustmentSource = "shipping_option";
+  }
 
   return {
-    logisticType: convertedLogisticType,
+    logisticType: convertLogisticTypeName(logisticType),
     logisticTypeSource,
     shippingMode,
+
     baseCost,
     listCost,
     shippingOptionCost: optCost !== null ? roundCurrency(optCost) : null,
     shipmentCost: shipCost !== null ? roundCurrency(shipCost) : null,
     orderCostFallback: orderCost !== null ? roundCurrency(orderCost) : null,
+
     finalCost: chargedCost,
     finalCostSource: chargedCostSource,
     chargedCost,
     chargedCostSource,
+
     discount,
     totalAmount,
     quantity,
     unitPrice,
     diffBaseList,
+
     adjustedCost,
     adjustmentSource,
   };
@@ -875,9 +885,6 @@ async function fetchAllOrdersForAccount(
     schedulePageFetch(nextOffset);
     nextOffset += PAGE_LIMIT;
   }
-
-  console.log("---------------------------aqui 1")
-  console.log(activePages.size)
 
   while (activePages.size > 0) {
     await Promise.race(activePages);
@@ -1675,10 +1682,8 @@ async function prepareVendaData(
         : 0);
 
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
-    const frete =
-      freight.adjustedCost ??
-      freight.finalCost ??
-      freight.orderCostFallback ??
+    const frete = unitario >= 79 ?
+      freight.adjustedCost :
       0;
 
     const skuVendaRaw = itemData?.seller_sku || itemData?.sku || null;

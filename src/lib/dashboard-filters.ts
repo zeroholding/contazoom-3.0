@@ -75,7 +75,7 @@ export function getTipoAnuncioWhere(tipoParam?: string | null) {
     return {
       OR: [
         { tipoAnuncio: { contains: 'catalog', mode: 'insensitive' as const } },
-        { tipoAnuncio: { contains: 'catálogo', mode: 'insensitive' as const } }
+        { tipoAnuncio: { contains: 'catalogo', mode: 'insensitive' as const } }
       ]
     };
   }
