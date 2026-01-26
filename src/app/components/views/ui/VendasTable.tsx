@@ -89,6 +89,7 @@ interface VendasTableProps {
   itemsPerPage: number;
   colunasVisiveis?: import('./FiltrosVendas').ColunasVisiveis;
   platform?: "Mercado Livre" | "Shopee" | "Geral";
+  managePage?: boolean;
 }
 
 // Skeleton para carregamento
@@ -161,12 +162,13 @@ export default function VendasTable({
     cmv: true,
     margem: true, // margem contribuição
   },
-  platform = "Mercado Livre"
+  platform = "Mercado Livre",
+  managePage = false
 }: VendasTableProps) {
-  const paginatedVendas = vendas.slice(
+  const paginatedVendas = managePage ? vendas.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
-  );
+  ) : vendas;
 
   const getStatusColor = (status: string) => {
     switch (status) {

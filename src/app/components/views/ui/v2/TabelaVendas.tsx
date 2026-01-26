@@ -1,53 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { EmptyState } from "./CardsContas";
-import AvatarConta, { type ContaConectada } from "./AvatarConta";
-import VendasTable, { type Venda } from "./VendasTable";
-import VendasPagination from "./VendasPagination";
-import {
-  FiltroStatus,
-  FiltroPeriodo,
-  FiltroADS,
-  FiltroExposicao,
-  FiltroTipoAnuncio,
-  FiltroModalidadeEnvio,
-  ColunasVisiveis,
-} from "./FiltrosVendas";
-import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
-import { useToast } from "./toaster";
-import { useVendas } from "@/hooks/useVendas";
+import { EmptyState } from "../CardsContas";
+import VendasTable from "../VendasTable";
+import VendasPagination from "../VendasPagination";
+import { ColunasVisiveis } from "../FiltrosVendas";
+import { useToast } from "../toaster";
+import { useVendasV2 } from "@/hooks/v2/useVendas";
+import { PaginationMeta } from "@/validation/validation.interface";
+import { Venda } from "@/hooks/useVendas";
+import { useVendasContext } from "@/hooks/v2/useVendasContext";
 
 interface SyncProgressTotals {
   fetched?: number;
   expected?: number;
 }
-
-type MeliOrdersResponse = {
-  syncedAt: string;
-  accounts: Array<{
-    id: string;
-    nickname: string | null;
-    ml_user_id: number;
-    expires_at: string;
-  }>;
-  orders: Array<{
-    accountId: string;
-    accountNickname: string | null;
-    mlUserId: number;
-    order: Record<string, unknown>;
-    shipment?: Record<string, unknown>;
-  }>;
-  errors: Array<{
-    accountId: string;
-    mlUserId: number;
-    message: string;
-  }>;
-  totals?: {
-    expected: number;
-    fetched: number;
-  };
-};
 
 interface TabelaVendasProps {
   platform?: string;
@@ -56,116 +23,20 @@ interface TabelaVendasProps {
   isSyncing?: boolean;
   syncProgress?: SyncProgressTotals | null;
   vendas?: Venda[];
+  pagination?: PaginationMeta;
+  onPageChange?: (page: number) => void;
   lastSyncedAt?: string | null;
   showInfoDropdown?: boolean;
   onToggleInfoDropdown?: () => void;
   dropdownRef?: React.RefObject<HTMLDivElement>;
-  filtroAtivo?: FiltroStatus;
-  periodoAtivo?: FiltroPeriodo;
-  filtroADS?: FiltroADS;
-  filtroExposicao?: FiltroExposicao;
-  filtroTipoAnuncio?: FiltroTipoAnuncio;
-  filtroModalidadeEnvio?: FiltroModalidadeEnvio;
-  filtroConta?: string;
   colunasVisiveis?: ColunasVisiveis;
-  dataInicioPersonalizada?: Date | null;
-  dataFimPersonalizada?: Date | null;
 }
 
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return null;
-}
-
-function roundCurrency(value: number): number {
-  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
-  return Object.is(rounded, -0) ? 0 : rounded;
-}
-
-function mapListingTypeToExposure(listingType: string | null): string | null {
-  if (!listingType) return null;
-  const normalized = listingType.toLowerCase();
-  if (normalized.startsWith("gold")) return "Premium";
-  if (normalized === "silver") return "Clássico";
-  return "Clássico";
-}
-
-function mapListingTypeToLabel(listingType: string | null): string | null {
-  if (!listingType) return null;
-  const normalized = listingType.toLowerCase();
-  if (normalized.includes("catalog")) {
-    return "Catálogo";
-  }
-  return "Próprio";
-}
-
-/**
- * Mantida por compatibilidade; cálculo vem do backend.
- */
-function calculateMargemContribuicao(
-  valorTotal: number,
-  taxaPlataforma: number | null,
-  frete: number,
-  cmv: number | null,
-): { valor: number; isMargemReal: boolean } {
-  const taxa = taxaPlataforma || 0;
-  if (cmv !== null && cmv !== undefined && cmv > 0) {
-    const margemContribuicao = valorTotal + taxa + frete - cmv;
-    return {
-      valor: roundCurrency(margemContribuicao),
-      isMargemReal: true,
-    };
-  }
-  const receitaLiquida = valorTotal + taxa + frete;
-  return {
-    valor: roundCurrency(receitaLiquida),
-    isMargemReal: false,
-  };
-}
-
-type ProcessedVenda = {
-  venda: Venda;
-  isCalculating: boolean;
-};
-
-export default function TabelaVendas({
+export default function TabelaVendasV2({
   platform = "Mercado Livre",
-  isLoading = false,
-  filtroAtivo = "pagos",
-  periodoAtivo = "todos",
-  filtroADS = "todos",
-  filtroExposicao = "todas",
-  filtroTipoAnuncio = "todos",
-  filtroModalidadeEnvio = "todos",
-  filtroConta = "todas",
-  colunasVisiveis = {
-    data: true,
-    pedido: true,
-    produto: true,
-    quantidade: true,
-    valor: true,
-    frete: true,
-    taxa: true,
-    margem: true,
-    exposicao: true,
-    ads: true,
-    tipo: true,
-    conta: true,
-    canal: true,
-    sku: true,
-    unitario: true,
-    cmv: true,
-  },
-  dataInicioPersonalizada = null,
-  dataFimPersonalizada = null,
   syncProgress = null,
-  vendas: propVendas, // Recebe vendas via prop (renomeado para evitar conflito)
+  colunasVisiveis,
+  onPageChange,
 }: TabelaVendasProps) {
   const toast = useToast();
   const [isStartingSync, setIsStartingSync] = useState(false);
@@ -190,7 +61,9 @@ export default function TabelaVendas({
   };
 
   const {
-    vendas: vendasFromHook,
+    vendas,
+    pagination,
+    countVendas,
     contasConectadas,
     syncErrors,
     isTableLoading,
@@ -199,39 +72,40 @@ export default function TabelaVendas({
     handleSyncOrders,
     isSyncing,
     syncProgress: hookSyncProgress,
-    isConnected,
     progress,
     connect,
-    disconnect,
-  } = useVendas(platform, {
-    autoConnectSSE: true, // Conectar SSE automaticamente para detectar syncs em andamento
-  });
-
-  // Prioriza vendas passadas via prop, senão usa do hook
-  const vendas = propVendas || vendasFromHook;
+  } = useVendasContext();
 
   const effectiveSyncProgress: SyncProgressTotals | null =
     syncProgress || hookSyncProgress || null;
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
 
   const [localSyncProgress, setLocalSyncProgress] = useState<{
     fetched: number;
     expected: number;
   }>({ fetched: 0, expected: 0 });
 
+  const handlePageChange = (page: number) => {
+    if (onPageChange) {
+      onPageChange(page);
+    }
+  };
+
   // Atualiza progresso local a partir dos eventos SSE (inclui complete)
   useEffect(() => {
     if (
       progress &&
-      ["sync_progress", "sync_continue", "sync_start", "sync_complete"].includes(
-        progress.type,
-      )
+      [
+        "sync_progress",
+        "sync_continue",
+        "sync_start",
+        "sync_complete",
+      ].includes(progress.type)
     ) {
       setLocalSyncProgress({
         fetched:
-          (typeof progress.current === "number" ? progress.current : undefined) ??
+          (typeof progress.current === "number"
+            ? progress.current
+            : undefined) ??
           (typeof progress.fetched === "number" ? progress.fetched : 0),
         expected:
           (typeof progress.total === "number" ? progress.total : undefined) ??
@@ -286,216 +160,7 @@ export default function TabelaVendas({
     return processedVendas;
   }, [vendas]);
 
-  const filtrarPorPeriodo = (
-    item: ProcessedVenda,
-    periodo: FiltroPeriodo,
-    dataInicioPersonalizada?: Date | null,
-    dataFimPersonalizada?: Date | null,
-  ) => {
-    if (periodo === "todos") return true;
-    const dataVenda = new Date(item.venda.dataVenda);
-    const agora = new Date();
-
-    switch (periodo) {
-      case "mes_passado": {
-        const primeiroDiaMesPassado = new Date(
-          agora.getFullYear(),
-          agora.getMonth() - 1,
-          1,
-        );
-        const ultimoDiaMesPassado = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          0,
-        );
-        return (
-          dataVenda >= primeiroDiaMesPassado &&
-          dataVenda <= ultimoDiaMesPassado
-        );
-      }
-      case "este_mes": {
-        const primeiroDiaMesAtual = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          1,
-        );
-        const ultimoDiaMesAtual = new Date(
-          agora.getFullYear(),
-          agora.getMonth() + 1,
-          0,
-        );
-        return (
-          dataVenda >= primeiroDiaMesAtual && dataVenda <= ultimoDiaMesAtual
-        );
-      }
-      case "hoje": {
-        const hoje = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          agora.getDate(),
-        );
-        const amanha = new Date(hoje);
-        amanha.setDate(amanha.getDate() + 1);
-        return dataVenda >= hoje && dataVenda < amanha;
-      }
-      case "ontem": {
-        const ontem = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          agora.getDate() - 1,
-        );
-        const hoje = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          agora.getDate(),
-        );
-        return dataVenda >= ontem && dataVenda < hoje;
-      }
-      case "personalizado": {
-        if (dataInicioPersonalizada && dataFimPersonalizada) {
-          const inicio = new Date(dataInicioPersonalizada);
-          inicio.setHours(0, 0, 0, 0);
-          const fim = new Date(dataFimPersonalizada);
-          fim.setHours(23, 59, 59, 999);
-          return dataVenda >= inicio && dataVenda <= fim;
-        }
-        return true;
-      }
-      default:
-        return true;
-    }
-  };
-
-  const filtrarPorADS = (item: ProcessedVenda, filtro: FiltroADS) => {
-    if (filtro === "todos") return true;
-    const { venda } = item;
-    const temADS =
-      venda.ads === "ADS" ||
-      (venda.internalTags && venda.internalTags.includes("ads"));
-    if (filtro === "com_ads") return temADS;
-    if (filtro === "sem_ads") return !temADS;
-    return true;
-  };
-
-  const filtrarPorExposicao = (
-    item: ProcessedVenda,
-    filtro: FiltroExposicao,
-  ) => {
-    if (filtro === "todas") return true;
-    const { exposicao } = item.venda;
-    const lowerExposicao = exposicao?.toLowerCase();
-    if (filtro === "premium") return lowerExposicao === "premium";
-    if (filtro === "classico") return lowerExposicao === "clássico";
-    return true;
-  };
-
-  const filtrarPorTipoAnuncio = (
-    item: ProcessedVenda,
-    filtro: FiltroTipoAnuncio,
-  ) => {
-    if (filtro === "todos") return true;
-    const { venda } = item;
-    const tipoAnuncio = venda.tipoAnuncio?.toLowerCase();
-    if (filtro === "catalogo")
-      return (
-        tipoAnuncio === "catalog" ||
-        tipoAnuncio === "catalogo" ||
-        (venda.tags && venda.tags.includes("catalog_product"))
-      );
-    if (filtro === "proprio")
-      return (
-        tipoAnuncio !== "catalog" &&
-        tipoAnuncio !== "catalogo" &&
-        (!venda.tags || !venda.tags.includes("catalog_product"))
-      );
-    return true;
-  };
-
-  const filtrarPorModalidadeEnvio = (
-    item: ProcessedVenda,
-    filtro: FiltroModalidadeEnvio,
-  ) => {
-    if (filtro === "todos") return true;
-    const { venda } = item;
-    const logisticType = venda.logisticType?.toLowerCase();
-    if (filtro === "full") return logisticType?.includes("fulfill") || false;
-    if (filtro === "flex") return logisticType?.includes("flex") || false;
-    if (filtro === "me")
-      return (
-        !logisticType?.includes("fulfill") && !logisticType?.includes("flex")
-      );
-    return true;
-  };
-
-  const filtrarPorConta = (item: ProcessedVenda, contaId: string) => {
-    if (contaId === "todas") return true;
-    const venda = item.venda as any;
-    if (platform === "Shopee")
-      return venda?.shopeeAccountId === contaId || venda?.conta === contaId;
-    return venda?.meliAccountId === contaId || venda?.conta === contaId;
-  };
-
-  const vendasFiltradas = useMemo(() => {
-    return vendasProcessadas.filter((item) => {
-      if (
-        filtroAtivo === "pagos" &&
-        !isStatusPago(item.venda.status, platform)
-      )
-        return false;
-      if (
-        filtroAtivo === "cancelados" &&
-        !isStatusCancelado(item.venda.status, platform)
-      )
-        return false;
-      if (
-        periodoAtivo !== "todos" &&
-        !filtrarPorPeriodo(
-          item,
-          periodoAtivo,
-          dataInicioPersonalizada,
-          dataFimPersonalizada,
-        )
-      )
-        return false;
-      if (filtroADS !== "todos" && !filtrarPorADS(item, filtroADS))
-        return false;
-      if (
-        filtroExposicao !== "todas" &&
-        !filtrarPorExposicao(item, filtroExposicao)
-      )
-        return false;
-      if (
-        filtroTipoAnuncio !== "todos" &&
-        !filtrarPorTipoAnuncio(item, filtroTipoAnuncio)
-      )
-        return false;
-      if (
-        filtroModalidadeEnvio !== "todos" &&
-        !filtrarPorModalidadeEnvio(item, filtroModalidadeEnvio)
-      )
-        return false;
-      if (filtroConta !== "todas" && !filtrarPorConta(item, filtroConta))
-        return false;
-      return true;
-    });
-  }, [
-    vendasProcessadas,
-    filtroAtivo,
-    periodoAtivo,
-    filtroADS,
-    filtroExposicao,
-    filtroTipoAnuncio,
-    filtroModalidadeEnvio,
-    filtroConta,
-    dataInicioPersonalizada,
-    dataFimPersonalizada,
-    platform,
-  ]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(vendasFiltradas.length / ITEMS_PER_PAGE),
-  );
+  const totalPages = pagination.totalPages;
 
   // Combina progressos: SSE + local + retorno do backend
   const mergedSync = useMemo(() => {
@@ -555,7 +220,7 @@ export default function TabelaVendas({
   const resumoPorConta = useMemo(() => {
     const counts = new Map<string, number>();
 
-    for (const item of vendasFiltradas) {
+    for (const item of vendasProcessadas) {
       const contaNome = (item as any)?.venda?.conta ?? "Sem conta";
       counts.set(contaNome, (counts.get(contaNome) ?? 0) + 1);
     }
@@ -578,12 +243,12 @@ export default function TabelaVendas({
             step.currentStep === "completed"
               ? "Concluída"
               : step.currentStep === "saving"
-              ? "Salvando"
-              : step.currentStep === "fetching"
-              ? "Buscando"
-              : step.currentStep === "error"
-              ? "Erro"
-              : "Aguardando";
+                ? "Salvando"
+                : step.currentStep === "fetching"
+                  ? "Buscando"
+                  : step.currentStep === "error"
+                    ? "Erro"
+                    : "Aguardando";
 
           const fetched = step.fetched ?? 0;
           const expected = step.expected ?? fetched;
@@ -606,8 +271,8 @@ export default function TabelaVendas({
           mergedSync.type === "sync_continue"
             ? "↻ Continuando"
             : mergedSync.type === "sync_start"
-            ? "↻ Iniciando"
-            : "↻ Sincronizando";
+              ? "↻ Iniciando"
+              : "↻ Sincronizando";
 
         const textoQtd =
           expected > 0 ? ` (${Math.min(fetched, expected)}/${expected})` : "";
@@ -631,7 +296,7 @@ export default function TabelaVendas({
 
     return lista;
   }, [
-    vendasFiltradas,
+    vendasProcessadas,
     isSyncing,
     isStartingSync,
     progress,
@@ -641,16 +306,6 @@ export default function TabelaVendas({
     mergedSync.type,
     effectiveSyncProgress,
   ]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [platform, filtroAtivo, periodoAtivo]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
 
   const EmptyStateActionButton = () => {
     if (isLoadingAccounts) {
@@ -741,18 +396,16 @@ export default function TabelaVendas({
               strokeLinejoin="round"
               className="icon icon-tabler icons-tabler-outline icon-tabler-shopping-bag"
             >
-              <path
-                stroke="none"
-                d="M0 0h24v24H0z"
-                fill="none"
-              />
+              <path stroke="none" d="M0 0h24v24H0z" fill="none" />
               <path d="M6.331 8h11.339a2 2 0 0 1 1.977 2.304l-1.255 8.152a3 3 0 0 1 -2.966 2.544h-6.852a3 3 0 0 1 -2.965 -2.544l-1.255 -8.152a2 2 0 0 1 1.977 -2.304z" />
               <path d="M9 11v-5a3 3 0 0 1 6 0v5" />
             </svg>
           )}
         </div>
         <span>
-          {isSyncing || isStartingSync ? "Sincronizando..." : "Sincronizar Vendas"}
+          {isSyncing || isStartingSync
+            ? "Sincronizando..."
+            : "Sincronizar Vendas"}
         </span>
       </button>
     );
@@ -871,13 +524,11 @@ export default function TabelaVendas({
             className="min-h-[320px] w-full"
           />
         </div>
-      ) : vendasFiltradas.length === 0 ? (
+      ) : vendasProcessadas.length === 0 ? (
         <div className="relative">
           <EmptyState
             title="Nenhuma venda encontrada para este filtro"
-            description={`Não há vendas com status "${
-              filtroAtivo === "todos" ? "todos" : filtroAtivo
-            }" no momento.`}
+            description={`Não há vendas com esses filtros no momento.`}
             icons={emptyStateIcons}
             footer={undefined}
             variant="default"
@@ -891,42 +542,48 @@ export default function TabelaVendas({
         <div className="flex h-[600px] flex-col">
           <div className="min-h-0 flex-1">
             <VendasTable
-              vendas={vendasFiltradas}
+              vendas={vendasProcessadas}
               isLoading={isTableLoading}
-              currentPage={currentPage}
-              itemsPerPage={ITEMS_PER_PAGE}
+              currentPage={pagination.page}
+              itemsPerPage={pagination.limit}
               colunasVisiveis={colunasVisiveis}
               platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
-              managePage
             />
           </div>
           <div className="border-t border-gray-200 bg-white">
             <VendasPagination
-              currentPage={currentPage}
+              currentPage={pagination.page}
               totalPages={totalPages}
-              totalItems={vendasFiltradas.length}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={setCurrentPage}
+              totalItems={pagination.totalItems}
+              itemsPerPage={pagination.limit}
+              onPageChange={handlePageChange}
               resumoPorConta={resumoPorConta}
             />
           </div>
 
           {/* Indicador de sincronização/salvamento (persiste após reload) */}
-          {progress && (progress.message?.includes('Salvando') || progress.message?.includes('baixadas') || progress.type === 'sync_progress') && progress.type !== 'sync_complete' && (
-            <div className="border-t border-blue-100 bg-blue-50 px-4 py-3">
-              <div className="flex items-center justify-center gap-3">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600"></div>
-                <div className="text-sm text-blue-800">
-                  <span className="font-medium">{progress.message || 'Sincronizando...'}</span>
-                  {progress.current && progress.total && (
-                    <span className="ml-2 text-blue-600">
-                      ({Math.round((progress.current / progress.total) * 100)}%)
+          {progress &&
+            (progress.message?.includes("Salvando") ||
+              progress.message?.includes("baixadas") ||
+              progress.type === "sync_progress") &&
+            progress.type !== "sync_complete" && (
+              <div className="border-t border-blue-100 bg-blue-50 px-4 py-3">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600"></div>
+                  <div className="text-sm text-blue-800">
+                    <span className="font-medium">
+                      {progress.message || "Sincronizando..."}
                     </span>
-                  )}
+                    {progress.current && progress.total && (
+                      <span className="ml-2 text-blue-600">
+                        ({Math.round((progress.current / progress.total) * 100)}
+                        %)
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
       )}
     </div>
