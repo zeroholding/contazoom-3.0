@@ -1,0 +1,60 @@
+name: contazoom-services-dev
+networks:
+  dev:
+    driver: bridge
+
+volumes:
+  contazoom_postgres_data:
+  contazoom_redis_data:
+
+services:
+  migrate:
+    image: contazoom:${TAG_MIGRATION:-1.0.0-alpine-migrate-prod}
+    build:
+      context: .
+      dockerfile: ./docker/prisma/Dockerfile.prod
+    env_file:
+      - .env.dev
+    depends_on:
+      - postgres
+    networks:
+      - dev
+
+  app:
+    image: contazoom:${TAG:-1.0.0-alpine-prod}
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.dev
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - dev
+
+  postgres:
+    image: postgres:17.6-alpine3.21
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-contazoom}
+      POSTGRES_USER: ${POSTGRES_USER:-contazoom_app}
+      POSTGRES_SCHEMA: public
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - contazoom_postgres_data:/var/lib/postgresql/data
+    networks:
+      - dev
+
+  redis:
+    image: redis:7.4-alpine3.21
+    ports:
+      - "6379:6379"
+    volumes:
+      - contazoom_redis_data:/data
+    networks:
+      - dev

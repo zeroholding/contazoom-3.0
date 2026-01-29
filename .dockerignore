@@ -1,0 +1,10 @@
+node_modules
+.next
+.claude
+.gemini
+.env
+.env.*
+.gitignore
+.vercelignore
+*.md
+vercel.json

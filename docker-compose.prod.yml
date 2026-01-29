@@ -1,0 +1,64 @@
+name: contazoom-services-prod
+networks:
+  traefik:
+    external: true
+  internal:
+    driver: bridge
+
+volumes:
+  contazoom_postgres_data:
+  contazoom_redis_data:
+
+services:
+  migrate:
+    image: contazoom:${TAG_MIGRATION:-1.0.0-alpine-prod}
+    env_file:
+      - .env.prod
+    depends_on:
+      - postgres
+    networks:
+      - internal
+
+  app:
+    image: contazoom:${TAG:-1.0.0-alpine-prod}
+    restart: always
+    env_file:
+      - .env.prod
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - internal
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      # - "traefik.http.routers.contazoom.entrypoints=web"
+      # - "traefik.http.routers.contazoom.rule=Host(`localhost`)"
+      - "traefik.http.routers.contazoom.entrypoints=https"
+      - "traefik.http.routers.contazoom.rule=Host(`contazoom.com.br`)"
+      - "traefik.http.routers.contazoom.tls.certresolver=letsencrypt"
+      - "traefik.http.services.contazoom.loadbalancer.server.port=3000"
+
+  postgres:
+    image: postgres:17.6-alpine3.21
+    restart: always
+    env_file:
+      - .env.prod
+    environment:
+      POSTGRES_DB: contazoom
+      POSTGRES_USER: contazoom_app
+      POSTGRES_SCHEMA: public
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - contazoom_postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  redis:
+    image: redis:7.4-alpine3.21
+    restart: always
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - contazoom_redis_data:/data
+    networks:
+      - internal

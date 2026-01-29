@@ -1,0 +1,29 @@
+name: contazoom-traefik
+
+networks:
+  traefik:
+    name: traefik
+    driver: bridge
+
+services:
+  traefik:
+    image: traefik:v3.6.7
+    restart: always
+    command:
+      - --log.level=DEBUG
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+
+      - --entrypoints.web.address=:80
+      - --entrypoints.traefik.address=:8080
+
+      - --api=true
+      - --api.dashboard=true
+      - --api.insecure=true
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik
