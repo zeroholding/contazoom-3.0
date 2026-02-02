@@ -1,0 +1,26 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  migrate:
+    name: Prisma Migrate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Coolify Migration
+        run: |
+          curl -f -X POST "${{ secrets.COOLIFY_MIGRATION_WEBHOOK }}"
+
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    needs: migrate
+
+    steps:
+      - name: Trigger Coolify App Deploy
+        run: |
+          curl -f -X POST "${{ secrets.COOLIFY_APP_WEBHOOK }}"
