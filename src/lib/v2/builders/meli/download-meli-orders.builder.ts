@@ -122,41 +122,40 @@ export class DownloadMeliOrdersBuilder {
   });
 
   async refreshHandler(): Promise<this> {
-    let current = this._ctx.current.accountData;
     try {
       // Usar mutex para evitar refresh concorrente
-      const mutexKey = `refresh_${this._ctx.current.accountData.id}`;
+      const mutexKey = `refresh_${this._ctx.current.accountId}`;
       if (this._tokenRefreshMutex.has(mutexKey)) {
         console.log(
-          `[Sync] Aguardando refresh em andamento para conta ${this._ctx.current.accountData.id}`,
+          `[Sync] Aguardando refresh em andamento para conta ${this._ctx.current.accountId}`,
         );
-        current = await this._tokenRefreshMutex.get(mutexKey)!;
+        this._ctx.current.accountData = await this._tokenRefreshMutex.get(mutexKey)!;
       } else {
         const refreshPromise = smartRefreshMeliAccountToken(
           this._ctx.current.accountData,
         );
         this._tokenRefreshMutex.set(mutexKey, refreshPromise);
         try {
-          current = await refreshPromise;
+          this._ctx.current.accountData = await refreshPromise;
           this._tokenRefreshMutex.delete(mutexKey);
         } catch (error) {
           this._tokenRefreshMutex.delete(mutexKey);
           throw error;
         }
       }
-      this._ctx.current.expiresAt = current.expires_at.toISOString();
+      this._ctx.current.expiresAt = this._ctx.current.accountData.expires_at.toISOString();
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "Erro desconhecido ao renovar token.";
       this._ctx.errors.push({
-        accountId: this._ctx.current.accountData.id,
+        accountId: this._ctx.current.accountId,
         mlUserId: this._ctx.current.accountData.ml_user_id,
         message,
       });
       console.error(
-        `[Sync] Erro ao renovar token da conta ${this._ctx.current.accountData.id}:`,
+        `[Sync] Erro ao renovar token da conta ${this._ctx.current.accountId}:`,
         error,
       );
 
@@ -168,8 +167,7 @@ export class DownloadMeliOrdersBuilder {
       sendProgressToUser(this._ctx.userId, {
         type: "sync_warning",
         message: `Erro ao renovar token da conta ${
-          this._ctx.current.accountData.nickname ||
-          this._ctx.current.accountData.ml_user_id
+          this._ctx.current.accountName
         }: ${message}. Continuando com próxima conta...`,
         errorCode: "TOKEN_REFRESH_FAILED",
       });
