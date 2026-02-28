@@ -231,7 +231,7 @@ export default function ModalSyncVendasDashboard({
       ));
 
       try {
-        const apiUrl = conta.platform === 'meli' ? '/api/cron/meli-sync/trigger' : '/api/shopee/vendas/sync';
+        const apiUrl = conta.platform === 'meli' ? '/api/v2/meli/sync-trigger' : '/api/shopee/vendas/sync';
         const body = { accountIds: [conta.id] };
 
         const res = await fetch(apiUrl, {

@@ -321,12 +321,12 @@ export function useVendas(
           body.fullSync = true;
         }
 
-        console.log(`[useVendas] Chamando API /api/cron/meli-sync/trigger com ${accountsToSync.length} conta(s):`, body);
+        console.log(`[useVendas] Chamando API /api/v2/meli/sync-trigger com ${accountsToSync.length} conta(s):`, body);
         console.log(`[useVendas] 🔗 Usando backend: ${API_CONFIG.baseURL || 'local'}`);
 
         // Fire-and-forget: Iniciar sincronização sem aguardar resposta HTTP
         // O progresso será acompanhado via SSE (Server-Sent Events)
-        API_CONFIG.fetch("/api/cron/meli-sync/trigger", {
+        API_CONFIG.fetch("/api/v2/meli/sync-trigger", {
           method: "POST",
           cache: "no-store",
           credentials: "include",

@@ -1,4 +1,4 @@
-type ProgressPayload = {
+export type ProgressPayload = {
   type: string;
   message: string;
   current?: number;
