@@ -149,7 +149,7 @@ export default function VendasTable({
     canal: true,
     conta: true,
     pedido: true, // id venda
-    ads: true,
+    ads: false,
     exposicao: true,
     tipo: true, // tipo de anuncio
     produto: true,

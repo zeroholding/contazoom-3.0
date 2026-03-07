@@ -390,7 +390,6 @@ export default class MeliSyncService {
           }: ${totalInPeriod} vendas`
         );
   
-        // Se período tem mais de 9.950 vendas, precisa dividir
         if (totalInPeriod > MAX_OFFSET) {
           needsSplitting = true;
           console.log(
@@ -519,8 +518,12 @@ export default class MeliSyncService {
                 3,
                 userId
               );
-  
-              return r.ok ? await r.json() : o;
+
+              if (!r.ok) return 0;
+
+              const payload = await r.json();
+
+              return payload;
             } catch {
               return o;
             }

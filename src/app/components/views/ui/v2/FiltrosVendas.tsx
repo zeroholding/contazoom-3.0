@@ -61,7 +61,7 @@ const colunasVisiveisDefault: ColunasVisiveis = {
   canal: true,
   conta: true,
   pedido: true,
-  ads: true,
+  ads: false,
   exposicao: true,
   tipo: true,
   produto: true,
@@ -550,7 +550,7 @@ export default function FiltrosVendasV2({
         canal: true,
         conta: true,
         pedido: true,
-        ads: true,
+        ads: false,
         exposicao: true,
         tipo: true,
         produto: true,
@@ -664,7 +664,7 @@ export default function FiltrosVendasV2({
         {/* Botões de Ação */}
         <div className="flex items-center gap-2">
           {/* Botão de Filtro ADS - Apenas para Mercado Livre */}
-          {platform !== "Shopee" && (
+          {platform !== "Shopee" && platform !== "Mercado Livre" && (
             <div className="relative">
               <button
                 ref={adsDropdown.triggerRef}

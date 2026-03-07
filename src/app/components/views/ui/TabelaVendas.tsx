@@ -154,7 +154,7 @@ export default function TabelaVendas({
     taxa: true,
     margem: true,
     exposicao: true,
-    ads: true,
+    ads: false,
     tipo: true,
     conta: true,
     canal: true,

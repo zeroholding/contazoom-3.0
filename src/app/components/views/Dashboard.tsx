@@ -333,7 +333,7 @@ export default function Dashboard() {
           {canalAtivo !== 'shopee' && (
             <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Suspense fallback={<div className="h-96 bg-gray-50 rounded-lg animate-pulse" />}>
-                <FaturamentoPorOrigem
+                <FaturamentoPorTipoAnuncio
                   periodoAtivo={periodoAtivo}
                   dataInicioPersonalizada={dataInicioPersonalizada}
                   dataFimPersonalizada={dataFimPersonalizada}
@@ -348,26 +348,6 @@ export default function Dashboard() {
               </Suspense>
               <Suspense fallback={<div className="h-96 bg-gray-50 rounded-lg animate-pulse" />}>
                 <FaturamentoPorExposicao
-                  periodoAtivo={periodoAtivo}
-                  dataInicioPersonalizada={dataInicioPersonalizada}
-                  dataFimPersonalizada={dataFimPersonalizada}
-                  canalAtivo={canalAtivo}
-                  statusAtivo={statusAtivo}
-                  tipoAnuncioAtivo={tipoAnuncioAtivo}
-                  modalidadeEnvioAtiva={modalidadeEnvioAtiva}
-                  agrupamentoSKUAtivo={agrupamentoSKUAtivo}
-                  refreshKey={refreshKey}
-                  selectedAccount={selectedAccount}
-                />
-              </Suspense>
-            </div>
-          )}
-
-          {/* GrÃ¡fico Donut - Tipo de AnÃºncio (apenas para Mercado Livre e Todos) */}
-          {canalAtivo !== 'shopee' && (
-            <div className="mt-6">
-              <Suspense fallback={<div className="h-96 bg-gray-50 rounded-lg animate-pulse" />}>
-                <FaturamentoPorTipoAnuncio
                   periodoAtivo={periodoAtivo}
                   dataInicioPersonalizada={dataInicioPersonalizada}
                   dataFimPersonalizada={dataFimPersonalizada}

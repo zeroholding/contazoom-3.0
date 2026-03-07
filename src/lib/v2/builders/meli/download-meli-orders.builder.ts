@@ -347,137 +347,138 @@ export class DownloadMeliOrdersBuilder {
       total = results.length;
     }
 
-    // PASSO 2: Buscar vendas hist�ricas apenas se N�O atingiu o limite
-    const timeRemaining = MAX_EXECUTION_TIME - (Date.now() - startTime);
-    const reachedLimit = results.length >= SAFE_BATCH_SIZE;
-    const shouldFetchHistory = !reachedLimit && timeRemaining > 10000;
+    // // PASSO 2: Buscar vendas hist�ricas apenas se N�O atingiu o limite
+    // const timeRemaining = MAX_EXECUTION_TIME - (Date.now() - startTime);
+    // const reachedLimit = results.length >= SAFE_BATCH_SIZE;
+    // const shouldFetchHistory = !reachedLimit && timeRemaining > 10000;
 
-    if (shouldFetchHistory) {
-      console.log(
-        `[Sync] 🔄 Buscando vendas históricas (tempo restante: ${Math.round(
-          timeRemaining / 1000,
-        )}s)...`,
-      );
+    // if (shouldFetchHistory) {
+    //   console.log(
+    //     `[Sync] 🔄 Buscando vendas históricas (tempo restante: ${Math.round(
+    //       timeRemaining / 1000,
+    //     )}s)...`,
+    //   );
 
-      // Determinar ponto de partida para busca histórica
-      let searchStartDate: Date;
+    //   // Determinar ponto de partida para busca histórica
+    //   let searchStartDate: Date;
 
-      if (oldestSyncedDate) {
-        // Continuar de onde a última sincronização parou
-        searchStartDate = new Date(oldestSyncedDate);
-        searchStartDate.setDate(searchStartDate.getDate() - 1); // Um dia antes da última sincronizada
-        console.log(
-          `[Sync] 📅 Continuando busca histórica a partir de ${
-            searchStartDate.toISOString().split("T")[0]
-          }`,
-        );
-      } else {
-        // Primeira vez: começar da venda mais antiga das recentes
-        const fallbackOldest =
-          results.length > 0
-            ? (this._meliSyncService.extractOrderDate(
-                results[results.length - 1].order,
-              ) ?? new Date())
-            : new Date();
+    //   if (oldestSyncedDate) {
+    //     // Continuar de onde a última sincronização parou
+    //     searchStartDate = new Date(oldestSyncedDate);
+    //     searchStartDate.setDate(searchStartDate.getDate() - 1); // Um dia antes da última sincronizada
+    //     console.log(
+    //       `[Sync] 📅 Continuando busca histórica a partir de ${
+    //         searchStartDate.toISOString().split("T")[0]
+    //       }`,
+    //     );
+    //   } else {
+    //     // Primeira vez: começar da venda mais antiga das recentes
+    //     const firstSyncFallbackDate = new Date(2025, 0, 1);
+    //     const fallbackOldest =
+    //       results.length > 0
+    //         ? (this._meliSyncService.extractOrderDate(
+    //             results[results.length - 1].order,
+    //           ) ?? firstSyncFallbackDate)
+    //         : firstSyncFallbackDate;
 
-        searchStartDate = oldestOrderDate ?? fallbackOldest;
-        console.log(
-          `[Sync] 📅 Primeira busca histórica a partir de ${
-            searchStartDate.toISOString().split("T")[0]
-          }`,
-        );
-      }
+    //     searchStartDate = oldestOrderDate ?? fallbackOldest;
+    //     console.log(
+    //       `[Sync] 📅 Primeira busca histórica a partir de ${
+    //         searchStartDate.toISOString().split("T")[0]
+    //       }`,
+    //     );
+    //   }
 
-      // Buscar vendas mais antigas em blocos de 1 mês
-      const currentMonthStart = new Date(searchStartDate);
-      currentMonthStart.setDate(1); // Primeiro dia do mês
-      currentMonthStart.setHours(0, 0, 0, 0);
-      currentMonthStart.setMonth(currentMonthStart.getMonth() - 1); // Começar do mês anterior
+    //   // Buscar vendas mais antigas em blocos de 1 mês
+    //   const currentMonthStart = new Date(searchStartDate);
+    //   currentMonthStart.setDate(1); // Primeiro dia do mês
+    //   currentMonthStart.setHours(0, 0, 0, 0);
+    //   currentMonthStart.setMonth(currentMonthStart.getMonth() - 1); // Começar do mês anterior
 
-      const startDate = new Date();
-      console.log(
-        `[Sync] ?? FULL SYNC ativado - buscando TODAS as vendas (desde 2000)`,
-      );
+    //   const startDate = new Date();
+    //   console.log(
+    //     `[Sync] ?? FULL SYNC ativado - buscando TODAS as vendas (desde 2000)`,
+    //   );
 
-      // Buscar enquanto tiver tempo
-      while (
-        currentMonthStart < startDate &&
-        Date.now() - startTime < MAX_EXECUTION_TIME - 5000
-      ) {
-        // Calcular fim do mês
-        const currentMonthEnd = new Date(currentMonthStart);
-        currentMonthEnd.setMonth(currentMonthEnd.getMonth() + 1);
-        currentMonthEnd.setDate(0); // Último dia do mês
-        currentMonthEnd.setHours(23, 59, 59, 999);
+    //   // Buscar enquanto tiver tempo
+    //   while (
+    //     currentMonthStart < startDate &&
+    //     Date.now() - startTime < MAX_EXECUTION_TIME - 5000
+    //   ) {
+    //     // Calcular fim do mês
+    //     const currentMonthEnd = new Date(currentMonthStart);
+    //     currentMonthEnd.setMonth(currentMonthEnd.getMonth() + 1);
+    //     currentMonthEnd.setDate(0); // Último dia do mês
+    //     currentMonthEnd.setHours(23, 59, 59, 999);
 
-        console.log(
-          `[Sync] 📅 Buscando: ${
-            currentMonthStart.toISOString().split("T")[0]
-          } a ${currentMonthEnd.toISOString().split("T")[0]}`,
-        );
-        // Buscar vendas deste mês
-        const monthOrders = await this._meliSyncService.fetchOrdersInDateRange(
-          account,
-          headers,
-          userId,
-          currentMonthStart,
-          currentMonthEnd,
-          logisticStats,
-        );
+    //     console.log(
+    //       `[Sync] 📅 Buscando: ${
+    //         currentMonthStart.toISOString().split("T")[0]
+    //       } a ${currentMonthEnd.toISOString().split("T")[0]}`,
+    //     );
+    //     // Buscar vendas deste mês
+    //     const monthOrders = await this._meliSyncService.fetchOrdersInDateRange(
+    //       account,
+    //       headers,
+    //       userId,
+    //       currentMonthStart,
+    //       currentMonthEnd,
+    //       logisticStats,
+    //     );
 
-        console.log(
-          `[Sync] ✅ Encontradas ${monthOrders.length} vendas neste período`,
-        );
+    //     console.log(
+    //       `[Sync] ✅ Encontradas ${monthOrders.length} vendas neste período`,
+    //     );
 
-        detailsResults.push(...monthOrders);
+    //     detailsResults.push(...monthOrders);
 
-        sendProgressToUser(userId, {
-          type: "sync_details_progress",
-          message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${
-            results.length
-          } vendas baixadas (buscando histórico: ${
-            currentMonthStart.toISOString().split("T")[0]
-          })`,
-          current: detailsResults.length,
-          total: Math.max(total, results.length), // Usar o maior valor entre total estimado e vendas baixadas
-          fetched: detailsResults.length,
-          expected: Math.max(total, results.length),
-          accountId: account.id,
-          accountNickname: account.nickname || undefined,
-        });
+    //     sendProgressToUser(userId, {
+    //       type: "sync_details_progress",
+    //       message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${
+    //         results.length
+    //       } vendas baixadas (buscando histórico: ${
+    //         currentMonthStart.toISOString().split("T")[0]
+    //       })`,
+    //       current: detailsResults.length,
+    //       total: Math.max(total, results.length), // Usar o maior valor entre total estimado e vendas baixadas
+    //       fetched: detailsResults.length,
+    //       expected: Math.max(total, results.length),
+    //       accountId: account.id,
+    //       accountNickname: account.nickname || undefined,
+    //     });
 
-        // Se não encontrou vendas neste mês, chegou no início do histórico
-        if (monthOrders.length === 0) {
-          console.log(
-            `[Sync] ✅ Nenhuma venda encontrada neste período - histórico completo!`,
-          );
-          // break;
-        }
+    //     // Se não encontrou vendas neste mês, chegou no início do histórico
+    //     if (monthOrders.length === 0) {
+    //       console.log(
+    //         `[Sync] ✅ Nenhuma venda encontrada neste período - histórico completo!`,
+    //       );
+    //       // break;
+    //     }
 
-        // Ir para o mês anterior
-        currentMonthStart.setMonth(currentMonthStart.getMonth() + 1);
-      }
+    //     // Ir para o mês anterior
+    //     currentMonthStart.setMonth(currentMonthStart.getMonth() + 1);
+    //   }
 
-      results.push(...detailsResults);
+    //   results.push(...detailsResults);
 
-      const elapsedTime = Math.round((Date.now() - startTime) / 1000);
-      console.log(
-        `[Sync] ✅ Busca por período concluída em ${elapsedTime}s: ${results.length} vendas baixadas`,
-      );
-      if (
-        Date.now() - startTime >= MAX_EXECUTION_TIME - 5000 &&
-        currentMonthStart > startDate
-      ) {
-        forcedStop = true;
-      }
-    } else if (!shouldFetchHistory && total > results.length) {
-      if (timeRemaining <= 10000) {
-        forcedStop = true;
-      }
-      console.log(
-        `[Sync] ⏱️ Tempo insuficiente para busca histórica - execute sincronização novamente para continuar`,
-      );
-    }
+    //   const elapsedTime = Math.round((Date.now() - startTime) / 1000);
+    //   console.log(
+    //     `[Sync] ✅ Busca por período concluída em ${elapsedTime}s: ${results.length} vendas baixadas`,
+    //   );
+    //   if (
+    //     Date.now() - startTime >= MAX_EXECUTION_TIME - 5000 &&
+    //     currentMonthStart > startDate
+    //   ) {
+    //     forcedStop = true;
+    //   }
+    // } else if (!shouldFetchHistory && total > results.length) {
+    //   if (timeRemaining <= 10000) {
+    //     forcedStop = true;
+    //   }
+    //   console.log(
+    //     `[Sync] ⏱️ Tempo insuficiente para busca histórica - execute sincronização novamente para continuar`,
+    //   );
+    // }
 
     // Calcular estatísticas finais
     const elapsedTime = Math.round((Date.now() - startTime) / 1000);

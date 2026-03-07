@@ -310,7 +310,7 @@ export default function VendasMercadolivre() {
     canal: true,
     conta: true,
     pedido: true,
-    ads: true,
+    ads: false,
     exposicao: true,
     tipo: true,
     produto: true,
