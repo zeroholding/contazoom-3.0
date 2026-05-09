@@ -102,6 +102,8 @@ type MeliOrderFreight = {
 
   adjustedCost: number | null;
   adjustmentSource: string | null;
+
+  sellerShippingCost: number | null;
 };
 
 function extractOrderDate(order: unknown): Date | null {
@@ -343,6 +345,8 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
 
     adjustedCost,
     adjustmentSource,
+
+    sellerShippingCost: toFiniteNumber((s as any)._seller_shipping_cost),
   };
 }
 
@@ -684,17 +688,9 @@ async function fetchOrdersPage({
           
           if (costsRes && costsRes.ok) {
             const costsData = await costsRes.json();
-            shipmentData.base_cost = costsData.gross_amount ?? shipmentData.base_cost;
-            shipmentData.cost = costsData.gross_amount ?? shipmentData.cost;
-            
-            const senderCost = costsData.senders?.find((s: any) => s.cost !== undefined)?.cost;
-            if (senderCost !== undefined) {
-              shipmentData.cost = senderCost;
-              if (shipmentData.shipping_option) {
-                shipmentData.shipping_option.cost = senderCost;
-              } else {
-                shipmentData.shipping_option = { cost: senderCost };
-              }
+            const senderCost = costsData.senders?.[0]?.cost;
+            if (senderCost !== undefined && senderCost !== null) {
+              shipmentData._seller_shipping_cost = senderCost;
             }
           }
           return shipmentData;
@@ -1312,17 +1308,9 @@ async function fetchOrdersInDateRange(
               
               if (costsRes && costsRes.ok) {
                 const costsData = await costsRes.json();
-                shipmentData.base_cost = costsData.gross_amount ?? shipmentData.base_cost;
-                shipmentData.cost = costsData.gross_amount ?? shipmentData.cost;
-                
-                const senderCost = costsData.senders?.find((s: any) => s.cost !== undefined)?.cost;
-                if (senderCost !== undefined) {
-                  shipmentData.cost = senderCost;
-                  if (shipmentData.shipping_option) {
-                    shipmentData.shipping_option.cost = senderCost;
-                  } else {
-                    shipmentData.shipping_option = { cost: senderCost };
-                  }
+                const senderCost = costsData.senders?.[0]?.cost;
+                if (senderCost !== undefined && senderCost !== null) {
+                  shipmentData._seller_shipping_cost = senderCost;
                 }
               }
               return shipmentData;

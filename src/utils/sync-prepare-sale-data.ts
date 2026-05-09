@@ -34,6 +34,8 @@ type MeliOrderFreight = {
 
   adjustedCost: number | null;
   adjustmentSource: string | null;
+
+  sellerShippingCost: number | null;
 };
 
 type MeliOrderPayload = {
@@ -153,21 +155,29 @@ export async function prepareSaleData(
 
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
     
-    const logisticTypeAccepted = ["drop_off", "Correios", "Agência", "fulfillment"]
-    let frete = freight.adjustedCost ?? 0;
+    // Usar custo real do vendedor do endpoint /shipments/{id}/costs quando disponível
+    let frete: number;
+    if (freight.sellerShippingCost !== null && freight.sellerShippingCost !== undefined) {
+      // Custo real extraído de /shipments/{id}/costs -> senders[0].cost
+      // Negativo porque é uma despesa do vendedor
+      frete = -freight.sellerShippingCost;
+    } else {
+      // Fallback para lógica antiga quando /costs não disponível
+      const logisticTypeAccepted = ["drop_off", "Correios", "Agência", "fulfillment"]
+      frete = freight.adjustedCost ?? 0;
 
-    if (unitario < 79) {
-      if (freight.logisticType && logisticTypeAccepted.includes(freight.logisticType)) {
-        frete = 0
-      } else if (freight.logisticType === "FLEX") {
-        frete = freight.finalCost && freight.finalCost > 0 ? freight.finalCost : freight.baseCost ?? 0
-
-        if (freight.baseCost === 0) {
-          frete = 11
+      if (unitario < 79) {
+        if (freight.logisticType && logisticTypeAccepted.includes(freight.logisticType)) {
+          frete = 0
+        } else if (freight.logisticType === "FLEX") {
+          frete = freight.finalCost && freight.finalCost > 0 ? freight.finalCost : freight.baseCost ?? 0
+          if (freight.baseCost === 0) {
+            frete = 11
+          }
         }
+      } else if (unitario >= 79 && freight.diffBaseList && freight.logisticType === "FLEX") {
+        frete = Math.abs(freight.diffBaseList)
       }
-    } else if (unitario >= 79 && freight.diffBaseList && freight.logisticType === "FLEX") {
-      frete = Math.abs(freight.diffBaseList)
     }
 
     const skuVendaRaw = itemData?.seller_sku || itemData?.sku || null;

@@ -23,6 +23,8 @@ export type MeliOrderFreight = {
 
   adjustedCost: number | null;
   adjustmentSource: string | null;
+
+  sellerShippingCost: number | null;
 };
 
 export type MeliOrderPayload = {
