@@ -674,14 +674,30 @@ async function fetchOrdersPage({
           return typeof order?.shipping === "object" ? order.shipping : null;
         }
         try {
-          const res = await fetchWithRetry(
-            `${MELI_API_BASE}/shipments/${shippingId}`,
-            { headers },
-            3,
-            userId
-          );
+          const [res, costsRes] = await Promise.all([
+            fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}`, { headers }, 3, userId),
+            fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/costs`, { headers }, 3, userId).catch(() => null)
+          ]);
+          
           if (!res.ok) return null;
-          return await res.json();
+          const shipmentData = await res.json();
+          
+          if (costsRes && costsRes.ok) {
+            const costsData = await costsRes.json();
+            shipmentData.base_cost = costsData.gross_amount ?? shipmentData.base_cost;
+            shipmentData.cost = costsData.gross_amount ?? shipmentData.cost;
+            
+            const senderCost = costsData.senders?.find((s: any) => s.cost !== undefined)?.cost;
+            if (senderCost !== undefined) {
+              shipmentData.cost = senderCost;
+              if (shipmentData.shipping_option) {
+                shipmentData.shipping_option.cost = senderCost;
+              } else {
+                shipmentData.shipping_option = { cost: senderCost };
+              }
+            }
+          }
+          return shipmentData;
         } catch {
           return null;
         }
@@ -1286,13 +1302,30 @@ async function fetchOrdersInDateRange(
             const sid = o?.shipping?.id;
             if (!sid) return null;
             try {
-              const r = await fetchWithRetry(
-                `${MELI_API_BASE}/shipments/${sid}`,
-                { headers },
-                3,
-                userId
-              );
-              return r.ok ? await r.json() : null;
+              const [r, costsRes] = await Promise.all([
+                fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}`, { headers }, 3, userId),
+                fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/costs`, { headers }, 3, userId).catch(() => null)
+              ]);
+              
+              if (!r.ok) return null;
+              const shipmentData = await r.json();
+              
+              if (costsRes && costsRes.ok) {
+                const costsData = await costsRes.json();
+                shipmentData.base_cost = costsData.gross_amount ?? shipmentData.base_cost;
+                shipmentData.cost = costsData.gross_amount ?? shipmentData.cost;
+                
+                const senderCost = costsData.senders?.find((s: any) => s.cost !== undefined)?.cost;
+                if (senderCost !== undefined) {
+                  shipmentData.cost = senderCost;
+                  if (shipmentData.shipping_option) {
+                    shipmentData.shipping_option.cost = senderCost;
+                  } else {
+                    shipmentData.shipping_option = { cost: senderCost };
+                  }
+                }
+              }
+              return shipmentData;
             } catch {
               return null;
             }
