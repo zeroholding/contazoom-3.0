@@ -1,11 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import type { FiltroPeriodo } from "./FiltrosDashboard";
 import type { FiltroCanal, FiltroStatus } from "./FiltrosDashboardExtra";
 
 interface EstadoData {
   uf: string;
+  nome: string;
+  regiao: string;
+  quantidade: number;
+  valor: number;
+  percentual: number;
+  percentualValor: number;
+}
+
+interface RegiaData {
+  nome: string;
   quantidade: number;
   valor: number;
   percentual: number;
@@ -20,495 +30,406 @@ interface MapaCalorProps {
   refreshKey: number;
 }
 
+// Projeção Mercator simples para o Brasil
+function project(lon: number, lat: number, W: number, H: number): [number, number] {
+  const lonMin = -74, lonMax = -28.6;
+  const latMin = -33.75, latMax = 5.27;
+  const x = ((lon - lonMin) / (lonMax - lonMin)) * W;
+  const y = H - ((lat - latMin) / (latMax - latMin)) * H;
+  return [x, y];
+}
+
+function coordsToPath(rings: number[][][], W: number, H: number): string {
+  return rings
+    .map((ring) =>
+      ring.map((pt, i) => {
+        const [x, y] = project(pt[0], pt[1], W, H);
+        return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(" ") + " Z"
+    ).join(" ");
+}
+
+// UF por nome de propriedade no GeoJSON
+function extractUF(props: Record<string, unknown>): string {
+  const raw =
+    (props.SIGLA as string) ||
+    (props.sigla as string) ||
+    (props.UF_05 as string) ||
+    (props.CD_GEOCUF as string) ||
+    (props.NM_ESTADO as string) ||
+    "";
+  // Se veio o nome completo, mapear
+  const nameMap: Record<string, string> = {
+    "Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM",
+    "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES",
+    "Goiás": "GO", "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS",
+    "Minas Gerais": "MG", "Pará": "PA", "Paraíba": "PB", "Paraná": "PR",
+    "Pernambuco": "PE", "Piauí": "PI", "Rio de Janeiro": "RJ",
+    "Rio Grande do Norte": "RN", "Rio Grande do Sul": "RS", "Rondônia": "RO",
+    "Roraima": "RR", "Santa Catarina": "SC", "São Paulo": "SP",
+    "Sergipe": "SE", "Tocantins": "TO",
+  };
+  return nameMap[raw] || raw.toUpperCase().slice(0, 2);
+}
+
+// Centróides aproximados dos estados para labels
+const CENTROIDS: Record<string, [number, number]> = {
+  AC: [-70.5, -9.0], AL: [-36.6, -9.6], AP: [-51.8, 1.4], AM: [-64.0, -3.5],
+  BA: [-41.7, -12.5], CE: [-39.3, -5.2], DF: [-47.9, -15.8], ES: [-40.7, -19.5],
+  GO: [-49.6, -15.9], MA: [-45.3, -5.4], MT: [-56.1, -12.7], MS: [-54.5, -20.5],
+  MG: [-44.5, -18.1], PA: [-52.2, -3.8], PB: [-36.8, -7.2], PR: [-51.6, -24.7],
+  PE: [-37.8, -8.4], PI: [-43.0, -7.7], RJ: [-43.2, -22.3], RN: [-36.5, -5.8],
+  RS: [-53.1, -30.2], RO: [-62.8, -10.9], RR: [-61.4, 2.0], SC: [-50.5, -27.3],
+  SP: [-48.7, -22.2], SE: [-37.4, -10.6], TO: [-48.3, -10.2],
+};
+
+function getHeatColor(intensidade: number): string {
+  if (intensidade === 0) return "#1e2538";
+  if (intensidade >= 0.85) return "#ff4500";
+  if (intensidade >= 0.65) return "#ff6a00";
+  if (intensidade >= 0.45) return "#ff8c00";
+  if (intensidade >= 0.25) return "#ffa940";
+  if (intensidade >= 0.10) return "#ffcd7a";
+  return "#ffe8b0";
+}
+
+function getGlowColor(intensidade: number): string {
+  if (intensidade === 0) return "none";
+  if (intensidade >= 0.65) return "rgba(255,69,0,0.7)";
+  if (intensidade >= 0.35) return "rgba(255,140,0,0.5)";
+  return "rgba(255,200,100,0.3)";
+}
+
+const fmt = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+const REGIOES_ORDER = ["Sudeste", "Sul", "Nordeste", "Centro-Oeste", "Norte"];
+
 export default function MapaCalorBrasil({
-  periodoAtivo,
-  dataInicioPersonalizada,
-  dataFimPersonalizada,
-  canalAtivo,
-  statusAtivo,
-  refreshKey,
+  periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada,
+  canalAtivo, statusAtivo, refreshKey,
 }: MapaCalorProps) {
   const [estados, setEstados] = useState<EstadoData[]>([]);
+  const [regioes, setRegioes] = useState<RegiaData[]>([]);
   const [totals, setTotals] = useState({ vendas: 0, valor: 0 });
   const [isLoading, setIsLoading] = useState(true);
-  const [hoveredEstado, setHoveredEstado] = useState<string | null>(null);
+  const [hoveredUF, setHoveredUF] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [geoFeatures, setGeoFeatures] = useState<{ uf: string; path: string; cx: number; cy: number }[]>([]);
+  const [metricMode, setMetricMode] = useState<"vendas" | "valor">("vendas");
+  const svgRef = useRef<SVGSVGElement>(null);
+  const W = 600, H = 620;
 
+  // Carregar GeoJSON uma vez
+  useEffect(() => {
+    fetch("/br-states.json")
+      .then((r) => r.json())
+      .then((geo: { features: { geometry: { type: string; coordinates: unknown }; properties: Record<string, unknown> }[] }) => {
+        const features = geo.features.map((f) => {
+          const uf = extractUF(f.properties);
+          const geom = f.geometry;
+          let path = "";
+          if (geom.type === "Polygon") {
+            path = coordsToPath(geom.coordinates as number[][][], W, H);
+          } else if (geom.type === "MultiPolygon") {
+            path = (geom.coordinates as number[][][][])
+              .map((poly) => coordsToPath(poly, W, H))
+              .join(" ");
+          }
+          const c = CENTROIDS[uf];
+          const [cx, cy] = c ? project(c[0], c[1], W, H) : [0, 0];
+          return { uf, path, cx, cy };
+        }).filter((f) => f.path && f.uf);
+        setGeoFeatures(features);
+      });
+  }, []);
+
+  // Buscar dados
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const params = new URLSearchParams({
-          periodo: periodoAtivo,
-          canal: canalAtivo,
-          status: statusAtivo,
-        });
-
+        const params = new URLSearchParams({ periodo: periodoAtivo, canal: canalAtivo, status: statusAtivo });
         if (periodoAtivo === "personalizado" && dataInicioPersonalizada && dataFimPersonalizada) {
           params.append("dataInicio", dataInicioPersonalizada.toISOString());
           params.append("dataFim", dataFimPersonalizada.toISOString());
         }
-
         const res = await fetch(`/api/dashboard/vendas-por-estado?${params}`);
         if (res.ok) {
           const data = await res.json();
           setEstados(data.estados || []);
+          setRegioes(data.regioes || []);
           setTotals(data.totals || { vendas: 0, valor: 0 });
         }
-      } catch (error) {
-        console.error("[MapaCalorBrasil] Erro ao buscar dados:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (e) { console.error(e); }
+      finally { setIsLoading(false); }
     };
-
     fetchData();
   }, [periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada, canalAtivo, statusAtivo, refreshKey]);
 
-  // Função para obter cor baseada na quantidade de vendas
-  const getHeatColor = (uf: string): string => {
-    const estadoData = estados.find(e => e.uf === uf);
-    if (!estadoData || estadoData.quantidade === 0) return "#E5E7EB"; // Cinza claro
+  const maxVendas = Math.max(...estados.map((e) => e.quantidade), 1);
+  const maxValor = Math.max(...estados.map((e) => e.valor), 1);
 
-    const maxVendas = Math.max(...estados.map(e => e.quantidade));
-    const intensidade = estadoData.quantidade / maxVendas;
+  const getIntensidade = useCallback((uf: string) => {
+    const e = estados.find((s) => s.uf === uf);
+    if (!e) return 0;
+    return metricMode === "vendas" ? e.quantidade / maxVendas : e.valor / maxValor;
+  }, [estados, metricMode, maxVendas, maxValor]);
 
-    // Gradiente de amarelo a vermelho
-    if (intensidade >= 0.8) return "#DC2626"; // Vermelho escuro
-    if (intensidade >= 0.6) return "#EF4444"; // Vermelho
-    if (intensidade >= 0.4) return "#F97316"; // Laranja
-    if (intensidade >= 0.2) return "#FBBF24"; // Amarelo
-    return "#FDE68A"; // Amarelo claro
-  };
-
-  const handleMouseMove = (e: React.MouseEvent, uf: string) => {
-    setHoveredEstado(uf);
-    setTooltipPos({ x: e.clientX, y: e.clientY });
-  };
-
-  const estadoHovered = estados.find(e => e.uf === hoveredEstado);
-
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="h-96 bg-gray-100 rounded"></div>
-        </div>
-      </div>
-    );
-  }
+  const getEstadoData = (uf: string) => estados.find((e) => e.uf === uf);
+  const hoveredData = hoveredUF ? getEstadoData(hoveredUF) : null;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-gray-800">Mapa de Calor - Vendas por Estado</h2>
-        <div className="text-sm text-gray-600">
-          <span className="font-semibold">{totals.vendas}</span> vendas • 
-          <span className="font-semibold ml-1">R$ {totals.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+    <div
+      style={{
+        background: "linear-gradient(135deg, #0d1117 0%, #161b27 50%, #0d1117 100%)",
+        borderRadius: "16px",
+        padding: "24px",
+        boxShadow: "0 4px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
+        fontFamily: "'Inter', sans-serif",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Grid background */}
+      <div style={{
+        position: "absolute", inset: 0, opacity: 0.03,
+        backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+        backgroundSize: "40px 40px",
+        pointerEvents: "none",
+      }} />
+
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, position: "relative" }}>
+        <div>
+          <h2 style={{ color: "#fff", fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: "-0.3px" }}>
+            🔥 Mapa de Calor — Vendas por Estado
+          </h2>
+          <p style={{ color: "#6b7280", fontSize: 13, margin: "4px 0 0" }}>
+            Concentração geográfica de faturamento no Brasil
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            onClick={() => setMetricMode("vendas")}
+            style={{
+              padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+              background: metricMode === "vendas" ? "rgba(255,100,0,0.2)" : "rgba(255,255,255,0.05)",
+              color: metricMode === "vendas" ? "#ff6a00" : "#9ca3af",
+              transition: "all 0.2s",
+            }}
+          >Qtd. Vendas</button>
+          <button
+            onClick={() => setMetricMode("valor")}
+            style={{
+              padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+              background: metricMode === "valor" ? "rgba(255,100,0,0.2)" : "rgba(255,255,255,0.05)",
+              color: metricMode === "valor" ? "#ff6a00" : "#9ca3af",
+              transition: "all 0.2s",
+            }}
+          >Faturamento</button>
         </div>
       </div>
 
-      <div className="flex gap-6">
+      {/* Totais */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+        {[
+          { label: "Total de Vendas", value: totals.vendas.toLocaleString("pt-BR"), icon: "📦" },
+          { label: "Faturamento Total", value: fmt(totals.valor), icon: "💰" },
+          { label: "Estados Ativos", value: estados.length.toString(), icon: "📍" },
+        ].map((item) => (
+          <div key={item.label} style={{
+            flex: 1, padding: "10px 14px", borderRadius: 10,
+            background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)",
+          }}>
+            <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>{item.icon} {item.label}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         {/* Mapa SVG */}
-        <div className="flex-1 relative">
+        <div style={{ flex: 1, position: "relative" }}>
+          {isLoading && (
+            <div style={{
+              position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+              background: "rgba(13,17,23,0.8)", borderRadius: 12, zIndex: 10,
+            }}>
+              <div style={{ color: "#ff6a00", fontSize: 14 }}>Carregando mapa...</div>
+            </div>
+          )}
           <svg
-            viewBox="0 0 600 650"
-            className="w-full h-auto"
-            style={{ maxHeight: "600px" }}
+            ref={svgRef}
+            viewBox={`0 0 ${W} ${H}`}
+            style={{ width: "100%", height: "auto", display: "block" }}
           >
-            {/* Estados do Brasil - SVG simplificado */}
-            
-            {/* Acre (AC) */}
-            <path
-              d="M 80 180 L 140 180 L 140 240 L 80 240 Z"
-              fill={getHeatColor("AC")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "AC")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="110" y="215" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">AC</text>
+            <defs>
+              <filter id="glow-hot">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
 
-            {/* Amazonas (AM) */}
-            <path
-              d="M 100 80 L 220 80 L 220 180 L 140 180 L 140 150 L 100 150 Z"
-              fill={getHeatColor("AM")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "AM")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="160" y="135" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">AM</text>
+            {/* Estados */}
+            {geoFeatures.map(({ uf, path, cx, cy }) => {
+              const intens = getIntensidade(uf);
+              const fill = getHeatColor(intens);
+              const isHovered = hoveredUF === uf;
+              const hasData = intens > 0;
 
-            {/* Roraima (RR) */}
-            <path
-              d="M 180 20 L 260 20 L 260 80 L 220 80 L 180 80 Z"
-              fill={getHeatColor("RR")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "RR")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="220" y="55" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">RR</text>
-
-            {/* Pará (PA) */}
-            <path
-              d="M 220 80 L 380 80 L 380 200 L 320 200 L 320 180 L 220 180 Z"
-              fill={getHeatColor("PA")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "PA")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="300" y="140" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">PA</text>
-
-            {/* Amapá (AP) */}
-            <path
-              d="M 380 50 L 440 50 L 440 120 L 380 120 L 380 80 Z"
-              fill={getHeatColor("AP")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "AP")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="410" y="90" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">AP</text>
-
-            {/* Maranhão (MA) */}
-            <path
-              d="M 380 120 L 480 120 L 480 220 L 380 220 L 380 200 Z"
-              fill={getHeatColor("MA")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "MA")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="430" y="175" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">MA</text>
-
-            {/* Tocantins (TO) */}
-            <path
-              d="M 320 200 L 380 200 L 380 310 L 320 310 Z"
-              fill={getHeatColor("TO")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "TO")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="350" y="260" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">TO</text>
-
-            {/* Piauí (PI) */}
-            <path
-              d="M 380 220 L 480 220 L 480 300 L 420 300 L 380 300 L 380 260 Z"
-              fill={getHeatColor("PI")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "PI")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="430" y="265" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">PI</text>
-
-            {/* Ceará (CE) */}
-            <path
-              d="M 480 220 L 560 220 L 560 280 L 480 280 Z"
-              fill={getHeatColor("CE")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "CE")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="520" y="255" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">CE</text>
-
-            {/* Rio Grande do Norte (RN) */}
-            <path
-              d="M 520 280 L 560 280 L 560 310 L 520 310 Z"
-              fill={getHeatColor("RN")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "RN")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="540" y="300" fontSize="11" textAnchor="middle" fill="#333" pointerEvents="none">RN</text>
-
-            {/* Paraíba (PB) */}
-            <path
-              d="M 520 310 L 560 310 L 560 340 L 520 340 Z"
-              fill={getHeatColor("PB")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "PB")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="540" y="330" fontSize="11" textAnchor="middle" fill="#333" pointerEvents="none">PB</text>
-
-            {/* Pernambuco (PE) */}
-            <path
-              d="M 480 300 L 520 300 L 520 350 L 480 350 Z"
-              fill={getHeatColor("PE")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "PE")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="500" y="330" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">PE</text>
-
-            {/* Alagoas (AL) */}
-            <path
-              d="M 520 350 L 550 350 L 550 380 L 520 380 Z"
-              fill={getHeatColor("AL")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "AL")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="535" y="370" fontSize="11" textAnchor="middle" fill="#333" pointerEvents="none">AL</text>
-
-            {/* Sergipe (SE) */}
-            <path
-              d="M 500 380 L 530 380 L 530 410 L 500 410 Z"
-              fill={getHeatColor("SE")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "SE")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="515" y="400" fontSize="11" textAnchor="middle" fill="#333" pointerEvents="none">SE</text>
-
-            {/* Bahia (BA) */}
-            <path
-              d="M 380 310 L 480 310 L 480 430 L 380 430 Z"
-              fill={getHeatColor("BA")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "BA")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="430" y="375" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">BA</text>
-
-            {/* Rondônia (RO) */}
-            <path
-              d="M 140 200 L 200 200 L 200 280 L 140 280 L 140 240 Z"
-              fill={getHeatColor("RO")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "RO")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="170" y="245" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">RO</text>
-
-            {/* Mato Grosso (MT) */}
-            <path
-              d="M 200 200 L 320 200 L 320 340 L 200 340 Z"
-              fill={getHeatColor("MT")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "MT")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="260" y="275" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">MT</text>
-
-            {/* Goiás (GO) */}
-            <path
-              d="M 320 310 L 380 310 L 380 410 L 320 410 Z"
-              fill={getHeatColor("GO")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "GO")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="350" y="365" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">GO</text>
-
-            {/* Distrito Federal (DF) */}
-            <circle
-              cx="360"
-              cy="380"
-              r="8"
-              fill={getHeatColor("DF")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "DF")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="360" y="385" fontSize="10" textAnchor="middle" fill="#333" pointerEvents="none">DF</text>
-
-            {/* Mato Grosso do Sul (MS) */}
-            <path
-              d="M 200 340 L 300 340 L 300 440 L 200 440 Z"
-              fill={getHeatColor("MS")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "MS")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="250" y="395" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">MS</text>
-
-            {/* Minas Gerais (MG) */}
-            <path
-              d="M 320 410 L 420 410 L 420 490 L 320 490 Z"
-              fill={getHeatColor("MG")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "MG")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="370" y="455" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">MG</text>
-
-            {/* Espírito Santo (ES) */}
-            <path
-              d="M 420 450 L 460 450 L 460 490 L 420 490 Z"
-              fill={getHeatColor("ES")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "ES")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="440" y="475" fontSize="11" textAnchor="middle" fill="#333" pointerEvents="none">ES</text>
-
-            {/* Rio de Janeiro (RJ) */}
-            <path
-              d="M 380 490 L 440 490 L 440 525 L 380 525 Z"
-              fill={getHeatColor("RJ")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "RJ")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="410" y="512" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">RJ</text>
-
-            {/* São Paulo (SP) */}
-            <path
-              d="M 280 490 L 380 490 L 380 545 L 280 545 Z"
-              fill={getHeatColor("SP")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "SP")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="330" y="522" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">SP</text>
-
-            {/* Paraná (PR) */}
-            <path
-              d="M 220 490 L 300 490 L 300 560 L 220 560 Z"
-              fill={getHeatColor("PR")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "PR")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="260" y="530" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">PR</text>
-
-            {/* Santa Catarina (SC) */}
-            <path
-              d="M 220 560 L 300 560 L 300 600 L 220 600 Z"
-              fill={getHeatColor("SC")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "SC")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="260" y="585" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">SC</text>
-
-            {/* Rio Grande do Sul (RS) */}
-            <path
-              d="M 180 600 L 280 600 L 280 630 L 240 630 L 180 630 Z"
-              fill={getHeatColor("RS")}
-              stroke="#fff"
-              strokeWidth="2"
-              className="cursor-pointer hover:opacity-80 transition-opacity"
-              onMouseMove={(e) => handleMouseMove(e, "RS")}
-              onMouseLeave={() => setHoveredEstado(null)}
-            />
-            <text x="230" y="620" fontSize="12" textAnchor="middle" fill="#333" pointerEvents="none">RS</text>
+              return (
+                <g key={uf}>
+                  <path
+                    d={path}
+                    fill={fill}
+                    stroke={isHovered ? "#ff6a00" : "rgba(255,255,255,0.12)"}
+                    strokeWidth={isHovered ? 1.5 : 0.5}
+                    style={{
+                      cursor: hasData ? "pointer" : "default",
+                      transition: "all 0.15s",
+                      filter: isHovered && hasData ? `drop-shadow(0 0 8px ${getGlowColor(intens)})` : undefined,
+                      opacity: isHovered ? 0.95 : 1,
+                    }}
+                    onMouseMove={(e) => {
+                      setHoveredUF(uf);
+                      setTooltipPos({ x: e.clientX, y: e.clientY });
+                    }}
+                    onMouseLeave={() => setHoveredUF(null)}
+                  />
+                  {/* Label UF */}
+                  {cx > 0 && cy > 0 && (
+                    <text
+                      x={cx} y={cy}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontSize={intens > 0.5 ? 11 : 9}
+                      fontWeight={intens > 0.3 ? "700" : "500"}
+                      fill={intens > 0.4 ? "#fff" : "rgba(255,255,255,0.6)"}
+                      pointerEvents="none"
+                      style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+                    >
+                      {uf}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
           </svg>
 
           {/* Tooltip */}
-          {hoveredEstado && estadoHovered && (
-            <div
-              className="fixed z-50 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-lg pointer-events-none text-sm"
-              style={{
-                left: tooltipPos.x + 10,
-                top: tooltipPos.y + 10,
-              }}
-            >
-              <div className="font-semibold">{hoveredEstado}</div>
-              <div>Vendas: {estadoHovered.quantidade}</div>
-              <div>Total: R$ {estadoHovered.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
-              <div className="text-xs text-gray-300">{estadoHovered.percentual.toFixed(1)}% do total</div>
+          {hoveredUF && hoveredData && (
+            <div style={{
+              position: "fixed",
+              left: tooltipPos.x + 14,
+              top: tooltipPos.y - 10,
+              background: "rgba(13,17,23,0.96)",
+              border: "1px solid rgba(255,106,0,0.4)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              pointerEvents: "none",
+              zIndex: 9999,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+              minWidth: 160,
+            }}>
+              <div style={{ color: "#ff6a00", fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+                {hoveredData.nome} ({hoveredUF})
+              </div>
+              <div style={{ color: "#9ca3af", fontSize: 11, marginBottom: 2 }}>{hoveredData.regiao}</div>
+              <div style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>
+                📦 {hoveredData.quantidade.toLocaleString("pt-BR")} vendas
+              </div>
+              <div style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>
+                💰 {fmt(hoveredData.valor)}
+              </div>
+              <div style={{ color: "#6b7280", fontSize: 11, marginTop: 4 }}>
+                {hoveredData.percentual.toFixed(1)}% das vendas • {hoveredData.percentualValor.toFixed(1)}% do fat.
+              </div>
             </div>
           )}
         </div>
 
-        {/* Legenda */}
-        <div className="w-48 flex flex-col gap-4">
+        {/* Painel direito */}
+        <div style={{ width: 200, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Legenda gradiente */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Intensidade</h3>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-4 rounded" style={{ backgroundColor: "#DC2626" }}></div>
-                <span className="text-xs text-gray-600">Muito alto</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-4 rounded" style={{ backgroundColor: "#EF4444" }}></div>
-                <span className="text-xs text-gray-600">Alto</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-4 rounded" style={{ backgroundColor: "#F97316" }}></div>
-                <span className="text-xs text-gray-600">Médio</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-4 rounded" style={{ backgroundColor: "#FBBF24" }}></div>
-                <span className="text-xs text-gray-600">Baixo</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-4 rounded" style={{ backgroundColor: "#FDE68A" }}></div>
-                <span className="text-xs text-gray-600">Muito baixo</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-4 rounded bg-gray-200"></div>
-                <span className="text-xs text-gray-600">Sem vendas</span>
-              </div>
+            <div style={{ color: "#9ca3af", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              Intensidade
+            </div>
+            <div style={{ position: "relative", height: 140 }}>
+              <div style={{
+                position: "absolute", left: 0, top: 0, bottom: 0, width: 20, borderRadius: 4,
+                background: "linear-gradient(to bottom, #ff4500, #ff8c00, #ffcd7a, #ffe8b0, #1e2538)",
+              }} />
+              {["Muito Alta", "Alta", "Média", "Baixa", "Sem dados"].map((label, i) => (
+                <div key={label} style={{
+                  position: "absolute", left: 28, fontSize: 11, color: "#9ca3af",
+                  top: `${i * 25}%`,
+                }}>{label}</div>
+              ))}
             </div>
           </div>
 
+          {/* Regiões */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Top 5 Estados</h3>
-            <div className="space-y-1">
-              {estados.slice(0, 5).map((estado, index) => (
-                <div key={estado.uf} className="text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-gray-700">
-                      {index + 1}. {estado.uf}
-                    </span>
-                    <span className="text-gray-600">{estado.quantidade}</span>
+            <div style={{ color: "#9ca3af", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              Por Região
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {REGIOES_ORDER.map((nomeRegiao) => {
+                const r = regioes.find((reg) => reg.nome === nomeRegiao);
+                if (!r) return null;
+                return (
+                  <div key={nomeRegiao}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                      <span style={{ color: "#e5e7eb", fontSize: 12 }}>{nomeRegiao}</span>
+                      <span style={{ color: "#ff8c00", fontSize: 12, fontWeight: 700 }}>
+                        {r.percentual.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2 }}>
+                      <div style={{
+                        height: "100%", borderRadius: 2, width: `${r.percentual}%`,
+                        background: "linear-gradient(90deg, #ff4500, #ff8c00)",
+                        transition: "width 0.5s ease",
+                      }} />
+                    </div>
                   </div>
-                  <div className="text-gray-500">
-                    R$ {estado.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Top 5 estados */}
+          <div>
+            <div style={{ color: "#9ca3af", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              Top 5 Estados
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {estados.slice(0, 5).map((e, i) => (
+                <div
+                  key={e.uf}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
+                    borderRadius: 6, cursor: "pointer",
+                    background: hoveredUF === e.uf ? "rgba(255,106,0,0.1)" : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${hoveredUF === e.uf ? "rgba(255,106,0,0.3)" : "transparent"}`,
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={() => setHoveredUF(e.uf)}
+                  onMouseLeave={() => setHoveredUF(null)}
+                >
+                  <span style={{
+                    width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                    background: i === 0 ? "#ff4500" : i === 1 ? "#ff6a00" : i === 2 ? "#ff8c00" : "rgba(255,255,255,0.1)",
+                    fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0,
+                  }}>{i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: "#e5e7eb", fontSize: 12, fontWeight: 600 }}>{e.uf}</div>
+                    <div style={{ color: "#6b7280", fontSize: 10 }}>{e.quantidade} vendas</div>
                   </div>
+                  <span style={{ color: "#ff8c00", fontSize: 11, fontWeight: 700 }}>
+                    {e.percentual.toFixed(1)}%
+                  </span>
                 </div>
               ))}
             </div>
