@@ -30,7 +30,7 @@ interface MapaCalorProps {
   refreshKey: number;
 }
 
-const W = 560, H = 580;
+const W = 560, H = 580; // viewBox interno — o SVG vai renderizar em 50% via maxHeight
 
 // Projeção Mercator simples para o Brasil
 function project(lon: number, lat: number): [number, number] {
@@ -225,7 +225,7 @@ export default function MapaCalorBrasil({
 
       <div className="flex gap-4">
         {/* Mapa */}
-        <div className="flex-1 relative bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="relative bg-white rounded-lg border border-gray-200 overflow-hidden" style={{ width: 280 }}>
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 rounded-lg">
               <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -238,7 +238,7 @@ export default function MapaCalorBrasil({
             </div>
           )}
 
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block p-2">
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: 280, height: 290, display: "block", padding: 4 }}>
             {geoFeatures.map(({ uf, path, cx, cy }) => {
               const intens = getIntensidade(uf);
               const isHov = hoveredUF === uf;
