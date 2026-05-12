@@ -16,6 +16,7 @@ const FaturamentoPorOrigem = lazy(() => import("../views/ui/FaturamentoPorOrigem
 const FaturamentoPorExposicao = lazy(() => import("../views/ui/FaturamentoPorExposicao"));
 const FaturamentoPorTipoAnuncio = lazy(() => import("../views/ui/FaturamentoPorTipoAnuncio"));
 const MapaCalorBrasil = lazy(() => import("../views/ui/MapaCalorBrasil"));
+const FaturamentoPorConta = lazy(() => import("../views/ui/FaturamentoPorConta"));
 import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "../views/ui/FiltrosDashboardExtra";
 import type { FiltroAgrupamentoSKU } from "../views/ui/FiltroSKU";
 import { AlertBanner } from "@/components/ui/alert-banner";
@@ -363,6 +364,24 @@ export default function Dashboard() {
               </Suspense>
             </div>
           )}
+
+          {/* Gráfico Faturamento por Conta */}
+          <div className="mt-6">
+            <Suspense fallback={<div className="h-96 bg-gray-50 rounded-lg animate-pulse" />}>
+              <FaturamentoPorConta
+                periodoAtivo={periodoAtivo}
+                dataInicioPersonalizada={dataInicioPersonalizada}
+                dataFimPersonalizada={dataFimPersonalizada}
+                canalAtivo={canalAtivo}
+                statusAtivo={statusAtivo}
+                tipoAnuncioAtivo={tipoAnuncioAtivo}
+                modalidadeEnvioAtiva={modalidadeEnvioAtiva}
+                agrupamentoSKUAtivo={agrupamentoSKUAtivo}
+                selectedAccount={selectedAccount}
+                refreshKey={refreshKey}
+              />
+            </Suspense>
+          </div>
 
           {/* Mapa de Calor por Estado */}
           <div className="mt-6">
