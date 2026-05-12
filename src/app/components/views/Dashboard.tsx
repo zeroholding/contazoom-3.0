@@ -373,6 +373,10 @@ export default function Dashboard() {
                 dataFimPersonalizada={dataFimPersonalizada}
                 canalAtivo={canalAtivo}
                 statusAtivo={statusAtivo}
+                tipoAnuncioAtivo={tipoAnuncioAtivo}
+                modalidadeEnvioAtiva={modalidadeEnvioAtiva}
+                agrupamentoSKUAtivo={agrupamentoSKUAtivo}
+                selectedAccount={selectedAccount}
                 refreshKey={refreshKey}
               />
             </Suspense>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getStatusWhere, getCanalWhere } from "@/lib/dashboard-filters";
+import { getStatusWhere, getCanalWhere, getTipoAnuncioWhere, getModalidadeWhere } from "@/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -151,36 +151,35 @@ export async function GET(req: NextRequest) {
     const dataFimParam = url.searchParams.get("dataFim");
     const canalParam = url.searchParams.get("canal");
     const statusParam = url.searchParams.get("status");
+    const tipoAnuncioParam = url.searchParams.get("tipoAnuncio");
+    const modalidadeParam = url.searchParams.get("modalidade");
+    const accountPlatformParam = url.searchParams.get("accountPlatform");
+    const accountIdParam = url.searchParams.get("accountId");
 
     const { start, end, useRange } = getPeriodRange(periodoParam, dataInicioParam, dataFimParam);
     const statusWhere = getStatusWhere(statusParam);
     const canalWhere = getCanalWhere(canalParam);
+    const tipoWhere = getTipoAnuncioWhere(tipoAnuncioParam);
+    const modalidadeWhere = getModalidadeWhere(modalidadeParam);
 
     const [vendasMeli, vendasShopee] = await Promise.all([
       canalParam === "shopee" ? [] : prisma.meliVenda.findMany({
         where: useRange
-          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...statusWhere }
-          : { userId: session.sub, ...statusWhere },
-        select: {
-          orderId: true,
-          valorTotal: true,
-          quantidade: true,
-          latitude: true,
-          longitude: true,
-        },
+          ? { userId: session.sub, dataVenda: { gte: start, lte: end },
+              ...statusWhere, ...tipoWhere, ...modalidadeWhere,
+              ...(accountPlatformParam === "meli" && accountIdParam ? { meliAccountId: accountIdParam } : {}) }
+          : { userId: session.sub, ...statusWhere, ...tipoWhere, ...modalidadeWhere,
+              ...(accountPlatformParam === "meli" && accountIdParam ? { meliAccountId: accountIdParam } : {}) },
+        select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
         distinct: ["orderId"],
       }),
       canalParam === "mercado_livre" ? [] : prisma.shopeeVenda.findMany({
         where: useRange
-          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...statusWhere }
-          : { userId: session.sub, ...statusWhere },
-        select: {
-          orderId: true,
-          valorTotal: true,
-          quantidade: true,
-          latitude: true,
-          longitude: true,
-        },
+          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...statusWhere,
+              ...(accountPlatformParam === "shopee" && accountIdParam ? { shopeeAccountId: accountIdParam } : {}) }
+          : { userId: session.sub, ...statusWhere,
+              ...(accountPlatformParam === "shopee" && accountIdParam ? { shopeeAccountId: accountIdParam } : {}) },
+        select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
         distinct: ["orderId"],
       }),
     ]);

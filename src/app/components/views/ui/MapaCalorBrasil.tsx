@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import type { FiltroPeriodo } from "./FiltrosDashboard";
-import type { FiltroCanal, FiltroStatus } from "./FiltrosDashboardExtra";
+import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "./FiltrosDashboardExtra";
+import type { FiltroAgrupamentoSKU } from "./FiltroSKU";
 
 interface EstadoData {
   uf: string;
@@ -27,6 +28,10 @@ interface MapaCalorProps {
   dataFimPersonalizada: Date | null;
   canalAtivo: FiltroCanal;
   statusAtivo: FiltroStatus;
+  tipoAnuncioAtivo: FiltroTipoAnuncio;
+  modalidadeEnvioAtiva: FiltroModalidadeEnvio;
+  agrupamentoSKUAtivo: FiltroAgrupamentoSKU;
+  selectedAccount: { platform: 'meli' | 'shopee' | 'todos'; id?: string; label?: string };
   refreshKey: number;
 }
 
@@ -115,7 +120,8 @@ const fmt = (v: number) =>
 
 export default function MapaCalorBrasil({
   periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada,
-  canalAtivo, statusAtivo, refreshKey,
+  canalAtivo, statusAtivo, tipoAnuncioAtivo, modalidadeEnvioAtiva,
+  agrupamentoSKUAtivo, selectedAccount, refreshKey,
 }: MapaCalorProps) {
   const [estados, setEstados] = useState<EstadoData[]>([]);
   const [regioes, setRegioes] = useState<RegiaData[]>([]);
@@ -156,6 +162,13 @@ export default function MapaCalorBrasil({
           params.append("dataInicio", dataInicioPersonalizada.toISOString());
           params.append("dataFim", dataFimPersonalizada.toISOString());
         }
+        if (tipoAnuncioAtivo && tipoAnuncioAtivo !== "todos") params.append("tipoAnuncio", tipoAnuncioAtivo);
+        if (modalidadeEnvioAtiva && modalidadeEnvioAtiva !== "todos") params.append("modalidade", modalidadeEnvioAtiva);
+        if (agrupamentoSKUAtivo && agrupamentoSKUAtivo !== "mlb") params.append("agrupamentoSKU", agrupamentoSKUAtivo);
+        if (selectedAccount && selectedAccount.platform !== "todos" && selectedAccount.id) {
+          params.append("accountPlatform", selectedAccount.platform);
+          params.append("accountId", selectedAccount.id);
+        }
         const res = await fetch(`/api/dashboard/vendas-por-estado?${params}`);
         if (res.ok) {
           const data = await res.json();
@@ -167,7 +180,8 @@ export default function MapaCalorBrasil({
       finally { setIsLoading(false); }
     };
     load();
-  }, [periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada, canalAtivo, statusAtivo, refreshKey]);
+  }, [periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada, canalAtivo, statusAtivo,
+      tipoAnuncioAtivo, modalidadeEnvioAtiva, agrupamentoSKUAtivo, selectedAccount, refreshKey]);
 
   const maxVendas = Math.max(...estados.map(e => e.quantidade), 1);
   const maxValor = Math.max(...estados.map(e => e.valor), 1);
