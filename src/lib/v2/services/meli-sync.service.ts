@@ -180,6 +180,7 @@ export default class MeliSyncService {
       adjustmentSource,
 
       sellerShippingCost: toFiniteNumber((s as any)._seller_shipping_cost),
+      costsGrossAmount: toFiniteNumber((s as any)._costs_gross_amount),
     };
   }
 
@@ -304,6 +305,11 @@ export default class MeliSyncService {
               const senderCost = costsData.senders?.[0]?.cost;
               if (senderCost !== undefined && senderCost !== null) {
                 shipmentData._seller_shipping_cost = senderCost;
+              }
+              // Salvar gross_amount para detectar receita FLEX
+              const grossAmount = costsData.gross_amount;
+              if (grossAmount !== undefined && grossAmount !== null) {
+                shipmentData._costs_gross_amount = grossAmount;
               }
             }
             return shipmentData;

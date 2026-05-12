@@ -692,6 +692,11 @@ async function fetchOrdersPage({
             if (senderCost !== undefined && senderCost !== null) {
               shipmentData._seller_shipping_cost = senderCost;
             }
+            // Salvar gross_amount para detectar receita FLEX
+            const grossAmount = costsData.gross_amount;
+            if (grossAmount !== undefined && grossAmount !== null) {
+              shipmentData._costs_gross_amount = grossAmount;
+            }
           }
           return shipmentData;
         } catch {

@@ -36,6 +36,7 @@ type MeliOrderFreight = {
   adjustmentSource: string | null;
 
   sellerShippingCost: number | null;
+  costsGrossAmount: number | null; // gross_amount do /costs endpoint
 };
 
 type MeliOrderPayload = {
@@ -155,29 +156,28 @@ export async function prepareSaleData(
 
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
     
-    // Usar custo real do vendedor do endpoint /shipments/{id}/costs quando disponível
+    // ── Cálculo do frete ────────────────────────────────────────────────────
+    // FLEX: logistic_type = self_service + senderCost = 0 + grossAmount > 0
+    //       → vendedor RECEBE o gross_amount como receita (positivo)
+    // Outros: vendedor PAGA o senderCost líquido (negativo)
     let frete: number;
-    if (freight.sellerShippingCost !== null && freight.sellerShippingCost !== undefined) {
+    const isFlex =
+      freight.logisticType === "self_service" &&
+      (freight.sellerShippingCost === 0 || freight.sellerShippingCost === null) &&
+      freight.baseCost === 0 &&
+      freight.costsGrossAmount !== null &&
+      freight.costsGrossAmount > 0;
+
+    if (isFlex) {
+      // Receita do FLEX: vendedor recebe gross_amount do ML por fazer a entrega
+      frete = roundCurrency(freight.costsGrossAmount!);
+      console.log(`[Sync] FLEX detectado — receita frete: +R$${frete}`);
+    } else if (freight.sellerShippingCost !== null && freight.sellerShippingCost !== undefined) {
       // Custo real extraído de /shipments/{id}/costs -> senders[0].cost
-      // Negativo porque é uma despesa do vendedor
-      frete = -freight.sellerShippingCost;
+      frete = -roundCurrency(freight.sellerShippingCost);
     } else {
       // Fallback para lógica antiga quando /costs não disponível
-      const logisticTypeAccepted = ["drop_off", "Correios", "Agência", "fulfillment"]
       frete = freight.adjustedCost ?? 0;
-
-      if (unitario < 79) {
-        if (freight.logisticType && logisticTypeAccepted.includes(freight.logisticType)) {
-          frete = 0
-        } else if (freight.logisticType === "FLEX") {
-          frete = freight.finalCost && freight.finalCost > 0 ? freight.finalCost : freight.baseCost ?? 0
-          if (freight.baseCost === 0) {
-            frete = 11
-          }
-        }
-      } else if (unitario >= 79 && freight.diffBaseList && freight.logisticType === "FLEX") {
-        frete = Math.abs(freight.diffBaseList)
-      }
     }
 
     const skuVendaRaw = itemData?.seller_sku || itemData?.sku || null;
