@@ -170,10 +170,15 @@ export async function prepareSaleData(
       freight.costsGrossAmount > 0;
 
     if (isFlex) {
-      const senderCost  = freight.sellerShippingCost  ?? 0;
-      const senderSave  = freight.sellerShippingSave  ?? 0;
-      const netSenderCost = Math.max(senderCost - senderSave, 0);
-      frete = roundCurrency(freight.costsGrossAmount! - netSenderCost);
+      const senderCost = freight.sellerShippingCost ?? 0;
+      const senderSave = freight.sellerShippingSave  ?? 0;
+      if (senderCost === 0) {
+        // Produto < R$79: ML paga gross_amount ao vendedor (varia por região: 8, 9, 11...)
+        frete = roundCurrency(freight.costsGrossAmount!);
+      } else {
+        // Produto >= R$79: FLEX reward = senders.save (incentivo obrigatório do ML)
+        frete = roundCurrency(senderSave);
+      }
       console.log(`[Sync] FLEX — gross=${freight.costsGrossAmount} cost=${senderCost} save=${senderSave} → frete=+${frete}`);
     } else if (freight.sellerShippingCost !== null && freight.sellerShippingCost !== undefined) {
       // Custo real extraído de /shipments/{id}/costs -> senders[0].cost (normal)
