@@ -1,14 +1,7 @@
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { tryVerifySessionToken } from "@/lib/auth";
-import {
-  SHOPEE_API_BASE,
-  SHOPEE_PATH_TOKEN_GET,
-  deleteShopeeOauthState,
-  resolveShopeeCookieSettings,
-  signShopeeBaseString,
-  getShopInfo,
-} from "@/lib/shopee";
 
 export const runtime = "nodejs";
 
@@ -17,17 +10,17 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
   const shop_id = url.searchParams.get("shop_id") || url.searchParams.get("shopid");
   const oauthMode = req.cookies.get("shopee_oauth_mode")?.value ?? "redirect";
-  const stateCookie = req.cookies.get("shopee_oauth_state")?.value;
-  const cookieSettings = resolveShopeeCookieSettings(req);
+  
+  const redirectOrigin = process.env.SHOPEE_REDIRECT_ORIGIN || (req.headers.get("x-forwarded-proto") || "http") + "://" + req.headers.get("host");
+  const secure = redirectOrigin.startsWith("https");
 
   const clearAuthCookies = (res: NextResponse) => {
     const base = {
       httpOnly: true,
       sameSite: "lax" as const,
-      secure: cookieSettings.secure,
+      secure,
       path: "/",
       maxAge: 0,
-      ...(cookieSettings.domain ? { domain: cookieSettings.domain } : {}),
     };
     res.cookies.set({ name: "shopee_oauth_state", value: "", ...base });
     res.cookies.set({ name: "shopee_oauth_mode", value: "", ...base });
@@ -45,10 +38,10 @@ export async function GET(req: NextRequest) {
       data: options.data ?? null,
     };
     const payloadJson = JSON.stringify(payload).replace(/</g, "\\u003c");
-    const title = options.success ? "Conexao Shopee concluida" : "Conexao Shopee nao concluida";
+    const title = options.success ? "Conexão Shopee concluída" : "Conexão Shopee não concluída";
     const description = options.success
       ? "Conta Shopee conectada com sucesso. Esta janela pode ser fechada."
-      : "Nao foi possivel conectar a conta Shopee. Esta janela pode ser fechada.";
+      : "Não foi possível conectar a conta Shopee. Esta janela pode ser fechada.";
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -67,7 +60,7 @@ export async function GET(req: NextRequest) {
   <main>
     <h1>${title}</h1>
     <p>${description}</p>
-    <p class="hint">Esta janela sera fechada automaticamente.</p>
+    <p class="hint">Esta janela será fechada automaticamente.</p>
   </main>
   <script>
     (function() {
@@ -114,7 +107,6 @@ export async function GET(req: NextRequest) {
     if (loginUrl.hostname === "localhost" || loginUrl.hostname === "127.0.0.1") loginUrl.protocol = "http:";
     loginUrl.searchParams.set("redirect", "/contas");
     loginUrl.searchParams.set("error", "session_expired");
-    loginUrl.searchParams.set("message", "Voce precisa estar logado para conectar sua conta Shopee");
     const redirectRes = NextResponse.redirect(loginUrl);
     clearAuthCookies(redirectRes);
     return redirectRes;
@@ -124,35 +116,33 @@ export async function GET(req: NextRequest) {
   const partnerKey = process.env.SHOPEE_PARTNER_KEY!;
   if (!partnerId || !partnerKey) {
     if (oauthMode === "popup") {
-      return respondWithPopup({ success: false, message: "Credenciais Shopee ausentes no servidor.", status: 500 });
+      return respondWithPopup({ success: false, message: "Credenciais Shopee ausentes.", status: 500 });
     }
     return respondWithText("Shopee credentials missing", 500);
   }
 
   // Token exchange
   const ts = Math.floor(Date.now() / 1000);
-  const baseString = `${partnerId}${SHOPEE_PATH_TOKEN_GET}${ts}`;
-  const sign = signShopeeBaseString(partnerKey, baseString);
+  const path = "/api/v2/auth/token/get";
+  const baseString = `${partnerId}${path}${ts}`;
+  const sign = crypto.createHmac("sha256", partnerKey).update(baseString).digest("hex");
 
-  const tokenUrl = new URL(`${SHOPEE_API_BASE}${SHOPEE_PATH_TOKEN_GET}`);
-  tokenUrl.searchParams.set("partner_id", String(partnerId));
-  tokenUrl.searchParams.set("timestamp", String(ts));
-  tokenUrl.searchParams.set("sign", sign);
+  const tokenUrl = `https://partner.shopeemobile.com${path}?partner_id=${partnerId}&timestamp=${ts}&sign=${sign}`;
 
   const body = {
     code,
     shop_id: Number(shop_id),
     partner_id: Number(partnerId),
-  } as any;
+  };
 
-  const tokenRes = await fetch(tokenUrl.toString(), {
+  const tokenRes = await fetch(tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
   const payload = await tokenRes.json().catch(() => null);
-  if (!tokenRes.ok) {
+  if (!tokenRes.ok || payload?.error) {
     const message = `Erro ao obter token Shopee: ${JSON.stringify(payload)}`;
     if (oauthMode === "popup") {
       return respondWithPopup({ success: false, message, status: 400 });
@@ -181,103 +171,80 @@ export async function GET(req: NextRequest) {
   // Buscar nome da loja
   let shopName: string | null = null;
   try {
-    const shopInfo = await getShopInfo({
-      partnerId,
-      partnerKey,
-      accessToken: access_token,
-      shopId: shopIdStr,
-    });
-    shopName = shopInfo?.shop_name || null;
+    const pathShopInfo = "/api/v2/shop/get_shop_info";
+    const ts2 = Math.floor(Date.now() / 1000);
+    const baseString2 = `${partnerId}${pathShopInfo}${ts2}${access_token}${shopIdStr}`;
+    const sign2 = crypto.createHmac("sha256", partnerKey).update(baseString2).digest("hex");
+    const shopInfoUrl = `https://partner.shopeemobile.com${pathShopInfo}?partner_id=${partnerId}&timestamp=${ts2}&access_token=${access_token}&shop_id=${shopIdStr}&sign=${sign2}`;
+    
+    const infoRes = await fetch(shopInfoUrl);
+    const infoData = await infoRes.json();
+    if (infoData?.response?.shop_name) {
+      shopName = infoData.response.shop_name;
+    }
   } catch (err) {
     console.warn("Não foi possível buscar nome da loja Shopee:", err);
   }
 
   try {
-    // Usar raw query para não depender do Prisma Client regenerado
-    const existing = await prisma.$queryRaw<Array<{ id: string }>>\`
+    // Escapar corretamente as variáveis na raw query
+    const existing = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM shopee_account
-      WHERE user_id = \${session.sub} AND shop_id = \${shopIdStr}
+      WHERE user_id = ${session.sub} AND shop_id = ${shopIdStr}
       LIMIT 1
-    \`;
+    `;
 
-    if (existing.length > 0) {
-      // Update
-      await prisma.$executeRaw\`
+    if (existing && existing.length > 0) {
+      await prisma.$executeRaw`
         UPDATE shopee_account
         SET
-          access_token = \${access_token},
-          refresh_token = \${refresh_token},
-          expires_at = \${expiresAt},
-          merchant_id = \${merchantIdStr},
-          shop_name = \${shopName},
+          access_token = ${access_token},
+          refresh_token = ${refresh_token},
+          expires_at = ${expiresAt},
+          merchant_id = ${merchantIdStr},
+          shop_name = ${shopName},
           updated_at = NOW()
-        WHERE user_id = \${session.sub} AND shop_id = \${shopIdStr}
-      \`;
+        WHERE user_id = ${session.sub} AND shop_id = ${shopIdStr}
+      `;
     } else {
-      // Insert
-      await prisma.$executeRaw\`
+      await prisma.$executeRaw`
         INSERT INTO shopee_account (
           id, user_id, shop_id, shop_name, merchant_id,
           access_token, refresh_token, expires_at, created_at, updated_at
         ) VALUES (
           gen_random_uuid()::text,
-          \${session.sub},
-          \${shopIdStr},
-          \${shopName},
-          \${merchantIdStr},
-          \${access_token},
-          \${refresh_token},
-          \${expiresAt},
+          ${session.sub},
+          ${shopIdStr},
+          ${shopName},
+          ${merchantIdStr},
+          ${access_token},
+          ${refresh_token},
+          ${expiresAt},
           NOW(),
           NOW()
         )
-      \`;
+      `;
     }
   } catch (err) {
     console.error("Erro ao salvar conta Shopee:", err);
-    const message = "Erro interno ao salvar credenciais Shopee";
     if (oauthMode === "popup") {
-      return respondWithPopup({ success: false, message, status: 500 });
+      return respondWithPopup({ success: false, message: "Erro interno", status: 500 });
     }
-    return respondWithText(message, 500);
+    return respondWithText("Erro interno", 500);
   }
-
-  if (stateCookie) {
-    try {
-      await deleteShopeeOauthState(stateCookie);
-    } catch (err) {
-      console.warn("Falha ao remover state Shopee utilizado:", err);
-    }
-  }
-
-  const successData = {
-    shopId: shopIdStr,
-    merchantId: merchantIdStr,
-    expiresAt: expiresAt.toISOString(),
-  };
 
   if (oauthMode === "popup") {
     return respondWithPopup({
       success: true,
       message: "Conta Shopee conectada com sucesso.",
-      data: successData,
+      data: { shopId: shopIdStr },
       status: 200,
     });
   }
 
   const contasUrl = new URL("/contas", req.url);
   contasUrl.searchParams.set("shopee_connected", "true");
-  contasUrl.searchParams.set("shopee_shop_id", shopIdStr);
-  if (merchantIdStr) {
-    contasUrl.searchParams.set("shopee_merchant_id", merchantIdStr);
-  }
   const redirectRes = NextResponse.redirect(contasUrl, { status: 302 });
   clearAuthCookies(redirectRes);
   return redirectRes;
 }
-
-
-
-
-
-
