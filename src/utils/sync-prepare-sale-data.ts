@@ -157,14 +157,15 @@ export async function prepareSaleData(
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
     
     // ── Cálculo do frete ────────────────────────────────────────────────────
-    // FLEX: logistic_type = self_service + senderCost = 0 + grossAmount > 0
-    //       → vendedor RECEBE o gross_amount como receita (positivo)
+    // FLEX: logisticType = "FLEX" (já convertido de "self_service")
+    //       + vendor não paga (sellerShippingCost = 0)
+    //       + ML retornou gross_amount > 0 no /costs endpoint
+    //       → vendedor RECEBE gross_amount como receita (positivo)
     // Outros: vendedor PAGA o senderCost líquido (negativo)
     let frete: number;
     const isFlex =
-      freight.logisticType === "self_service" &&
+      freight.logisticType === "FLEX" &&
       (freight.sellerShippingCost === 0 || freight.sellerShippingCost === null) &&
-      freight.baseCost === 0 &&
       freight.costsGrossAmount !== null &&
       freight.costsGrossAmount > 0;
 
