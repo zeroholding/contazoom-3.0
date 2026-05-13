@@ -36,6 +36,7 @@ type MeliOrderFreight = {
   adjustmentSource: string | null;
 
   sellerShippingCost: number | null;
+  sellerShippingSave: number | null; // senders[0].save do /costs endpoint
   costsGrossAmount: number | null; // gross_amount do /costs endpoint
 };
 
@@ -157,25 +158,27 @@ export async function prepareSaleData(
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
     
     // ── Cálculo do frete ────────────────────────────────────────────────────
-    // FLEX: logisticType = "FLEX" (já convertido de "self_service")
-    //       + vendor não paga (sellerShippingCost = 0)
-    //       + ML retornou gross_amount > 0 no /costs endpoint
-    //       → vendedor RECEBE gross_amount como receita (positivo)
-    // Outros: vendedor PAGA o senderCost líquido (negativo)
+    // FLEX (self_service): receita = gross_amount - (senders.cost - senders.save)
+    //   • Produto < R$79:  cost=0, save=0  → receita = gross_amount (+R$11)
+    //   • Produto >= R$79: cost=9.9, save=1.1 → receita = 22 - 8.8 = +R$13.20
+    // Outros: vendedor PAGA (senders.cost - senders.save) líquido (negativo)
     let frete: number;
+
     const isFlex =
       freight.logisticType === "FLEX" &&
-      (freight.sellerShippingCost === 0 || freight.sellerShippingCost === null) &&
       freight.costsGrossAmount !== null &&
       freight.costsGrossAmount > 0;
 
     if (isFlex) {
-      // Receita do FLEX: vendedor recebe gross_amount do ML por fazer a entrega
-      frete = roundCurrency(freight.costsGrossAmount!);
-      console.log(`[Sync] FLEX detectado — receita frete: +R$${frete}`);
+      const senderCost  = freight.sellerShippingCost  ?? 0;
+      const senderSave  = freight.sellerShippingSave  ?? 0;
+      const netSenderCost = Math.max(senderCost - senderSave, 0);
+      frete = roundCurrency(freight.costsGrossAmount! - netSenderCost);
+      console.log(`[Sync] FLEX — gross=${freight.costsGrossAmount} cost=${senderCost} save=${senderSave} → frete=+${frete}`);
     } else if (freight.sellerShippingCost !== null && freight.sellerShippingCost !== undefined) {
-      // Custo real extraído de /shipments/{id}/costs -> senders[0].cost
-      frete = -roundCurrency(freight.sellerShippingCost);
+      // Custo real extraído de /shipments/{id}/costs -> senders[0].cost (normal)
+      const senderSave = freight.sellerShippingSave ?? 0;
+      frete = -roundCurrency(Math.max(freight.sellerShippingCost - senderSave, 0));
     } else {
       // Fallback para lógica antiga quando /costs não disponível
       frete = freight.adjustedCost ?? 0;

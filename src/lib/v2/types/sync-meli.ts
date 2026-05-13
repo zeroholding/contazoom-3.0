@@ -25,6 +25,7 @@ export type MeliOrderFreight = {
   adjustmentSource: string | null;
 
   sellerShippingCost: number | null;
+  sellerShippingSave: number | null; // senders[0].save do /costs endpoint
   costsGrossAmount: number | null;  // gross_amount do /costs endpoint (usado para receita FLEX)
 };
 
