@@ -112,8 +112,8 @@ export async function GET(req: NextRequest) {
     return redirectRes;
   }
 
-  const partnerId = process.env.SHOPEE_PARTNER_ID!;
-  const partnerKey = process.env.SHOPEE_PARTNER_KEY!;
+  const partnerId = process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID;
+  const partnerKey = process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET;
   if (!partnerId || !partnerKey) {
     if (oauthMode === "popup") {
       return respondWithPopup({ success: false, message: "Credenciais Shopee ausentes.", status: 500 });

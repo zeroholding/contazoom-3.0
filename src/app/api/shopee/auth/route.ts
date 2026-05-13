@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
     }
 
-    const partnerId = process.env.SHOPEE_PARTNER_ID;
-    const partnerKey = process.env.SHOPEE_PARTNER_KEY;
+    const partnerId = process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID;
+    const partnerKey = process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET;
     const redirectOrigin = process.env.SHOPEE_REDIRECT_ORIGIN || (req.headers.get("x-forwarded-proto") || "http") + "://" + req.headers.get("host");
     
     if (!partnerId || !partnerKey) {
