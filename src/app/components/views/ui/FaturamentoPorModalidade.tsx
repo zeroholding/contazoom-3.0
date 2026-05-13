@@ -5,8 +5,8 @@ import type { FiltroPeriodo } from "./FiltrosDashboard";
 import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "./FiltrosDashboardExtra";
 import type { FiltroAgrupamentoSKU } from "./FiltroSKU";
 
-interface ContaData {
-  conta: string;
+interface ModalidadeData {
+  modalidade: string;
   faturamento: number;
   quantidade: number;
   percentual: number;
@@ -39,18 +39,17 @@ function getColor(index: number, total: number): string {
   return palette[index] ?? "#fdba74";
 }
 
-function shortName(conta: string): string {
-  // Abreviar nomes longos para a legenda
-  if (conta.length <= 18) return conta;
-  return conta.slice(0, 16) + "…";
+function shortName(modalidade: string): string {
+  if (modalidade.length <= 18) return modalidade;
+  return modalidade.slice(0, 16) + "…";
 }
 
-export default function FaturamentoPorConta({
+export default function FaturamentoPorModalidade({
   periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada,
   canalAtivo, statusAtivo, tipoAnuncioAtivo, modalidadeEnvioAtiva,
   agrupamentoSKUAtivo, selectedAccount, refreshKey,
 }: Props) {
-  const [contas, setContas] = useState<ContaData[]>([]);
+  const [modalidades, setModalidades] = useState<ModalidadeData[]>([]);
   const [totalFaturamento, setTotalFaturamento] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -71,10 +70,10 @@ export default function FaturamentoPorConta({
           params.append("accountPlatform", selectedAccount.platform);
           params.append("accountId", selectedAccount.id);
         }
-        const res = await fetch(`/api/dashboard/faturamento-por-conta?${params}`);
+        const res = await fetch(`/api/dashboard/faturamento-por-modalidade?${params}`);
         if (res.ok) {
           const data = await res.json();
-          setContas(data.contas || []);
+          setModalidades(data.modalidades || []);
           setTotalFaturamento(data.totalFaturamento || 0);
         }
       } catch (e) { console.error(e); }
@@ -87,7 +86,7 @@ export default function FaturamentoPorConta({
   // Skeleton
   if (isLoading) {
     return (
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm animate-pulse">
+      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm animate-pulse h-full">
         <div className="h-4 bg-gray-200 rounded w-1/3 mb-3" />
         <div className="flex gap-6">
           <div className="flex-1 h-72 bg-gray-100 rounded" />
@@ -99,18 +98,19 @@ export default function FaturamentoPorConta({
     );
   }
 
-  if (contas.length === 0) {
+  if (modalidades.length === 0) {
     return (
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm">
+      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm h-full">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-6 h-6 bg-orange-100 rounded-lg flex items-center justify-center">
             <svg className="w-3.5 h-3.5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+              <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+              <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H14a1 1 0 001-1v-5h2.5a1 1 0 00.8-.4l2-3A1 1 0 0020 6H15a1 1 0 00-1 1v5H4V5a1 1 0 00-1-1z" />
             </svg>
           </div>
           <div>
-            <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Distribuição de Faturamento por Contas</h3>
-            <p className="text-xs text-gray-500">Participação percentual no faturamento total</p>
+            <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Faturamento por Mod. Envio</h3>
+            <p className="text-xs text-gray-500">Participação percentual das modalidades</p>
           </div>
         </div>
         <div className="h-48 flex items-center justify-center text-xs text-gray-400">
@@ -123,17 +123,18 @@ export default function FaturamentoPorConta({
   const BAR_HEIGHT = 420; // px da barra empilhada
 
   return (
-    <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm">
+    <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm h-full">
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <div className="w-6 h-6 bg-orange-100 rounded-lg flex items-center justify-center">
           <svg className="w-3.5 h-3.5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+            <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+            <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H14a1 1 0 001-1v-5h2.5a1 1 0 00.8-.4l2-3A1 1 0 0020 6H15a1 1 0 00-1 1v5H4V5a1 1 0 00-1-1z" />
           </svg>
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Faturamento por Conta</h3>
-          <p className="text-xs text-gray-500">Participação percentual no faturamento total</p>
+          <h3 className="text-sm font-semibold text-gray-800 uppercase tracking-wide">Faturamento por Mod. Envio</h3>
+          <p className="text-xs text-gray-500">Participação percentual das modalidades</p>
         </div>
       </div>
 
@@ -163,20 +164,20 @@ export default function FaturamentoPorConta({
               ))}
 
               {/* Segmentos empilhados (maior embaixo = mais escuro) */}
-              {[...contas].reverse().map((conta, revIdx) => {
-                const idx = contas.length - 1 - revIdx;
-                const color = getColor(idx, contas.length);
+              {[...modalidades].reverse().map((mod, revIdx) => {
+                const idx = modalidades.length - 1 - revIdx;
+                const color = getColor(idx, modalidades.length);
                 const isHov = hoveredIdx === idx;
-                const heightPx = (conta.percentual / 100) * BAR_HEIGHT;
+                const heightPx = (mod.percentual / 100) * BAR_HEIGHT;
                 const showLabel = heightPx >= 22;
 
                 return (
                   <div
-                    key={conta.conta}
+                    key={mod.modalidade}
                     className="relative flex items-center justify-center cursor-pointer transition-all duration-150"
                     style={{
                       backgroundColor: color,
-                      height: `${conta.percentual}%`,
+                      height: `${mod.percentual}%`,
                       width: "100%",
                       filter: isHov ? "brightness(1.15)" : "brightness(1)",
                     }}
@@ -185,7 +186,7 @@ export default function FaturamentoPorConta({
                   >
                     {showLabel && (
                       <span className="text-white font-bold text-xs select-none z-10">
-                        {conta.percentual.toFixed(1)}%
+                        {mod.percentual.toFixed(1)}%
                       </span>
                     )}
                   </div>
@@ -203,12 +204,12 @@ export default function FaturamentoPorConta({
 
         {/* Legenda */}
         <div className="flex-1 flex flex-col gap-1.5 pt-1">
-          {contas.map((conta, idx) => {
-            const color = getColor(idx, contas.length);
+          {modalidades.map((mod, idx) => {
+            const color = getColor(idx, modalidades.length);
             const isHov = hoveredIdx === idx;
             return (
               <div
-                key={conta.conta}
+                key={mod.modalidade}
                 className={`flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer transition-all ${
                   isHov ? "bg-orange-50 ring-1 ring-orange-200" : "hover:bg-gray-100"
                 }`}
@@ -218,42 +219,42 @@ export default function FaturamentoPorConta({
                 {/* Cor swatch */}
                 <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
                 {/* Nome */}
-                <span className="flex-1 text-xs text-gray-700 font-medium truncate" title={conta.conta}>
-                  {shortName(conta.conta)}
+                <span className="flex-1 text-xs text-gray-700 font-medium truncate" title={mod.modalidade}>
+                  {shortName(mod.modalidade)}
                 </span>
                 {/* Percentual */}
                 <span className="text-xs font-bold text-gray-800 tabular-nums">
-                  {conta.percentual.toFixed(1)}%
+                  {mod.percentual.toFixed(1)}%
                 </span>
               </div>
             );
           })}
 
           {/* Tooltip detalhado ao hover */}
-          {hoveredIdx !== null && contas[hoveredIdx] && (
+          {hoveredIdx !== null && modalidades[hoveredIdx] && (
             <div className="mt-3 p-3 bg-white rounded-xl border border-orange-200 shadow-md">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: getColor(hoveredIdx, contas.length) }} />
-                <span className="text-xs font-bold text-gray-800">{contas[hoveredIdx].conta}</span>
+                <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: getColor(hoveredIdx, modalidades.length) }} />
+                <span className="text-xs font-bold text-gray-800">{modalidades[hoveredIdx].modalidade}</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <div className="text-gray-400">Faturamento</div>
-                  <div className="font-bold text-orange-600">{fmt(contas[hoveredIdx].faturamento)}</div>
+                  <div className="font-bold text-orange-600">{fmt(modalidades[hoveredIdx].faturamento)}</div>
                 </div>
                 <div>
                   <div className="text-gray-400">Participação</div>
-                  <div className="font-bold text-gray-700">{contas[hoveredIdx].percentual.toFixed(1)}%</div>
+                  <div className="font-bold text-gray-700">{modalidades[hoveredIdx].percentual.toFixed(1)}%</div>
                 </div>
                 <div>
                   <div className="text-gray-400">Pedidos</div>
-                  <div className="font-bold text-gray-700">{contas[hoveredIdx].quantidade.toLocaleString("pt-BR")}</div>
+                  <div className="font-bold text-gray-700">{modalidades[hoveredIdx].quantidade.toLocaleString("pt-BR")}</div>
                 </div>
                 <div>
                   <div className="text-gray-400">Ticket Médio</div>
                   <div className="font-bold text-gray-700">
-                    {contas[hoveredIdx].quantidade > 0
-                      ? fmt(contas[hoveredIdx].faturamento / contas[hoveredIdx].quantidade)
+                    {modalidades[hoveredIdx].quantidade > 0
+                      ? fmt(modalidades[hoveredIdx].faturamento / modalidades[hoveredIdx].quantidade)
                       : "—"}
                   </div>
                 </div>

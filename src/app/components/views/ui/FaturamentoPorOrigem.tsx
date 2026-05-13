@@ -141,7 +141,7 @@ export default function FaturamentoPorOrigem({
 
   const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const radius = outerRadius * 1.2; // Move labels outside
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
@@ -149,7 +149,7 @@ export default function FaturamentoPorOrigem({
       <text 
         x={x} 
         y={y} 
-        fill="white" 
+        fill="#374151" 
         textAnchor={x > cx ? 'start' : 'end'} 
         dominantBaseline="central"
         fontSize={12}
@@ -171,7 +171,7 @@ export default function FaturamentoPorOrigem({
             </svg>
           </div>
           <div>
-            <h3 className="text-xs font-medium text-gray-600">Faturamento por Origem</h3>
+            <h3 className="text-sm font-semibold text-gray-800">Faturamento por Origem</h3>
             <p className="text-xs text-gray-500">Carregando dados...</p>
           </div>
         </div>
@@ -193,7 +193,7 @@ export default function FaturamentoPorOrigem({
             </svg>
           </div>
           <div>
-            <h3 className="text-xs font-medium text-gray-600">Faturamento por Origem</h3>
+            <h3 className="text-sm font-semibold text-gray-800">Faturamento por Origem</h3>
             <p className="text-xs text-gray-500">Nenhum dado encontrado</p>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function FaturamentoPorOrigem({
             </svg>
           </div>
           <div>
-            <h3 className="text-xs font-medium text-gray-600">Faturamento por Origem</h3>
+            <h3 className="text-sm font-semibold text-gray-800">Faturamento por Origem</h3>
             <p className="text-xs text-gray-500">Distribuição entre ADS e vendas orgânicas</p>
           </div>
         </div>
@@ -242,10 +242,10 @@ export default function FaturamentoPorOrigem({
               data={dados}
               cx="50%"
               cy="50%"
-              labelLine={false}
+              labelLine={true}
               label={CustomLabel}
-              outerRadius={80}
-              innerRadius={40}
+              outerRadius={90}
+              innerRadius={50}
               fill="#8884d8"
               dataKey="faturamento"
               nameKey="origem"
