@@ -19,16 +19,22 @@ export async function GET(req: NextRequest) {
         email: true,
         role: true,
         createdAt: true,
-        meliAccounts: { select: { id: true } },
-        shopeeAccounts: { select: { id: true } }
+        meliAccounts: { select: { id: true, nickname: true } },
+        shopeeAccounts: { select: { id: true, shop_name: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
 
     const formattedUsers = users.map(user => {
-      const connectedAccounts = [];
-      if (user.meliAccounts && user.meliAccounts.length > 0) connectedAccounts.push("mercado-livre");
-      if (user.shopeeAccounts && user.shopeeAccounts.length > 0) connectedAccounts.push("shopee");
+      const connectedAccounts: { provider: string; label: string }[] = [];
+      
+      user.meliAccounts?.forEach(acc => {
+        connectedAccounts.push({ provider: "mercado-livre", label: acc.nickname || "Conta ML" });
+      });
+      
+      user.shopeeAccounts?.forEach(acc => {
+        connectedAccounts.push({ provider: "shopee", label: acc.shop_name || "Loja Shopee" });
+      });
 
       return {
         id: user.id,

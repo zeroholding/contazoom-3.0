@@ -559,7 +559,7 @@ export default function Sidebar({
           <div className="px-3 py-2">
             <Link
               href="/admin"
-              className={`flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md hover:from-purple-700 hover:to-indigo-700 transition-all ${collapsed ? 'p-2' : 'px-4 py-2.5'}`}
+              className={`flex items-center justify-center gap-2 rounded-lg bg-gray-900 text-orange-500 shadow-sm border border-gray-800 hover:bg-gray-800 transition-all ${collapsed ? 'p-2' : 'px-4 py-2.5'}`}
             >
               <AdminIcon />
               {!collapsed && <span className="font-bold text-sm tracking-wide">PAINEL ADMIN</span>}
