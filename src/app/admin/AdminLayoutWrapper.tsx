@@ -1,9 +1,8 @@
 "use client";
 
-import { useRef, useEffect, useLayoutEffect, useState } from "react";
+import { useRef, useEffect, useLayoutEffect, useState, ReactNode } from "react";
 import gsap from "gsap";
 import AdminSidebar from "./AdminSidebar";
-import AdminPanel from "@/app/components/views/ui/AdminPanel";
 
 const FULL_W = "16rem";
 const RAIL_W = "4rem";
@@ -11,9 +10,8 @@ const LS_KEY = "cz_sidebar_collapsed";
 
 const useIsoLayout = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-export default function AdminLayoutWrapper() {
+export default function AdminLayoutWrapper({ children }: { children?: ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
-  const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hasInitialSet = useRef(false);
 
@@ -75,7 +73,7 @@ export default function AdminLayoutWrapper() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <AdminPanel />
+          {children}
         </main>
       </div>
     </div>

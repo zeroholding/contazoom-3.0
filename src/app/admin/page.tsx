@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AdminLayoutWrapper from "./AdminLayoutWrapper";
+import AdminPanel from "@/app/components/views/ui/AdminPanel";
 
 export const metadata: Metadata = {
   title: "Administração - ContaZoom",
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 export default function AdminPage() {
   return (
     <ProtectedRoute>
-      <AdminLayoutWrapper />
+      <AdminLayoutWrapper>
+        <AdminPanel />
+      </AdminLayoutWrapper>
     </ProtectedRoute>
   );
 }
