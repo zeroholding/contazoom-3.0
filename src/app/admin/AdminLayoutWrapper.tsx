@@ -2,8 +2,7 @@
 
 import { useRef, useEffect, useLayoutEffect, useState } from "react";
 import gsap from "gsap";
-import Sidebar from "@/app/components/views/ui/Sidebar";
-import Topbar from "@/app/components/views/ui/Topbar";
+import AdminSidebar from "./AdminSidebar";
 import AdminPanel from "@/app/components/views/ui/AdminPanel";
 
 const FULL_W = "16rem";
@@ -52,16 +51,30 @@ export default function AdminLayoutWrapper() {
   };
 
   return (
-    <div ref={containerRef} className="flex h-screen bg-[#F3F3F3] font-sans">
-      <Sidebar 
-        isCollapsed={isSidebarCollapsed} 
-        onToggle={handleToggleSidebar} 
-        isMobileOpen={isSidebarMobileOpen} 
-        onMobileClose={() => setIsSidebarMobileOpen(false)} 
-      />
+    <div ref={containerRef} className="flex h-screen bg-gray-50 font-sans">
+      <AdminSidebar collapsed={isSidebarCollapsed} />
+      
       <div className="flex-1 flex flex-col h-screen overflow-hidden lg:ml-[var(--sidebar-w)] transition-all duration-200">
-        <Topbar onMobileOpen={() => setIsSidebarMobileOpen(true)} collapsed={isSidebarCollapsed} onToggleCollapse={handleToggleSidebar} />
-        <main className="flex-1 overflow-auto pt-16">
+        
+        {/* Admin Top Header */}
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center px-6 justify-between shrink-0">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleToggleSidebar}
+              className="p-2 -ml-2 rounded-lg text-gray-500 hover:bg-gray-100 hidden md:block"
+            >
+              <svg className={`w-5 h-5 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h2 className="text-lg font-semibold text-gray-800">Centro de Controle</h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">Sessão Administrador</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-auto">
           <AdminPanel />
         </main>
       </div>

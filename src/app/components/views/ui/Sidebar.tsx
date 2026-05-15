@@ -356,9 +356,6 @@ export default function Sidebar({
   }, []);
 
   const visibleItems = [...NAV_ITEMS];
-  if (isAdmin) {
-    visibleItems.unshift({ href: "/admin", label: "Administração", icon: <AdminIcon /> });
-  }
 
   const [open, setOpen] = useState<Record<string, boolean>>({
     sales: false,
@@ -557,6 +554,18 @@ export default function Sidebar({
             priority
           />
         </div>
+
+        {isAdmin && (
+          <div className="px-3 py-2">
+            <Link
+              href="/admin"
+              className={`flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md hover:from-purple-700 hover:to-indigo-700 transition-all ${collapsed ? 'p-2' : 'px-4 py-2.5'}`}
+            >
+              <AdminIcon />
+              {!collapsed && <span className="font-bold text-sm tracking-wide">PAINEL ADMIN</span>}
+            </Link>
+          </div>
+        )}
 
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-2">
           {visibleItems.map((item) => {
