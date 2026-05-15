@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tryVerifySessionToken } from "@/lib/auth";
+import { tryVerifySessionToken, checkIsAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { readFile, unlink } from "fs/promises";
 import { join } from "path";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "uploads");
-
-function isSuperAdmin(email?: string) {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  return adminEmail && email && adminEmail.toLowerCase() === email.toLowerCase();
-}
 
 export async function GET(req: NextRequest, { params }: { params: { fileName: string } }) {
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
@@ -22,7 +17,8 @@ export async function GET(req: NextRequest, { params }: { params: { fileName: st
 
     if (!document) return new NextResponse("File not found", { status: 404 });
 
-    if (document.userId !== session.sub && !isSuperAdmin(session.email)) {
+    const isAdmin = await checkIsAdmin(session.email, session.sub);
+    if (document.userId !== session.sub && !isAdmin) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
@@ -45,7 +41,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { fileName:
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!isSuperAdmin(session.email)) {
+  const isAdmin = await checkIsAdmin(session.email, session.sub);
+  if (!isAdmin) {
     return NextResponse.json({ error: "Apenas o administrador pode excluir arquivos." }, { status: 403 });
   }
 

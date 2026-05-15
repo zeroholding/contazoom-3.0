@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tryVerifySessionToken } from "@/lib/auth";
+import { tryVerifySessionToken, checkIsAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "uploads");
-
-function isSuperAdmin(email?: string) {
-  const adminEmail = process.env.ADMIN_EMAIL;
-  return adminEmail && email && adminEmail.toLowerCase() === email.toLowerCase();
-}
 
 export async function GET(req: NextRequest) {
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
@@ -20,8 +15,9 @@ export async function GET(req: NextRequest) {
 
   try {
     let documents;
+    const isAdmin = await checkIsAdmin(session.email, session.sub);
 
-    if (isSuperAdmin(session.email)) {
+    if (isAdmin) {
       if (targetUserId) {
         documents = await prisma.document.findMany({
           where: { userId: targetUserId },
@@ -42,7 +38,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      isAdmin: isSuperAdmin(session.email),
+      isAdmin,
       documents
     });
   } catch (error) {
@@ -54,7 +50,8 @@ export async function POST(req: NextRequest) {
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!isSuperAdmin(session.email)) {
+  const isAdmin = await checkIsAdmin(session.email, session.sub);
+  if (!isAdmin) {
     return NextResponse.json({ error: "Apenas o administrador pode enviar arquivos." }, { status: 403 });
   }
 

@@ -322,12 +322,43 @@ const RailFlyoutCard = forwardRef<
 RailFlyoutCard.displayName = "RailFlyoutCard";
 
 /** ---------------------------- Sidebar ---------------------------- */
+const AdminIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className="h-5 w-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3" />
+    <path d="M12 11m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+    <path d="M12 12l0 2.5" />
+  </svg>
+);
+
 export default function Sidebar({
   collapsed,
   mobileOpen,
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch('/api/admin/check').then(r => r.json()).then(d => {
+      if (d.isAdmin) setIsAdmin(true);
+    }).catch(() => {});
+  }, []);
+
+  const visibleItems = [...NAV_ITEMS];
+  if (isAdmin) {
+    visibleItems.push({ href: "/admin", label: "Administração", icon: <AdminIcon /> });
+  }
 
   const [open, setOpen] = useState<Record<string, boolean>>({
     sales: false,
@@ -482,7 +513,7 @@ export default function Sidebar({
     if (!btnRect || !asideRect) return;
 
     const GAP = 8;
-    const node = NAV_ITEMS.find((n): n is Branch => "slug" in n && n.slug === slug);
+    const node = visibleItems.find((n): n is Branch => "slug" in n && n.slug === slug);
     if (!node) {
       return;
     }
@@ -528,7 +559,7 @@ export default function Sidebar({
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-2">
-          {NAV_ITEMS.map((item) => {
+          {visibleItems.map((item) => {
             if ("href" in item && !("children" in item)) {
               const active =
                 pathname === item.href || pathname?.startsWith(item.href + "/");

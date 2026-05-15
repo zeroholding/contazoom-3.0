@@ -94,3 +94,31 @@ export async function assertSessionToken(token: string | undefined): Promise<Ses
   if (!session) throw new Error("Sessão inválida ou expirada.");
   return session;
 }
+
+export async function checkIsAdmin(email?: string, userId?: string): Promise<boolean> {
+  // Verificação 1: O email está na variável de ambiente? (Dono)
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (adminEmail && email && adminEmail.toLowerCase() === email.toLowerCase()) {
+    return true;
+  }
+  
+  // Verificação 2: Tem a role ADMIN no banco?
+  if (userId) {
+    try {
+      // Dynamic import to avoid circular dependencies if auth.ts is used elsewhere
+      const { PrismaClient } = await import('@prisma/client');
+      const tempPrisma = new PrismaClient();
+      const user = await tempPrisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true }
+      });
+      await tempPrisma.$disconnect();
+      return user?.role === "ADMIN";
+    } catch (e) {
+      console.error("Erro ao verificar role:", e);
+    }
+  }
+  
+  return false;
+}
+

@@ -13,6 +13,7 @@ model User {
   email             String              @unique @db.Citext
   passwordHash      String              @map("password_hash")
   country           String?             @db.VarChar(2)
+  role              String              @default("USER")
   createdAt         DateTime            @default(now()) @map("created_at")
   updatedAt         DateTime            @updatedAt @map("updated_at")
   blingAccounts     BlingAccount[]
