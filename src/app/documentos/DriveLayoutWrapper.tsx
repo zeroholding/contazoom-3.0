@@ -61,7 +61,7 @@ export default function DriveLayoutWrapper() {
       />
       <div className="flex-1 flex flex-col h-screen overflow-hidden lg:ml-[var(--sidebar-w)] transition-all duration-200">
         <Topbar onMobileOpen={() => setIsSidebarMobileOpen(true)} />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pt-16">
           <DriveDocumentos />
         </main>
       </div>
