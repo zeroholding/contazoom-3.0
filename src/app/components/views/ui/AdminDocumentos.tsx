@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, ShoppingBag, Eye, Download, History } from "lucide-react";
+import { MeliIcon } from "@/components/icons/MeliIcon";
+import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 
 type UserData = {
   id: string;
@@ -199,13 +201,13 @@ export default function AdminDocumentos() {
                         <span className="text-sm text-gray-500 italic">Nenhuma loja.</span>
                       ) : (
                         activeUser.connectedAccounts.map((acc, i) => (
-                          <div key={i} className="flex items-center text-xs px-2.5 py-1.5 rounded-md border" style={{
-                            backgroundColor: acc.provider === 'shopee' ? '#fff6ed' : '#fef9c3',
-                            borderColor: acc.provider === 'shopee' ? '#fed7aa' : '#fef08a',
-                            color: acc.provider === 'shopee' ? '#c2410c' : '#854d0e'
-                          }}>
-                            {acc.provider === 'shopee' ? <ShoppingBag className="w-3.5 h-3.5 mr-1.5" /> : <Store className="w-3.5 h-3.5 mr-1.5" />}
-                            <span className="font-semibold">{acc.label}</span>
+                          <div key={i} className="flex items-center text-xs px-2.5 py-1.5 rounded-md border bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors">
+                            {acc.provider === 'shopee' ? (
+                              <ShopeeIcon className="w-4 h-4 mr-2" />
+                            ) : (
+                              <MeliIcon className="w-4 h-4 mr-2" />
+                            )}
+                            <span className="font-semibold truncate max-w-[150px]">{acc.label}</span>
                           </div>
                         ))
                       )}

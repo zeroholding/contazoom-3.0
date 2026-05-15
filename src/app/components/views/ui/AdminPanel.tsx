@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Users, UserPlus, Shield, Loader2, Store, ShoppingBag, X } from "lucide-react";
+import { MeliIcon } from "@/components/icons/MeliIcon";
+import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 
 type UserData = {
   id: string;
@@ -160,12 +162,12 @@ export default function AdminPanel() {
                         <span className="text-sm text-gray-400 italic">Nenhuma conta</span>
                       ) : (
                         user.connectedAccounts.map((acc, i) => (
-                          <div key={i} className="flex items-center text-xs px-2 py-1.5 rounded-md border" style={{
-                            backgroundColor: acc.provider === 'shopee' ? '#fff6ed' : '#fef9c3',
-                            borderColor: acc.provider === 'shopee' ? '#fed7aa' : '#fef08a',
-                            color: acc.provider === 'shopee' ? '#c2410c' : '#854d0e'
-                          }}>
-                            {acc.provider === 'shopee' ? <ShoppingBag className="w-3.5 h-3.5 mr-1.5" /> : <Store className="w-3.5 h-3.5 mr-1.5" />}
+                          <div key={i} className="flex items-center text-xs px-2.5 py-1.5 rounded-md border bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors">
+                            {acc.provider === 'shopee' ? (
+                              <ShopeeIcon className="w-4 h-4 mr-2" />
+                            ) : (
+                              <MeliIcon className="w-4 h-4 mr-2" />
+                            )}
                             <span className="font-medium truncate max-w-[120px]" title={acc.label}>{acc.label}</span>
                           </div>
                         ))
