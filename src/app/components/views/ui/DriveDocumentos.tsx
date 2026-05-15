@@ -289,31 +289,6 @@ export default function DriveDocumentos() {
               {currentMonth || currentYear || CATEGORIES.find(c => c.id === currentCategory)?.name.substring(4)}
             </h1>
           </div>
-
-          <div className="flex items-center gap-3">
-            {isAdmin && (
-              <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className="bg-white border-gray-300 rounded-lg text-sm px-3 py-2 border shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="">Todos os Clientes</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-            )}
-
-            {isAdmin && (
-              <button
-                onClick={() => setUploadModalOpen(true)}
-                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm"
-              >
-                <Upload className="w-4 h-4 mr-2" />
-                Upload
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Corpo da Área Principal */}
@@ -354,11 +329,6 @@ export default function DriveDocumentos() {
                       <p className="text-xs text-gray-500 mt-0.5">
                         {formatSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString("pt-BR")}
                       </p>
-                      {isAdmin && doc.user && (
-                        <p className="text-xs text-blue-600 truncate mt-1 bg-blue-50 inline-block px-1.5 py-0.5 rounded font-medium">
-                          {doc.user.name.split(' ')[0]}
-                        </p>
-                      )}
                     </div>
                     <div className="flex flex-col space-y-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
@@ -368,15 +338,6 @@ export default function DriveDocumentos() {
                       >
                         <Download className="w-4 h-4" />
                       </button>
-                      {isAdmin && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleDelete(doc.fileName); }}
-                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
                     </div>
                   </div>
                 );
@@ -385,101 +346,6 @@ export default function DriveDocumentos() {
           )}
         </div>
       </div>
-
-      {/* Modal de Upload */}
-      {uploadModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
-              <h3 className="text-lg font-bold text-gray-800">Enviar Documento</h3>
-              <button onClick={() => setUploadModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-            </div>
-            
-            <form onSubmit={handleUpload} className="p-6 space-y-4">
-              {isAdmin && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cliente Destino *</label>
-                  <select
-                    required
-                    value={uploadTargetUser}
-                    onChange={(e) => setUploadTargetUser(e.target.value)}
-                    className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500"
-                  >
-                    <option value="">-- Selecione o Cliente --</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Categoria da Pasta</label>
-                <select
-                  value={uploadCategory}
-                  onChange={(e) => setUploadCategory(e.target.value)}
-                  className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500"
-                >
-                  {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-
-              {uploadCategory === "02_IMPOSTOS" && (
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ano</label>
-                    <select
-                      value={uploadYear}
-                      onChange={(e) => setUploadYear(e.target.value)}
-                      className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mês</label>
-                    <select
-                      value={uploadMonth}
-                      onChange={(e) => setUploadMonth(e.target.value)}
-                      className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-blue-500 focus:ring-blue-500"
-                    >
-                      {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Arquivo</label>
-                <input
-                  type="file"
-                  required
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-              </div>
-
-              <div className="pt-4 border-t flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setUploadModalOpen(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUploading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-70 flex items-center"
-                >
-                  {isUploading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {isUploading ? "Enviando..." : "Enviar Arquivo"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </div>
   );
