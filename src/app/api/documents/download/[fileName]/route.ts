@@ -11,6 +11,8 @@ export async function GET(req: NextRequest, { params }: { params: { fileName: st
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
   try {
+    const action = req.nextUrl.searchParams.get("action") || "download";
+
     const document = await prisma.document.findFirst({
       where: { fileName: params.fileName }
     });
@@ -22,14 +24,34 @@ export async function GET(req: NextRequest, { params }: { params: { fileName: st
       return new NextResponse("Forbidden", { status: 403 });
     }
 
+    // Log the action
+    try {
+      await prisma.documentLog.create({
+        data: {
+          documentId: document.id,
+          userId: session.sub,
+          action: action === "view" ? "VIEWED" : "DOWNLOADED"
+        }
+      });
+    } catch (e) {
+      console.error("Erro ao registrar log de acesso:", e);
+    }
+
     const filePath = join(UPLOAD_DIR, document.fileName);
     const fileBuffer = await readFile(filePath);
 
+    const headers = new Headers();
+    headers.set("Content-Type", document.mimeType);
+    
+    if (action === "view") {
+      headers.set("Content-Disposition", `inline; filename="${document.originalName}"`);
+    } else {
+      headers.set("Content-Disposition", `attachment; filename="${document.originalName}"`);
+    }
+
     return new NextResponse(fileBuffer, {
-      headers: {
-        "Content-Type": document.mimeType,
-        "Content-Disposition": `inline; filename="${document.originalName}"`,
-      },
+      status: 200,
+      headers
     });
   } catch (error) {
     console.error("Download erro:", error);

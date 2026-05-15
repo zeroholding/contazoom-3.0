@@ -34,6 +34,7 @@ model User {
   settings          UserSettings?
   aliquotasImposto  AliquotaImposto[]
   documents         Document[]
+  documentLogs      DocumentLog[]
 
   @@index([createdAt])
   @@map("usuario")
@@ -454,9 +455,25 @@ model Document {
   updatedAt       DateTime @updatedAt @map("updated_at")
   
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs            DocumentLog[]
 
   @@index([userId])
   @@index([category])
   @@index([subFolder])
   @@map("documento")
+}
+
+model DocumentLog {
+  id         String   @id @default(cuid())
+  documentId String   @map("document_id")
+  action     String   // "VIEWED", "DOWNLOADED"
+  userId     String   @map("user_id") // Quem realizou a ação
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+  @@map("document_log")
 }

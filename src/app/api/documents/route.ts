@@ -88,6 +88,18 @@ export async function POST(req: NextRequest) {
       include: { user: { select: { name: true, email: true } } }
     });
 
+    try {
+      await prisma.documentLog.create({
+        data: {
+          documentId: document.id,
+          userId: session.sub,
+          action: "CREATED"
+        }
+      });
+    } catch (e) {
+      console.error("Erro ao registrar log de criação:", e);
+    }
+
     return NextResponse.json(document, { status: 201 });
   } catch (error) {
     console.error("Erro no upload:", error);
