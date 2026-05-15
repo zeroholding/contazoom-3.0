@@ -332,42 +332,55 @@ export default function DriveDocumentos() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {visibleFiles.map(doc => (
-                <div key={doc.id} className="flex items-center p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-200 transition-all group">
-                  {getFileIcon(doc.mimeType)}
-                  <div className="ml-4 flex-1 overflow-hidden">
-                    <p className="font-semibold text-gray-800 text-sm truncate" title={doc.originalName}>{doc.originalName}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {formatSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString("pt-BR")}
-                    </p>
-                    {isAdmin && doc.user && (
-                      <p className="text-xs text-blue-600 truncate mt-1 bg-blue-50 inline-block px-1.5 py-0.5 rounded">
-                        {doc.user.name.split(' ')[0]}
+              {visibleFiles.map(doc => {
+                const isPdf = doc.mimeType.includes("pdf");
+                const isImage = doc.mimeType.includes("image");
+                const fileExt = isPdf ? "PDF" : isImage ? "IMG" : doc.originalName.split('.').pop()?.toUpperCase().substring(0, 4) || "DOC";
+                
+                return (
+                  <div 
+                    key={doc.id} 
+                    className="flex items-center p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-400 transition-all group cursor-pointer"
+                    onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')}
+                  >
+                    <div className="relative">
+                      {getFileIcon(doc.mimeType)}
+                      <span className="absolute -top-2 -right-2 bg-gray-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm uppercase">
+                        {fileExt}
+                      </span>
+                    </div>
+                    <div className="ml-4 flex-1 overflow-hidden">
+                      <p className="font-semibold text-gray-800 text-sm truncate" title={doc.originalName}>{doc.originalName}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {formatSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString("pt-BR")}
                       </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col space-y-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <a 
-                      href={doc.fileUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Baixar"
-                    >
-                      <Download className="w-4 h-4" />
-                    </a>
-                    {isAdmin && (
+                      {isAdmin && doc.user && (
+                        <p className="text-xs text-blue-600 truncate mt-1 bg-blue-50 inline-block px-1.5 py-0.5 rounded font-medium">
+                          {doc.user.name.split(' ')[0]}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col space-y-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
-                        onClick={() => handleDelete(doc.fileName)}
-                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Excluir"
+                        onClick={(e) => { e.stopPropagation(); window.open(`${doc.fileUrl}?action=download`, '_self'); }}
+                        className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Baixar Arquivo"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Download className="w-4 h-4" />
                       </button>
-                    )}
+                      {isAdmin && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(doc.fileName); }}
+                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
