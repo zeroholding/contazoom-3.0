@@ -32,6 +32,7 @@ model User {
   notifications     SyncNotification[]
   settings          UserSettings?
   aliquotasImposto  AliquotaImposto[]
+  documents         Document[]
 
   @@index([createdAt])
   @@map("usuario")
@@ -433,4 +434,28 @@ model AliquotaImposto {
   @@index([dataInicio, dataFim])
   @@index([ativo])
   @@map("aliquota_imposto")
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  fileName        String   @map("file_name")
+  fileUrl         String   @map("file_url")
+  originalName    String   @map("original_name")
+  mimeType        String   @map("mime_type")
+  sizeBytes       Int      @map("size_bytes")
+  
+  // Categorization
+  category        String   // "INSTITUCIONAL", "IMPOSTOS", "FATURAMENTO", "FOLHA"
+  subFolder       String?  @map("sub_folder") // e.g. "2026/01_Janeiro"
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([subFolder])
+  @@map("documento")
 }
