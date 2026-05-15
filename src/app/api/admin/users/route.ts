@@ -19,17 +19,26 @@ export async function GET(req: NextRequest) {
         email: true,
         role: true,
         createdAt: true,
-        accounts: {
-          select: { provider: true }
-        }
+        meliAccounts: { select: { id: true } },
+        shopeeAccounts: { select: { id: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    const formattedUsers = users.map(user => ({
-      ...user,
-      connectedAccounts: user.accounts.map(a => a.provider)
-    }));
+    const formattedUsers = users.map(user => {
+      const connectedAccounts = [];
+      if (user.meliAccounts && user.meliAccounts.length > 0) connectedAccounts.push("mercado-livre");
+      if (user.shopeeAccounts && user.shopeeAccounts.length > 0) connectedAccounts.push("shopee");
+
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+        connectedAccounts
+      };
+    });
 
     return NextResponse.json(formattedUsers);
   } catch (error) {

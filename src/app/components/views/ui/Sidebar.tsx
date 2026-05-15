@@ -357,7 +357,7 @@ export default function Sidebar({
 
   const visibleItems = [...NAV_ITEMS];
   if (isAdmin) {
-    visibleItems.push({ href: "/admin", label: "Administração", icon: <AdminIcon /> });
+    visibleItems.unshift({ href: "/admin", label: "Administração", icon: <AdminIcon /> });
   }
 
   const [open, setOpen] = useState<Record<string, boolean>>({
