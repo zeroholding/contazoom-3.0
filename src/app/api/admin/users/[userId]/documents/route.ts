@@ -1,14 +1,12 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { tryVerifySessionToken, checkIsAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { checkIsAdmin } from "@/lib/auth";
 
-export async function GET(req: Request, { params }: { params: { userId: string } }) {
-  const session = await getServerSession(authOptions);
+export async function GET(req: NextRequest, { params }: { params: { userId: string } }) {
+  const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
-  const isAdmin = await checkIsAdmin(session.user?.email || session.email, session.sub);
+  const isAdmin = await checkIsAdmin(session.email, session.sub);
   if (!isAdmin) return new NextResponse("Forbidden", { status: 403 });
 
   try {
