@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, ShoppingBag, Eye, Download, History } from "lucide-react";
+import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search } from "lucide-react";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 
@@ -25,6 +25,7 @@ type UserDocument = {
   category: string;
   subFolder: string | null;
   sizeBytes: number;
+  mimeType: string;
   createdAt: string;
   fileUrl: string;
   logs: DocumentLog[];
@@ -47,32 +48,28 @@ export default function AdminDocumentos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
-  // Selection States
   const [selectedUser, setSelectedUser] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("01_INSTITUCIONAIS");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
-  // Upload UI State
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
-  // Documents State
   const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [expandedDocLogs, setExpandedDocLogs] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
   useEffect(() => {
     if (selectedUser) {
       fetchUserDocuments(selectedUser);
       setUploadSuccess(null);
-      setSelectedStores([]); // Reset stores on user change
+      setSelectedStores([]);
     } else {
       setUserDocuments([]);
     }
@@ -81,46 +78,30 @@ export default function AdminDocumentos() {
   const fetchUsers = async () => {
     try {
       const res = await fetch("/api/admin/users");
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
-      } else {
-        setError("Erro ao carregar lista de clientes.");
-      }
-    } catch (err) {
-      setError("Erro de conexão.");
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) { setUsers(await res.json()); }
+      else { setError("Erro ao carregar lista de clientes."); }
+    } catch { setError("Erro de conexão."); }
+    finally { setLoading(false); }
   };
 
   const fetchUserDocuments = async (userId: string) => {
     setLoadingDocs(true);
     try {
       const res = await fetch(`/api/admin/users/${userId}/documents`);
-      if (res.ok) {
-        const data = await res.json();
-        setUserDocuments(data);
-      }
-    } catch (err) {
-      console.error("Erro ao carregar documentos:", err);
-    } finally {
-      setLoadingDocs(false);
-    }
+      if (res.ok) setUserDocuments(await res.json());
+    } catch (err) { console.error("Erro ao carregar documentos:", err); }
+    finally { setLoadingDocs(false); }
   };
 
   const handleToggleStore = (storeLabel: string) => {
     setSelectedStores(prev => 
-      prev.includes(storeLabel) 
-        ? prev.filter(s => s !== storeLabel)
-        : [...prev, storeLabel]
+      prev.includes(storeLabel) ? prev.filter(s => s !== storeLabel) : [...prev, storeLabel]
     );
   };
 
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile || !selectedUser) return;
-
     setIsUploading(true);
     setUploadSuccess(null);
     
@@ -140,325 +121,286 @@ export default function AdminDocumentos() {
     if (subFolder) formData.append("subFolder", subFolder);
 
     try {
-      const res = await fetch("/api/documents", {
-        method: "POST",
-        body: formData,
-      });
+      const res = await fetch("/api/documents", { method: "POST", body: formData });
       if (res.ok) {
-        setUploadSuccess(`Documento enviado com sucesso!`);
+        setUploadSuccess("Documento enviado com sucesso!");
         setUploadFile(null);
-        // Reset file input
         const fileInput = document.getElementById("file-upload") as HTMLInputElement;
         if (fileInput) fileInput.value = "";
-        
-        // Refresh docs
         fetchUserDocuments(selectedUser);
       } else {
         const err = await res.json();
-        alert(err.error || "Erro ao fazer upload. Você pode precisar corrigir as permissões do servidor.");
+        alert(err.error || "Erro ao fazer upload.");
       }
-    } catch (err) {
-      alert("Erro ao fazer upload. Verifique as permissões da pasta /app/uploads.");
-    } finally {
-      setIsUploading(false);
-    }
+    } catch { alert("Erro ao fazer upload. Verifique as permissões da pasta /app/uploads."); }
+    finally { setIsUploading(false); }
   };
 
-  if (loading) return <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>;
   if (error) return <div className="p-8 text-center text-red-600 font-medium">{error}</div>;
 
   const activeUser = users.find(u => u.id === selectedUser);
+  const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  // Helper to extract store labels from subFolder
+  const getStoreBadges = (doc: UserDocument) => {
+    if (!doc.subFolder) return null;
+    const parts = doc.subFolder.split("/");
+    const storesStr = doc.category === "02_IMPOSTOS" ? (parts.length > 2 ? parts[2] : null) : (parts.length > 0 ? parts[0] : null);
+    if (!storesStr) return null;
+    return storesStr.split(",");
+  };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="flex h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
       
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-            <UploadCloud className="w-6 h-6 mr-2 text-orange-500" /> Envio e Histórico de Documentos
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Gerencie os documentos dos clientes, veja quem visualizou e quando.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        
-        {/* Painel Esquerdo: Formulário de Upload */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden h-fit">
-          <div className="p-6">
-            <form onSubmit={handleUploadDocument} className="space-y-8">
-              
-              {/* Step 1: User Selection */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider border-b pb-2 flex items-center">
-                  <Users className="w-4 h-4 mr-2 text-gray-400" /> 1. Escolha o Cliente
-                </h3>
-                
-                <div>
-                  <select 
-                    value={selectedUser} 
-                    onChange={e => {
-                      setSelectedUser(e.target.value);
-                    }} 
-                    className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2.5 border focus:border-orange-500 focus:ring-orange-500 text-gray-900 cursor-pointer"
-                    required
-                  >
-                    <option value="" disabled>-- Clique para selecionar --</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-                  </select>
-                </div>
-
-                {/* Info do Usuario Selecionado */}
-                {activeUser && (
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 mt-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">
-                      Lojas conectadas <span className="text-gray-400 text-xs font-normal">(Clique para vincular o documento, ou deixe vazio para "Geral")</span>
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {activeUser.connectedAccounts.length === 0 ? (
-                        <span className="text-sm text-gray-500 italic">Nenhuma loja.</span>
-                      ) : (
-                        activeUser.connectedAccounts.map((acc, i) => {
-                          const isSelected = selectedStores.includes(acc.label);
-                          return (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => handleToggleStore(acc.label)}
-                              className={`flex items-center text-xs px-2.5 py-1.5 rounded-md border transition-all cursor-pointer select-none ${
-                                isSelected 
-                                  ? 'bg-blue-50 border-blue-400 text-blue-800 ring-1 ring-blue-400 shadow-sm' 
-                                  : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                              }`}
-                            >
-                              {acc.provider === 'shopee' ? (
-                                <ShopeeIcon className={`w-4 h-4 mr-2 ${!isSelected && 'opacity-70'}`} />
-                              ) : (
-                                <MeliIcon className={`w-4 h-4 mr-2 ${!isSelected && 'opacity-70'}`} />
-                              )}
-                              <span className="font-semibold truncate max-w-[150px]">{acc.label}</span>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Step 2: Categorization */}
-              <div className={`space-y-4 transition-opacity ${!selectedUser ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider border-b pb-2 flex items-center">
-                  <FileText className="w-4 h-4 mr-2 text-gray-400" /> 2. Classificação
-                </h3>
-                
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Pasta Principal:</label>
-                    <select 
-                      value={selectedCategory} 
-                      onChange={e => setSelectedCategory(e.target.value)} 
-                      className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-orange-500 focus:ring-orange-500 text-sm cursor-pointer"
-                    >
-                      {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-
-                  {selectedCategory === "02_IMPOSTOS" && (
-                    <div className="flex gap-4">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Ano:</label>
-                        <select 
-                          value={selectedYear} 
-                          onChange={e => setSelectedYear(e.target.value)} 
-                          className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-orange-500 focus:ring-orange-500 text-sm"
-                        >
-                          {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Mês:</label>
-                        <select 
-                          value={selectedMonth} 
-                          onChange={e => setSelectedMonth(e.target.value)} 
-                          className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-orange-500 focus:ring-orange-500 text-sm"
-                        >
-                          {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Step 3: File Upload */}
-              <div className={`space-y-4 transition-opacity ${!selectedUser ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
-                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider border-b pb-2 flex items-center">
-                  <UploadCloud className="w-4 h-4 mr-2 text-gray-400" /> 3. Arquivo
-                </h3>
-                
-                <div>
-                  <div className="flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl bg-gray-50 hover:bg-orange-50 transition-colors">
-                    <div className="space-y-2 text-center">
-                      <UploadCloud className="mx-auto h-10 w-10 text-gray-400" />
-                      <div className="flex text-sm text-gray-600 justify-center">
-                        <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-medium text-orange-600 hover:text-orange-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-orange-500">
-                          <span>Anexar arquivo</span>
-                          <input id="file-upload" name="file-upload" type="file" className="sr-only" required onChange={e => setUploadFile(e.target.files?.[0] || null)} />
-                        </label>
-                      </div>
-                      <p className="text-xs text-gray-500">Sem limite rígido (depende do servidor)</p>
-                      {uploadFile && (
-                        <div className="mt-4 p-2 bg-orange-100 text-orange-800 rounded-md text-xs font-medium border border-orange-200 truncate max-w-xs">
-                          {uploadFile.name}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button & Status */}
-              <div className="pt-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="w-full md:w-auto">
-                  {uploadSuccess && (
-                    <div className="flex items-center text-green-700 text-sm font-medium">
-                      <CheckCircle2 className="w-4 h-4 mr-1" /> {uploadSuccess}
-                    </div>
-                  )}
-                </div>
-                
-                <button 
-                  type="submit" 
-                  disabled={!selectedUser || !uploadFile || isUploading}
-                  className="w-full md:w-auto px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-md shadow-orange-500/20"
-                >
-                  {isUploading ? (
-                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Enviando...</>
-                  ) : (
-                    <><UploadCloud className="w-5 h-5 mr-2" /> Enviar Arquivo</>
-                  )}
-                </button>
-              </div>
-              
-            </form>
+      {/* ═══ COL 1 — CLIENT LIST ═══ */}
+      <aside className="w-72 xl:w-80 bg-white border-r border-gray-200 flex flex-col shrink-0">
+        <div className="p-5 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900 flex items-center">
+            <Users className="w-4 h-4 mr-2 text-orange-500" /> Clientes
+          </h2>
+          <div className="mt-3 relative">
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text" placeholder="Buscar cliente..." value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+            />
           </div>
         </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-400">Nenhum cliente encontrado.</div>
+          ) : (
+            filteredUsers.map(u => (
+              <button key={u.id} onClick={() => setSelectedUser(u.id)}
+                className={`w-full text-left px-5 py-3.5 flex items-center gap-3 transition-all border-l-[3px] ${
+                  selectedUser === u.id 
+                    ? 'bg-orange-50/70 border-orange-500' 
+                    : 'border-transparent hover:bg-gray-50'
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                  selectedUser === u.id ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {u.name.charAt(0)}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-semibold truncate ${selectedUser === u.id ? 'text-orange-900' : 'text-gray-800'}`}>{u.name}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{u.email}</p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </aside>
 
-        {/* Painel Direito: Lista de Documentos e Logs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-            <h3 className="font-bold text-gray-800 flex items-center">
-              <FileText className="w-5 h-5 mr-2 text-gray-500" /> 
-              {activeUser ? `Documentos de ${activeUser.name.split(' ')[0]}` : "Selecione um cliente ao lado"}
-            </h3>
-            {loadingDocs && <Loader2 className="w-4 h-4 animate-spin text-orange-500" />}
+      {/* ═══ COL 2 — DOCUMENTS ═══ */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <header className="px-8 py-5 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">
+              {activeUser ? `Documentos de ${activeUser.name.split(' ')[0]}` : "Centro de Documentos"}
+            </h1>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {activeUser ? "Gerencie arquivos, envie relatórios e acompanhe acessos." : "Selecione um cliente à esquerda."}
+            </p>
           </div>
+          {loadingDocs && <Loader2 className="w-5 h-5 animate-spin text-orange-500" />}
+        </header>
 
-          <div className="flex-1 overflow-y-auto p-0 max-h-[700px]">
-            {!activeUser ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center">
-                <Users className="w-12 h-12 mb-3 opacity-20" />
-                <p>Nenhum cliente selecionado.</p>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 xl:p-8">
+          {!activeUser ? (
+            <div className="h-full flex flex-col items-center justify-center text-center max-w-xs mx-auto">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <Users className="w-8 h-8 text-gray-300" />
               </div>
-            ) : userDocuments.length === 0 && !loadingDocs ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center">
-                <FileText className="w-12 h-12 mb-3 opacity-20" />
-                <p>Este cliente ainda não possui documentos.</p>
+              <h3 className="text-base font-semibold text-gray-600 mb-1">Nenhum cliente selecionado</h3>
+              <p className="text-sm text-gray-400">Escolha um cliente na barra lateral.</p>
+            </div>
+          ) : userDocuments.length === 0 && !loadingDocs ? (
+            <div className="h-full flex flex-col items-center justify-center text-center max-w-xs mx-auto">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <FileText className="w-8 h-8 text-gray-300" />
               </div>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {userDocuments.map(doc => (
-                  <li key={doc.id} className="p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 truncate max-w-xs md:max-w-sm" title={doc.originalName}>{doc.originalName}</p>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                          <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded">
-                            {CATEGORIES.find(c => c.id === doc.category)?.name.replace(/^\d+\.\s*/, '')}
-                          </span>
-                          
-                          {(() => {
-                            if (!doc.subFolder) return null;
-                            const parts = doc.subFolder.split("/");
-                            const storesStr = doc.category === "02_IMPOSTOS" ? (parts.length > 2 ? parts[2] : null) : (parts.length > 0 ? parts[0] : null);
-                            const pathStr = doc.category === "02_IMPOSTOS" && parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
-                            
-                            return (
-                              <>
-                                {pathStr && (
-                                  <span className="text-xs text-gray-400 font-medium">› {pathStr}</span>
-                                )}
-                                {storesStr && storesStr.split(",").map((s, idx) => (
-                                  <span key={idx} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 font-medium">
-                                    <Store className="w-3 h-3 mr-1" />
-                                    {s}
-                                  </span>
-                                ))}
-                              </>
-                            );
-                          })()}
-                        </div>
-                        <p className="text-[11px] text-gray-400 mt-1">Enviado em: {new Date(doc.createdAt).toLocaleString('pt-BR')}</p>
+              <h3 className="text-base font-semibold text-gray-600 mb-1">Pasta vazia</h3>
+              <p className="text-sm text-gray-400">Este cliente ainda não possui documentos.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
+              {userDocuments.map(doc => {
+                const isPdf = doc.mimeType?.includes("pdf");
+                const fileExt = isPdf ? "PDF" : doc.originalName.split('.').pop()?.toUpperCase().substring(0, 4) || "DOC";
+                const stores = getStoreBadges(doc);
+                
+                return (
+                  <div key={doc.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-lg hover:border-orange-200 transition-all flex flex-col">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isPdf ? 'bg-red-50' : 'bg-blue-50'}`}>
+                        <FileText className={`w-5 h-5 ${isPdf ? 'text-red-500' : 'text-blue-500'}`} />
                       </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')}
-                          className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
-                          title="Visualizar no Navegador"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => window.open(`${doc.fileUrl}?action=download`, '_blank')}
-                          className="p-1.5 text-orange-600 bg-orange-50 rounded hover:bg-orange-100 transition-colors"
-                          title="Fazer Download"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => setExpandedDocLogs(expandedDocLogs === doc.id ? null : doc.id)}
-                          className={`p-1.5 rounded transition-colors ${expandedDocLogs === doc.id ? 'bg-gray-800 text-white' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'}`}
-                          title="Ver Logs de Acesso"
-                        >
-                          <History className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-500 rounded uppercase tracking-wider">{fileExt}</span>
                     </div>
                     
-                    {/* Painel de Logs Expandível */}
+                    <h4 className="text-sm font-semibold text-gray-900 truncate mb-1" title={doc.originalName}>{doc.originalName}</h4>
+                    <p className="text-[11px] text-gray-400 mb-3">{new Date(doc.createdAt).toLocaleDateString('pt-BR')} • {(doc.sizeBytes / 1024 / 1024).toFixed(1)} MB</p>
+                    
+                    <div className="flex flex-wrap gap-1.5 mb-auto">
+                      <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                        {CATEGORIES.find(c => c.id === doc.category)?.name.replace(/^\d+\.\s*/, '')}
+                      </span>
+                      {stores?.map((s, i) => (
+                        <span key={i} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-medium">
+                          <Store className="w-2.5 h-2.5 mr-1" />{s}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
+                      <div className="flex gap-1">
+                        <button onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Ver"><Eye className="w-4 h-4" /></button>
+                        <button onClick={() => window.open(`${doc.fileUrl}?action=download`, '_blank')} className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors" title="Baixar"><Download className="w-4 h-4" /></button>
+                      </div>
+                      <button onClick={() => setExpandedDocLogs(expandedDocLogs === doc.id ? null : doc.id)}
+                        className={`text-[11px] px-2.5 py-1 rounded-full font-medium flex items-center gap-1 transition-colors ${expandedDocLogs === doc.id ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                      ><History className="w-3 h-3" /> Logs</button>
+                    </div>
+
                     {expandedDocLogs === doc.id && (
-                      <div className="mt-4 pt-3 border-t border-gray-100">
-                        <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider flex items-center">
-                          <History className="w-3 h-3 mr-1" /> Histórico de Acessos
-                        </p>
-                        {doc.logs && doc.logs.length > 0 ? (
-                          <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                            {doc.logs.map((log, idx) => (
-                              <div key={idx} className="flex justify-between items-center text-xs bg-gray-50 p-2 rounded border border-gray-100">
-                                <div>
-                                  <span className={`font-medium ${log.action === 'CREATED' ? 'text-green-600' : log.action === 'VIEWED' ? 'text-blue-600' : 'text-orange-600'}`}>
-                                    {log.action === 'CREATED' ? 'CRIADO' : log.action === 'VIEWED' ? 'VISUALIZADO' : 'BAIXADO'}
-                                  </span>
-                                  <span className="text-gray-500 mx-1">por</span>
-                                  <span className="font-semibold text-gray-800">{log.user.name}</span>
+                      <div className="mt-3 pt-3 border-t border-gray-100 bg-gray-50 -mx-5 -mb-5 px-5 pb-4 rounded-b-xl">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Histórico</p>
+                        {doc.logs?.length > 0 ? (
+                          <div className="space-y-1 max-h-28 overflow-y-auto">
+                            {doc.logs.map((log, i) => (
+                              <div key={i} className="flex justify-between items-center text-[10px] bg-white p-1.5 rounded border border-gray-100">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${log.action === 'CREATED' ? 'bg-green-500' : log.action === 'VIEWED' ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                                  <span className="text-gray-700 font-medium">{log.user.name}</span>
                                 </div>
-                                <span className="text-gray-400 font-mono text-[10px]">{new Date(log.createdAt).toLocaleString('pt-BR')}</span>
+                                <span className="text-gray-400">{new Date(log.createdAt).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
                               </div>
                             ))}
                           </div>
-                        ) : (
-                          <p className="text-xs text-gray-500 italic">Nenhum log registrado para este documento.</p>
-                        )}
+                        ) : <p className="text-[10px] text-gray-400 italic">Nenhum log.</p>}
                       </div>
                     )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      </div>
+      </main>
+
+      {/* ═══ COL 3 — UPLOAD PANEL ═══ */}
+      {activeUser && (
+        <aside className="w-72 xl:w-80 bg-white border-l border-gray-200 flex flex-col shrink-0">
+          <div className="p-5 border-b border-gray-100">
+            <h2 className="text-base font-bold text-gray-900 flex items-center">
+              <UploadCloud className="w-4 h-4 mr-2 text-orange-500" /> Novo Upload
+            </h2>
+            <p className="text-[11px] text-gray-400 mt-0.5">Envie arquivos para {activeUser.name.split(' ')[0]}</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5">
+            <form id="upload-form" onSubmit={handleUploadDocument} className="space-y-5">
+              
+              {/* Stores */}
+              {activeUser.connectedAccounts.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Vincular Lojas</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeUser.connectedAccounts.map((acc, i) => {
+                      const sel = selectedStores.includes(acc.label);
+                      return (
+                        <button key={i} type="button" onClick={() => handleToggleStore(acc.label)}
+                          className={`flex items-center text-[11px] px-2.5 py-1.5 rounded-full border transition-all font-medium ${
+                            sel ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {acc.provider === 'shopee' 
+                            ? <ShopeeIcon className={`w-3.5 h-3.5 mr-1 ${!sel && 'opacity-50 grayscale'}`} /> 
+                            : <MeliIcon className={`w-3.5 h-3.5 mr-1 ${!sel && 'opacity-50 grayscale'}`} />}
+                          {acc.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Category */}
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Classificação</label>
+                <div className="space-y-1.5">
+                  {CATEGORIES.map(c => (
+                    <button key={c.id} type="button" onClick={() => setSelectedCategory(c.id)}
+                      className={`w-full text-left text-[11px] px-3 py-2 rounded-lg border transition-all ${
+                        selectedCategory === c.id 
+                          ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold ring-1 ring-blue-300' 
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >{c.name.replace(/^\d+\.\s*/, '')}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Month/Year for Impostos */}
+              {selectedCategory === "02_IMPOSTOS" && (
+                <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Mês</label>
+                    <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full border-gray-200 rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
+                      {MONTHS.map(m => <option key={m} value={m}>{m.split(' - ')[0]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Ano</label>
+                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="w-full border-gray-200 rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
+                      {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* File */}
+              <div>
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Arquivo</label>
+                <div className="relative border-2 border-dashed border-gray-300 rounded-xl px-4 py-6 text-center hover:bg-orange-50/50 hover:border-orange-300 transition-colors cursor-pointer group">
+                  <input id="file-upload" type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required onChange={e => setUploadFile(e.target.files?.[0] || null)} />
+                  <UploadCloud className="mx-auto w-7 h-7 text-gray-300 group-hover:text-orange-400 transition-colors mb-2" />
+                  <p className="text-xs font-medium text-orange-600">Anexar arquivo</p>
+                  <p className="text-[10px] text-gray-400">PDF, Imagem, Zip</p>
+                </div>
+                {uploadFile && (
+                  <div className="mt-2 p-2.5 bg-orange-50 text-orange-800 rounded-lg text-[11px] font-semibold border border-orange-200 flex items-center justify-between">
+                    <span className="truncate">{uploadFile.name}</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-orange-500 shrink-0 ml-2" />
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Submit footer */}
+          <div className="p-4 border-t border-gray-100">
+            {uploadSuccess && (
+              <div className="mb-2.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-[11px] font-medium flex items-center border border-green-200">
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> {uploadSuccess}
+              </div>
+            )}
+            <button type="submit" form="upload-form" disabled={!uploadFile || isUploading}
+              className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shadow-md shadow-orange-500/20 active:scale-[0.98]"
+            >
+              {isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</> : <><UploadCloud className="w-4 h-4 mr-2" /> Enviar Documento</>}
+            </button>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
