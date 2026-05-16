@@ -49,6 +49,9 @@ export default function AdminDocumentos() {
   
   // Selection States
   const [selectedUser, setSelectedUser] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState("01_INSTITUCIONAIS");
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
