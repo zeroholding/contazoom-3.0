@@ -172,7 +172,7 @@ export default function DriveDocumentos() {
     if (doc.category !== currentCategory) return false;
     if (currentCategory === "02_IMPOSTOS") {
       if (currentYear && currentMonth) {
-        return doc.subFolder === `${currentYear}/${currentMonth}`;
+        return doc.subFolder?.startsWith(`${currentYear}/${currentMonth}`);
       } else if (currentYear) {
         return doc.subFolder?.startsWith(currentYear);
       }
@@ -311,26 +311,35 @@ export default function DriveDocumentos() {
                 const isPdf = doc.mimeType.includes("pdf");
                 const isImage = doc.mimeType.includes("image");
                 const fileExt = isPdf ? "PDF" : isImage ? "IMG" : doc.originalName.split('.').pop()?.toUpperCase().substring(0, 4) || "DOC";
+                const parts = doc.subFolder?.split("/") || [];
+                const storeLabel = doc.category === "02_IMPOSTOS" ? (parts.length > 2 ? parts[2] : null) : (parts.length > 0 ? parts[0] : null);
                 
                 return (
                   <div 
                     key={doc.id} 
-                    className="flex items-center p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-400 transition-all group cursor-pointer"
+                    className="flex flex-col p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-400 transition-all group cursor-pointer"
                     onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')}
                   >
-                    <div className="relative">
-                      {getFileIcon(doc.mimeType)}
-                      <span className="absolute -top-2 -right-2 bg-gray-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm uppercase">
-                        {fileExt}
-                      </span>
-                    </div>
-                    <div className="ml-4 flex-1 overflow-hidden">
-                      <p className="font-semibold text-gray-800 text-sm truncate" title={doc.originalName}>{doc.originalName}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {formatSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString("pt-BR")}
-                      </p>
-                    </div>
-                    <div className="flex flex-col space-y-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-start">
+                      <div className="relative mt-1">
+                        {getFileIcon(doc.mimeType)}
+                        <span className="absolute -top-2 -right-2 bg-gray-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm uppercase">
+                          {fileExt}
+                        </span>
+                      </div>
+                      <div className="ml-4 flex-1 overflow-hidden">
+                        <p className="font-semibold text-gray-800 text-sm truncate" title={doc.originalName}>{doc.originalName}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {formatSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString("pt-BR")}
+                        </p>
+                        {storeLabel && (
+                          <div className="mt-2 inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 font-medium">
+                            <Store className="w-3 h-3 mr-1" />
+                            {storeLabel}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col space-y-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={(e) => { e.stopPropagation(); window.open(`${doc.fileUrl}?action=download`, '_self'); }}
                         className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -338,6 +347,7 @@ export default function DriveDocumentos() {
                       >
                         <Download className="w-4 h-4" />
                       </button>
+                      </div>
                     </div>
                   </div>
                 );

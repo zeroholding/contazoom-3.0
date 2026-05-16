@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
         });
       } else {
         documents = await prisma.document.findMany({
+          where: { userId: session.sub },
           orderBy: { createdAt: "desc" },
           include: { user: { select: { name: true, email: true } } }
         });

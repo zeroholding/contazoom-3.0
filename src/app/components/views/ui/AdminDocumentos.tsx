@@ -52,6 +52,7 @@ export default function AdminDocumentos() {
   const [selectedCategory, setSelectedCategory] = useState("01_INSTITUCIONAIS");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
+  const [selectedStoreLabel, setSelectedStoreLabel] = useState<string>("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
   // Upload UI State
@@ -122,6 +123,9 @@ export default function AdminDocumentos() {
     let subFolder = "";
     if (selectedCategory === "02_IMPOSTOS") {
       subFolder = `${selectedYear}/${selectedMonth}`;
+      if (selectedStoreLabel) subFolder += `/${selectedStoreLabel}`;
+    } else if (selectedStoreLabel) {
+      subFolder = selectedStoreLabel;
     }
     if (subFolder) formData.append("subFolder", subFolder);
 
@@ -183,7 +187,10 @@ export default function AdminDocumentos() {
                 <div>
                   <select 
                     value={selectedUser} 
-                    onChange={e => setSelectedUser(e.target.value)} 
+                    onChange={e => {
+                      setSelectedUser(e.target.value);
+                      setSelectedStoreLabel("");
+                    }} 
                     className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2.5 border focus:border-orange-500 focus:ring-orange-500 text-gray-900"
                     required
                   >
@@ -233,6 +240,22 @@ export default function AdminDocumentos() {
                       {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
+                  
+                  {activeUser && activeUser.connectedAccounts.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Loja Vinculada (Opcional):</label>
+                      <select 
+                        value={selectedStoreLabel} 
+                        onChange={e => setSelectedStoreLabel(e.target.value)} 
+                        className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-orange-500 focus:ring-orange-500 text-sm"
+                      >
+                        <option value="">Geral (Nenhuma Loja Específica)</option>
+                        {activeUser.connectedAccounts.map((acc, i) => (
+                          <option key={i} value={acc.label}>{acc.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {selectedCategory === "02_IMPOSTOS" && (
                     <div className="flex gap-4">
