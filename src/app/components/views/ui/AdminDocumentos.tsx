@@ -49,10 +49,7 @@ export default function AdminDocumentos() {
   
   // Selection States
   const [selectedUser, setSelectedUser] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState("01_INSTITUCIONAIS");
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
-  const [selectedStoreLabel, setSelectedStoreLabel] = useState<string>("");
+  const [selectedStores, setSelectedStores] = useState<string[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
   // Upload UI State
@@ -72,6 +69,7 @@ export default function AdminDocumentos() {
     if (selectedUser) {
       fetchUserDocuments(selectedUser);
       setUploadSuccess(null);
+      setSelectedStores([]); // Reset stores on user change
     } else {
       setUserDocuments([]);
     }
@@ -108,6 +106,14 @@ export default function AdminDocumentos() {
     }
   };
 
+  const handleToggleStore = (storeLabel: string) => {
+    setSelectedStores(prev => 
+      prev.includes(storeLabel) 
+        ? prev.filter(s => s !== storeLabel)
+        : [...prev, storeLabel]
+    );
+  };
+
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile || !selectedUser) return;
@@ -121,11 +127,12 @@ export default function AdminDocumentos() {
     formData.append("userId", selectedUser);
     
     let subFolder = "";
+    const storesStr = selectedStores.length > 0 ? selectedStores.join(",") : "";
     if (selectedCategory === "02_IMPOSTOS") {
       subFolder = `${selectedYear}/${selectedMonth}`;
-      if (selectedStoreLabel) subFolder += `/${selectedStoreLabel}`;
-    } else if (selectedStoreLabel) {
-      subFolder = selectedStoreLabel;
+      if (storesStr) subFolder += `/${storesStr}`;
+    } else if (storesStr) {
+      subFolder = storesStr;
     }
     if (subFolder) formData.append("subFolder", subFolder);
 
@@ -189,9 +196,8 @@ export default function AdminDocumentos() {
                     value={selectedUser} 
                     onChange={e => {
                       setSelectedUser(e.target.value);
-                      setSelectedStoreLabel("");
                     }} 
-                    className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2.5 border focus:border-orange-500 focus:ring-orange-500 text-gray-900"
+                    className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2.5 border focus:border-orange-500 focus:ring-orange-500 text-gray-900 cursor-pointer"
                     required
                   >
                     <option value="" disabled>-- Clique para selecionar --</option>
@@ -202,21 +208,35 @@ export default function AdminDocumentos() {
                 {/* Info do Usuario Selecionado */}
                 {activeUser && (
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 mt-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Lojas conectadas:</p>
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Lojas conectadas <span className="text-gray-400 text-xs font-normal">(Clique para vincular o documento, ou deixe vazio para "Geral")</span>
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       {activeUser.connectedAccounts.length === 0 ? (
                         <span className="text-sm text-gray-500 italic">Nenhuma loja.</span>
                       ) : (
-                        activeUser.connectedAccounts.map((acc, i) => (
-                          <div key={i} className="flex items-center text-xs px-2.5 py-1.5 rounded-md border bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors">
-                            {acc.provider === 'shopee' ? (
-                              <ShopeeIcon className="w-4 h-4 mr-2" />
-                            ) : (
-                              <MeliIcon className="w-4 h-4 mr-2" />
-                            )}
-                            <span className="font-semibold truncate max-w-[150px]">{acc.label}</span>
-                          </div>
-                        ))
+                        activeUser.connectedAccounts.map((acc, i) => {
+                          const isSelected = selectedStores.includes(acc.label);
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => handleToggleStore(acc.label)}
+                              className={`flex items-center text-xs px-2.5 py-1.5 rounded-md border transition-all cursor-pointer select-none ${
+                                isSelected 
+                                  ? 'bg-blue-50 border-blue-400 text-blue-800 ring-1 ring-blue-400 shadow-sm' 
+                                  : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              {acc.provider === 'shopee' ? (
+                                <ShopeeIcon className={`w-4 h-4 mr-2 ${!isSelected && 'opacity-70'}`} />
+                              ) : (
+                                <MeliIcon className={`w-4 h-4 mr-2 ${!isSelected && 'opacity-70'}`} />
+                              )}
+                              <span className="font-semibold truncate max-w-[150px]">{acc.label}</span>
+                            </button>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -235,27 +255,11 @@ export default function AdminDocumentos() {
                     <select 
                       value={selectedCategory} 
                       onChange={e => setSelectedCategory(e.target.value)} 
-                      className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-orange-500 focus:ring-orange-500 text-sm"
+                      className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-orange-500 focus:ring-orange-500 text-sm cursor-pointer"
                     >
                       {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
-                  
-                  {activeUser && activeUser.connectedAccounts.length > 0 && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Loja Vinculada (Opcional):</label>
-                      <select 
-                        value={selectedStoreLabel} 
-                        onChange={e => setSelectedStoreLabel(e.target.value)} 
-                        className="w-full border-gray-300 rounded-lg shadow-sm px-3 py-2 border focus:border-orange-500 focus:ring-orange-500 text-sm"
-                      >
-                        <option value="">Geral (Nenhuma Loja Específica)</option>
-                        {activeUser.connectedAccounts.map((acc, i) => (
-                          <option key={i} value={acc.label}>{acc.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
 
                   {selectedCategory === "02_IMPOSTOS" && (
                     <div className="flex gap-4">
@@ -366,10 +370,33 @@ export default function AdminDocumentos() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-sm font-semibold text-gray-900 truncate max-w-xs md:max-w-sm" title={doc.originalName}>{doc.originalName}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {CATEGORIES.find(c => c.id === doc.category)?.name.replace(/^\d+\.\s*/, '')} {doc.subFolder ? `(${doc.subFolder})` : ''}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">Enviado em: {new Date(doc.createdAt).toLocaleString('pt-BR')}</p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded">
+                            {CATEGORIES.find(c => c.id === doc.category)?.name.replace(/^\d+\.\s*/, '')}
+                          </span>
+                          
+                          {(() => {
+                            if (!doc.subFolder) return null;
+                            const parts = doc.subFolder.split("/");
+                            const storesStr = doc.category === "02_IMPOSTOS" ? (parts.length > 2 ? parts[2] : null) : (parts.length > 0 ? parts[0] : null);
+                            const pathStr = doc.category === "02_IMPOSTOS" && parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
+                            
+                            return (
+                              <>
+                                {pathStr && (
+                                  <span className="text-xs text-gray-400 font-medium">› {pathStr}</span>
+                                )}
+                                {storesStr && storesStr.split(",").map((s, idx) => (
+                                  <span key={idx} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 font-medium">
+                                    <Store className="w-3 h-3 mr-1" />
+                                    {s}
+                                  </span>
+                                ))}
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1">Enviado em: {new Date(doc.createdAt).toLocaleString('pt-BR')}</p>
                       </div>
                       <div className="flex gap-2">
                         <button 

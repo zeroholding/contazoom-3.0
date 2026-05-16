@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { tryVerifySessionToken, checkIsAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export async function GET(req: NextRequest, { params }: { params: { userId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
@@ -10,8 +10,9 @@ export async function GET(req: NextRequest, { params }: { params: { userId: stri
   if (!isAdmin) return new NextResponse("Forbidden", { status: 403 });
 
   try {
+    const { userId } = await params;
     const documents = await prisma.document.findMany({
-      where: { userId: params.userId },
+      where: { userId },
       include: {
         logs: {
           include: { user: { select: { name: true, role: true } } },

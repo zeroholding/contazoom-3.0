@@ -333,9 +333,13 @@ export default function DriveDocumentos() {
                           {formatSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString("pt-BR")}
                         </p>
                         {storeLabel && (
-                          <div className="mt-2 inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 font-medium">
-                            <Store className="w-3 h-3 mr-1" />
-                            {storeLabel}
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {storeLabel.split(",").map((s, idx) => (
+                              <div key={idx} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 font-medium">
+                                <Store className="w-3 h-3 mr-1" />
+                                <span className="truncate max-w-[120px]">{s}</span>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
