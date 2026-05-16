@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search } from "lucide-react";
+import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search, Building2, Landmark, TrendingUp, FolderPlus } from "lucide-react";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 
@@ -32,10 +32,10 @@ type UserDocument = {
 };
 
 const CATEGORIES = [
-  { id: "01_INSTITUCIONAIS", name: "01. DOCUMENTOS INSTITUCIONAIS", hasYears: false },
-  { id: "02_IMPOSTOS", name: "02. IMPOSTOS E OBRIGAÇÕES", hasYears: true },
-  { id: "03_FATURAMENTO", name: "03. FATURAMENTO E RELATÓRIOS", hasYears: false },
-  { id: "04_FOLHA", name: "04. FOLHA E FUNCIONÁRIOS", hasYears: false },
+  { id: "01_INSTITUCIONAIS", name: "01. DOCUMENTOS INSTITUCIONAIS", hasYears: false, icon: Building2 },
+  { id: "02_IMPOSTOS", name: "02. IMPOSTOS E OBRIGAÇÕES", hasYears: true, icon: Landmark },
+  { id: "03_FATURAMENTO", name: "03. FATURAMENTO E RELATÓRIOS", hasYears: false, icon: TrendingUp },
+  { id: "04_FOLHA", name: "04. FOLHA E FUNCIONÁRIOS", hasYears: false, icon: Users },
 ];
 const MONTHS = [
   "01 - Janeiro", "02 - Fevereiro", "03 - Março", "04 - Abril", 
@@ -57,6 +57,7 @@ export default function AdminDocumentos() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
   const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
@@ -121,19 +122,47 @@ export default function AdminDocumentos() {
     if (subFolder) formData.append("subFolder", subFolder);
 
     try {
-      const res = await fetch("/api/documents", { method: "POST", body: formData });
-      if (res.ok) {
-        setUploadSuccess("Documento enviado com sucesso!");
-        setUploadFile(null);
-        const fileInput = document.getElementById("file-upload") as HTMLInputElement;
-        if (fileInput) fileInput.value = "";
-        fetchUserDocuments(selectedUser);
-      } else {
-        const err = await res.json();
-        alert(err.error || "Erro ao fazer upload.");
-      }
-    } catch { alert("Erro ao fazer upload. Verifique as permissões da pasta /app/uploads."); }
-    finally { setIsUploading(false); }
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/documents", true);
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percentComplete);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setUploadSuccess("Documento enviado com sucesso!");
+          setUploadFile(null);
+          const fileInput = document.getElementById("file-upload") as HTMLInputElement;
+          if (fileInput) fileInput.value = "";
+          fetchUserDocuments(selectedUser);
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText);
+            alert(err.error || "Erro ao fazer upload.");
+          } catch {
+            alert("Erro ao fazer upload.");
+          }
+        }
+        setIsUploading(false);
+        setTimeout(() => setUploadProgress(0), 2000);
+      };
+
+      xhr.onerror = () => {
+        alert("Erro ao fazer upload. Verifique as permissões da pasta /app/uploads.");
+        setIsUploading(false);
+        setUploadProgress(0);
+      };
+
+      xhr.send(formData);
+    } catch {
+      alert("Erro ao iniciar upload.");
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   if (error) return <div className="p-8 text-center text-red-600 font-medium">{error}</div>;
@@ -167,7 +196,7 @@ export default function AdminDocumentos() {
             <input 
               type="text" placeholder="Buscar cliente..." value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              className="w-full pl-10 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
             />
           </div>
         </div>
@@ -195,7 +224,20 @@ export default function AdminDocumentos() {
                   <p className="text-[11px] text-gray-400 truncate">{u.email}</p>
                 </div>
                 {u.connectedAccounts.length > 0 && (
-                  <span className="text-[9px] font-bold bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded shrink-0">{u.connectedAccounts.length} {u.connectedAccounts.length === 1 ? 'loja' : 'lojas'}</span>
+                  <div className="flex flex-col gap-1 shrink-0 items-end">
+                    {u.connectedAccounts.filter(a => a.provider === 'mercadolivre').length > 0 && (
+                      <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 text-yellow-700 px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm">
+                        <MeliIcon className="w-2.5 h-2.5" />
+                        {u.connectedAccounts.filter(a => a.provider === 'mercadolivre').length}
+                      </div>
+                    )}
+                    {u.connectedAccounts.filter(a => a.provider === 'shopee').length > 0 && (
+                      <div className="flex items-center gap-1 bg-orange-50 border border-orange-200 text-orange-700 px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm">
+                        <ShopeeIcon className="w-2.5 h-2.5" />
+                        {u.connectedAccounts.filter(a => a.provider === 'shopee').length}
+                      </div>
+                    )}
+                  </div>
                 )}
               </button>
             ))
@@ -366,15 +408,21 @@ export default function AdminDocumentos() {
               <div>
                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Classificação</label>
                 <div className="space-y-1.5">
-                  {CATEGORIES.map(c => (
-                    <button key={c.id} type="button" onClick={() => setSelectedCategory(c.id)}
-                      className={`w-full text-left text-[11px] px-3 py-2 rounded-lg border transition-all ${
-                        selectedCategory === c.id 
-                          ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold ring-1 ring-blue-300' 
-                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >{c.name.replace(/^\d+\.\s*/, '')}</button>
-                  ))}
+                  {CATEGORIES.map(c => {
+                    const Icon = c.icon;
+                    return (
+                      <button key={c.id} type="button" onClick={() => setSelectedCategory(c.id)}
+                        className={`w-full flex items-center text-left text-[11px] px-3 py-2.5 rounded-lg border transition-all ${
+                          selectedCategory === c.id 
+                            ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold shadow-sm ring-1 ring-blue-300/50' 
+                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className={`w-3.5 h-3.5 mr-2 shrink-0 ${selectedCategory === c.id ? 'text-blue-500' : 'text-gray-400'}`} />
+                        {c.name.replace(/^\d+\.\s*/, '')}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -416,16 +464,31 @@ export default function AdminDocumentos() {
           </div>
 
           {/* Submit footer */}
-          <div className="p-4 border-t border-gray-100">
-            {uploadSuccess && (
-              <div className="mb-2.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-[11px] font-medium flex items-center border border-green-200">
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> {uploadSuccess}
+          <div className="p-4 border-t border-gray-100 relative">
+            {isUploading && uploadProgress > 0 && (
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100">
+                <div className="h-full bg-orange-500 transition-all duration-300 ease-out" style={{ width: `${uploadProgress}%` }} />
               </div>
             )}
+            
+            {uploadSuccess && (
+              <div className="mb-2.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-[11px] font-medium flex items-center border border-green-200">
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" /> {uploadSuccess}
+              </div>
+            )}
+            
             <button type="submit" form="upload-form" disabled={!uploadFile || isUploading}
-              className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shadow-md shadow-orange-500/20 active:scale-[0.98]"
+              className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-md shadow-orange-500/20 active:scale-[0.98] relative overflow-hidden group"
             >
-              {isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</> : <><UploadCloud className="w-4 h-4 mr-2" /> Enviar Documento</>}
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin relative z-10" /> 
+                  <span className="relative z-10">Enviando {uploadProgress}%...</span>
+                  <div className="absolute inset-0 bg-black/10 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                </>
+              ) : (
+                <><UploadCloud className="w-4 h-4 mr-2" /> Enviar Documento</>
+              )}
             </button>
           </div>
         </aside>
