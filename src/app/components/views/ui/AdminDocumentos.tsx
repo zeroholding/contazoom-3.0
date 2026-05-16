@@ -156,9 +156,12 @@ export default function AdminDocumentos() {
       {/* ═══ COL 1 — CLIENT LIST ═══ */}
       <aside className="w-72 xl:w-80 bg-white border-r border-gray-200 flex flex-col shrink-0">
         <div className="p-5 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-900 flex items-center">
-            <Users className="w-4 h-4 mr-2 text-orange-500" /> Clientes
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-gray-900 flex items-center">
+              <Users className="w-4 h-4 mr-2 text-orange-500" /> Clientes
+            </h2>
+            <span className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{users.length}</span>
+          </div>
           <div className="mt-3 relative">
             <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input 
@@ -187,10 +190,13 @@ export default function AdminDocumentos() {
                 }`}>
                   {u.name.charAt(0)}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className={`text-sm font-semibold truncate ${selectedUser === u.id ? 'text-orange-900' : 'text-gray-800'}`}>{u.name}</p>
                   <p className="text-[11px] text-gray-400 truncate">{u.email}</p>
                 </div>
+                {u.connectedAccounts.length > 0 && (
+                  <span className="text-[9px] font-bold bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded shrink-0">{u.connectedAccounts.length} {u.connectedAccounts.length === 1 ? 'loja' : 'lojas'}</span>
+                )}
               </button>
             ))
           )}
@@ -200,16 +206,36 @@ export default function AdminDocumentos() {
       {/* ═══ COL 2 — DOCUMENTS ═══ */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="px-8 py-5 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-              {activeUser ? `Documentos de ${activeUser.name.split(' ')[0]}` : "Centro de Documentos"}
-            </h1>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {activeUser ? "Gerencie arquivos, envie relatórios e acompanhe acessos." : "Selecione um cliente à esquerda."}
-            </p>
+        <header className="px-8 py-4 bg-white border-b border-gray-200 shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">
+                {activeUser ? `Documentos de ${activeUser.name.split(' ')[0]}` : "Centro de Documentos"}
+              </h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {activeUser ? "Gerencie arquivos, envie relatórios e acompanhe acessos." : "Selecione um cliente à esquerda."}
+              </p>
+            </div>
+            {loadingDocs && <Loader2 className="w-5 h-5 animate-spin text-orange-500" />}
           </div>
-          {loadingDocs && <Loader2 className="w-5 h-5 animate-spin text-orange-500" />}
+          {activeUser && userDocuments.length > 0 && (
+            <div className="flex gap-4 mt-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="w-2 h-2 rounded-full bg-orange-400" />
+                <span className="font-semibold text-gray-700">{userDocuments.length}</span> documento{userDocuments.length !== 1 && 's'}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="w-2 h-2 rounded-full bg-blue-400" />
+                <span className="font-semibold text-gray-700">{(userDocuments.reduce((a, d) => a + d.sizeBytes, 0) / 1024 / 1024).toFixed(1)} MB</span> total
+              </div>
+              {activeUser.connectedAccounts.length > 0 && (
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="w-2 h-2 rounded-full bg-green-400" />
+                  <span className="font-semibold text-gray-700">{activeUser.connectedAccounts.length}</span> loja{activeUser.connectedAccounts.length !== 1 && 's'}
+                </div>
+              )}
+            </div>
+          )}
         </header>
 
         {/* Content */}
@@ -238,12 +264,14 @@ export default function AdminDocumentos() {
                 const stores = getStoreBadges(doc);
                 
                 return (
-                  <div key={doc.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-lg hover:border-orange-200 transition-all flex flex-col">
+                  <div key={doc.id} className="bg-white rounded-xl border border-gray-200 hover:shadow-lg hover:border-orange-200 transition-all flex flex-col overflow-hidden group">
+                    <div className={`h-1 w-full ${isPdf ? 'bg-gradient-to-r from-red-400 to-red-500' : 'bg-gradient-to-r from-blue-400 to-blue-500'}`} />
+                    <div className="p-5 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isPdf ? 'bg-red-50' : 'bg-blue-50'}`}>
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isPdf ? 'bg-red-50' : 'bg-blue-50'} group-hover:scale-110 transition-transform`}>
                         <FileText className={`w-5 h-5 ${isPdf ? 'text-red-500' : 'text-blue-500'}`} />
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-500 rounded uppercase tracking-wider">{fileExt}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${isPdf ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>{fileExt}</span>
                     </div>
                     
                     <h4 className="text-sm font-semibold text-gray-900 truncate mb-1" title={doc.originalName}>{doc.originalName}</h4>
@@ -288,6 +316,7 @@ export default function AdminDocumentos() {
                         ) : <p className="text-[10px] text-gray-400 italic">Nenhum log.</p>}
                       </div>
                     )}
+                    </div>
                   </div>
                 );
               })}
