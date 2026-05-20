@@ -17,18 +17,7 @@ type Document = {
   user?: { name: string; email: string };
 };
 
-const CATEGORIES = [
-  { id: "01_INSTITUCIONAIS", name: "01. DOCUMENTOS INSTITUCIONAIS", hasYears: false },
-  { id: "02_IMPOSTOS", name: "02. IMPOSTOS E OBRIGAÇÕES", hasYears: true },
-  { id: "03_FATURAMENTO", name: "03. FATURAMENTO E RELATÓRIOS", hasYears: false },
-  { id: "04_FOLHA", name: "04. FOLHA E FUNCIONÁRIOS", hasYears: false },
-];
-
-const MONTHS = [
-  "01 - Janeiro", "02 - Fevereiro", "03 - Março", "04 - Abril", 
-  "05 - Maio", "06 - Junho", "07 - Julho", "08 - Agosto", 
-  "09 - Setembro", "10 - Outubro", "11 - Novembro", "12 - Dezembro"
-];
+import { DOCUMENT_CATEGORIES as CATEGORIES, DOCUMENT_MONTHS as MONTHS } from "@/lib/document-categories";
 
 export default function DriveDocumentos() {
   const [documents, setDocuments] = useState<Document[]>([]);

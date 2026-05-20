@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search, Building2, Landmark, TrendingUp, FolderPlus } from "lucide-react";
+import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search, Trash2, AlertTriangle, X } from "lucide-react";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 
@@ -31,17 +31,7 @@ type UserDocument = {
   logs: DocumentLog[];
 };
 
-const CATEGORIES = [
-  { id: "01_INSTITUCIONAIS", name: "01. DOCUMENTOS INSTITUCIONAIS", hasYears: false, icon: Building2 },
-  { id: "02_IMPOSTOS", name: "02. IMPOSTOS E OBRIGAÇÕES", hasYears: true, icon: Landmark },
-  { id: "03_FATURAMENTO", name: "03. FATURAMENTO E RELATÓRIOS", hasYears: false, icon: TrendingUp },
-  { id: "04_FOLHA", name: "04. FOLHA E FUNCIONÁRIOS", hasYears: false, icon: Users },
-];
-const MONTHS = [
-  "01 - Janeiro", "02 - Fevereiro", "03 - Março", "04 - Abril", 
-  "05 - Maio", "06 - Junho", "07 - Julho", "08 - Agosto", 
-  "09 - Setembro", "10 - Outubro", "11 - Novembro", "12 - Dezembro"
-];
+import { DOCUMENT_CATEGORIES as CATEGORIES, DOCUMENT_MONTHS as MONTHS } from "@/lib/document-categories";
 
 export default function AdminDocumentos() {
   const [users, setUsers] = useState<UserData[]>([]);
@@ -63,6 +53,8 @@ export default function AdminDocumentos() {
   const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [expandedDocLogs, setExpandedDocLogs] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
 
@@ -98,6 +90,25 @@ export default function AdminDocumentos() {
     setSelectedStores(prev => 
       prev.includes(storeLabel) ? prev.filter(s => s !== storeLabel) : [...prev, storeLabel]
     );
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!confirmDelete || !selectedUser) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUser}/documents/${confirmDelete.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setUserDocuments(prev => prev.filter(d => d.id !== confirmDelete.id));
+        setConfirmDelete(null);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Erro ao excluir documento.");
+      }
+    } catch {
+      alert("Erro de conexão ao excluir documento.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleUploadDocument = async (e: React.FormEvent) => {
@@ -180,7 +191,8 @@ export default function AdminDocumentos() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
+    <>
+      <div className="flex h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
       
       {/* ═══ COL 1 — CLIENT LIST ═══ */}
       <aside className="w-72 xl:w-80 bg-white border-r border-gray-200 flex flex-col shrink-0">
@@ -334,6 +346,7 @@ export default function AdminDocumentos() {
                       <div className="flex gap-1">
                         <button onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Ver"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => window.open(`${doc.fileUrl}?action=download`, '_blank')} className="p-1.5 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors" title="Baixar"><Download className="w-4 h-4" /></button>
+                        <button onClick={() => setConfirmDelete({ id: doc.id, name: doc.originalName })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                       </div>
                       <button onClick={() => setExpandedDocLogs(expandedDocLogs === doc.id ? null : doc.id)}
                         className={`text-[11px] px-2.5 py-1 rounded-full font-medium flex items-center gap-1 transition-colors ${expandedDocLogs === doc.id ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
@@ -494,5 +507,54 @@ export default function AdminDocumentos() {
         </aside>
       )}
     </div>
+
+      {/* ═══ MODAL DE CONFIRMAÇÃO DE EXCLUSÃO ═══ */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isDeleting && setConfirmDelete(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-0 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Red accent bar */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-red-500 to-red-600" />
+            
+            <div className="p-6">
+              {/* Icon */}
+              <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-red-100">
+                <AlertTriangle className="w-7 h-7 text-red-500" />
+              </div>
+              
+              {/* Text */}
+              <h3 className="text-lg font-bold text-gray-900 text-center mb-2">Excluir Documento?</h3>
+              <p className="text-sm text-gray-500 text-center mb-1">Tem certeza que deseja excluir o arquivo:</p>
+              <p className="text-sm font-semibold text-gray-800 text-center bg-gray-50 px-4 py-2 rounded-lg border border-gray-100 truncate mb-4" title={confirmDelete.name}>
+                {confirmDelete.name}
+              </p>
+              <p className="text-xs text-red-500 text-center font-medium">Esta ação não pode ser desfeita.</p>
+            </div>
+            
+            {/* Buttons */}
+            <div className="flex border-t border-gray-100">
+              <button 
+                onClick={() => setConfirmDelete(null)} 
+                disabled={isDeleting}
+                className="flex-1 px-6 py-3.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 border-r border-gray-100"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleDeleteDocument} 
+                disabled={isDeleting}
+                className="flex-1 px-6 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Excluindo...</>
+                ) : (
+                  <><Trash2 className="w-4 h-4" /> Sim, Excluir</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
