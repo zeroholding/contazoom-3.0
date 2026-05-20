@@ -19,7 +19,7 @@ export async function GET(
   }
 
   try {
-    let folders = await prisma.documentFolder.findMany({
+    const folders = await prisma.documentFolder.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' }
     });

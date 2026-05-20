@@ -30,15 +30,13 @@ export async function POST(req: NextRequest) {
     console.error("[Sync Meli V2] Erro ao parsear body:", error);
   }
 
-  let userId: string;
-
   let session;
   try {
     session = await assertSessionToken(sessionCookie);
   } catch {
     return new NextResponse("Unauthorized", { status: 401 });
   }
-  userId = session.sub;
+  const userId = session.sub;
 
   console.log(`[Sync] Iniciando sincronização para usuário ${userId}`, {
     accountIds: requestBody.accountIds,

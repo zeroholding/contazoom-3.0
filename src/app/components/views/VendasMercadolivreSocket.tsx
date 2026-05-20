@@ -6,8 +6,8 @@ import gsap from "gsap";
 import Sidebar from "../views/ui/Sidebar";
 import Topbar from "../views/ui/Topbar";
 import TabelaVendas from "../views/ui/TabelaVendas";
-import { useVendasSocket, FiltrosVendas } from "@/hooks/useVendasSocket";
-import FiltrosVendas as FiltrosVendasComponent, {
+import { useVendasSocket, type FiltrosVendas } from "@/hooks/useVendasSocket";
+import FiltrosVendasComponent, {
   FiltroStatus,
   FiltroPeriodo,
   FiltroADS,

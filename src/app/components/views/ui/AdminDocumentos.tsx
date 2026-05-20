@@ -697,7 +697,7 @@ export default function AdminDocumentos() {
                 <AlertTriangle className="w-7 h-7 text-red-500" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 text-center mb-2">Excluir Pasta?</h3>
-              <p className="text-sm text-gray-500 text-center mb-4">Tem certeza que deseja excluir a pasta "{confirmDeleteFolder.name}"?</p>
+              <p className="text-sm text-gray-500 text-center mb-4">Tem certeza que deseja excluir a pasta &quot;{confirmDeleteFolder.name}&quot;?</p>
               <p className="text-xs text-red-500 text-center font-medium bg-red-50 p-2 rounded border border-red-100">A pasta deve estar vazia para ser excluída.</p>
             </div>
             <div className="flex border-t border-gray-100">

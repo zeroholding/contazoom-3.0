@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     }
 
     const targetId = isAdmin && targetUserId ? targetUserId : session.sub;
-    let folders = await prisma.documentFolder.findMany({
+    const folders = await prisma.documentFolder.findMany({
       where: { userId: targetId },
       orderBy: { createdAt: "asc" }
     });
