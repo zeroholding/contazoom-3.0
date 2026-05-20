@@ -656,6 +656,8 @@ export default function AdminDocumentos() {
             </div>
           </div>
         </div>
+      )}
+
       {/* ═══ MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE PASTA ═══ */}
       {confirmDeleteFolder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
