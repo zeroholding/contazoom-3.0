@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
           taxaPlataforma: true,
           frete: true,
           freteAjuste: true,
+          cmv: true,
           titulo: true,
           sku: true,
           comprador: true,
@@ -115,6 +116,7 @@ export async function GET(req: NextRequest) {
           taxaPlataforma: true,
           frete: true,
           freteAjuste: true,
+          cmv: true,
           titulo: true,
           sku: true,
           comprador: true,
@@ -164,8 +166,8 @@ export async function GET(req: NextRequest) {
 
     // Formatar vendas do Mercado Livre
     const vendasMeliFormatted = vendasMeli.map((venda) => {
-      let cmv: number | null = null;
-      if (venda.sku && mapaCustos.has(venda.sku)) {
+      let cmv: number | null = venda.cmv ? Number(venda.cmv) : null;
+      if (cmv === null && venda.sku && mapaCustos.has(venda.sku)) {
         const custoUnitario = mapaCustos.get(venda.sku)!;
         cmv = roundCurrency(custoUnitario * venda.quantidade);
       }
@@ -286,8 +288,8 @@ export async function GET(req: NextRequest) {
 
     // Formatar vendas do Shopee
     const vendasShopeeFormatted = vendasShopee.map((venda) => {
-      let cmv: number | null = null;
-      if (venda.sku && mapaCustos.has(venda.sku)) {
+      let cmv: number | null = venda.cmv ? Number(venda.cmv) : null;
+      if (cmv === null && venda.sku && mapaCustos.has(venda.sku)) {
         const custoUnitario = mapaCustos.get(venda.sku)!;
         cmv = roundCurrency(custoUnitario * venda.quantidade);
       }
