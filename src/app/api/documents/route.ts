@@ -40,10 +40,24 @@ export async function GET(req: NextRequest) {
     }
 
     const targetId = isAdmin && targetUserId ? targetUserId : session.sub;
-    const folders = await prisma.documentFolder.findMany({
+    let folders = await prisma.documentFolder.findMany({
       where: { userId: targetId },
       orderBy: { createdAt: "asc" }
     });
+
+    if (folders.length === 0) {
+      const { DOCUMENT_CATEGORIES } = await import("@/lib/document-categories");
+      for (const cat of DOCUMENT_CATEGORIES) {
+        const folder = await prisma.documentFolder.create({
+          data: {
+            userId: targetId,
+            name: cat.name,
+            icon: 'Folder'
+          }
+        });
+        folders.push(folder);
+      }
+    }
 
     return NextResponse.json({
       isAdmin,

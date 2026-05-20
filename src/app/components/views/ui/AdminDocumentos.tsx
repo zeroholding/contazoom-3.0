@@ -37,6 +37,8 @@ type DocumentFolder = {
   id: string;
   name: string;
   icon: string;
+  parentId?: string | null;
+  subFolders?: DocumentFolder[];
 };
 
 import { DOCUMENT_CATEGORIES as CATEGORIES, DOCUMENT_MONTHS as MONTHS } from "@/lib/document-categories";
@@ -65,7 +67,9 @@ export default function AdminDocumentos() {
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [editingFolder, setEditingFolder] = useState<DocumentFolder | null>(null);
   const [folderNameInput, setFolderNameInput] = useState("");
+  const [folderParentId, setFolderParentId] = useState<string>("");
   const [isSavingFolder, setIsSavingFolder] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
 
   const [expandedDocLogs, setExpandedDocLogs] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
@@ -130,7 +134,7 @@ export default function AdminDocumentos() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: folderNameInput.trim() })
+        body: JSON.stringify({ name: folderNameInput.trim(), parentId: folderParentId || null })
       });
       if (res.ok) {
         await fetchUserFolders(selectedUser);
@@ -507,37 +511,61 @@ export default function AdminDocumentos() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pasta do Cliente</label>
-                  <button type="button" onClick={() => { setEditingFolder(null); setFolderNameInput(""); setShowFolderModal(true); }} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded transition-colors">+ Nova</button>
+                  <button type="button" onClick={() => { setEditingFolder(null); setFolderNameInput(""); setFolderParentId(""); setShowFolderModal(true); }} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded transition-colors">+ Nova</button>
                 </div>
-                <div className="space-y-1.5">
-                  {loadingFolders ? (
-                    <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>
-                  ) : userFolders.length === 0 ? (
-                    <div className="text-[11px] text-gray-400 text-center py-2 bg-gray-50 rounded-lg border border-gray-100">Nenhuma pasta criada.</div>
-                  ) : (
-                    userFolders.map(f => (
-                      <div key={f.id} className={`w-full flex items-center justify-between text-left text-[11px] px-3 py-2.5 rounded-lg border transition-all group ${
-                        selectedFolderId === f.id 
-                          ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-300/50' 
-                          : 'bg-white border-gray-200 hover:bg-gray-50'
-                      }`}>
-                        <button type="button" onClick={() => setSelectedFolderId(f.id)} className="flex items-center flex-1 min-w-0">
-                          <div className={`w-4 h-4 mr-2 shrink-0 flex items-center justify-center ${selectedFolderId === f.id ? 'text-blue-500' : 'text-gray-400'}`}>
-                            <FileText className="w-3.5 h-3.5" />
+                <div className="space-y-1">                  
+                  {(() => {
+                    // Build folder tree: top-level + nested subfolders
+                    const topLevel = userFolders.filter(f => !f.parentId);
+                    const renderFolder = (f: DocumentFolder, depth = 0): React.ReactNode => {
+                      const children = userFolders.filter(sf => sf.parentId === f.id);
+                      const isExpanded = expandedFolders[f.id] !== false; // default expanded
+                      const hasChildren = children.length > 0;
+                      return (
+                        <div key={f.id}>
+                          <div className={`w-full flex items-center justify-between text-left text-[11px] px-3 py-2.5 rounded-lg border transition-all group ${
+                            selectedFolderId === f.id
+                              ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-300/50'
+                              : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`} style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
+                            <button type="button" onClick={() => setSelectedFolderId(f.id)} className="flex items-center flex-1 min-w-0">
+                              {hasChildren && (
+                                <button type="button" className="mr-1 text-gray-400 hover:text-gray-600" onClick={(e) => { e.stopPropagation(); setExpandedFolders(prev => ({...prev, [f.id]: !isExpanded})); }}>
+                                  <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
+                                </button>
+                              )}
+                              {!hasChildren && depth > 0 && <span className="mr-1 w-3" />}
+                              <div className={`w-4 h-4 mr-2 shrink-0 flex items-center justify-center ${selectedFolderId === f.id ? 'text-blue-500' : 'text-gray-400'}`}>
+                                {depth === 0 ? (
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+                                ) : (
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h10M7 12h10"/></svg>
+                                )}
+                              </div>
+                              <span className={`truncate ${selectedFolderId === f.id ? 'text-blue-900 font-semibold' : 'text-gray-600'}`}>{f.name}</span>
+                            </button>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button type="button" onClick={() => { setEditingFolder(null); setFolderNameInput(""); setFolderParentId(f.id); setShowFolderModal(true); }} className="p-1 text-gray-400 hover:text-green-600 rounded" title="Nova subpasta aqui">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+                              </button>
+                              <button type="button" onClick={() => { setEditingFolder(f); setFolderNameInput(f.name); setFolderParentId(f.parentId || ""); setShowFolderModal(true); }} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Renomear">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                              </button>
+                              <button type="button" onClick={() => setConfirmDeleteFolder(f)} className="p-1 text-gray-400 hover:text-red-600 rounded" title={hasChildren ? 'Remova as subpastas antes' : 'Excluir'} disabled={hasChildren}>
+                                <svg className={`w-3 h-3 ${hasChildren ? 'opacity-30' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                              </button>
+                            </div>
                           </div>
-                          <span className={`truncate ${selectedFolderId === f.id ? 'text-blue-900 font-semibold' : 'text-gray-600'}`}>{f.name}</span>
-                        </button>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button type="button" onClick={() => { setEditingFolder(f); setFolderNameInput(f.name); setShowFolderModal(true); }} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Renomear">
-                            <History className="w-3 h-3" />
-                          </button>
-                          <button type="button" onClick={() => setConfirmDeleteFolder(f)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Excluir">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          {hasChildren && isExpanded && (
+                            <div className="mt-1 space-y-1">{children.map(c => renderFolder(c, depth + 1))}</div>
+                          )}
                         </div>
-                      </div>
-                    ))
-                  )}
+                      );
+                    };
+                    if (loadingFolders) return <div className="flex justify-center py-4"><svg className="w-4 h-4 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg></div>;
+                    if (topLevel.length === 0) return <div className="text-[11px] text-gray-400 text-center py-2 bg-gray-50 rounded-lg border border-gray-100">Nenhuma pasta criada.</div>;
+                    return <>{topLevel.map(f => renderFolder(f))}</>;
+                  })()}
                 </div>
               </div>
 
@@ -696,10 +724,25 @@ export default function AdminDocumentos() {
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Nome da Pasta</label>
                 <input type="text" autoFocus required value={folderNameInput} onChange={e => setFolderNameInput(e.target.value)} placeholder="Ex: Contratos 2026" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
               </div>
+              {!editingFolder && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Criar dentro de (opcional)</label>
+                  <select
+                    value={folderParentId}
+                    onChange={e => setFolderParentId(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  >
+                    <option value="">📁 Raiz (pasta principal)</option>
+                    {userFolders.map(f => (
+                      <option key={f.id} value={f.id}>{'└ '}{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="pt-2 flex justify-end gap-2">
                 <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
                 <button type="submit" disabled={isSavingFolder || !folderNameInput.trim()} className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition-colors flex items-center shadow-sm">
-                  {isSavingFolder ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null} Salvar
+                  {isSavingFolder ? <svg className="w-4 h-4 animate-spin mr-1.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> : null} Salvar
                 </button>
               </div>
             </form>

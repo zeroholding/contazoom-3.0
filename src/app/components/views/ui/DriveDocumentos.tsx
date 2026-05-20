@@ -22,6 +22,7 @@ type DocumentFolder = {
   id: string;
   name: string;
   icon: string;
+  parentId?: string | null;
 };
 
 import { DOCUMENT_CATEGORIES as CATEGORIES, DOCUMENT_MONTHS as MONTHS } from "@/lib/document-categories";
@@ -40,7 +41,7 @@ export default function DriveDocumentos() {
   const [currentMonth, setCurrentMonth] = useState<string | null>(null);
   
   // Expanded state for the left sidebar tree
-  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({ "02_IMPOSTOS": false });
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
 
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -189,8 +190,8 @@ export default function DriveDocumentos() {
     return true;
   });
 
-  const toggleCat = (catId: string) => {
-    setExpandedCats(prev => ({ ...prev, [catId]: !prev[catId] }));
+  const toggleFolder = (id: string) => {
+    setExpandedFolders(prev => ({ ...prev, [id]: !prev[id] }));
   };
   const toggleYear = (year: string) => {
     setExpandedYears(prev => ({ ...prev, [year]: !prev[year] }));
@@ -212,76 +213,111 @@ export default function DriveDocumentos() {
         </div>
         
         <div className="p-3 space-y-1">
-          {userFolders.map(folder => {
-            const isCatActive = currentFolderId === folder.id && !currentYear;
-            const isExpanded = expandedCats[folder.id];
-            const isImpostos = folder.name.toUpperCase().includes("IMPOSTO");
-            
-            return (
-              <div key={folder.id}>
-                <div 
-                  className={`flex items-center w-full rounded-lg cursor-pointer transition-colors ${isCatActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'}`}
-                >
-                  <button 
-                    className="p-2"
-                    onClick={() => isImpostos ? toggleCat(folder.id) : selectFolder(folder.id)}
-                  >
-                    {isImpostos ? (isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />) : <div className="w-4" />}
-                  </button>
-                  <div 
-                    className="flex items-center flex-1 py-2 pr-2" 
-                    onClick={() => selectFolder(folder.id)}
-                  >
-                    <Folder className={`w-4 h-4 mr-2 ${isCatActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-400'}`} />
-                    <span className="text-sm font-medium truncate" title={folder.name}>{folder.name}</span>
-                  </div>
-                </div>
+          {(() => {
+            const topLevel = userFolders.filter(f => !f.parentId);
 
-                {/* Subpastas (Anos e Meses) */}
-                {isImpostos && isExpanded && (
-                  <div className="ml-6 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
-                    {getAvailableYears(folder.id).map(year => {
-                      const isYearActive = currentFolderId === folder.id && currentYear === year && !currentMonth;
-                      const isYearExpanded = expandedYears[year];
-                      
-                      return (
-                        <div key={year}>
-                          <div className={`flex items-center w-full rounded-lg cursor-pointer transition-colors ${isYearActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-600'}`}>
-                            <button className="p-2" onClick={() => toggleYear(year)}>
-                              {isYearExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            </button>
-                            <div className="flex items-center flex-1 py-1.5 pr-2" onClick={() => selectFolder(folder.id, year)}>
-                              <Folder className={`w-4 h-4 mr-2 ${isYearActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-400'}`} />
-                              <span className="text-sm font-medium">{year}</span>
+            const renderFolder = (folder: DocumentFolder, depth = 0): React.ReactNode => {
+              const children = userFolders.filter(f => f.parentId === folder.id);
+              const hasChildren = children.length > 0;
+              const isImpostos = folder.name.toUpperCase().includes("IMPOSTO");
+              const isCatActive = currentFolderId === folder.id && !currentYear;
+              const isExpanded = expandedFolders[folder.id] !== false; // default expanded
+              const availYears = getAvailableYears(folder.id);
+
+              return (
+                <div key={folder.id}>
+                  <div
+                    className={`flex items-center w-full rounded-lg cursor-pointer transition-colors ${
+                      isCatActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'
+                    }`}
+                    style={{ paddingLeft: depth > 0 ? `${depth * 12}px` : undefined }}
+                  >
+                    <button
+                      className="p-2 flex-shrink-0"
+                      onClick={() => {
+                        if (hasChildren || isImpostos) toggleFolder(folder.id);
+                        else selectFolder(folder.id);
+                      }}
+                    >
+                      {hasChildren || isImpostos ? (
+                        isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
+                      ) : (
+                        <div className="w-4" />
+                      )}
+                    </button>
+                    <div
+                      className="flex items-center flex-1 py-2 pr-2"
+                      onClick={() => selectFolder(folder.id)}
+                    >
+                      <Folder className={`w-4 h-4 mr-2 flex-shrink-0 ${
+                        isCatActive ? 'text-blue-600 fill-blue-600/20' : depth > 0 ? 'text-gray-300' : 'text-gray-400'
+                      }`} />
+                      <span className="text-sm font-medium truncate" title={folder.name}>{folder.name}</span>
+                    </div>
+                  </div>
+
+                  {/* Subpastas reais (parentId) */}
+                  {hasChildren && isExpanded && (
+                    <div className="ml-2 mt-1 space-y-1 border-l-2 border-gray-200 pl-1">
+                      {children.map(child => renderFolder(child, depth + 1))}
+                    </div>
+                  )}
+
+                  {/* Subpastas de Impostos (Anos/Meses) */}
+                  {isImpostos && isExpanded && !hasChildren && (
+                    <div className="ml-6 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
+                      {availYears.map(year => {
+                        const isYearActive = currentFolderId === folder.id && currentYear === year && !currentMonth;
+                        const isYearExpanded = expandedYears[year];
+
+                        return (
+                          <div key={year}>
+                            <div className={`flex items-center w-full rounded-lg cursor-pointer transition-colors ${
+                              isYearActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-600'
+                            }`}>
+                              <button className="p-2" onClick={() => toggleYear(year)}>
+                                {isYearExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              </button>
+                              <div className="flex items-center flex-1 py-1.5 pr-2" onClick={() => selectFolder(folder.id, year)}>
+                                <Folder className={`w-4 h-4 mr-2 ${
+                                  isYearActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-400'
+                                }`} />
+                                <span className="text-sm font-medium">{year}</span>
+                              </div>
                             </div>
+
+                            {isYearExpanded && (
+                              <div className="ml-5 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
+                                {MONTHS.map(month => {
+                                  const isMonthActive = currentFolderId === folder.id && currentYear === year && currentMonth === month;
+                                  return (
+                                    <div
+                                      key={month}
+                                      className={`flex items-center py-1.5 px-3 rounded-lg cursor-pointer transition-colors ${
+                                        isMonthActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100 text-gray-500'
+                                      }`}
+                                      onClick={() => selectFolder(folder.id, year, month)}
+                                    >
+                                      <Folder className={`w-3.5 h-3.5 mr-2 ${
+                                        isMonthActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-300'
+                                      }`} />
+                                      <span className="text-xs font-medium">{month.split(" - ")[1]}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            };
 
-                          {/* Meses */}
-                          {isYearExpanded && (
-                            <div className="ml-5 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
-                              {MONTHS.map(month => {
-                                const isMonthActive = currentFolderId === folder.id && currentYear === year && currentMonth === month;
-                                return (
-                                  <div 
-                                    key={month} 
-                                    className={`flex items-center py-1.5 px-3 rounded-lg cursor-pointer transition-colors ${isMonthActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100 text-gray-500'}`}
-                                    onClick={() => selectFolder(folder.id, year, month)}
-                                  >
-                                    <Folder className={`w-3.5 h-3.5 mr-2 ${isMonthActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-300'}`} />
-                                    <span className="text-xs font-medium">{month.split(" - ")[1]}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+            return topLevel.map(f => renderFolder(f));
+          })()}
         </div>
       </div>
 

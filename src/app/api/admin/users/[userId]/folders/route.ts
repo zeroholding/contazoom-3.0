@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tryVerifySessionToken, checkIsAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { DOCUMENT_CATEGORIES } from "@/lib/document-categories";
 
 export async function GET(
   req: NextRequest,
@@ -18,10 +19,25 @@ export async function GET(
   }
 
   try {
-    const folders = await prisma.documentFolder.findMany({
+    let folders = await prisma.documentFolder.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' }
     });
+
+    // Bootstrapping: Auto-criação das 4 pastas padrões caso o cliente não tenha nenhuma pasta
+    if (folders.length === 0) {
+      for (const cat of DOCUMENT_CATEGORIES) {
+        const folder = await prisma.documentFolder.create({
+          data: {
+            userId,
+            name: cat.name,
+            icon: 'Folder'
+          }
+        });
+        folders.push(folder);
+      }
+    }
+
     return NextResponse.json(folders);
   } catch (error) {
     console.error("Erro ao buscar pastas:", error);
@@ -53,7 +69,8 @@ export async function POST(
       data: {
         userId,
         name: body.name,
-        icon: body.icon || 'Folder'
+        icon: body.icon || 'Folder',
+        parentId: body.parentId || null
       }
     });
 

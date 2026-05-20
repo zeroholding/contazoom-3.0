@@ -58,13 +58,19 @@ export async function DELETE(
       where: { id: folderId },
       include: {
         _count: {
-          select: { documents: true }
+          select: { documents: true, subFolders: true }
         }
       }
     });
 
     if (!folder || folder.userId !== userId) {
       return NextResponse.json({ error: "Pasta não encontrada" }, { status: 404 });
+    }
+
+    if (folder._count.subFolders > 0) {
+      return NextResponse.json({ 
+        error: "Não é possível excluir esta pasta pois ela contém subpastas. Remova-as primeiro." 
+      }, { status: 400 });
     }
 
     if (folder._count.documents > 0) {
