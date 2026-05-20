@@ -34,6 +34,7 @@ model User {
   settings          UserSettings?
   aliquotasImposto  AliquotaImposto[]
   documents         Document[]
+  documentFolders   DocumentFolder[]
   documentLogs      DocumentLog[]
 
   @@index([createdAt])
@@ -450,6 +451,9 @@ model Document {
   // Categorization
   category        String   // "INSTITUCIONAL", "IMPOSTOS", "FATURAMENTO", "FOLHA"
   subFolder       String?  @map("sub_folder") // e.g. "2026/01_Janeiro"
+  folderId        String?  @map("folder_id")
+  
+  folder          DocumentFolder? @relation(fields: [folderId], references: [id], onDelete: Restrict)
   
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -460,7 +464,23 @@ model Document {
   @@index([userId])
   @@index([category])
   @@index([subFolder])
+  @@index([folderId])
   @@map("documento")
+}
+
+model DocumentFolder {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@index([userId])
+  @@map("document_folder")
 }
 
 model DocumentLog {

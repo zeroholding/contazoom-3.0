@@ -22,25 +22,33 @@ export async function GET(req: NextRequest) {
         documents = await prisma.document.findMany({
           where: { userId: targetUserId },
           orderBy: { createdAt: "desc" },
-          include: { user: { select: { name: true, email: true } } }
+          include: { user: { select: { name: true, email: true } }, folder: true }
         });
       } else {
         documents = await prisma.document.findMany({
           where: { userId: session.sub },
           orderBy: { createdAt: "desc" },
-          include: { user: { select: { name: true, email: true } } }
+          include: { user: { select: { name: true, email: true } }, folder: true }
         });
       }
     } else {
       documents = await prisma.document.findMany({
         where: { userId: session.sub },
         orderBy: { createdAt: "desc" },
+        include: { folder: true }
       });
     }
 
+    const targetId = isAdmin && targetUserId ? targetUserId : session.sub;
+    const folders = await prisma.documentFolder.findMany({
+      where: { userId: targetId },
+      orderBy: { createdAt: "asc" }
+    });
+
     return NextResponse.json({
       isAdmin,
-      documents
+      documents,
+      folders
     });
   } catch (error) {
     return NextResponse.json({ error: "Erro ao buscar documentos" }, { status: 500 });
@@ -62,6 +70,7 @@ export async function POST(req: NextRequest) {
     const userId = formData.get("userId") as string;
     const category = formData.get("category") as string;
     const subFolder = formData.get("subFolder") as string | null;
+    const folderId = formData.get("folderId") as string | null;
 
     if (!file || !userId || !category) {
       return NextResponse.json({ error: "Dados incompletos" }, { status: 400 });
@@ -85,6 +94,7 @@ export async function POST(req: NextRequest) {
         fileUrl: `/api/documents/download/${uniqueFileName}`,
         category,
         subFolder,
+        folderId,
       },
       include: { user: { select: { name: true, email: true } } }
     });

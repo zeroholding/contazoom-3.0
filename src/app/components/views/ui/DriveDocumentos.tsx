@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Folder, FileText, Upload, Trash2, Download, ChevronRight, ChevronDown, Loader2, File, Image as ImageIcon } from "lucide-react";
+import { Folder, FileText, Upload, Trash2, Download, ChevronRight, ChevronDown, Loader2, File, Image as ImageIcon, Store } from "lucide-react";
 
 type Document = {
   id: string;
@@ -14,7 +14,14 @@ type Document = {
   subFolder: string | null;
   createdAt: string;
   fileUrl: string;
-  user?: { name: string; email: string };
+  folder?: { id: string; name: string; icon: string } | null;
+  folderId: string | null;
+};
+
+type DocumentFolder = {
+  id: string;
+  name: string;
+  icon: string;
 };
 
 import { DOCUMENT_CATEGORIES as CATEGORIES, DOCUMENT_MONTHS as MONTHS } from "@/lib/document-categories";
@@ -25,8 +32,10 @@ export default function DriveDocumentos() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<{id: string, name: string}[]>([]);
   
+  const [userFolders, setUserFolders] = useState<DocumentFolder[]>([]);
+  
   // Navigation state
-  const [currentCategory, setCurrentCategory] = useState<string>("01_INSTITUCIONAIS");
+  const [currentFolderId, setCurrentFolderId] = useState<string>("");
   const [currentYear, setCurrentYear] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState<string | null>(null);
   
@@ -40,7 +49,7 @@ export default function DriveDocumentos() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadCategory, setUploadCategory] = useState("01_INSTITUCIONAIS");
+  const [uploadCategory, setUploadCategory] = useState("");
   const [uploadYear, setUploadYear] = useState(new Date().getFullYear().toString());
   const [uploadMonth, setUploadMonth] = useState(MONTHS[new Date().getMonth()]);
   const [uploadTargetUser, setUploadTargetUser] = useState("");
@@ -61,6 +70,11 @@ export default function DriveDocumentos() {
         fetchUsers();
       }
       setDocuments(data.documents || []);
+      setUserFolders(data.folders || []);
+      if (data.folders?.length > 0 && !currentFolderId) {
+        setCurrentFolderId(data.folders[0].id);
+        setUploadCategory(data.folders[0].id);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -89,10 +103,12 @@ export default function DriveDocumentos() {
     setIsUploading(true);
     const formData = new FormData();
     formData.append("file", uploadFile);
-    formData.append("category", uploadCategory);
+    formData.append("category", "CUSTOM");
+    formData.append("folderId", uploadCategory); // Using uploadCategory state for folderId
     
     let subFolder = "";
-    if (uploadCategory === "02_IMPOSTOS") {
+    const folderObj = userFolders.find(f => f.id === uploadCategory);
+    if (folderObj?.name.toUpperCase().includes("IMPOSTO")) {
       subFolder = `${uploadYear}/${uploadMonth}`;
     }
     if (subFolder) formData.append("subFolder", subFolder);
@@ -146,10 +162,9 @@ export default function DriveDocumentos() {
     return <File className="w-8 h-8 text-gray-500" />;
   };
 
-  // Obter anos disponíveis para a árvore
-  const getAvailableYears = () => {
+  const getAvailableYears = (folderId: string) => {
     const years = Array.from(new Set(documents
-      .filter(d => d.category === "02_IMPOSTOS" && d.subFolder)
+      .filter(d => d.folderId === folderId && d.subFolder)
       .map(d => d.subFolder?.split("/")[0])
       .filter(Boolean)
     )).sort().reverse() as string[];
@@ -158,8 +173,13 @@ export default function DriveDocumentos() {
   };
 
   const visibleFiles = documents.filter(doc => {
-    if (doc.category !== currentCategory) return false;
-    if (currentCategory === "02_IMPOSTOS") {
+    // If no folderId in doc, fallback to match category. But normally doc.folderId === currentFolderId
+    if (doc.folderId !== currentFolderId && doc.category !== currentFolderId) return false;
+    
+    const folderObj = userFolders.find(f => f.id === currentFolderId);
+    const isImpostos = folderObj?.name.toUpperCase().includes("IMPOSTO");
+
+    if (isImpostos) {
       if (currentYear && currentMonth) {
         return doc.subFolder?.startsWith(`${currentYear}/${currentMonth}`);
       } else if (currentYear) {
@@ -177,7 +197,7 @@ export default function DriveDocumentos() {
   };
 
   const selectFolder = (catId: string, year?: string, month?: string) => {
-    setCurrentCategory(catId);
+    setCurrentFolderId(catId);
     setCurrentYear(year || null);
     setCurrentMonth(month || null);
   };
@@ -192,35 +212,36 @@ export default function DriveDocumentos() {
         </div>
         
         <div className="p-3 space-y-1">
-          {CATEGORIES.map(cat => {
-            const isCatActive = currentCategory === cat.id && !currentYear;
-            const isExpanded = expandedCats[cat.id];
+          {userFolders.map(folder => {
+            const isCatActive = currentFolderId === folder.id && !currentYear;
+            const isExpanded = expandedCats[folder.id];
+            const isImpostos = folder.name.toUpperCase().includes("IMPOSTO");
             
             return (
-              <div key={cat.id}>
+              <div key={folder.id}>
                 <div 
                   className={`flex items-center w-full rounded-lg cursor-pointer transition-colors ${isCatActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'}`}
                 >
                   <button 
                     className="p-2"
-                    onClick={() => cat.hasYears ? toggleCat(cat.id) : selectFolder(cat.id)}
+                    onClick={() => isImpostos ? toggleCat(folder.id) : selectFolder(folder.id)}
                   >
-                    {cat.hasYears ? (isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />) : <div className="w-4" />}
+                    {isImpostos ? (isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />) : <div className="w-4" />}
                   </button>
                   <div 
                     className="flex items-center flex-1 py-2 pr-2" 
-                    onClick={() => selectFolder(cat.id)}
+                    onClick={() => selectFolder(folder.id)}
                   >
                     <Folder className={`w-4 h-4 mr-2 ${isCatActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-400'}`} />
-                    <span className="text-sm font-medium truncate" title={cat.name}>{cat.name.substring(4)}</span>
+                    <span className="text-sm font-medium truncate" title={folder.name}>{folder.name}</span>
                   </div>
                 </div>
 
                 {/* Subpastas (Anos e Meses) */}
-                {cat.hasYears && isExpanded && (
+                {isImpostos && isExpanded && (
                   <div className="ml-6 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
-                    {getAvailableYears().map(year => {
-                      const isYearActive = currentCategory === cat.id && currentYear === year && !currentMonth;
+                    {getAvailableYears(folder.id).map(year => {
+                      const isYearActive = currentFolderId === folder.id && currentYear === year && !currentMonth;
                       const isYearExpanded = expandedYears[year];
                       
                       return (
@@ -229,7 +250,7 @@ export default function DriveDocumentos() {
                             <button className="p-2" onClick={() => toggleYear(year)}>
                               {isYearExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                             </button>
-                            <div className="flex items-center flex-1 py-1.5 pr-2" onClick={() => selectFolder(cat.id, year)}>
+                            <div className="flex items-center flex-1 py-1.5 pr-2" onClick={() => selectFolder(folder.id, year)}>
                               <Folder className={`w-4 h-4 mr-2 ${isYearActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-400'}`} />
                               <span className="text-sm font-medium">{year}</span>
                             </div>
@@ -239,12 +260,12 @@ export default function DriveDocumentos() {
                           {isYearExpanded && (
                             <div className="ml-5 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
                               {MONTHS.map(month => {
-                                const isMonthActive = currentCategory === cat.id && currentYear === year && currentMonth === month;
+                                const isMonthActive = currentFolderId === folder.id && currentYear === year && currentMonth === month;
                                 return (
                                   <div 
                                     key={month} 
                                     className={`flex items-center py-1.5 px-3 rounded-lg cursor-pointer transition-colors ${isMonthActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100 text-gray-500'}`}
-                                    onClick={() => selectFolder(cat.id, year, month)}
+                                    onClick={() => selectFolder(folder.id, year, month)}
                                   >
                                     <Folder className={`w-3.5 h-3.5 mr-2 ${isMonthActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-300'}`} />
                                     <span className="text-xs font-medium">{month.split(" - ")[1]}</span>
@@ -270,12 +291,12 @@ export default function DriveDocumentos() {
         <div className="p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
           <div>
             <div className="flex items-center text-sm text-gray-500 mb-1 space-x-2">
-              <span className="font-medium text-gray-700">{CATEGORIES.find(c => c.id === currentCategory)?.name}</span>
+              <span className="font-medium text-gray-700">{userFolders.find(c => c.id === currentFolderId)?.name || "Documentos"}</span>
               {currentYear && <><ChevronRight className="w-4 h-4" /><span>{currentYear}</span></>}
               {currentMonth && <><ChevronRight className="w-4 h-4" /><span>{currentMonth}</span></>}
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {currentMonth || currentYear || CATEGORIES.find(c => c.id === currentCategory)?.name.substring(4)}
+            <h1 className="text-xl font-bold text-gray-900">
+              {userFolders.find(c => c.id === currentFolderId)?.name || "Todos os Documentos"}
             </h1>
           </div>
         </div>

@@ -14,6 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ user
     const documents = await prisma.document.findMany({
       where: { userId },
       include: {
+        folder: true,
         logs: {
           include: { user: { select: { name: true, role: true } } },
           orderBy: { createdAt: "desc" }

@@ -24,11 +24,19 @@ type UserDocument = {
   originalName: string;
   category: string;
   subFolder: string | null;
+  folderId: string | null;
   sizeBytes: number;
   mimeType: string;
   createdAt: string;
   fileUrl: string;
   logs: DocumentLog[];
+  folder?: { id: string; name: string; icon: string } | null;
+};
+
+type DocumentFolder = {
+  id: string;
+  name: string;
+  icon: string;
 };
 
 import { DOCUMENT_CATEGORIES as CATEGORIES, DOCUMENT_MONTHS as MONTHS } from "@/lib/document-categories";
@@ -40,7 +48,7 @@ export default function AdminDocumentos() {
   
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("01_INSTITUCIONAIS");
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[new Date().getMonth()]);
   const [selectedStores, setSelectedStores] = useState<string[]>([]);
@@ -52,8 +60,16 @@ export default function AdminDocumentos() {
 
   const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [userFolders, setUserFolders] = useState<DocumentFolder[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<DocumentFolder | null>(null);
+  const [folderNameInput, setFolderNameInput] = useState("");
+  const [isSavingFolder, setIsSavingFolder] = useState(false);
+
   const [expandedDocLogs, setExpandedDocLogs] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<DocumentFolder | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => { fetchUsers(); }, []);
@@ -61,10 +77,13 @@ export default function AdminDocumentos() {
   useEffect(() => {
     if (selectedUser) {
       fetchUserDocuments(selectedUser);
+      fetchUserFolders(selectedUser);
       setUploadSuccess(null);
       setSelectedStores([]);
     } else {
       setUserDocuments([]);
+      setUserFolders([]);
+      setSelectedFolderId("");
     }
   }, [selectedUser]);
 
@@ -84,6 +103,66 @@ export default function AdminDocumentos() {
       if (res.ok) setUserDocuments(await res.json());
     } catch (err) { console.error("Erro ao carregar documentos:", err); }
     finally { setLoadingDocs(false); }
+  };
+
+  const fetchUserFolders = async (userId: string) => {
+    setLoadingFolders(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/folders`);
+      if (res.ok) {
+        const folders = await res.json();
+        setUserFolders(folders);
+        if (folders.length > 0) setSelectedFolderId(folders[0].id);
+      }
+    } catch (err) { console.error("Erro ao carregar pastas:", err); }
+    finally { setLoadingFolders(false); }
+  };
+
+  const handleSaveFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!folderNameInput.trim() || !selectedUser) return;
+    setIsSavingFolder(true);
+    try {
+      const url = editingFolder 
+        ? `/api/admin/users/${selectedUser}/folders/${editingFolder.id}`
+        : `/api/admin/users/${selectedUser}/folders`;
+      const method = editingFolder ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: folderNameInput.trim() })
+      });
+      if (res.ok) {
+        await fetchUserFolders(selectedUser);
+        setShowFolderModal(false);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Erro ao salvar pasta.");
+      }
+    } catch {
+      alert("Erro de conexão ao salvar pasta.");
+    } finally {
+      setIsSavingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!confirmDeleteFolder || !selectedUser) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/users/${selectedUser}/folders/${confirmDeleteFolder.id}`, { method: "DELETE" });
+      if (res.ok) {
+        await fetchUserFolders(selectedUser);
+        setConfirmDeleteFolder(null);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Erro ao excluir pasta.");
+      }
+    } catch {
+      alert("Erro de conexão ao excluir pasta.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleToggleStore = (storeLabel: string) => {
@@ -119,12 +198,19 @@ export default function AdminDocumentos() {
     
     const formData = new FormData();
     formData.append("file", uploadFile);
-    formData.append("category", selectedCategory);
+    // category will be CUSTOM, folderId will be selectedFolderId
+    formData.append("category", "CUSTOM");
+    if (selectedFolderId) formData.append("folderId", selectedFolderId);
     formData.append("userId", selectedUser);
     
     let subFolder = "";
     const storesStr = selectedStores.length > 0 ? selectedStores.join(",") : "";
-    if (selectedCategory === "02_IMPOSTOS") {
+    
+    // We try to guess if it's IMPOSTOS based on folder name for legacy logic, or just always allow it if user selects it.
+    const folderObj = userFolders.find(f => f.id === selectedFolderId);
+    const isImpostos = folderObj?.name.toUpperCase().includes("IMPOSTO");
+
+    if (isImpostos) {
       subFolder = `${selectedYear}/${selectedMonth}`;
       if (storesStr) subFolder += `/${storesStr}`;
     } else if (storesStr) {
@@ -333,7 +419,7 @@ export default function AdminDocumentos() {
                     
                     <div className="flex flex-wrap gap-1.5 mb-auto">
                       <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                        {CATEGORIES.find(c => c.id === doc.category)?.name.replace(/^\d+\.\s*/, '')}
+                        {doc.folder?.name || CATEGORIES.find(c => c.id === doc.category)?.name.replace(/^\d+\.\s*/, '') || "Geral"}
                       </span>
                       {stores?.map((s, i) => (
                         <span key={i} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-medium">
@@ -417,30 +503,46 @@ export default function AdminDocumentos() {
                 </div>
               )}
 
-              {/* Category */}
+              {/* Folders */}
               <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Classificação</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pasta do Cliente</label>
+                  <button type="button" onClick={() => { setEditingFolder(null); setFolderNameInput(""); setShowFolderModal(true); }} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded transition-colors">+ Nova</button>
+                </div>
                 <div className="space-y-1.5">
-                  {CATEGORIES.map(c => {
-                    const Icon = c.icon;
-                    return (
-                      <button key={c.id} type="button" onClick={() => setSelectedCategory(c.id)}
-                        className={`w-full flex items-center text-left text-[11px] px-3 py-2.5 rounded-lg border transition-all ${
-                          selectedCategory === c.id 
-                            ? 'bg-blue-50 border-blue-300 text-blue-900 font-semibold shadow-sm ring-1 ring-blue-300/50' 
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Icon className={`w-3.5 h-3.5 mr-2 shrink-0 ${selectedCategory === c.id ? 'text-blue-500' : 'text-gray-400'}`} />
-                        {c.name.replace(/^\d+\.\s*/, '')}
-                      </button>
-                    )
-                  })}
+                  {loadingFolders ? (
+                    <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>
+                  ) : userFolders.length === 0 ? (
+                    <div className="text-[11px] text-gray-400 text-center py-2 bg-gray-50 rounded-lg border border-gray-100">Nenhuma pasta criada.</div>
+                  ) : (
+                    userFolders.map(f => (
+                      <div key={f.id} className={`w-full flex items-center justify-between text-left text-[11px] px-3 py-2.5 rounded-lg border transition-all group ${
+                        selectedFolderId === f.id 
+                          ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-300/50' 
+                          : 'bg-white border-gray-200 hover:bg-gray-50'
+                      }`}>
+                        <button type="button" onClick={() => setSelectedFolderId(f.id)} className="flex items-center flex-1 min-w-0">
+                          <div className={`w-4 h-4 mr-2 shrink-0 flex items-center justify-center ${selectedFolderId === f.id ? 'text-blue-500' : 'text-gray-400'}`}>
+                            <FileText className="w-3.5 h-3.5" />
+                          </div>
+                          <span className={`truncate ${selectedFolderId === f.id ? 'text-blue-900 font-semibold' : 'text-gray-600'}`}>{f.name}</span>
+                        </button>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button type="button" onClick={() => { setEditingFolder(f); setFolderNameInput(f.name); setShowFolderModal(true); }} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Renomear">
+                            <History className="w-3 h-3" />
+                          </button>
+                          <button type="button" onClick={() => setConfirmDeleteFolder(f)} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Excluir">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
-              {/* Month/Year for Impostos */}
-              {selectedCategory === "02_IMPOSTOS" && (
+              {/* Month/Year for Impostos (Legacy logic fallback based on folder name) */}
+              {userFolders.find(f => f.id === selectedFolderId)?.name.toUpperCase().includes("IMPOSTO") && (
                 <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <div>
                     <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Mês</label>
@@ -552,6 +654,53 @@ export default function AdminDocumentos() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      {/* ═══ MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE PASTA ═══ */}
+      {confirmDeleteFolder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isDeleting && setConfirmDeleteFolder(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-0 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="h-1.5 w-full bg-gradient-to-r from-red-500 to-red-600" />
+            <div className="p-6">
+              <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-red-100">
+                <AlertTriangle className="w-7 h-7 text-red-500" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 text-center mb-2">Excluir Pasta?</h3>
+              <p className="text-sm text-gray-500 text-center mb-4">Tem certeza que deseja excluir a pasta "{confirmDeleteFolder.name}"?</p>
+              <p className="text-xs text-red-500 text-center font-medium bg-red-50 p-2 rounded border border-red-100">A pasta deve estar vazia para ser excluída.</p>
+            </div>
+            <div className="flex border-t border-gray-100">
+              <button onClick={() => setConfirmDeleteFolder(null)} disabled={isDeleting} className="flex-1 px-6 py-3.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors border-r border-gray-100">Cancelar</button>
+              <button onClick={handleDeleteFolder} disabled={isDeleting} className="flex-1 px-6 py-3.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center gap-2">
+                {isDeleting ? <><Loader2 className="w-4 h-4 animate-spin" /> Excluindo...</> : <><Trash2 className="w-4 h-4" /> Sim, Excluir</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ MODAL DE NOVA/EDITAR PASTA ═══ */}
+      {showFolderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isSavingFolder && setShowFolderModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">{editingFolder ? "Renomear Pasta" : "Nova Pasta"}</h3>
+              <button onClick={() => setShowFolderModal(false)} className="text-gray-400 hover:bg-gray-100 p-1 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveFolder} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Nome da Pasta</label>
+                <input type="text" autoFocus required value={folderNameInput} onChange={e => setFolderNameInput(e.target.value)} placeholder="Ex: Contratos 2026" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+              </div>
+              <div className="pt-2 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowFolderModal(false)} className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+                <button type="submit" disabled={isSavingFolder || !folderNameInput.trim()} className="px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 transition-colors flex items-center shadow-sm">
+                  {isSavingFolder ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null} Salvar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
