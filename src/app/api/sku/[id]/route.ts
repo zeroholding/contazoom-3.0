@@ -4,7 +4,7 @@ import { verifySessionToken } from "@/lib/auth";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const sessionCookie = request.cookies.get("session")?.value;
@@ -13,7 +13,7 @@ export async function PUT(
     }
     const session = await verifySessionToken(sessionCookie);
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     const existingSku = await prisma.sKU.findUnique({
@@ -41,9 +41,9 @@ export async function PUT(
     } = body;
 
     // Detect if cost changed
-    const oldCusto = Number(existingSku.custoUnitario);
+    const oldCusto = existingSku.custoUnitario ? Number(existingSku.custoUnitario) : 0;
     const newCusto = custoUnitario !== undefined ? Number(custoUnitario) : oldCusto;
-    const custoChanged = newCusto !== oldCusto;
+    const custoChanged = newCusto !== oldCusto && !Number.isNaN(newCusto) && !Number.isNaN(oldCusto);
 
     const updatedSku = await prisma.$transaction(async (tx) => {
       const skuDataToUpdate: any = {};
@@ -96,7 +96,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const sessionCookie = request.cookies.get("session")?.value;
@@ -105,7 +105,7 @@ export async function DELETE(
     }
     const session = await verifySessionToken(sessionCookie);
 
-    const { id } = params;
+    const { id } = await params;
 
     const existingSku = await prisma.sKU.findUnique({
       where: { id },
