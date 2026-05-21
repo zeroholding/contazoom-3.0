@@ -155,26 +155,16 @@ async function processVendas(
     new Set(vendas.map((v) => v.sku).filter(Boolean) as string[]),
   );
 
-  const skuCustos = await prisma.sKU.findMany({
-    where: {
-      userId: session.sub,
-      sku: { in: skusUnicos },
-    },
-    select: {
-      sku: true,
-      custoUnitario: true,
-    },
-  });
-
-  const mapaCustos = new Map(
-    skuCustos.map((sku) => [sku.sku, Number(sku.custoUnitario)]),
-  );
+  const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
+  const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
   const vendasFormatted = vendas.map((venda) => {
     let cmv: number | null = null;
-    if (venda.sku && mapaCustos.has(venda.sku)) {
-      const custoUnitario = mapaCustos.get(venda.sku)!;
-      cmv = roundCurrency(custoUnitario * venda.quantidade);
+    if (venda.sku) {
+      const custoUnitario = costMap.getCostAtDate(venda.sku, venda.dataVenda);
+      if (custoUnitario > 0) {
+        cmv = roundCurrency(custoUnitario * venda.quantidade);
+      }
     }
 
     const valorTotal = Number(venda.valorTotal);
