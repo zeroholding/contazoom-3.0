@@ -6,7 +6,8 @@ import { join } from "path";
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), "uploads");
 
-export async function GET(req: NextRequest, { params }: { params: { fileName: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ fileName: string }> }) {
+  const { fileName } = await params;
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: { fileName: st
     const action = req.nextUrl.searchParams.get("action") || "download";
 
     const document = await prisma.document.findFirst({
-      where: { fileName: params.fileName }
+      where: { fileName }
     });
 
     if (!document) return new NextResponse("File not found", { status: 404 });
@@ -59,7 +60,8 @@ export async function GET(req: NextRequest, { params }: { params: { fileName: st
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { fileName: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ fileName: string }> }) {
+  const { fileName } = await params;
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -70,7 +72,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { fileName:
 
   try {
     const document = await prisma.document.findFirst({
-      where: { fileName: params.fileName }
+      where: { fileName }
     });
 
     if (!document) return NextResponse.json({ error: "File not found" }, { status: 404 });
