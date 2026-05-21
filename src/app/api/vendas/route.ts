@@ -149,27 +149,17 @@ export async function GET(req: NextRequest) {
       ]),
     );
 
-    const skuCustos = await prisma.sKU.findMany({
-      where: {
-        userId: session.sub,
-        sku: { in: skusUnicos },
-      },
-      select: {
-        sku: true,
-        custoUnitario: true,
-      },
-    });
-
-    const mapaCustos = new Map(
-      skuCustos.map((sku) => [sku.sku, Number(sku.custoUnitario)]),
-    );
+    const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
+    const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
     // Formatar vendas do Mercado Livre
     const vendasMeliFormatted = vendasMeli.map((venda) => {
-      let cmv: number | null = venda.cmv ? Number(venda.cmv) : null;
-      if (cmv === null && venda.sku && mapaCustos.has(venda.sku)) {
-        const custoUnitario = mapaCustos.get(venda.sku)!;
-        cmv = roundCurrency(custoUnitario * venda.quantidade);
+      let cmv: number | null = null;
+      if (venda.sku) {
+        const custoUnitario = costMap.getCostAtDate(venda.sku, venda.dataVenda);
+        if (custoUnitario > 0) {
+          cmv = roundCurrency(custoUnitario * venda.quantidade);
+        }
       }
 
       const valorTotal = Number(venda.valorTotal);
@@ -383,16 +373,37 @@ export async function GET(req: NextRequest) {
       ultimaSyncGeral = ultimaSyncShopee;
     }
 
+    // Consolidar e deduplicar vendas
+    const todasVendas = [...vendasMeliFormatted, ...vendasShopeeFormatted];
+    
+    const vendasDeduplicadas: typeof todasVendas = [];
+    const orderIdsVistos = new Set<string>();
+    
+    for (const venda of todasVendas) {
+      if (!venda.id) {
+        vendasDeduplicadas.push(venda);
+        continue;
+      }
+      
+      if (!orderIdsVistos.has(venda.id)) {
+        orderIdsVistos.add(venda.id);
+        vendasDeduplicadas.push(venda);
+      }
+    }
+
+    // Ordenar vendas deduplicadas por data (mais recente primeiro)
+    vendasDeduplicadas.sort((a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime());
+
     const response = {
-      vendas: todasVendas,
-      total: todasVendas.length,
+      vendas: vendasDeduplicadas,
+      total: vendasDeduplicadas.length,
       lastSync: ultimaSyncGeral?.toISOString() || null,
     };
 
     // Armazenar no cache
     cache.set(cacheKey, response);
     console.log(`[Cache Miss] Vendas gerais (${todasVendas.length} vendas) salvas no cache`);
-    console.log(`[Vendas Gerais] ✅ Retornando ${todasVendas.length} vendas combinadas (ML: ${vendasMeliFormatted.length}, Shopee: ${vendasShopeeFormatted.length})`);
+    console.log(`[Vendas Gerais] ✅ Retornando ${vendasDeduplicadas.length} vendas combinadas (ML: ${vendasMeliFormatted.length}, Shopee: ${vendasShopeeFormatted.length})`);
 
     return NextResponse.json(response);
   } catch (error) {

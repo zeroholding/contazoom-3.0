@@ -199,14 +199,8 @@ export async function GET(req: NextRequest) {
       new Set(vendas.map((v) => v.sku).filter((s): s is string => Boolean(s)))
     );
 
-    const skuCustos = skusUnicos.length
-      ? await prisma.sKU.findMany({
-          where: { userId: session.sub, sku: { in: skusUnicos } },
-          select: { sku: true, custoUnitario: true },
-        })
-      : [];
-
-    const mapaCustos = new Map(skuCustos.map((s) => [s.sku, toNumber(s.custoUnitario)]));
+    const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
+    const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
     // Buscar dados de SKU para agrupamento inteligente
     const skusData = await prisma.sKU.findMany({
@@ -285,7 +279,7 @@ export async function GET(req: NextRequest) {
       const taxaPlataforma = Math.abs(toNumber(venda.taxaPlataforma));
       const frete = Math.abs(toNumber(venda.frete));
       const quantidade = toNumber(venda.quantidade);
-      const custoUnit = venda.sku && mapaCustos.has(venda.sku) ? mapaCustos.get(venda.sku)! : 0;
+      const custoUnit = venda.sku ? costMap.getCostAtDate(venda.sku, venda.dataVenda) : 0;
       const cmv = custoUnit * quantidade;
 
       const displayName = getDisplayName(venda, groupingKey);

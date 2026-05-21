@@ -300,14 +300,8 @@ export async function GET(req: NextRequest) {
       new Set(vendas.map((v) => v.sku).filter((s): s is string => Boolean(s)))
     );
 
-    const skuCustos = skusUnicos.length
-      ? await prisma.sKU.findMany({
-          where: { userId: session.sub, sku: { in: skusUnicos } },
-          select: { sku: true, custoUnitario: true },
-        })
-      : [];
-
-    const mapaCustos = new Map(skuCustos.map((s) => [s.sku, toNumber(s.custoUnitario)]));
+    const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
+    const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
     // Aggregate current period
     let faturamentoTotal = 0;
@@ -325,9 +319,12 @@ export async function GET(req: NextRequest) {
     for (const v of vendas) {
       const vt = toNumber(v.valorTotal);
       const tp = toNumber(v.taxaPlataforma);
-      const fr = toNumber(v.frete);
+      let fr = toNumber(v.frete);
+      if (Math.abs(fr) === 999) {
+        fr = 0; // Ignore 999 sentinel value to avoid inflating sums
+      }
       const qtd = toNumber(v.quantidade);
-      const custoUnit = v.sku && mapaCustos.has(v.sku) ? mapaCustos.get(v.sku)! : 0;
+      const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;
 
       faturamentoTotal += vt;
