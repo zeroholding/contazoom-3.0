@@ -18,41 +18,42 @@ export async function buildHistoricalCostMap(userId: string, skuCodes: string[])
     };
   }
 
-  // Get all SKUs with their current cost and full cost history
-  const skus = await prisma.sKU.findMany({
-    where: { userId, sku: { in: skuCodes } },
-    select: {
-      sku: true,
-      custoUnitario: true,
-      custoHistorico: {
-        orderBy: { createdAt: "asc" },
-        select: { custoNovo: true, createdAt: true },
+    // Get all SKUs with their current cost and full cost history
+    const skus = await prisma.sKU.findMany({
+      where: { userId, sku: { in: skuCodes } },
+      select: {
+        sku: true,
+        custoUnitario: true,
+        custoHistorico: {
+          orderBy: { createdAt: "asc" },
+          select: { custoAnterior: true, custoNovo: true, createdAt: true },
+        },
       },
-    },
-  });
-
-  // Build a map: skuCode -> sorted array of { date, cost }
-  const costTimelines = new Map<string, Array<{ date: Date; cost: number }>>();
-  const currentCosts = new Map<string, number>();
-
-  for (const sku of skus) {
-    const currentCost = Number(sku.custoUnitario) || 0;
-    currentCosts.set(sku.sku, currentCost);
-
-    const timeline = sku.custoHistorico.map((h) => ({
-      date: new Date(h.createdAt),
-      cost: Number(h.custoNovo),
-    }));
-
-    if (timeline.length === 0) {
-      // No history at all — use current cost for all dates
-      timeline.push({ date: new Date(0), cost: currentCost });
+    });
+  
+    // Build a map: skuCode -> sorted array of { date, cost, custoAnterior }
+    const costTimelines = new Map<string, Array<{ date: Date; cost: number; custoAnterior: number }>>();
+    const currentCosts = new Map<string, number>();
+  
+    for (const sku of skus) {
+      const currentCost = Number(sku.custoUnitario) || 0;
+      currentCosts.set(sku.sku, currentCost);
+  
+      const timeline = sku.custoHistorico.map((h) => ({
+        date: new Date(h.createdAt),
+        cost: Number(h.custoNovo),
+        custoAnterior: Number(h.custoAnterior) || 0,
+      }));
+  
+      if (timeline.length === 0) {
+        // No history at all — use current cost for all dates
+        timeline.push({ date: new Date(0), cost: currentCost, custoAnterior: currentCost });
+      }
+  
+      costTimelines.set(sku.sku, timeline);
     }
-
-    costTimelines.set(sku.sku, timeline);
-  }
-
-  return {
+  
+    return {
     /**
      * Get the cost that was active for a given SKU at a specific date.
      * Uses binary search on the sorted timeline.
@@ -80,8 +81,8 @@ export async function buildHistoricalCostMap(userId: string, skuCodes: string[])
         return timeline[result].cost;
       }
 
-      // Sale happened before first recorded cost — use the first known cost
-      return timeline[0].cost;
+      // Sale happened before first recorded cost — use the first known cost's "custoAnterior"
+      return timeline[0].custoAnterior;
     },
 
     /**
