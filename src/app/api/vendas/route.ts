@@ -374,8 +374,6 @@ export async function GET(req: NextRequest) {
     }
 
     // Consolidar e deduplicar vendas
-    const todasVendas = [...vendasMeliFormatted, ...vendasShopeeFormatted];
-    
     const vendasDeduplicadas: typeof todasVendas = [];
     const orderIdsVistos = new Set<string>();
     
