@@ -37,8 +37,15 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
           href="/admin/documentos" 
           className={`flex items-center gap-3 rounded-lg px-3 py-2.5 shadow-sm transition-colors ${pathname === '/admin/documentos' ? 'bg-orange-600 text-white' : 'text-gray-300 hover:bg-gray-800'} ${collapsed ? 'justify-center' : ''}`}
         >
-          <UploadCloud className="w-5 h-5 shrink-0" />
+          <FolderOpen className="h-5 w-5 shrink-0" />
           {!collapsed && <span className="font-medium">Enviar Documentos</span>}
+        </Link>
+        <Link 
+          href="/admin/auditoria-documentos" 
+          className={`flex items-center gap-3 rounded-lg px-3 py-2.5 shadow-sm transition-colors ${pathname === '/admin/auditoria-documentos' ? 'bg-orange-600 text-white' : 'text-gray-300 hover:bg-gray-800'} ${collapsed ? 'justify-center' : ''}`}
+        >
+          <FileText className="h-5 w-5 shrink-0" />
+          {!collapsed && <span className="font-medium">Auditoria Docs</span>}
         </Link>
       </nav>
 

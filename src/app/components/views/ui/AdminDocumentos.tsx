@@ -432,6 +432,27 @@ export default function AdminDocumentos() {
                       ))}
                     </div>
 
+                    <div className="mt-3 flex items-center gap-3">
+                      {(() => {
+                        const views = doc.logs?.filter(l => l.action === 'VIEWED') || [];
+                        const downloads = doc.logs?.filter(l => l.action === 'DOWNLOADED') || [];
+                        const uniqueViewers = Array.from(new Set(views.map(v => v.user.name.split(' ')[0])));
+                        const uniqueDownloaders = Array.from(new Set(downloads.map(d => d.user.name.split(' ')[0])));
+                        return (
+                          <>
+                            <div className="flex items-center gap-1 text-[10px] text-gray-500 cursor-help" title={uniqueViewers.length > 0 ? `Visualizado por: ${uniqueViewers.join(', ')}` : 'Nenhuma visualização'}>
+                              <Eye className={`w-3.5 h-3.5 ${views.length > 0 ? 'text-blue-500' : 'text-gray-300'}`} />
+                              <span className="font-semibold">{views.length}</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] text-gray-500 cursor-help" title={uniqueDownloaders.length > 0 ? `Baixado por: ${uniqueDownloaders.join(', ')}` : 'Nenhum download'}>
+                              <Download className={`w-3.5 h-3.5 ${downloads.length > 0 ? 'text-orange-500' : 'text-gray-300'}`} />
+                              <span className="font-semibold">{downloads.length}</span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+
                     <div className="flex items-center justify-between pt-4 mt-4 border-t border-gray-100">
                       <div className="flex gap-1">
                         <button onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Ver"><Eye className="w-4 h-4" /></button>
