@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Loader2, FileText, Download, Eye, UploadCloud, Users, Filter, Calendar } from "lucide-react";
+import { Search, Loader2, FileText, Download, Eye, UploadCloud, Users, Filter, Calendar, Clock, Activity, UserCheck, Briefcase } from "lucide-react";
 
 type UserBasic = {
   id: string;
@@ -113,48 +113,63 @@ export default function AuditoriaDocumentos() {
 
         {/* Filters */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" 
-              placeholder="Buscar por nome do arquivo..." 
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-            />
+          <div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Pesquisar Arquivo</label>
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome do arquivo..." 
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              />
+            </div>
           </div>
 
-          <select 
-            value={selectedAction}
-            onChange={(e) => { setSelectedAction(e.target.value); setPage(1); }}
-            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-          >
-            <option value="">Todas as Ações</option>
-            <option value="CREATED">Uploads</option>
-            <option value="DOWNLOADED">Downloads</option>
-            <option value="VIEWED">Visualizações</option>
-          </select>
-
-          <div className="relative">
-            <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="date" 
-              value={startDate}
-              onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-              title="Data Inicial"
-            />
+          <div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Tipo de Ação</label>
+            <div className="relative">
+              <Activity className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <select 
+                value={selectedAction}
+                onChange={(e) => { setSelectedAction(e.target.value); setPage(1); }}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all appearance-none"
+              >
+                <option value="">Todas as Ações</option>
+                <option value="CREATED">Uploads</option>
+                <option value="DOWNLOADED">Downloads</option>
+                <option value="VIEWED">Visualizações</option>
+              </select>
+            </div>
           </div>
 
-          <div className="relative">
-            <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="date" 
-              value={endDate}
-              onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-              title="Data Final"
-            />
+          <div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Data Inicial</label>
+            <div className="relative">
+              <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+                title="Data Inicial"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Data Final</label>
+            <div className="relative">
+              <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+                title="Data Final"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -182,22 +197,31 @@ export default function AuditoriaDocumentos() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold">
-                  <th className="px-5 py-3">Data / Hora</th>
-                  <th className="px-5 py-3">Ação</th>
-                  <th className="px-5 py-3">Autor da Ação</th>
-                  <th className="px-5 py-3">Documento</th>
-                  <th className="px-5 py-3">Cliente Dono</th>
+                  <th className="px-5 py-4"><div className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> Data / Hora</div></th>
+                  <th className="px-5 py-4"><div className="flex items-center gap-1.5"><Activity className="w-4 h-4" /> Ação</div></th>
+                  <th className="px-5 py-4"><div className="flex items-center gap-1.5"><UserCheck className="w-4 h-4" /> Autor da Ação</div></th>
+                  <th className="px-5 py-4"><div className="flex items-center gap-1.5"><FileText className="w-4 h-4" /> Documento</div></th>
+                  <th className="px-5 py-4"><div className="flex items-center gap-1.5"><Briefcase className="w-4 h-4" /> Cliente Dono</div></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {logs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50 transition-colors group">
                     <td className="px-5 py-3 whitespace-nowrap">
-                      <div className="text-sm font-semibold text-gray-800">
-                        {new Date(log.createdAt).toLocaleDateString('pt-BR')}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {new Date(log.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      <div className="flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-lg bg-orange-50 border border-orange-100 flex flex-col items-center justify-center shrink-0">
+                          <span className="text-xs font-bold text-orange-600 leading-none mb-0.5">{new Date(log.createdAt).getDate()}</span>
+                          <span className="text-[9px] font-medium text-orange-400 leading-none uppercase">{new Date(log.createdAt).toLocaleString('pt-BR', { month: 'short' }).replace('.', '')}</span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-800">
+                            {new Date(log.createdAt).toLocaleDateString('pt-BR')}
+                          </div>
+                          <div className="text-[11px] text-gray-500 flex items-center mt-0.5">
+                            <Clock className="w-3 h-3 mr-1" />
+                            {new Date(log.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap">
