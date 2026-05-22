@@ -114,62 +114,58 @@ export default function AuditoriaDocumentos() {
         {/* Filters */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Pesquisar Arquivo</label>
-            <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input 
-                type="text" 
-                placeholder="Buscar por nome do arquivo..." 
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-              />
-            </div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+              <Search className="w-3.5 h-3.5" /> Pesquisar Arquivo
+            </label>
+            <input 
+              type="text" 
+              placeholder="Buscar por nome do arquivo..." 
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+            />
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Tipo de Ação</label>
-            <div className="relative">
-              <Activity className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <select 
-                value={selectedAction}
-                onChange={(e) => { setSelectedAction(e.target.value); setPage(1); }}
-                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all appearance-none"
-              >
-                <option value="">Todas as Ações</option>
-                <option value="CREATED">Uploads</option>
-                <option value="DOWNLOADED">Downloads</option>
-                <option value="VIEWED">Visualizações</option>
-              </select>
-            </div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+              <Activity className="w-3.5 h-3.5" /> Tipo de Ação
+            </label>
+            <select 
+              value={selectedAction}
+              onChange={(e) => { setSelectedAction(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all appearance-none"
+            >
+              <option value="">Todas as Ações</option>
+              <option value="CREATED">Uploads</option>
+              <option value="DOWNLOADED">Downloads</option>
+              <option value="VIEWED">Visualizações</option>
+            </select>
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Data Inicial</label>
-            <div className="relative">
-              <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input 
-                type="date" 
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-                title="Data Inicial"
-              />
-            </div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+              <Calendar className="w-3.5 h-3.5" /> Data Inicial
+            </label>
+            <input 
+              type="date" 
+              value={startDate}
+              onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              title="Data Inicial"
+            />
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Data Final</label>
-            <div className="relative">
-              <Calendar className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input 
-                type="date" 
-                value={endDate}
-                onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-                className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-                title="Data Final"
-              />
-            </div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+              <Calendar className="w-3.5 h-3.5" /> Data Final
+            </label>
+            <input 
+              type="date" 
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              title="Data Final"
+            />
           </div>
         </div>
       </div>
@@ -244,9 +240,14 @@ export default function AuditoriaDocumentos() {
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex items-center gap-2 max-w-[250px] lg:max-w-xs xl:max-w-md">
-                        <FileText className="w-4 h-4 text-gray-400 shrink-0" />
-                        <span className="text-sm text-gray-700 truncate font-medium" title={log.document.originalName}>
+                      <div 
+                        className="flex items-center gap-2 max-w-[250px] lg:max-w-xs xl:max-w-md group/doc cursor-pointer"
+                        onClick={() => window.open(`${log.document.fileUrl}?action=view`, '_blank')}
+                      >
+                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center group-hover/doc:bg-blue-50 group-hover/doc:text-blue-600 transition-colors shrink-0">
+                          <FileText className="w-4 h-4 text-gray-400 group-hover/doc:text-blue-600 transition-colors" />
+                        </div>
+                        <span className="text-sm text-gray-700 truncate font-medium group-hover/doc:text-blue-600 transition-colors" title={log.document.originalName}>
                           {log.document.originalName}
                         </span>
                       </div>
