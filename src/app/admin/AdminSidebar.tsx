@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, Users, LogOut, ArrowLeft, FileText, UploadCloud } from "lucide-react";
+import { Shield, Users, LogOut, ArrowLeft, FileText, UploadCloud, FolderOpen } from "lucide-react";
 
 export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
