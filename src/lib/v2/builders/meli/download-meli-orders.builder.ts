@@ -192,22 +192,27 @@ export class DownloadMeliOrdersBuilder {
       `[Sync] ?? Iniciando busca de vendas para conta ${account.ml_user_id} (${account.nickname})`,
     );
 
-    // Verificar venda mais antiga já sincronizada para continuar de onde parou
-    const oldestSyncedOrder = await prisma.meliVenda.findFirst({
+    // Verificar a venda mais recente já sincronizada para fazer Sincronização Incremental (Delta Sync)
+    const latestSyncedOrder = await prisma.meliVenda.findFirst({
       where: { meliAccountId: account.id },
-      orderBy: { dataVenda: "asc" },
+      orderBy: { dataVenda: "desc" },
       select: { dataVenda: true },
     });
 
-    const oldestSyncedDate = oldestSyncedOrder?.dataVenda;
-    if (oldestSyncedDate) {
+    let lastUpdatedFrom: Date | undefined;
+
+    const latestDate = latestSyncedOrder?.dataVenda;
+    if (latestDate) {
+      // Define a data de início da busca como 15 dias atrás para capturar atualizações recentes
+      lastUpdatedFrom = new Date();
+      lastUpdatedFrom.setDate(lastUpdatedFrom.getDate() - 15);
       console.log(
-        `[Sync] 📅 Venda mais antiga no banco: ${
-          oldestSyncedDate.toISOString().split("T")[0]
+        `[Sync] 🚀 Modo Incremental: Buscando atualizações desde ${
+          lastUpdatedFrom.toISOString().split("T")[0]
         }`,
       );
     } else {
-      console.log(`[Sync] 📅 Primeira sincronização - buscando desde o início`);
+      console.log(`[Sync] 📅 Primeira sincronização - buscando histórico (limitado aos 50k mais recentes)`);
     }
 
     const MAX_OFFSET = 50000; // Limite seguro antes do 50k da API
@@ -229,6 +234,7 @@ export class DownloadMeliOrdersBuilder {
             userId,
             offset: offsetValue,
             pageNumber,
+            lastUpdatedFrom,
           });
 
           if (

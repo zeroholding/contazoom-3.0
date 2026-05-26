@@ -193,6 +193,7 @@ export default class MeliSyncService {
     pageNumber,
     dateFrom,
     dateTo,
+    ...options
   }: FetchOrdersPageOptions): Promise<FetchOrdersPageResult> {
     const limit = PAGE_LIMIT;
     const url = new URL(`${MELI_API_BASE}/orders/search`);
@@ -205,6 +206,12 @@ export default class MeliSyncService {
     }
     if (dateTo) {
       url.searchParams.set("order.date_created.to", dateTo.toISOString());
+    }
+    if (options.lastUpdatedFrom) {
+      url.searchParams.set("order.date_last_updated.from", options.lastUpdatedFrom.toISOString());
+    }
+    if (options.lastUpdatedTo) {
+      url.searchParams.set("order.date_last_updated.to", options.lastUpdatedTo.toISOString());
     }
 
     const result: FetchOrdersPageResult = {

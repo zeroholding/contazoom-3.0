@@ -98,6 +98,8 @@ export type FetchOrdersPageOptions = {
   pageNumber: number;
   dateFrom?: Date;
   dateTo?: Date;
+  lastUpdatedFrom?: Date;
+  lastUpdatedTo?: Date;
 };
 
 export type FetchOrdersPageResult = {

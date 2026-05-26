@@ -118,15 +118,7 @@ export default function ModalSyncVendas({
     }
   }, [isOpen, contasInfo.length, isSyncing]);
 
-  // Bloquear scroll do body quando modal aberto
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    }
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [isOpen]);
+  // Removido bloqueio de scroll para permitir uso do sistema durante sincronização
 
   // Manter o modal no step "syncing" quando a sincronização está ativa
   useEffect(() => {
@@ -423,23 +415,9 @@ export default function ModalSyncVendas({
 
   const modalContent = (
     <>
-      {/* Backdrop com blur progressivo */}
+      {/* Container do modal - Posicionado no canto inferior direito */}
       <div
-        className={`fixed inset-0 z-[9998] transition-all duration-300 ease-out ${
-          isAnimating
-            ? "backdrop-blur-md bg-black/40"
-            : "backdrop-blur-none bg-black/0"
-        }`}
-        style={{
-          backdropFilter: isAnimating ? "blur(8px)" : "blur(0px)",
-          WebkitBackdropFilter: isAnimating ? "blur(8px)" : "blur(0px)",
-        }}
-        onClick={() => !isSyncing && onClose()}
-      />
-
-      {/* Container do modal */}
-      <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
+        className="fixed bottom-4 right-4 z-[9999] flex items-end justify-end p-4 pointer-events-none"
         onClick={() => !isSyncing && onClose()}
       >
         <div
