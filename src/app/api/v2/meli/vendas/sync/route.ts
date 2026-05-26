@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
 
   sendProgressToUser(userId, {
     type: "sync_complete",
-    message: `Sincroniza��o completa! ${progressSum.sumSavedOrders} vendas processadas de ${progressSum.sumExpectedOrders} esperadas`,
+    message: `Sincronização completa! ${progressSum.sumSavedOrders} vendas processadas de ${progressSum.sumExpectedOrders} esperadas`,
     current: progressSum.sumSavedOrders,
     total: progressSum.sumExpectedOrders,
     fetched: progressSum.sumFetchedOrders,

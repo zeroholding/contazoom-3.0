@@ -468,16 +468,6 @@ export default function TabelaVendasV2({
 
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-gray-200 bg-white">
-      {(isSyncing || isStartingSync) && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-sm">
-          <div className="mx-auto w-full max-w-md p-6">
-            <div className="text-center text-sm font-semibold text-gray-700">
-              {syncStatusText}
-            </div>
-          </div>
-        </div>
-      )}
-
       {syncErrors.length > 0 && (
         <div className="border-b border-orange-100 bg-orange-50 px-6 py-3 text-sm text-orange-700">
           <p className="font-medium">
@@ -560,30 +550,6 @@ export default function TabelaVendasV2({
               resumoPorConta={resumoPorConta}
             />
           </div>
-
-          {/* Indicador de sincronização/salvamento (persiste após reload) */}
-          {progress &&
-            (progress.message?.includes("Salvando") ||
-              progress.message?.includes("baixadas") ||
-              progress.type === "sync_progress") &&
-            progress.type !== "sync_complete" && (
-              <div className="border-t border-blue-100 bg-blue-50 px-4 py-3">
-                <div className="flex items-center justify-center gap-3">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600"></div>
-                  <div className="text-sm text-blue-800">
-                    <span className="font-medium">
-                      {progress.message || "Sincronizando..."}
-                    </span>
-                    {progress.current && progress.total && (
-                      <span className="ml-2 text-blue-600">
-                        ({Math.round((progress.current / progress.total) * 100)}
-                        %)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
         </div>
       )}
     </div>

@@ -140,8 +140,10 @@ export function useVendasV2(
   const [isLoadingFromCache, setIsLoadingFromCache] = useState(false);
 
   // Hook para progresso em tempo real
-  const { isConnected, progress, connect, disconnect } =
-    useVendasSyncProgress();
+  const { isConnected, progress, connect, disconnect,
+    clearProgress,
+    error: sseError,
+  } = useVendasSyncProgress();
 
   // Conectar SSE automaticamente para acompanhar sincronizações em background (ex.: cron)
   useEffect(() => {
@@ -338,6 +340,7 @@ export function useVendasV2(
       });
       setIsSyncing(true);
       setIsTableLoading(true);
+      clearProgress();
       setSyncProgress({ fetched: 0, expected: 0 });
       setSyncErrors([]);
 

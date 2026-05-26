@@ -282,7 +282,7 @@ export class DownloadMeliOrdersBuilder {
               results.length
             }/${
               discoveredTotal ?? results.length
-            } vendas baixadas (p�gina ${pageNumber})`,
+            } vendas baixadas (página ${pageNumber})`,
             current: results.length,
             total: discoveredTotal ?? results.length,
             fetched: results.length,

@@ -27,6 +27,7 @@ interface UseVendasSyncProgressReturn {
   progress: VendasSyncProgress | null;
   connect: () => void;
   disconnect: () => void;
+  clearProgress: () => void;
 }
 
 export function useVendasSyncProgress(): UseVendasSyncProgressReturn {
@@ -40,6 +41,7 @@ export function useVendasSyncProgress(): UseVendasSyncProgressReturn {
 
   const connect = useCallback(() => {
     console.log('[SSE useVendasSyncProgress] 🔌 Função connect() chamada');
+    setProgress(null); // Clear progress when connecting
 
     if (eventSourceRef.current) {
       console.log('[SSE useVendasSyncProgress] Fechando conexão existente antes de criar nova');
@@ -420,6 +422,10 @@ export function useVendasSyncProgress(): UseVendasSyncProgressReturn {
     }
   }, []);
 
+  const clearProgress = useCallback(() => {
+    setProgress(null);
+  }, []);
+
   // Cleanup ao desmontar
   useEffect(() => {
     return () => {
@@ -431,6 +437,7 @@ export function useVendasSyncProgress(): UseVendasSyncProgressReturn {
     isConnected,
     progress,
     connect,
-    disconnect
+    disconnect,
+    clearProgress
   };
 }

@@ -815,16 +815,6 @@ export default function TabelaVendas({
 
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-gray-200 bg-white">
-      {(isSyncing || isStartingSync) && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/90 backdrop-blur-sm">
-          <div className="mx-auto w-full max-w-md p-6">
-            <div className="text-center text-sm font-semibold text-gray-700">
-              {syncStatusText}
-            </div>
-          </div>
-        </div>
-      )}
-
       {syncErrors.length > 0 && (
         <div className="border-b border-orange-100 bg-orange-50 px-6 py-3 text-sm text-orange-700">
           <p className="font-medium">
