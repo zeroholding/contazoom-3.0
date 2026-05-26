@@ -105,18 +105,11 @@ export default function ModalSyncVendas({
 
   // Gerenciar step baseado nos dados existentes
   useEffect(() => {
-    if (isOpen) {
-      if (contasInfo.length === 0) {
-        // Primeira vez ou sem dados - vai para verificação
-        setStep("verify");
-        setError(null);
-        setCheckProgress(null);
-      } else if (!isSyncing) {
-        // Já tem dados e não está sincronizando - vai direto para seleção
-        setStep("select");
-      }
+    if (isOpen && !isSyncing && step !== "syncing") {
+      setStep("syncing");
+      onStartSync(); // Inicia a sincronização de todas as contas automaticamente
     }
-  }, [isOpen, contasInfo.length, isSyncing]);
+  }, [isOpen, isSyncing, step, onStartSync]);
 
   // Removido bloqueio de scroll para permitir uso do sistema durante sincronização
 
