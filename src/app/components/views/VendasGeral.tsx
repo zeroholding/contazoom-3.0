@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import Sidebar from "../views/ui/Sidebar";
 import Topbar from "../views/ui/Topbar";
-import TabelaVendasV2 from "../ui/v2/TabelaVendas";
-import FiltrosVendasV2 from "../ui/v2/FiltrosVendas";
+import TabelaVendasV2 from "./ui/v2/TabelaVendas";
+import FiltrosVendasV2 from "./ui/v2/FiltrosVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import { useUserGuidance } from "@/hooks/useUserGuidance";
 import { UserGuidanceNotification } from "@/components/ui/user-guidance-notification";
@@ -149,7 +149,7 @@ const HeaderVendasGeral = ({
 };
 
 import { useVendaFilters } from "@/hooks/useVendasFilter";
-import { ColunasVisiveis } from "../ui/v2/FiltrosVendas";
+import { ColunasVisiveis } from "./ui/v2/FiltrosVendas";
 
 const colunasVisiveisDefault: ColunasVisiveis = {
   data: true,

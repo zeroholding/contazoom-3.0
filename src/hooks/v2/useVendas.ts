@@ -511,7 +511,7 @@ export function useVendasV2(
       } else if (platform === "Geral") {
         // Sincronização geral não existe na v2
         return;
-      } else {
+      }
       // NOTA: Código após todos os returns foi removido pois era inacessível
     } catch (error) {
       console.error("Erro ao sincronizar vendas:", error);
