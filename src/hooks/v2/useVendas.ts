@@ -509,23 +509,9 @@ export function useVendasV2(
         // Finalizar sincronização do Shopee
         return;
       } else if (platform === "Geral") {
-        // Para vendas gerais, não há sincronização - apenas carrega dados existentes
-        setVendas([]);
-        resetPagination();
-        setCountVendas(countVendaInitialData);
-        setLastSyncedAt(null);
-        setSyncErrors([]);
-        setSyncProgress({ fetched: 0, expected: 0 });
+        // Sincronização geral não existe na v2
         return;
       } else {
-        setVendas([]);
-        resetPagination();
-        setCountVendas(countVendaInitialData);
-        setLastSyncedAt(null);
-        setSyncErrors([]);
-        setSyncProgress({ fetched: 0, expected: 0 });
-        return;
-      }
       // NOTA: Código após todos os returns foi removido pois era inacessível
     } catch (error) {
       console.error("Erro ao sincronizar vendas:", error);
@@ -620,16 +606,18 @@ export function useVendasV2(
         `[useVendas] Iniciando carregamento de vendas para plataforma: ${platform}`,
       );
 
-      if (platform === "Mercado Livre") {
+      if (platform === "Mercado Livre" || platform === "Geral") {
         const queryParams = serializeVendaFilters(filters);
+        
+        let url = `api/v2/meli/vendas?${queryParams}`;
+        if (platform === "Geral") {
+          url = `api/v2/geral/vendas?${queryParams}`;
+        }
 
-        const res = await API_CONFIG.fetch(
-          `api/v2/meli/vendas?${queryParams}`,
-          {
-            cache: "no-store",
-            credentials: "include",
-          },
-        );
+        const res = await API_CONFIG.fetch(url, {
+          cache: "no-store",
+          credentials: "include",
+        });
 
         if (!res.ok) {
           const errorText = await res.text();

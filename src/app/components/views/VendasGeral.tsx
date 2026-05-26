@@ -1,46 +1,36 @@
 "use client";
 
-import { useRef, useEffect, useLayoutEffect, useState, useMemo } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRef, useEffect, useLayoutEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import Sidebar from "../views/ui/Sidebar";
 import Topbar from "../views/ui/Topbar";
-import TabelaVendas from "../views/ui/TabelaVendas";
-import { useVendas } from "@/hooks/useVendas";
-import FiltrosVendas, {
-  FiltroStatus,
-  FiltroPeriodo,
-  ColunasVisiveis,
-} from "../views/ui/FiltrosVendas";
+import TabelaVendasV2 from "../ui/v2/TabelaVendas";
+import FiltrosVendasV2 from "../ui/v2/FiltrosVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
-import { useNotification } from "@/contexts/NotificationContext";
-import { AlertBanner } from "@/components/ui/alert-banner";
-import { UserGuidanceNotification } from "@/components/ui/user-guidance-notification";
 import { useUserGuidance } from "@/hooks/useUserGuidance";
+import { UserGuidanceNotification } from "@/components/ui/user-guidance-notification";
+import { VendasProvider } from "@/contexts/VendasContext";
+import { useVendasContext } from "@/hooks/v2/useVendasContext";
 
 const FULL_W = "16rem";
 const RAIL_W = "4rem";
 const LS_KEY = "cz_sidebar_collapsed";
 
-// useLayoutEffect no browser; fallback para useEffect no SSR
-const useIsoLayout =
-  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+const useIsoLayout = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 interface HeaderVendasGeralProps {
-  vendas?: any[];
-  lastSyncedAt?: string | null;
+  totalItems?: number;
   contasConectadas?: any[];
 }
 
 const HeaderVendasGeral = ({
-  vendas = [],
-  lastSyncedAt = null,
+  totalItems = 0,
   contasConectadas = [],
 }: HeaderVendasGeralProps) => {
   const router = useRouter();
   const [showInfoDropdown, setShowInfoDropdown] = useState(false);
 
-  // Dropdown de informações
   const infoDropdown = useSmartDropdown<HTMLButtonElement>({
     isOpen: showInfoDropdown,
     onClose: () => setShowInfoDropdown(false),
@@ -49,13 +39,6 @@ const HeaderVendasGeral = ({
     minDistanceFromEdge: 16,
   });
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) return "-";
-    return date.toLocaleDateString("pt-BR");
-  };
-
   return (
     <div className="mb-6 flex items-center justify-between">
       <div className="text-left">
@@ -63,7 +46,6 @@ const HeaderVendasGeral = ({
           <h1 className="text-2xl font-semibold text-gray-900">
             Vendas Geral
           </h1>
-          {/* Botão para Dashboard */}
           <button
             onClick={() => router.push('/dashboard')}
             className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
@@ -115,7 +97,7 @@ const HeaderVendasGeral = ({
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-700">Vendas encontradas:</span>
                       <span className="text-sm font-semibold text-gray-900">
-                        {vendas?.length || 0}
+                        {totalItems}
                       </span>
                     </div>
 
@@ -136,7 +118,6 @@ const HeaderVendasGeral = ({
         </p>
       </div>
 
-      {/* Informações das contas conectadas */}
       {contasConectadas.length > 0 && (
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Contas conectadas:</span>
@@ -167,153 +148,72 @@ const HeaderVendasGeral = ({
   );
 };
 
-export default function VendasGeral() {
+import { useVendaFilters } from "@/hooks/useVendasFilter";
+import { ColunasVisiveis } from "../ui/v2/FiltrosVendas";
+
+const colunasVisiveisDefault: ColunasVisiveis = {
+  data: true,
+  canal: true,
+  conta: true,
+  pedido: true,
+  ads: false,
+  exposicao: false,
+  tipo: false,
+  produto: true,
+  sku: true,
+  quantidade: true,
+  unitario: true,
+  valor: true,
+  taxa: true,
+  frete: true,
+  cmv: true,
+  margem: true,
+};
+
+function VendasGeralContent() {
   const { 
-    hasAccounts, 
-    hasSales, 
     isLoading: isLoadingGuidance, 
     showConnectAccounts, 
     showSyncVendas, 
-    showViewVendas, 
     showViewDashboard,
     updateGuidanceState,
     dismissNotification 
   } = useUserGuidance();
   
-  const searchParams = useSearchParams();
-  const { showNotification } = useNotification();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
+  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>(colunasVisiveisDefault);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Sync with localStorage after hydration
+  const { filters, setPage, updateFilters } = useVendaFilters();
+
+  const { 
+    pagination,
+    countVendas,
+    contasConectadas,
+    reloadVendas
+  } = useVendasContext();
+
+  useEffect(() => {
+    async function load() {
+      setIsLoading(true);
+      await reloadVendas(filters);
+      setIsLoading(false);
+    }
+
+    load();
+  }, [filters, reloadVendas]);
+
   useEffect(() => {
     const stored = localStorage.getItem(LS_KEY);
     if (stored === "1") {
       setIsSidebarCollapsed(true);
     }
   }, []);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [filtroAtivo, setFiltroAtivo] = useState<FiltroStatus>("pagos");
-  const [periodoAtivo, setPeriodoAtivo] = useState<FiltroPeriodo>("todos");
-  const [dataInicioPersonalizada, setDataInicioPersonalizada] =
-    useState<Date | null>(null);
-  const [dataFimPersonalizada, setDataFimPersonalizada] =
-    useState<Date | null>(null);
-
-  const [filtroConta, setFiltroConta] = useState<string>("todas");
-
-  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>({
-    data: true,
-    canal: true,
-    conta: true,
-    pedido: true,
-    ads: false, // Específico do ML - desmarcado por padrão na tabela Geral
-    exposicao: false, // Específico do ML - desmarcado por padrão na tabela Geral
-    tipo: false, // Específico do ML - desmarcado por padrão na tabela Geral
-    produto: true,
-    sku: true,
-    quantidade: true,
-    unitario: true,
-    valor: true,
-    taxa: true,
-    frete: true,
-    cmv: true,
-    margem: true,
-  });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  // Usar o hook de vendas para Vendas Geral (combinando Shopee e Mercado Livre)
-  const { 
-    vendas, 
-    lastSyncedAt, 
-    contasConectadas,
-    isTableLoading,
-    isConnected,
-    progress,
-    connect,
-    disconnect
-  } = useVendas("Geral");
-
-  const handlePeriodoPersonalizadoChange = (
-    dataInicio: Date,
-    dataFim: Date,
-  ) => {
-    setDataInicioPersonalizada(dataInicio);
-    setDataFimPersonalizada(dataFim);
-  };
-
-  const filtrarPorPeriodo = (venda: any, periodo: FiltroPeriodo) => {
-    if (periodo === "todos") return true;
-    const dataVenda = new Date(venda.dataVenda);
-    const agora = new Date();
-    switch (periodo) {
-      case "mes_passado": {
-        const primeiroDiaMesPassado = new Date(
-          agora.getFullYear(),
-          agora.getMonth() - 1,
-          1,
-        );
-        const ultimoDiaMesPassado = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          0,
-        );
-        return (
-          dataVenda >= primeiroDiaMesPassado && dataVenda <= ultimoDiaMesPassado
-        );
-      }
-      case "este_mes": {
-        const primeiroDiaMesAtual = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          1,
-        );
-        const ultimoDiaMesAtual = new Date(
-          agora.getFullYear(),
-          agora.getMonth() + 1,
-          0,
-        );
-        return (
-          dataVenda >= primeiroDiaMesAtual && dataVenda <= ultimoDiaMesAtual
-        );
-      }
-      case "personalizado": {
-        if (dataInicioPersonalizada && dataFimPersonalizada) {
-          const inicio = new Date(dataInicioPersonalizada);
-          inicio.setHours(0, 0, 0, 0);
-          const fim = new Date(dataFimPersonalizada);
-          fim.setHours(23, 59, 59, 999);
-          return dataVenda >= inicio && dataVenda <= fim;
-        }
-        return true;
-      }
-      default:
-        return true;
-    }
-  };
-
-  // Memoizar cálculos de filtro para evitar re-renders desnecessários
-  const vendasFiltradasPorPeriodo = useMemo(() => 
-    vendas.filter((venda) => filtrarPorPeriodo(venda, periodoAtivo)),
-    [vendas, periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada]
-  );
-
-  const contagensVendas = useMemo(() => ({
-    total: vendasFiltradasPorPeriodo.length,
-    pagas: vendasFiltradasPorPeriodo.filter((venda) => {
-      const status = venda.status?.toLowerCase();
-      return (
-        status === "paid" || status === "pago" || status === "payment_approved"
-      );
-    }).length,
-    canceladas: vendasFiltradasPorPeriodo.filter((venda) => {
-      const status = venda.status?.toLowerCase();
-      return status === "cancelled" || status === "cancelado";
-    }).length,
-  }), [vendasFiltradasPorPeriodo]);
-
   const hasInitialSet = useRef(false);
+
   useIsoLayout(() => {
     if (hasInitialSet.current) return;
     const el = containerRef.current;
@@ -340,7 +240,6 @@ export default function VendasGeral() {
     } catch {}
   }, [isSidebarCollapsed]);
 
-  // Verificar contas e vendas para orientação do usuário
   useEffect(() => {
     const checkAccountsAndSales = async () => {
       try {
@@ -389,12 +288,10 @@ export default function VendasGeral() {
       <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
         <section className="p-6">
           <HeaderVendasGeral
-            vendas={vendas || []}
-            lastSyncedAt={lastSyncedAt || null}
+            totalItems={pagination.totalItems}
             contasConectadas={contasConectadas || []}
           />
 
-          {/* Sistema de orientação do usuário */}
           {!isLoadingGuidance && showConnectAccounts && (
             <UserGuidanceNotification
               type="warning"
@@ -431,38 +328,40 @@ export default function VendasGeral() {
             />
           )}
 
-          <FiltrosVendas
-            filtroAtivo={filtroAtivo}
-            onFiltroChange={setFiltroAtivo}
-            totalVendas={contagensVendas.total}
-            vendasPagas={contagensVendas.pagas}
-            vendasCanceladas={contagensVendas.canceladas}
-            periodoAtivo={periodoAtivo}
-            onPeriodoChange={setPeriodoAtivo}
-            onPeriodoPersonalizadoChange={handlePeriodoPersonalizadoChange}
-            filtroConta={filtroConta}
-            onContaChange={setFiltroConta}
-            contasDisponiveis={contasConectadas.map((conta: any) => ({
-              id: String(conta.shop_id || conta.merchant_id || conta.ml_user_id || conta.id || ""),
-              nickname: conta.nickname || `Conta ${conta.shop_id || conta.merchant_id || conta.ml_user_id || conta.id}`,
+          <FiltrosVendasV2 
+            totalVendas={countVendas.all}
+            vendasPagas={countVendas.paid}
+            vendasCanceladas={countVendas.cancelled}
+            filters={filters}
+            updateFilters={updateFilters}
+            contasDisponiveis={contasConectadas.map((conta) => ({
+              id: conta.id,
+              nickname: conta.nickname || "",
             }))}
             colunasVisiveis={colunasVisiveis}
             onColunasChange={setColunasVisiveis}
             platform="Geral"
           />
 
-          <TabelaVendas
+          <TabelaVendasV2 
             platform="Geral"
-            isLoading={isTableLoading}
-            filtroAtivo={filtroAtivo}
-            periodoAtivo={periodoAtivo}
-            filtroConta={filtroConta}
+            isLoading={isLoading}
+            isSyncing={false}
             colunasVisiveis={colunasVisiveis}
-            dataInicioPersonalizada={dataInicioPersonalizada}
-            dataFimPersonalizada={dataFimPersonalizada}
+            onPageChange={(page) => {
+              setPage(page);
+            }}
           />
         </section>
       </main>
     </div>
+  );
+}
+
+export default function VendasGeral() {
+  return (
+    <VendasProvider platform="Geral">
+      <VendasGeralContent />
+    </VendasProvider>
   );
 }
