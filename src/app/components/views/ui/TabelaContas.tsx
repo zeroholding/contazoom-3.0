@@ -365,7 +365,7 @@ export default function TabelaContas({
   };
 
   const handleDeleteAccount = async (account: TableAccount) => {
-    if (platform !== "Mercado Livre") {
+    if (platform !== "Mercado Livre" && platform !== "Shopee") {
       toast({
         variant: "warning",
         title: "Exclusão não disponível",
@@ -398,7 +398,11 @@ export default function TabelaContas({
         : undefined;
 
     try {
-      const res = await API_CONFIG.fetch(`/api/meli/accounts?id=${encodeURIComponent(account.id)}`, {
+      const endpoint = platform === "Shopee" 
+        ? `/api/shopee/accounts?id=${encodeURIComponent(account.id)}`
+        : `/api/meli/accounts?id=${encodeURIComponent(account.id)}`;
+
+      const res = await API_CONFIG.fetch(endpoint, {
         method: "DELETE",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

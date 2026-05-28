@@ -42,3 +42,36 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function DELETE(req: NextRequest) {
+  const session = await assertSessionToken(req.cookies.get("session")?.value);
+  if (!session) return new NextResponse("Unauthorized", { status: 401 });
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID da conta não fornecido" }, { status: 400 });
+    }
+
+    // Verify ownership
+    const accounts = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM shopee_account WHERE id = ${id} AND user_id = ${session.sub}
+    `;
+
+    if (accounts.length === 0) {
+      return NextResponse.json({ error: "Conta não encontrada ou sem permissão" }, { status: 404 });
+    }
+
+    await prisma.$executeRaw`DELETE FROM shopee_account WHERE id = ${id} AND user_id = ${session.sub}`;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Erro ao deletar conta Shopee:", error);
+    return NextResponse.json(
+      { error: "Erro ao deletar conta" },
+      { status: 500 }
+    );
+  }
+}
+
