@@ -534,71 +534,41 @@ export default function VendasTable({
                           <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-orange-500"></div>
                         </div>
                       ) : (
-                        <FreteDetailsDropdown venda={venda}>
-                          <div className="text-sm">
-                            {venda.plataforma === "Shopee" ? (
-                              (() => {
-                                // Usar lógica inteligente para Shopee
-                                const shipmentDetails = (venda as any).shipmentDetails || venda.raw?.shipmentDetails || {};
-                                const paymentDetails = (venda as any).paymentDetails || venda.raw?.paymentDetails || {};
-                                const freteData = {
-                                  actual_shipping_fee: shipmentDetails.actual_shipping_fee || 0,
-                                  shopee_shipping_rebate: shipmentDetails.shopee_shipping_rebate || 0,
-                                  buyer_paid_shipping_fee: shipmentDetails.buyer_paid_shipping_fee || 0,
-                                  shipping_fee_discount_from_3pl: shipmentDetails.shipping_fee_discount_from_3pl || 0,
-                                  reverse_shipping_fee: shipmentDetails.reverse_shipping_fee || 0,
-                                  productSubtotal: paymentDetails.product_subtotal || paymentDetails.order_cost || 0,
-                                  totalTaxas: paymentDetails.total_taxas || 0,
-                                  rendaLiquida: paymentDetails.renda_liquida || 0
-                                };
-                                
-                                const shippingCarrier = shipmentDetails.shipping_carrier || venda.shippingStatus;
-                                
-                                return (
-                                  <>
-                                    <div className={venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}>
-                                      {venda.frete === 0 ? <span className="text-xs text-gray-400">-</span> : formatCurrency(venda.frete)}
+                        <div className="text-sm">
+                          {venda.plataforma === "Shopee" ? (
+                            (() => {
+                              const shipmentDetails = (venda as any).shipmentDetails || venda.raw?.shipmentDetails || {};
+                              const shippingCarrier = shipmentDetails.shipping_carrier || venda.shippingStatus;
+                              
+                              return (
+                                <>
+                                  <div className={venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}>
+                                    {venda.frete === 0 ? <span className="text-xs text-gray-400">-</span> : formatCurrency(venda.frete)}
+                                  </div>
+                                  {shippingCarrier && (
+                                    <div className="text-xs text-gray-500 mt-1 capitalize">
+                                      {shippingCarrier}
                                     </div>
-                                    {freteData.shopee_shipping_rebate > 0 && (
-                                      <div className="text-xs text-green-600 mt-1 font-medium">
-                                        🎉 Frete subsidiado!
-                                      </div>
-                                    )}
-                                    {shippingCarrier && (
-                                      <div className="text-xs text-gray-500 mt-1 capitalize">
-                                        {shippingCarrier}
-                                      </div>
-                                    )}
-                                  </>
-                                );
-                              })()
-                            ) : (
-                              <>
-                                {venda.frete >= 0 ? (
-                                  <span className="frete-positivo">
-                                    {formatCurrency(venda.frete)}
-                                  </span>
-                                ) : venda.frete < 0 ? (
-                                  <span className="frete-negativo">
-                                    {formatCurrency(venda.frete)}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-gray-400">-</span>
-                                )}
-                              </>
-                              // <>
-                              //   <div className="text-xs text-gray-500 capitalize">
-                              //     {classifyFrete(venda.frete)}
-                              //   </div>
-                              //   {venda.logisticType && (
-                              //     <div className="text-xs text-gray-500 capitalize">
-                              //       {venda.logisticType.replace(/_/g, ' ')}
-                              //     </div>
-                              //   )}
-                              // </>
-                            )}
-                          </div>
-                        </FreteDetailsDropdown>
+                                  )}
+                                </>
+                              );
+                            })()
+                          ) : (
+                            <>
+                              {venda.frete >= 0 ? (
+                                <span className="frete-positivo">
+                                  {formatCurrency(venda.frete)}
+                                </span>
+                              ) : venda.frete < 0 ? (
+                                <span className="frete-negativo">
+                                  {formatCurrency(venda.frete)}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400">-</span>
+                              )}
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
                   </td>
