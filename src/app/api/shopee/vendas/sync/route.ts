@@ -12,8 +12,8 @@ import { sendProgressToUser, closeUserConnections } from "@/lib/sse-progress";
 import { invalidateVendasCache } from "@/lib/cache";
 
 export const runtime = "nodejs";
-export const maxDuration = 60; // 60 segundos (Vercel Pro)
-const MAX_VENDAS_POR_CONTA = 10000; // Limite de 10.000 vendas por conta
+export const maxDuration = 60;
+const MAX_VENDAS_POR_CONTA = 10000;
 
 // Tipos auxiliares
 type SyncError = { accountId: string; shopId: string; message: string; };
@@ -43,7 +43,14 @@ function epochSeconds(d: Date): number {
   return Math.floor(d.getTime() / 1000);
 }
 
-// Função auxiliar para executar operações com retry automático de token
+function getPartnerCredentials() {
+  return {
+    partnerId: process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "",
+    partnerKey: process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || "",
+  };
+}
+
+// Retry com renovação automática de token
 async function executeWithTokenRetry<T>(
   accountRef: { id: string; shop_id: string; access_token: string; refresh_token: string; expires_at: Date },
   operation: (accessToken: string) => Promise<T>,
@@ -58,24 +65,16 @@ async function executeWithTokenRetry<T>(
       lastError = error as Error;
       const errorMessage = error instanceof Error ? error.message : String(error);
       
-      // Verificar se o erro é de token inválido
       if (errorMessage.includes('invalid_access_token') || errorMessage.includes('invalid_acceess_token')) {
         if (attempt < maxRetries) {
-          console.log(`[Shopee Sync] Token inválido detectado. Tentando renovar (tentativa ${attempt + 1}/${maxRetries})...`);
-          
+          console.log(`[Shopee Sync] Token inválido. Renovando (tentativa ${attempt + 1}/${maxRetries})...`);
           try {
-            // Forçar renovação do token
-            const refreshed = await refreshShopeeAccountToken(
-              accountRef,
-              process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "",
-              process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || ""
-            );
+            const { partnerId, partnerKey } = getPartnerCredentials();
+            const refreshed = await refreshShopeeAccountToken(accountRef, partnerId, partnerKey);
             accountRef.access_token = refreshed.access_token;
             accountRef.refresh_token = refreshed.refresh_token;
             accountRef.expires_at = refreshed.expires_at;
-            
-            console.log(`[Shopee Sync] Token renovado com sucesso. Tentando operação novamente...`);
-            // Continuar para próxima tentativa com o novo token
+            console.log(`[Shopee Sync] Token renovado com sucesso.`);
           } catch (refreshError) {
             console.error(`[Shopee Sync] Falha ao renovar token:`, refreshError);
             throw new Error(`Falha ao renovar token: ${refreshError instanceof Error ? refreshError.message : 'Erro desconhecido'}`);
@@ -84,7 +83,6 @@ async function executeWithTokenRetry<T>(
           throw new Error(`Token inválido após ${maxRetries} tentativas de renovação`);
         }
       } else {
-        // Outros erros não relacionados a token, lançar imediatamente
         throw error;
       }
     }
@@ -93,22 +91,23 @@ async function executeWithTokenRetry<T>(
   throw lastError || new Error('Operação falhou após tentativas');
 }
 
+// ==========================================
+// OTIMIZAÇÃO #1: Escrow com alta concorrência
+// ==========================================
 async function fetchAndEnrichShopeeOrders(
   account: { id: string; shop_id: string; access_token: string; refresh_token: string; expires_at: Date },
   from: Date,
   to: Date,
 ) {
-  const partnerId = process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "";
-  const partnerKey = process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || "";
+  const { partnerId, partnerKey } = getPartnerCredentials();
 
+  // 1. Buscar lista de pedidos (paginado)
   const orderSnList: string[] = [];
   let cursor: string | undefined = undefined;
   do {
     const listResult = await executeWithTokenRetry(account, async (accessToken) => {
       return await getShopeeOrderList({
-        partnerId,
-        partnerKey,
-        accessToken,
+        partnerId, partnerKey, accessToken,
         shopId: account.shop_id,
         createTimeFrom: epochSeconds(from),
         createTimeTo: epochSeconds(to),
@@ -116,172 +115,245 @@ async function fetchAndEnrichShopeeOrders(
         cursor,
       });
     });
-    listResult.order_list.forEach(order => orderSnList.push(order.order_sn));
-    cursor = listResult.more ? listResult.next_cursor : undefined;
+    if (listResult?.order_list) {
+      listResult.order_list.forEach((order: any) => orderSnList.push(order.order_sn));
+    }
+    cursor = listResult?.more ? listResult.next_cursor : undefined;
   } while (cursor);
 
-  if (orderSnList.length === 0) {
-    return [];
-  }
+  if (orderSnList.length === 0) return [];
 
+  // 2. Buscar detalhes em lotes de 50 (API Shopee suporta batch)
   const detailedOrders: any[] = [];
+  const detailPromises: Promise<void>[] = [];
+  
   for (let i = 0; i < orderSnList.length; i += 50) {
     const batchSnList = orderSnList.slice(i, i + 50);
-    const detailsResult = await executeWithTokenRetry(account, async (accessToken) => {
-      return await getShopeeOrderDetail({
-        partnerId,
-        partnerKey,
-        accessToken,
-        shopId: account.shop_id,
-        orderSnList: batchSnList.join(','),
-      });
-    });
-    detailedOrders.push(...detailsResult.order_list);
-  }
-
-  const enrichedOrders: any[] = [];
-  const BATCH_SIZE = 50; // Aumentado de 25 para 50 para melhor performance
-
-  for (let i = 0; i < detailedOrders.length; i += BATCH_SIZE) {
-    const batch = detailedOrders.slice(i, i + BATCH_SIZE);
-
-    const promises = batch.map(async (order) => {
-      try {
-        const escrowResult = await executeWithTokenRetry(account, async (accessToken) => {
-          return await getShopeeEscrowDetail({
-            partnerId,
-            partnerKey,
-            accessToken,
-            shopId: account.shop_id,
-            orderSn: order.order_sn,
-          });
+    detailPromises.push(
+      executeWithTokenRetry(account, async (accessToken) => {
+        return await getShopeeOrderDetail({
+          partnerId, partnerKey, accessToken,
+          shopId: account.shop_id,
+          orderSnList: batchSnList.join(','),
         });
-        order.escrow_details = escrowResult.escrow_detail;
-        return order;
-      } catch (err) {
-        console.warn(`[Shopee Sync] Falha ao buscar escrow para ${order.order_sn}:`, err);
-        order.escrow_details = {};
-        return order;
-      }
-    });
+      }).then(result => {
+        if (result?.order_list) {
+          detailedOrders.push(...result.order_list);
+        }
+      })
+    );
+  }
+  // Buscar todos os detalhes em paralelo
+  await Promise.allSettled(detailPromises);
 
-    const results = await Promise.allSettled(promises);
+  // 3. Buscar escrow com alta concorrência (10 simultâneos)
+  const ESCROW_CONCURRENCY = 10;
+  const enrichedOrders: any[] = [];
+
+  for (let i = 0; i < detailedOrders.length; i += ESCROW_CONCURRENCY) {
+    const batch = detailedOrders.slice(i, i + ESCROW_CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(async (order) => {
+        try {
+          const escrowResult = await executeWithTokenRetry(account, async (accessToken) => {
+            return await getShopeeEscrowDetail({
+              partnerId, partnerKey, accessToken,
+              shopId: account.shop_id,
+              orderSn: order.order_sn,
+            });
+          });
+          order.escrow_details = escrowResult?.escrow_detail || {};
+        } catch {
+          order.escrow_details = {};
+        }
+        return order;
+      })
+    );
     results.forEach(res => {
-      if (res.status === 'fulfilled') {
-        enrichedOrders.push(res.value);
-      } else {
-        // Se Promise.allSettled retornar rejected, ainda assim adicionar o pedido sem escrow
-        console.warn(`[Shopee Sync] Pedido rejeitado ao buscar escrow, adicionando sem detalhes de pagamento`);
-      }
+      if (res.status === 'fulfilled') enrichedOrders.push(res.value);
     });
-    // Delay removido para aumentar velocidade
   }
 
   return enrichedOrders;
 }
 
-async function fetchAllShopeeOrdersSince(account: { id: string; shop_id: string; access_token: string; refresh_token: string; expires_at: Date }, since: Date, userId: string) {
+// ==========================================
+// OTIMIZAÇÃO #2: Janelas de tempo com paralelismo limitado
+// ==========================================
+async function fetchAllShopeeOrdersSince(
+  account: { id: string; shop_id: string; access_token: string; refresh_token: string; expires_at: Date },
+  since: Date,
+  userId: string
+) {
   const allOrders: any[] = [];
   const now = new Date();
   const MAX_WINDOW_DAYS = 15;
+  const PARALLEL_WINDOWS = 2; // 2 janelas simultâneas
 
+  // Preparar todas as janelas de tempo
+  const windows: { start: Date; end: Date }[] = [];
   let windowStart = since;
-
   while (windowStart < now) {
-    // Verificar se atingiu o limite de 10.000 vendas
-    if (allOrders.length >= MAX_VENDAS_POR_CONTA) {
-      console.log(`[Shopee Sync] Limite de ${MAX_VENDAS_POR_CONTA} vendas atingido para conta ${account.shop_id}. Parando busca.`);
-
-      sendProgressToUser(userId, {
-        type: "sync_warning",
-        message: `Limite de 10.000 vendas por conta atingido para loja ${account.shop_id}. As vendas mais recentes foram priorizadas.`,
-        errorCode: "MAX_VENDAS_REACHED"
-      });
-
-      break;
-    }
-
     const windowEnd = new Date(Math.min(
       windowStart.getTime() + MAX_WINDOW_DAYS * 24 * 60 * 60 * 1000,
       now.getTime()
     ));
+    windows.push({ start: new Date(windowStart), end: windowEnd });
+    windowStart = new Date(windowEnd.getTime() + 1);
+  }
 
-    console.log(`[Shopee Sync] Buscando janela: ${windowStart.toISOString()} -> ${windowEnd.toISOString()}`);
+  console.log(`[Shopee Sync] ${windows.length} janelas de tempo para processar`);
 
-    try {
-      const windowOrders = await fetchAndEnrichShopeeOrders(account, windowStart, windowEnd);
-
-      // Adicionar apenas até o limite
-      const remainingSlots = MAX_VENDAS_POR_CONTA - allOrders.length;
-      const ordersToAdd = windowOrders.slice(0, remainingSlots);
-      allOrders.push(...ordersToAdd);
-
-      console.log(`[Shopee Sync] ${ordersToAdd.length} pedidos adicionados (total: ${allOrders.length}/${MAX_VENDAS_POR_CONTA}).`);
-
-      // Se adicionou menos que o disponível, atingiu o limite
-      if (ordersToAdd.length < windowOrders.length) {
-        console.log(`[Shopee Sync] Limite atingido. ${windowOrders.length - ordersToAdd.length} pedidos não foram incluídos.`);
-        break;
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[Shopee Sync] Erro ao buscar janela para conta ${account.shop_id}:`, errorMsg);
-
-      // Tentar enviar aviso, mas não falhar se SSE falhar
-      try {
-        sendProgressToUser(userId, {
-          type: "sync_warning",
-          message: `Erro ao buscar vendas da janela ${windowStart.toISOString().split('T')[0]} para loja ${account.shop_id}. Continuando com próxima janela...`,
-          errorCode: "WINDOW_FETCH_ERROR"
-        });
-      } catch (sseError) {
-        console.warn(`[Shopee Sync] Erro ao enviar aviso SSE (não crítico):`, sseError);
-      }
-
-      // Continuar com a próxima janela mesmo se houver erro
+  // Processar janelas em paralelo (2 por vez)
+  for (let i = 0; i < windows.length; i += PARALLEL_WINDOWS) {
+    if (allOrders.length >= MAX_VENDAS_POR_CONTA) {
+      console.log(`[Shopee Sync] Limite de ${MAX_VENDAS_POR_CONTA} vendas atingido.`);
+      sendProgressToUser(userId, {
+        type: "sync_warning",
+        message: `Limite de 10.000 vendas atingido para loja ${account.shop_id}.`,
+        errorCode: "MAX_VENDAS_REACHED"
+      });
+      break;
     }
 
-    windowStart = new Date(windowEnd.getTime() + 1);
+    const batch = windows.slice(i, i + PARALLEL_WINDOWS);
+    
+    sendProgressToUser(userId, {
+      type: "sync_progress",
+      message: `Buscando vendas: janela ${i + 1}-${Math.min(i + PARALLEL_WINDOWS, windows.length)} de ${windows.length}`,
+      current: i,
+      total: windows.length,
+      fetched: allOrders.length,
+      expected: 0
+    });
+
+    const results = await Promise.allSettled(
+      batch.map(w => {
+        console.log(`[Shopee Sync] Buscando janela: ${w.start.toISOString()} -> ${w.end.toISOString()}`);
+        return fetchAndEnrichShopeeOrders(account, w.start, w.end);
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        const remaining = MAX_VENDAS_POR_CONTA - allOrders.length;
+        const ordersToAdd = result.value.slice(0, remaining);
+        allOrders.push(...ordersToAdd);
+      }
+    }
+
+    console.log(`[Shopee Sync] Total acumulado: ${allOrders.length} pedidos`);
   }
 
   return allOrders;
 }
 
+// ==========================================
+// OTIMIZAÇÃO #3: Batch SQL insert com ON CONFLICT
+// ==========================================
+async function batchUpsertVendas(vendaRecords: any[], userId: string): Promise<number> {
+  if (vendaRecords.length === 0) return 0;
 
+  const BATCH_SIZE = 200; // Lotes maiores para menos queries
+  let totalSaved = 0;
+
+  for (let i = 0; i < vendaRecords.length; i += BATCH_SIZE) {
+    const batch = vendaRecords.slice(i, i + BATCH_SIZE);
+    
+    try {
+      // Usar transação com createMany + fallback para upsert
+      const result = await prisma.$transaction(async (tx) => {
+        let saved = 0;
+        // Tentar inserir todos de uma vez, ignorando duplicatas
+        try {
+          const created = await tx.shopeeVenda.createMany({
+            data: batch,
+            skipDuplicates: true,
+          });
+          saved = created.count;
+        } catch (createError) {
+          // Fallback: upsert individual (só acontece se createMany falhar)
+          console.warn(`[Shopee Sync] createMany falhou, usando upsert individual:`, createError);
+          const results = await Promise.allSettled(
+            batch.map(record =>
+              tx.shopeeVenda.upsert({
+                where: { orderId: record.orderId },
+                update: {
+                  dataVenda: record.dataVenda,
+                  status: record.status,
+                  conta: record.conta,
+                  valorTotal: record.valorTotal,
+                  quantidade: record.quantidade,
+                  unitario: record.unitario,
+                  taxaPlataforma: record.taxaPlataforma,
+                  frete: record.frete,
+                  margemContribuicao: record.margemContribuicao,
+                  isMargemReal: record.isMargemReal,
+                  titulo: record.titulo,
+                  sku: record.sku,
+                  comprador: record.comprador,
+                  shippingId: record.shippingId,
+                  shippingStatus: record.shippingStatus,
+                  plataforma: record.plataforma,
+                  canal: record.canal,
+                  rawData: record.rawData,
+                  paymentDetails: record.paymentDetails,
+                  shipmentDetails: record.shipmentDetails,
+                  atualizadoEm: record.atualizadoEm,
+                },
+                create: record,
+              })
+            )
+          );
+          saved = results.filter(r => r.status === 'fulfilled').length;
+        }
+        return saved;
+      });
+
+      totalSaved += result;
+    } catch (error) {
+      console.error(`[Shopee Sync] Erro no lote ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
+    }
+
+    // SSE a cada lote (não a cada registro) - muito menos overhead
+    sendProgressToUser(userId, {
+      type: "sync_progress",
+      message: `Salvando: ${Math.min(i + BATCH_SIZE, vendaRecords.length)} de ${vendaRecords.length} vendas`,
+      current: Math.min(i + BATCH_SIZE, vendaRecords.length),
+      total: vendaRecords.length,
+      fetched: totalSaved,
+      expected: vendaRecords.length
+    });
+  }
+
+  return totalSaved;
+}
+
+// ==========================================
+// ROTA PRINCIPAL
+// ==========================================
 export async function POST(req: NextRequest) {
   const session = await assertSessionToken(req.cookies.get("session")?.value);
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
   const userId = session.sub;
 
-  // Ler body para verificar se há contas específicas para sincronizar
   let accountIds: string[] | undefined;
   try {
     const body = await req.json().catch(() => ({}));
     accountIds = body.accountIds;
   } catch {
-    // Se falhar ao parsear o body, continuar sem filtro de contas
+    // continuar sem filtro
   }
 
   try {
     console.log(`[Shopee Sync] Iniciando sincronização para usuário ${userId}`);
-    if (accountIds && accountIds.length > 0) {
-      console.log(`[Shopee Sync] Sincronizando apenas contas específicas: ${accountIds.join(", ")}`);
-    }
 
-    // Dar um delay para garantir que o SSE está conectado
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Enviar evento de início da sincronização
+    // Enviar evento de início (sem delay desnecessário)
     sendProgressToUser(userId, {
       type: "sync_start",
-      message: accountIds && accountIds.length > 0
-        ? `Conectando ao Shopee (${accountIds.length} conta(s))...`
-        : "Conectando ao Shopee...",
-      current: 0,
-      total: 0,
-      fetched: 0,
-      expected: 0
+      message: "Conectando ao Shopee...",
+      current: 0, total: 0, fetched: 0, expected: 0
     });
 
     // Filtrar por contas específicas se fornecido
@@ -294,58 +366,52 @@ export async function POST(req: NextRequest) {
       where: whereClause,
     });
 
-    console.log(`[Shopee Sync] Encontradas ${contasAtivas.length} conta(s) do Shopee`);
+    console.log(`[Shopee Sync] Encontradas ${contasAtivas.length} conta(s)`);
 
     if (contasAtivas.length === 0) {
       sendProgressToUser(userId, {
         type: "sync_complete",
-        message: "Nenhuma conta do Shopee encontrada",
-        current: 0,
-        total: 0,
-        fetched: 0,
-        expected: 0
+        message: "Nenhuma conta encontrada",
+        current: 0, total: 0, fetched: 0, expected: 0
       });
-      return NextResponse.json({ message: "Nenhuma conta Shopee ativa encontrada." }, { status: 404 });
+      return NextResponse.json({ message: "Nenhuma conta Shopee ativa." }, { status: 404 });
     }
 
-    // Verificar e renovar tokens preventivamente antes de iniciar a sincronização
-    console.log(`[Shopee Sync] Verificando validade dos tokens...`);
+    // OTIMIZAÇÃO #4: Renovar tokens em PARALELO
     sendProgressToUser(userId, {
       type: "sync_progress",
       message: "Verificando tokens de acesso...",
-      current: 0,
-      total: 0,
-      fetched: 0,
-      expected: 0
+      current: 0, total: 0, fetched: 0, expected: 0
     });
 
-    const contasAtualizadas = [];
-    for (let i = 0; i < contasAtivas.length; i++) {
-      const conta = contasAtivas[i];
-      try {
-        // Tentar renovar o token (só renovará se estiver expirado ou próximo da expiração)
-        const refreshedAccount = await refreshShopeeAccountToken(
-          conta,
-          process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "",
-          process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || ""
-        );
-        contasAtualizadas.push({
-          ...conta,
-          access_token: refreshedAccount.access_token,
-          refresh_token: refreshedAccount.refresh_token,
-          expires_at: refreshedAccount.expires_at,
-        });
-        console.log(`[Shopee Sync] Token da conta ${conta.shop_id} verificado/renovado com sucesso`);
-      } catch (error) {
-        console.error(`[Shopee Sync] Falha ao renovar token da conta ${conta.shop_id}:`, error);
+    const { partnerId, partnerKey } = getPartnerCredentials();
+    const refreshResults = await Promise.allSettled(
+      contasAtivas.map(conta =>
+        refreshShopeeAccountToken(conta, partnerId, partnerKey)
+          .then(refreshed => ({
+            ...conta,
+            access_token: refreshed.access_token,
+            refresh_token: refreshed.refresh_token,
+            expires_at: refreshed.expires_at,
+          }))
+      )
+    );
+
+    const contasAtualizadas = refreshResults
+      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+      .map(r => r.value);
+
+    // Reportar falhas
+    refreshResults.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        console.error(`[Shopee Sync] Falha token conta ${contasAtivas[i].shop_id}:`, r.reason);
         sendProgressToUser(userId, {
           type: "sync_error",
-          message: `Falha ao renovar token da conta ${conta.shop_id}. Reconecte a conta.`,
+          message: `Falha ao renovar token da conta ${contasAtivas[i].shop_id}. Reconecte a conta.`,
           errorCode: "TOKEN_REFRESH_FAILED"
         });
-        // Não incluir essa conta na sincronização
       }
-    }
+    });
 
     if (contasAtualizadas.length === 0) {
       sendProgressToUser(userId, {
@@ -354,11 +420,11 @@ export async function POST(req: NextRequest) {
         errorCode: "NO_VALID_ACCOUNTS"
       });
       return NextResponse.json({ 
-        message: "Nenhuma conta Shopee com token válido encontrada. Reconecte suas contas." 
+        message: "Nenhuma conta Shopee com token válido. Reconecte suas contas." 
       }, { status: 400 });
     }
 
-    const summaries: AccountSummary[] = contasAtualizadas.map((c) => ({ id: c.id, shop_id: c.shop_id }));
+    const summaries: AccountSummary[] = contasAtualizadas.map(c => ({ id: c.id, shop_id: c.shop_id }));
     const allOrdersPayload: ShopeeOrderPayload[] = [];
     const errors: SyncError[] = [];
     let totalSaved = 0;
@@ -366,96 +432,76 @@ export async function POST(req: NextRequest) {
     for (let accountIndex = 0; accountIndex < contasAtualizadas.length; accountIndex++) {
       const conta = contasAtualizadas[accountIndex];
       
-      // Enviar progresso: processando conta
       sendProgressToUser(userId, {
         type: "sync_progress",
         message: `Processando conta ${accountIndex + 1}/${contasAtualizadas.length}: Loja ${conta.shop_id}`,
-        current: accountIndex,
-        total: contasAtualizadas.length,
-        fetched: totalSaved,
-        expected: allOrdersPayload.length,
-        accountId: conta.id,
-        accountNickname: `Loja ${conta.shop_id}`
+        current: accountIndex, total: contasAtualizadas.length,
+        fetched: totalSaved, expected: allOrdersPayload.length,
+        accountId: conta.id, accountNickname: `Loja ${conta.shop_id}`
       });
 
       try {
-        // Buscar vendas existentes para filtrar duplicatas
+        // Buscar IDs existentes de forma otimizada (só consideramos como válidas as vendas com valor > 0)
         const existingOrderIds = await prisma.shopeeVenda.findMany({
-          where: { shopeeAccountId: conta.id },
+          where: { 
+            shopeeAccountId: conta.id,
+            valorTotal: { gt: 0 } 
+          },
           select: { orderId: true }
         });
         const existingIds = new Set(existingOrderIds.map(v => v.orderId));
-        console.log(`[Shopee Sync] Conta ${conta.shop_id}: ${existingIds.size} vendas já existem no banco`);
 
         const ultimaVenda = await prisma.shopeeVenda.findFirst({
-          where: { shopeeAccountId: conta.id },
+          where: { 
+            shopeeAccountId: conta.id,
+            valorTotal: { gt: 0 }
+          },
           orderBy: { dataVenda: "desc" },
           select: { dataVenda: true },
         });
 
-        // Determinar período de busca
         let since: Date;
         const isFirstSync = !ultimaVenda;
         
         if (isFirstSync) {
-          // PRIMEIRA SINCRONIZAÇÃO: buscar TODO o histórico desde 2024-01-01
           since = new Date("2024-01-01T00:00:00.000Z");
-          console.log(`[Shopee Sync] 🚀 PRIMEIRA SINCRONIZAÇÃO - Conta ${conta.shop_id}: buscando TODAS as vendas desde ${since.toISOString()}`);
+          console.log(`[Shopee Sync] 🚀 PRIMEIRA SYNC - Conta ${conta.shop_id}: desde ${since.toISOString()}`);
         } else {
-          // SINCRONIZAÇÃO INCREMENTAL: buscar desde 1 dia antes da última venda
           since = new Date(ultimaVenda.dataVenda.getTime() - 24 * 60 * 60 * 1000);
-          console.log(`[Shopee Sync] 📊 Sincronização incremental - Conta ${conta.shop_id}: buscando desde ${since.toISOString()} (${existingIds.size} vendas já existem)`);
+          console.log(`[Shopee Sync] 📊 Sync incremental - Conta ${conta.shop_id}: desde ${since.toISOString()}`);
         }
 
         const ordersFromAccount = await fetchAllShopeeOrdersSince(
-          {
-            id: conta.id,
-            shop_id: conta.shop_id,
-            access_token: conta.access_token,
-            refresh_token: conta.refresh_token,
-            expires_at: conta.expires_at
-          },
-          since,
-          userId
+          { id: conta.id, shop_id: conta.shop_id, access_token: conta.access_token, refresh_token: conta.refresh_token, expires_at: conta.expires_at },
+          since, userId
         );
 
-        // Filtrar vendas que já existem no banco
+        // Filtrar duplicatas
         const newOrders = ordersFromAccount.filter((order: any) => {
-          const orderId = String(order.order_sn || "");
-          return !existingIds.has(orderId);
+          return !existingIds.has(String(order.order_sn || ""));
         });
         
-        const skippedCount = ordersFromAccount.length - newOrders.length;
-        console.log(`[Shopee Sync] Conta ${conta.shop_id}: ${ordersFromAccount.length} vendas encontradas, ${newOrders.length} novas, ${skippedCount} puladas`);
+        console.log(`[Shopee Sync] Conta ${conta.shop_id}: ${newOrders.length} novas de ${ordersFromAccount.length}`);
 
-        // Enviar progresso de vendas encontradas
-        sendProgressToUser(userId, {
-          type: "sync_progress",
-          message: `Conta ${conta.shop_id}: ${newOrders.length} novas de ${ordersFromAccount.length} vendas (${skippedCount} já sincronizadas)`,
-          current: accountIndex,
-          total: contasAtivas.length,
-          fetched: totalSaved,
-          expected: allOrdersPayload.length + newOrders.length
-        });
-
-        // Se não há vendas novas, pular processamento
         if (newOrders.length === 0) {
-          console.log(`[Shopee Sync] Conta ${conta.shop_id}: Todas as vendas já existem, pulando...`);
+          sendProgressToUser(userId, {
+            type: "sync_progress",
+            message: `Conta ${conta.shop_id}: todas as vendas já sincronizadas ✓`,
+            current: accountIndex + 1, total: contasAtualizadas.length,
+            fetched: totalSaved, expected: 0
+          });
           continue;
         }
 
-        // Preparar dados em lote para inserção mais rápida
-        const vendaRecords = [];
-        
-        for (const order of newOrders) {
+        // Preparar registros para batch insert
+        const vendaRecords = newOrders.map((order: any) => {
           allOrdersPayload.push({ accountId: conta.id, shopId: conta.shop_id, order });
 
-          // Mapeamento dos dados
-          const orderSn: string = String(order.order_sn);
+          const orderSn = String(order.order_sn);
           const dataVenda = new Date((toFiniteNumber(order.create_time) ?? 0) * 1000);
-          const status: string = String(order.order_status ?? "DESCONHECIDO");
+          const status = String(order.order_status ?? "DESCONHECIDO");
           const itemList: any[] = Array.isArray(order.item_list) ? order.item_list : [];
-          const quantidade = itemList.reduce((acc, it) => acc + (toFiniteNumber(it?.model_quantity_purchased) ?? 0), 0);
+          const quantidade = itemList.reduce((acc: number, it: any) => acc + (toFiniteNumber(it?.model_quantity_purchased) ?? 0), 0);
           const totalAmount = toFiniteNumber(order.total_amount) ?? 0;
           
           const unitario = quantidade > 0
@@ -467,73 +513,43 @@ export async function POST(req: NextRequest) {
           const serviceFee = toFiniteNumber(incomeDetails.service_fee) ?? 0;
           const taxaPlataforma = roundCurrency(commissionFee + serviceFee);
           
-          // Dados específicos do frete da Shopee
           const actualShippingFee = toFiniteNumber(incomeDetails.actual_shipping_fee) ?? 0;
           const reverseShippingFee = toFiniteNumber(incomeDetails.reverse_shipping_fee) ?? 0;
           let shopeeShippingRebate = toFiniteNumber(incomeDetails.shopee_shipping_rebate) ?? 0;
           const buyerPaidShippingFee = toFiniteNumber(incomeDetails.buyer_paid_shipping_fee) ?? 0;
           const shippingFeeDiscountFrom3pl = toFiniteNumber(incomeDetails.shipping_fee_discount_from_3pl) ?? 0;
           
-          // Lógica de subsídio automático
-          // Se existe actual_shipping_fee mas NÃO existe shopee_shipping_rebate
-          // E o custo implícito do frete é praticamente zero (< 0.01)
-          // Então o sistema assume que o frete foi subsidiado
           if (actualShippingFee > 0 && shopeeShippingRebate === 0) {
             const custoImplicitoFrete = actualShippingFee - buyerPaidShippingFee;
             if (custoImplicitoFrete < 0.01) {
-              // Criar automaticamente o shopee_shipping_rebate
               shopeeShippingRebate = actualShippingFee - buyerPaidShippingFee;
             }
           }
           
-          // Cálculo do Frete Líquido
-          // Convenção: POSITIVO = receita de frete, NEGATIVO = custo de frete
-          // Fórmula invertida: Pago pelo Comprador + Subsídio - Custo Real
           const custoLiquidoFrete = (buyerPaidShippingFee + shopeeShippingRebate) - (actualShippingFee + reverseShippingFee);
-          
-          // Usar o custo líquido do frete como valor principal
           const frete = roundCurrency(custoLiquidoFrete);
-          
           const margem = roundCurrency(totalAmount - taxaPlataforma - frete);
 
           const titulo = truncateString(itemList?.[0]?.item_name, 500) || "Pedido";
           
-          // Extrair SKU: tentar todos os campos possíveis em ordem de prioridade
           let skuRaw = null;
           if (itemList && itemList.length > 0) {
             const firstItem = itemList[0];
-            // Ordem de prioridade: item_sku > model_sku > variation_sku
-            skuRaw = firstItem.item_sku || 
-                     firstItem.model_sku || 
-                     firstItem.variation_sku || 
-                     null;
-            
-            // Log para debug (será removido depois)
-            if (!skuRaw) {
-              console.log(`[Shopee Sync] Pedido ${orderSn} sem SKU. Item:`, {
-                item_sku: firstItem.item_sku,
-                model_sku: firstItem.model_sku,
-                variation_sku: firstItem.variation_sku,
-                item_id: firstItem.item_id,
-                model_id: firstItem.model_id
-              });
-            }
+            skuRaw = firstItem.item_sku || firstItem.model_sku || firstItem.variation_sku || null;
           }
-          
-          // Salvar o SKU diretamente na venda (igual ao Mercado Livre)
-          // A tabela SKU é usada apenas para buscar o CMV, mas não impede o SKU de ser exibido
           const sku = skuRaw ? truncateString(String(skuRaw), 255) : null;
           
           const comprador = truncateString(order.buyer_username, 255) || "Comprador";
           const trackingNumber = truncateString(order.package_list?.[0]?.tracking_number, 255) || null;
-          
-          // Campos específicos do frete da Shopee
           const packageInfo = order.package_list?.[0] || {};
           const parcelWeight = toFiniteNumber(packageInfo.parcel_chargeable_weight_gram) || 0;
           const shippingCarrier = truncateString(packageInfo.shipping_carrier || order.shipping_carrier, 100) || null;
           const logisticsStatus = truncateString(packageInfo.logistics_status, 100) || null;
 
-          const dataToSave = {
+          return {
+            orderId: orderSn,
+            userId: session.sub,
+            shopeeAccountId: conta.id,
             dataVenda,
             status,
             conta: conta.shop_id,
@@ -541,128 +557,45 @@ export async function POST(req: NextRequest) {
             quantidade: quantidade || 1,
             unitario: new Decimal(unitario),
             taxaPlataforma: new Decimal(taxaPlataforma),
-            frete: new Decimal(frete), // Custo líquido do frete (considerando subsídios)
+            frete: new Decimal(frete),
             margemContribuicao: new Decimal(margem),
             isMargemReal: false,
             titulo,
             sku,
             comprador,
             shippingId: trackingNumber,
-            shippingStatus: shippingCarrier, // Usando o valor extraído do package_list
+            shippingStatus: shippingCarrier,
             plataforma: "Shopee",
             canal: "SP",
             rawData: order,
             paymentDetails: order.escrow_details || {},
             shipmentDetails: {
-              // Dados do package_list
               parcel_chargeable_weight_gram: parcelWeight,
               shipping_carrier: shippingCarrier,
               logistics_status: logisticsStatus,
-              
-              // Dados específicos do frete da Shopee
               actual_shipping_fee: actualShippingFee,
               reverse_shipping_fee: reverseShippingFee,
               shopee_shipping_rebate: shopeeShippingRebate,
               buyer_paid_shipping_fee: buyerPaidShippingFee,
               shipping_fee_discount_from_3pl: shippingFeeDiscountFrom3pl,
-              
-              // Cálculo do frete líquido
               custo_liquido_frete: custoLiquidoFrete,
               custo_implicito_frete: actualShippingFee - buyerPaidShippingFee,
               subsidio_automatico_aplicado: shopeeShippingRebate > 0 && incomeDetails.shopee_shipping_rebate === 0,
-              
-              // Dados originais completos
               ...order.package_list
             },
             atualizadoEm: new Date(),
           };
+        });
 
-          // Adicionar ao batch ao invés de salvar individualmente
-          vendaRecords.push({
-            ...dataToSave,
-            orderId: orderSn,
-            userId: session.sub,
-            shopeeAccountId: conta.id,
-          });
-        }
-
-        // Batch upsert - muito mais rápido que queries individuais
-        console.log(`[Shopee Sync] Salvando ${vendaRecords.length} vendas em lote...`);
-        const SAVE_BATCH_SIZE = 100;
-        for (let i = 0; i < vendaRecords.length; i += SAVE_BATCH_SIZE) {
-          const batch = vendaRecords.slice(i, i + SAVE_BATCH_SIZE);
-
-          // Usar Promise.allSettled para garantir que erros parciais não parem tudo
-          const results = await Promise.allSettled(
-            batch.map(async (record, batchIndex) => {
-              try {
-                await prisma.shopeeVenda.upsert({
-                  where: { orderId: record.orderId },
-                  update: {
-                    dataVenda: record.dataVenda,
-                    status: record.status,
-                    conta: record.conta,
-                    valorTotal: record.valorTotal,
-                    quantidade: record.quantidade,
-                    unitario: record.unitario,
-                    taxaPlataforma: record.taxaPlataforma,
-                    frete: record.frete,
-                    margemContribuicao: record.margemContribuicao,
-                    isMargemReal: record.isMargemReal,
-                    titulo: record.titulo,
-                    sku: record.sku,
-                    comprador: record.comprador,
-                    shippingId: record.shippingId,
-                    shippingStatus: record.shippingStatus,
-                    plataforma: record.plataforma,
-                    canal: record.canal,
-                    rawData: record.rawData,
-                    paymentDetails: record.paymentDetails,
-                    shipmentDetails: record.shipmentDetails,
-                    atualizadoEm: record.atualizadoEm,
-                  },
-                  create: record,
-                });
-
-                // Enviar progresso em tempo real após cada venda salva
-                const currentProgress = i + batchIndex + 1;
-                try {
-                  sendProgressToUser(userId, {
-                    type: "sync_progress",
-                    message: `Salvando no banco de dados: ${currentProgress} de ${vendaRecords.length} vendas`,
-                    current: currentProgress,
-                    total: vendaRecords.length,
-                    fetched: currentProgress,
-                    expected: vendaRecords.length
-                  });
-                } catch (sseError) {
-                  console.warn(`[Shopee Sync] Erro ao enviar progresso SSE (não crítico):`, sseError);
-                }
-
-                return { success: true, orderId: record.orderId };
-              } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                console.error(`[Shopee Sync] Erro ao salvar venda ${record.orderId}:`, errorMsg);
-                return { success: false, orderId: record.orderId, error: errorMsg };
-              }
-            })
-          );
-
-          // Contar sucessos
-          const successes = results.filter(r => r.status === 'fulfilled' && (r.value as any).success).length;
-          totalSaved += successes;
-
-          const failures = batch.length - successes;
-          if (failures > 0) {
-            console.warn(`[Shopee Sync] ${failures} vendas falharam ao salvar no lote ${Math.floor(i / SAVE_BATCH_SIZE) + 1}`);
-          }
-        }
+        // OTIMIZAÇÃO #3: Batch upsert otimizado
+        const saved = await batchUpsertVendas(vendaRecords, userId);
+        totalSaved += saved;
+        console.log(`[Shopee Sync] Conta ${conta.shop_id}: ${saved} vendas salvas com sucesso`);
 
       } catch (error) {
         console.error(`[shopee][sync] Erro na conta ${conta.id}:`, error);
         errors.push({ accountId: conta.id, shopId: conta.shop_id, message: error instanceof Error ? error.message : "Erro desconhecido" });
         
-        // Enviar erro via SSE
         sendProgressToUser(userId, {
           type: "sync_error",
           message: `Erro ao processar conta ${conta.shop_id}: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
@@ -671,7 +604,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Enviar evento de conclusão da sincronização
+    // Conclusão
     sendProgressToUser(userId, {
       type: "sync_complete",
       message: `Sincronização concluída! ${totalSaved} vendas processadas`,
@@ -681,14 +614,10 @@ export async function POST(req: NextRequest) {
       expected: allOrdersPayload.length
     });
 
-    // Invalidar cache de vendas após sincronização
     invalidateVendasCache(userId);
-    console.log(`[Cache] Cache de vendas invalidado para usuário ${userId}`);
+    console.log(`[Cache] Cache invalidado para usuário ${userId}`);
 
-    // Fechar conexões SSE após um pequeno delay
-    setTimeout(() => {
-      closeUserConnections(userId);
-    }, 2000);
+    setTimeout(() => closeUserConnections(userId), 2000);
 
     return NextResponse.json({
       syncedAt: new Date().toISOString(),
