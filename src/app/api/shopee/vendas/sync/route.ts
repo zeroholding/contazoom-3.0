@@ -263,50 +263,47 @@ async function batchUpsertVendas(vendaRecords: any[], userId: string): Promise<n
     try {
       // Usar transação com createMany + fallback para upsert
       const result = await prisma.$transaction(async (tx) => {
-        let saved = 0;
-        // Tentar inserir todos de uma vez, ignorando duplicatas
-        try {
-          const created = await tx.shopeeVenda.createMany({
-            data: batch,
-            skipDuplicates: true,
-          });
-          saved = created.count;
-        } catch (createError) {
-          // Fallback: upsert individual (só acontece se createMany falhar)
-          console.warn(`[Shopee Sync] createMany falhou, usando upsert individual:`, createError);
-          const results = await Promise.allSettled(
-            batch.map(record =>
-              tx.shopeeVenda.upsert({
-                where: { orderId: record.orderId },
-                update: {
-                  dataVenda: record.dataVenda,
-                  status: record.status,
-                  conta: record.conta,
-                  valorTotal: record.valorTotal,
-                  quantidade: record.quantidade,
-                  unitario: record.unitario,
-                  taxaPlataforma: record.taxaPlataforma,
-                  frete: record.frete,
-                  margemContribuicao: record.margemContribuicao,
-                  isMargemReal: record.isMargemReal,
-                  titulo: record.titulo,
-                  sku: record.sku,
-                  comprador: record.comprador,
-                  shippingId: record.shippingId,
-                  shippingStatus: record.shippingStatus,
-                  plataforma: record.plataforma,
-                  canal: record.canal,
-                  rawData: record.rawData,
-                  paymentDetails: record.paymentDetails,
-                  shipmentDetails: record.shipmentDetails,
-                  atualizadoEm: record.atualizadoEm,
-                },
-                create: record,
-              })
-            )
-          );
-          saved = results.filter(r => r.status === 'fulfilled').length;
-        }
+        // Usar upsert individual em paralelo para garantir que vendas existentes sejam atualizadas (auto-cura)
+        const results = await Promise.allSettled(
+          batch.map(record =>
+            tx.shopeeVenda.upsert({
+              where: { orderId: record.orderId },
+              update: {
+                dataVenda: record.dataVenda,
+                status: record.status,
+                conta: record.conta,
+                valorTotal: record.valorTotal,
+                quantidade: record.quantidade,
+                unitario: record.unitario,
+                taxaPlataforma: record.taxaPlataforma,
+                frete: record.frete,
+                margemContribuicao: record.margemContribuicao,
+                isMargemReal: record.isMargemReal,
+                titulo: record.titulo,
+                sku: record.sku,
+                comprador: record.comprador,
+                shippingId: record.shippingId,
+                shippingStatus: record.shippingStatus,
+                plataforma: record.plataforma,
+                canal: record.canal,
+                rawData: record.rawData,
+                paymentDetails: record.paymentDetails,
+                shipmentDetails: record.shipmentDetails,
+                atualizadoEm: record.atualizadoEm,
+              },
+              create: record,
+            })
+          )
+        );
+        let saved = results.filter(r => r.status === 'fulfilled').length;
+        
+        // Log errors if any
+        results.forEach((r, idx) => {
+          if (r.status === 'rejected') {
+            console.error(`[Shopee Sync] Erro upsert ${batch[idx].orderId}:`, r.reason);
+          }
+        });
+        
         return saved;
       });
 
