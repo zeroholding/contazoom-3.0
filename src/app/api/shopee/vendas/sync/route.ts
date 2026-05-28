@@ -162,7 +162,7 @@ async function fetchAndEnrichShopeeOrders(
               orderSn: order.order_sn,
             });
           });
-          order.escrow_details = escrowResult?.escrow_detail || {};
+          order.escrow_details = escrowResult || {};
         } catch {
           order.escrow_details = {};
         }
