@@ -448,6 +448,21 @@ export async function POST(req: NextRequest) {
         });
         const existingIds = new Set(existingOrderIds.map(v => v.orderId));
 
+        // Auto-cura: Verifica se há pedidos COMPLETED com frete=0 e taxa=0 (indicando que sofreram com o bug anterior)
+        const corruptOrders = await prisma.shopeeVenda.count({
+          where: {
+            shopeeAccountId: conta.id,
+            status: "COMPLETED",
+            frete: 0,
+            taxaPlataforma: 0
+          }
+        });
+        const needsHeal = corruptOrders > 0;
+
+        if (needsHeal) {
+          console.log(`[Shopee Sync] 🚑 AUTO-CURA ATIVADA - Conta ${conta.shop_id}: Encontrados ${corruptOrders} pedidos corrompidos.`);
+        }
+
         const ultimaVenda = await prisma.shopeeVenda.findFirst({
           where: { 
             shopeeAccountId: conta.id,
@@ -460,9 +475,9 @@ export async function POST(req: NextRequest) {
         let since: Date;
         const isFirstSync = !ultimaVenda;
         
-        if (isFirstSync) {
+        if (isFirstSync || needsHeal) {
           since = new Date("2024-01-01T00:00:00.000Z");
-          console.log(`[Shopee Sync] 🚀 PRIMEIRA SYNC - Conta ${conta.shop_id}: desde ${since.toISOString()}`);
+          console.log(`[Shopee Sync] 🚀 PRIMEIRA SYNC / CURA - Conta ${conta.shop_id}: desde ${since.toISOString()}`);
         } else {
           since = new Date(ultimaVenda.dataVenda.getTime() - 24 * 60 * 60 * 1000);
           console.log(`[Shopee Sync] 📊 Sync incremental - Conta ${conta.shop_id}: desde ${since.toISOString()}`);
@@ -473,8 +488,8 @@ export async function POST(req: NextRequest) {
           since, userId
         );
 
-        // Filtrar duplicatas
-        const newOrders = ordersFromAccount.filter((order: any) => {
+        // Filtrar duplicatas (Se for auto-cura, não filtra nada para forçar o upsert de tudo)
+        const newOrders = needsHeal ? ordersFromAccount : ordersFromAccount.filter((order: any) => {
           return !existingIds.has(String(order.order_sn || ""));
         });
         

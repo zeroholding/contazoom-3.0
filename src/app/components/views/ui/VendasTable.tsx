@@ -552,15 +552,14 @@ export default function VendasTable({
                                   rendaLiquida: paymentDetails.renda_liquida || 0
                                 };
                                 
-                                const freteFormatado = formatarFreteShopee(freteData);
                                 const shippingCarrier = shipmentDetails.shipping_carrier || venda.shippingStatus;
                                 
                                 return (
                                   <>
-                                    <div className={freteFormatado.className}>
-                                      {freteFormatado.valorPrincipal}
+                                    <div className={venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}>
+                                      {venda.frete === 0 ? <span className="text-xs text-gray-400">-</span> : formatCurrency(venda.frete)}
                                     </div>
-                                    {freteFormatado.mensagemEspecial && (
+                                    {freteData.shopee_shipping_rebate > 0 && (
                                       <div className="text-xs text-green-600 mt-1 font-medium">
                                         🎉 Frete subsidiado!
                                       </div>
