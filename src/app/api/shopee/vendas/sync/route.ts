@@ -65,7 +65,11 @@ async function executeWithTokenRetry<T>(
           
           try {
             // Forçar renovação do token
-            const refreshed = await refreshShopeeAccountToken(accountRef, true);
+            const refreshed = await refreshShopeeAccountToken(
+              accountRef,
+              process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "",
+              process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || ""
+            );
             accountRef.access_token = refreshed.access_token;
             accountRef.refresh_token = refreshed.refresh_token;
             accountRef.expires_at = refreshed.expires_at;
@@ -94,8 +98,8 @@ async function fetchAndEnrichShopeeOrders(
   from: Date,
   to: Date,
 ) {
-  const partnerId = process.env.SHOPEE_PARTNER_ID!;
-  const partnerKey = process.env.SHOPEE_PARTNER_KEY!;
+  const partnerId = process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "";
+  const partnerKey = process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || "";
 
   const orderSnList: string[] = [];
   let cursor: string | undefined = undefined;
@@ -320,7 +324,11 @@ export async function POST(req: NextRequest) {
       const conta = contasAtivas[i];
       try {
         // Tentar renovar o token (só renovará se estiver expirado ou próximo da expiração)
-        const refreshedAccount = await refreshShopeeAccountToken(conta, false);
+        const refreshedAccount = await refreshShopeeAccountToken(
+          conta,
+          process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "",
+          process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET || ""
+        );
         contasAtualizadas.push({
           ...conta,
           access_token: refreshedAccount.access_token,

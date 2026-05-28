@@ -56,7 +56,7 @@ export async function refreshShopeeToken(
   },
   partnerId: string,
   partnerKey: string
-): Promise<string> {
+): Promise<{ access_token: string; refresh_token: string; expires_at: Date }> {
   const path = "/api/v2/auth/access_token/get";
   const timestamp = Math.floor(Date.now() / 1000);
   
@@ -100,7 +100,11 @@ export async function refreshShopeeToken(
     }
   });
 
-  return data;
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: expiresAt,
+  };
 }
 
 export { refreshShopeeToken as refreshShopeeAccountToken };
