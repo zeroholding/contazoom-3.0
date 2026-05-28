@@ -100,5 +100,104 @@ export async function refreshShopeeToken(
     }
   });
 
-  return data.access_token;
+  return data;
+}
+
+export { refreshShopeeToken as refreshShopeeAccountToken };
+
+export interface GetShopeeOrderListParams {
+  partnerId: string;
+  partnerKey: string;
+  accessToken: string;
+  shopId: string;
+  createTimeFrom: number;
+  createTimeTo: number;
+  pageSize: number;
+  cursor?: string;
+}
+
+export async function getShopeeOrderList(params: GetShopeeOrderListParams) {
+  const path = "/api/v2/order/get_order_list";
+  const timestamp = Math.floor(Date.now() / 1000);
+  const sign = generateShopeeSign(params.partnerId, params.partnerKey, path, params.accessToken, params.shopId, timestamp);
+  
+  const url = new URL(`https://partner.shopeemobile.com${path}`);
+  url.searchParams.append("partner_id", params.partnerId);
+  url.searchParams.append("timestamp", timestamp.toString());
+  url.searchParams.append("access_token", params.accessToken);
+  url.searchParams.append("shop_id", params.shopId);
+  url.searchParams.append("sign", sign);
+  url.searchParams.append("time_range_field", "create_time");
+  url.searchParams.append("time_from", params.createTimeFrom.toString());
+  url.searchParams.append("time_to", params.createTimeTo.toString());
+  url.searchParams.append("page_size", params.pageSize.toString());
+  if (params.cursor) {
+    url.searchParams.append("cursor", params.cursor);
+  }
+
+  const response = await fetch(url.toString());
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Shopee getOrderList error: ${data.message || data.error}`);
+  }
+  return data.response;
+}
+
+export interface GetShopeeOrderDetailParams {
+  partnerId: string;
+  partnerKey: string;
+  accessToken: string;
+  shopId: string;
+  orderSnList: string;
+}
+
+export async function getShopeeOrderDetail(params: GetShopeeOrderDetailParams) {
+  const path = "/api/v2/order/get_order_detail";
+  const timestamp = Math.floor(Date.now() / 1000);
+  const sign = generateShopeeSign(params.partnerId, params.partnerKey, path, params.accessToken, params.shopId, timestamp);
+  
+  const url = new URL(`https://partner.shopeemobile.com${path}`);
+  url.searchParams.append("partner_id", params.partnerId);
+  url.searchParams.append("timestamp", timestamp.toString());
+  url.searchParams.append("access_token", params.accessToken);
+  url.searchParams.append("shop_id", params.shopId);
+  url.searchParams.append("sign", sign);
+  url.searchParams.append("order_sn_list", params.orderSnList);
+  url.searchParams.append("response_optional_fields", "buyer_user_id,buyer_username,estimated_shipping_fee,actual_shipping_fee,item_list");
+
+  const response = await fetch(url.toString());
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Shopee getOrderDetail error: ${data.message || data.error}`);
+  }
+  return data.response;
+}
+
+export interface GetShopeeEscrowDetailParams {
+  partnerId: string;
+  partnerKey: string;
+  accessToken: string;
+  shopId: string;
+  orderSn: string;
+}
+
+export async function getShopeeEscrowDetail(params: GetShopeeEscrowDetailParams) {
+  const path = "/api/v2/payment/get_escrow_detail";
+  const timestamp = Math.floor(Date.now() / 1000);
+  const sign = generateShopeeSign(params.partnerId, params.partnerKey, path, params.accessToken, params.shopId, timestamp);
+  
+  const url = new URL(`https://partner.shopeemobile.com${path}`);
+  url.searchParams.append("partner_id", params.partnerId);
+  url.searchParams.append("timestamp", timestamp.toString());
+  url.searchParams.append("access_token", params.accessToken);
+  url.searchParams.append("shop_id", params.shopId);
+  url.searchParams.append("sign", sign);
+  url.searchParams.append("order_sn", params.orderSn);
+
+  const response = await fetch(url.toString());
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Shopee getEscrowDetail error: ${data.message || data.error}`);
+  }
+  return data.response;
 }
