@@ -759,7 +759,7 @@ export default function FiltrosVendas({
                 </div>
               </div>
             )}
-          </div>}
+          </div>
 
           {/* Botão de Filtro Conta */}
           <div className="relative">
