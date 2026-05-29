@@ -492,7 +492,24 @@ export default function VendasShopee() {
       filtroConta === "todas" ||
       venda.conta === filtroConta;
 
-    return matchStatus && matchConta;
+    let matchModalidade = true;
+    if (filtroModalidadeEnvio !== "todos") {
+      const shipmentDetails = (venda as any).shipmentDetails || venda.raw?.shipmentDetails || {};
+      const carrier = (shipmentDetails.shipping_carrier || venda.shippingStatus || "").toLowerCase();
+      
+      if (filtroModalidadeEnvio === "me") {
+        // Shopee Xpress
+        matchModalidade = carrier.includes("xpress") || carrier.includes("shopee");
+      } else if (filtroModalidadeEnvio === "full") {
+        // Correios
+        matchModalidade = carrier.includes("correio");
+      } else if (filtroModalidadeEnvio === "flex") {
+        // Pegaki / Outros
+        matchModalidade = !carrier.includes("xpress") && !carrier.includes("shopee") && !carrier.includes("correio");
+      }
+    }
+
+    return matchStatus && matchConta && matchModalidade;
   });
 
   const contagensVendasGeral = {
@@ -585,7 +602,7 @@ export default function VendasShopee() {
             onContaChange={setFiltroConta}
             contasDisponiveis={contasConectadas.map((conta: any) => ({
               id: conta.id,
-              nome: conta.nickname || conta.shop_id || conta.merchant_id || conta.id,
+              nickname: conta.nickname || conta.shop_id || conta.merchant_id || conta.id,
             }))}
             colunasVisiveis={colunasVisiveis}
             onColunasChange={setColunasVisiveis}
