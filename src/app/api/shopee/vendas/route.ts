@@ -87,8 +87,9 @@ export async function GET(req: NextRequest) {
       }
 
       const valorTotal = Number(venda.valorTotal);
+      // Forçar taxaPlataforma para ser sempre negativa (custo), compatível com dados antigos (positivos) e novos (negativos)
       const taxaPlataforma = venda.taxaPlataforma
-        ? Number(venda.taxaPlataforma)
+        ? -Math.abs(Number(venda.taxaPlataforma))
         : 0;
       const frete = Number(venda.frete);
 
@@ -115,9 +116,7 @@ export async function GET(req: NextRequest) {
         valorTotal,
         quantidade: venda.quantidade,
         unitario: Number(venda.unitario),
-        taxaPlataforma: venda.taxaPlataforma
-          ? Number(venda.taxaPlataforma)
-          : null,
+        taxaPlataforma,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
         cmv,
