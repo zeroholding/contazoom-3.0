@@ -10,8 +10,9 @@ interface PlataformaBadgeProps {
 }
 
 export function PlataformaBadge({ plataforma, size = 32, className = '', showText = false }: PlataformaBadgeProps) {
-  const isShopee = plataforma?.toLowerCase().includes('shopee');
-  const isML = plataforma?.toLowerCase().includes('mercado') || plataforma?.toLowerCase() === 'ml' || plataforma?.toLowerCase().includes('livre');
+  const p = plataforma?.toLowerCase() || '';
+  const isShopee = p.includes('shopee') || p === 'sp';
+  const isML = p.includes('mercado') || p === 'ml' || p.includes('livre');
 
   if (isShopee) {
     return (

@@ -295,9 +295,9 @@ export default function FiltrosVendas({
   const getModalidadeEnvioLabel = (filtro: FiltroModalidadeEnvio) => {
     switch (filtro) {
       case "todos": return "Todos";
-      case "me": return "Mercado Envios";
-      case "full": return "Full";
-      case "flex": return "Flex";
+      case "me": return platform === "Shopee" ? "Shopee Xpress" : "Mercado Envios";
+      case "full": return platform === "Shopee" ? "Correios" : "Full";
+      case "flex": return platform === "Shopee" ? "Pegaki / Outros" : "Flex";
       default: return "Todos";
     }
   };
@@ -677,8 +677,8 @@ export default function FiltrosVendas({
             )}
           </div>}
 
-          {/* Botão de Filtro Modalidade de Envio - Apenas para Mercado Livre */}
-          {platform !== "Shopee" && <div className="relative">
+          {/* Botão de Filtro Modalidade de Envio - Adaptado para ML e Shopee */}
+          <div className="relative">
             <button
               ref={modalidadeEnvioDropdown.triggerRef}
               onClick={() => setShowModalidadeEnvioDropdown(!showModalidadeEnvioDropdown)}
@@ -734,9 +734,9 @@ export default function FiltrosVendas({
                   <div className="space-y-1">
                     {[
                       { id: "todos" as FiltroModalidadeEnvio, label: "Todos" },
-                      { id: "me" as FiltroModalidadeEnvio, label: "Mercado Envios" },
-                      { id: "full" as FiltroModalidadeEnvio, label: "Full" },
-                      { id: "flex" as FiltroModalidadeEnvio, label: "Flex" },
+                      { id: "me" as FiltroModalidadeEnvio, label: platform === "Shopee" ? "Shopee Xpress" : "Mercado Envios" },
+                      { id: "full" as FiltroModalidadeEnvio, label: platform === "Shopee" ? "Correios" : "Full" },
+                      { id: "flex" as FiltroModalidadeEnvio, label: platform === "Shopee" ? "Pegaki / Outros" : "Flex" },
                     ].map((opcao) => (
                       <button
                         key={opcao.id}

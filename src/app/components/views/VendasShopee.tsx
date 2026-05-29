@@ -11,6 +11,7 @@ import FiltrosVendas, {
   FiltroStatus,
   FiltroPeriodo,
   ColunasVisiveis,
+  FiltroModalidadeEnvio,
 } from "../views/ui/FiltrosVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import { useToast } from "./ui/toaster";
@@ -382,6 +383,7 @@ export default function VendasShopee() {
 
   const [filtroConta, setFiltroConta] = useState<string>("todas");
 
+  const [filtroModalidadeEnvio, setFiltroModalidadeEnvio] = useState<FiltroModalidadeEnvio>("todos");
   const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>({
     data: true,
     canal: true,
@@ -586,7 +588,10 @@ export default function VendasShopee() {
               nome: conta.nickname || conta.shop_id || conta.merchant_id || conta.id,
             }))}
             colunasVisiveis={colunasVisiveis}
-            onColunasVisiveisChange={setColunasVisiveis}
+            onColunasChange={setColunasVisiveis}
+            platform="Shopee"
+            filtroModalidadeEnvio={filtroModalidadeEnvio}
+            onModalidadeEnvioChange={setFiltroModalidadeEnvio}
           />
 
           <TabelaVendas
