@@ -5,6 +5,11 @@ import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
+function roundCurrency(value: number): number {
+  const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
 export async function GET(req: NextRequest) {
   const session = await assertSessionToken(req.cookies.get("session")?.value);
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
@@ -19,28 +24,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cachedData);
     }
 
-    const url = new URL(req.url);
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "10000"); // Aumentado para 10000
-    const offset = (page - 1) * limit;
-
-    // Calcular data de início: 6 meses atrás para visualização na tabela
-    const hoje = new Date();
-    const dataInicio = new Date(hoje);
-    dataInicio.setMonth(dataInicio.getMonth() - 6); // Voltar 6 meses
-    
-    console.log(`[Shopee] Filtrando vendas a partir de: ${dataInicio.toISOString()}`);
-
-    // Buscar vendas Shopee do usuário
+    // Buscar TODAS as vendas Shopee do usuário (sem filtro de 6 meses, igual ML)
     const vendas = await prisma.shopeeVenda.findMany({
-      where: { 
-        userId: session.sub,
-        dataVenda: {
-          gte: dataInicio, // Filtrar vendas >= data de início (últimos 6 meses)
-        }
-      },
+      where: { userId: session.sub },
       select: {
-        id: true, // Campo essencial para React keys
+        id: true,
         orderId: true,
         dataVenda: true,
         status: true,
@@ -52,8 +40,9 @@ export async function GET(req: NextRequest) {
         taxaPlataforma: true,
         frete: true,
         freteAjuste: true,
-        margemContribuicao: true, // Campo essencial
-        isMargemReal: true, // Campo essencial
+        cmv: true,
+        margemContribuicao: true,
+        isMargemReal: true,
         titulo: true,
         sku: true,
         comprador: true,
@@ -70,43 +59,106 @@ export async function GET(req: NextRequest) {
         tags: true,
         internalTags: true,
         sincronizadoEm: true,
-        paymentDetails: true, // Dados do escrow para cálculos de frete
-        shipmentDetails: true, // Dados de envio incluindo shipping_carrier
+        paymentDetails: true,
+        shipmentDetails: true,
+        rawData: true,
       },
       orderBy: { dataVenda: "desc" },
-      skip: offset,
-      take: limit,
     });
 
-    // Contar total de vendas
-    const total = await prisma.shopeeVenda.count({
-      where: { 
-        userId: session.sub,
-        dataVenda: {
-          gte: dataInicio, // Filtrar vendas >= data de início (últimos 6 meses)
+    // === RECÁLCULO DE CMV + MARGEM (espelhando ML GET route) ===
+    // Buscar SKUs únicos para construir mapa de custo histórico
+    const skusUnicos = Array.from(
+      new Set(vendas.map((v) => v.sku).filter(Boolean) as string[]),
+    );
+
+    const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
+    const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
+
+    // Mapear vendas com recálculo dinâmico de CMV e margem (igual ML faz)
+    const vendasFormatted = vendas.map((venda) => {
+      // CMV: buscar custo histórico do SKU na data da venda
+      let cmv: number | null = null;
+      if (venda.sku) {
+        const custoUnitario = costMap.getCostAtDate(venda.sku, venda.dataVenda);
+        if (custoUnitario > 0) {
+          cmv = roundCurrency(custoUnitario * venda.quantidade);
         }
-      },
+      }
+
+      const valorTotal = Number(venda.valorTotal);
+      const taxaPlataforma = venda.taxaPlataforma
+        ? Number(venda.taxaPlataforma)
+        : 0;
+      const frete = Number(venda.frete);
+
+      // Margem: recalcular com CMV (igual ML)
+      // valorTotal + taxaPlataforma(negativo) + frete(negativo) - cmv
+      let margemContribuicao: number;
+      let isMargemReal: boolean;
+      if (cmv !== null && cmv > 0) {
+        margemContribuicao = roundCurrency(
+          valorTotal + taxaPlataforma + frete - cmv,
+        );
+        isMargemReal = true;
+      } else {
+        margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + frete);
+        isMargemReal = false;
+      }
+
+      return {
+        id: venda.orderId,
+        dataVenda: venda.dataVenda.toISOString(),
+        status: venda.status,
+        conta: venda.conta,
+        shopeeAccountId: venda.shopeeAccountId,
+        valorTotal,
+        quantidade: venda.quantidade,
+        unitario: Number(venda.unitario),
+        taxaPlataforma: venda.taxaPlataforma
+          ? Number(venda.taxaPlataforma)
+          : null,
+        frete,
+        freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
+        cmv,
+        margemContribuicao,
+        isMargemReal,
+        titulo: venda.titulo,
+        sku: venda.sku,
+        comprador: venda.comprador,
+        logisticType: venda.logisticType,
+        envioMode: venda.envioMode,
+        shippingStatus: venda.shippingStatus,
+        shippingId: venda.shippingId,
+        paymentMethod: venda.paymentMethod,
+        paymentStatus: venda.paymentStatus,
+        plataforma: venda.plataforma,
+        canal: venda.canal,
+        tags: venda.tags,
+        internalTags: venda.internalTags,
+        latitude:
+          venda.latitude !== null && venda.latitude !== undefined
+            ? Number(venda.latitude)
+            : null,
+        longitude:
+          venda.longitude !== null && venda.longitude !== undefined
+            ? Number(venda.longitude)
+            : null,
+        // Dados extras para o frontend (shipment/payment details)
+        shipmentDetails: venda.shipmentDetails,
+        paymentDetails: venda.paymentDetails,
+        raw: venda.rawData,
+        preco: valorTotal,
+      };
     });
 
-    // Buscar última sincronização
-    const lastSync = await prisma.shopeeVenda.findFirst({
-      where: { userId: session.sub },
-      orderBy: { sincronizadoEm: "desc" },
-      select: { sincronizadoEm: true },
-    });
-
-    console.log(`[Shopee API] ✅ Retornando ${vendas.length} vendas (total no banco: ${total})`);
-
-    // Mapear vendas para usar orderId como id (assim como Mercado Livre)
-    const vendasMapeadas = vendas.map((venda) => ({
-      ...venda,
-      id: venda.orderId, // Usar orderId como id para exibição
-    }));
+    console.log(`[Shopee API] ✅ Retornando ${vendasFormatted.length} vendas (total no banco: ${vendas.length})`);
 
     const response = {
-      vendas: vendasMapeadas,
-      total,
-      lastSync: lastSync?.sincronizadoEm?.toISOString() || null,
+      vendas: vendasFormatted,
+      total: vendas.length,
+      lastSync:
+        vendas.length > 0 ? vendas[0].sincronizadoEm.toISOString() : null,
     };
 
     // Armazenar no cache

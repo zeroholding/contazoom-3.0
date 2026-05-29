@@ -448,13 +448,12 @@ export async function POST(req: NextRequest) {
         });
         const existingIds = new Set(existingOrderIds.map(v => v.orderId));
 
-        // Auto-cura: Verifica se há pedidos COMPLETED com frete=0 e taxa=0 (indicando que sofreram com o bug anterior)
+        // Auto-cura: Verifica se há pedidos COMPLETED com taxa >= 0 (sinal antigo era positivo, agora deve ser negativo)
         const corruptOrders = await prisma.shopeeVenda.count({
           where: {
             shopeeAccountId: conta.id,
             status: "COMPLETED",
-            frete: 0,
-            taxaPlataforma: 0
+            taxaPlataforma: { gte: 0 }
           }
         });
         const needsHeal = corruptOrders > 0;
@@ -520,27 +519,28 @@ export async function POST(req: NextRequest) {
             ? roundCurrency(totalAmount / quantidade)
             : (toFiniteNumber(itemList?.[0]?.model_original_price) ?? 0);
 
+          // === TAXA DA PLATAFORMA (negativo = custo, igual ML) ===
           const incomeDetails = order.escrow_details?.order_income || {};
           const commissionFee = toFiniteNumber(incomeDetails.commission_fee) ?? 0;
           const serviceFee = toFiniteNumber(incomeDetails.service_fee) ?? 0;
-          const taxaPlataforma = roundCurrency(commissionFee + serviceFee);
+          const taxaPlataformaRaw = commissionFee + serviceFee;
+          const taxaPlataforma = taxaPlataformaRaw > 0 ? -roundCurrency(taxaPlataformaRaw) : null;
           
+          // === FRETE (negativo = custo do vendedor, igual ML) ===
           const actualShippingFee = toFiniteNumber(incomeDetails.actual_shipping_fee) ?? 0;
           const reverseShippingFee = toFiniteNumber(incomeDetails.reverse_shipping_fee) ?? 0;
-          let shopeeShippingRebate = toFiniteNumber(incomeDetails.shopee_shipping_rebate) ?? 0;
+          const shopeeShippingRebate = toFiniteNumber(incomeDetails.shopee_shipping_rebate) ?? 0;
           const buyerPaidShippingFee = toFiniteNumber(incomeDetails.buyer_paid_shipping_fee) ?? 0;
           const shippingFeeDiscountFrom3pl = toFiniteNumber(incomeDetails.shipping_fee_discount_from_3pl) ?? 0;
           
-          if (actualShippingFee > 0 && shopeeShippingRebate === 0) {
-            const custoImplicitoFrete = actualShippingFee - buyerPaidShippingFee;
-            if (custoImplicitoFrete < 0.01) {
-              shopeeShippingRebate = actualShippingFee - buyerPaidShippingFee;
-            }
-          }
+          // Custo do vendedor = frete real - o que o comprador pagou - subsídios
+          const custoVendedorFrete = actualShippingFee - buyerPaidShippingFee - shopeeShippingRebate - shippingFeeDiscountFrom3pl + reverseShippingFee;
+          // Se positivo → vendedor pagou → armazena como NEGATIVO (custo)
+          // Se zero/negativo → subsidiado → armazena como 0
+          const frete = custoVendedorFrete > 0.005 ? -roundCurrency(custoVendedorFrete) : 0;
           
-          const custoLiquidoFrete = (buyerPaidShippingFee + shopeeShippingRebate) - (actualShippingFee + reverseShippingFee);
-          const frete = roundCurrency(custoLiquidoFrete);
-          const margem = roundCurrency(totalAmount - taxaPlataforma - frete);
+          // === MARGEM (igual ML: valorTotal + taxa(neg) + frete(neg)) ===
+          const margem = roundCurrency(totalAmount + (taxaPlataforma ?? 0) + frete);
 
           const titulo = truncateString(itemList?.[0]?.item_name, 500) || "Pedido";
           
@@ -568,7 +568,7 @@ export async function POST(req: NextRequest) {
             valorTotal: new Decimal(totalAmount),
             quantidade: quantidade || 1,
             unitario: new Decimal(unitario),
-            taxaPlataforma: new Decimal(taxaPlataforma),
+            taxaPlataforma: taxaPlataforma !== null ? new Decimal(taxaPlataforma) : null,
             frete: new Decimal(frete),
             margemContribuicao: new Decimal(margem),
             isMargemReal: false,

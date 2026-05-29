@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useVendasSyncProgress, VendasSyncProgress } from "@/hooks/useVendasSyncProgress";
 import {
   loadVendasFromCache,
@@ -43,8 +43,17 @@ export interface Venda {
   ads?: string;
   plataforma: string;
   canal: string;
-  tags?: any;
-  internalTags?: any;
+  tags?: string[];
+  internalTags?: string[];
+  raw?: {
+    listing_type_id?: string | null;
+    tags?: string[];
+    internal_tags?: string[];
+  } | null;
+  paymentDetails?: any;
+  shipmentDetails?: any;
+  preco?: number;
+  shipping?: any;
   rawData?: any;
   atualizadoEm: string;
 }
