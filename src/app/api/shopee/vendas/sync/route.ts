@@ -597,7 +597,7 @@ export async function POST(req: NextRequest) {
               shopee_shipping_rebate: shopeeShippingRebate,
               buyer_paid_shipping_fee: buyerPaidShippingFee,
               shipping_fee_discount_from_3pl: shippingFeeDiscountFrom3pl,
-              custo_liquido_frete: custoLiquidoFrete,
+              custo_liquido_frete: custoVendedorFrete,
               custo_implicito_frete: actualShippingFee - buyerPaidShippingFee,
               subsidio_automatico_aplicado: shopeeShippingRebate > 0 && incomeDetails.shopee_shipping_rebate === 0,
               ...order.package_list
