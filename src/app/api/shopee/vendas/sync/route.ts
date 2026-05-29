@@ -354,7 +354,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Filtrar por contas específicas se fornecido
-    const whereClause: any = { userId: session.sub, expires_at: { gt: new Date() } };
+    const whereClause: any = { userId: session.sub };
     if (accountIds && accountIds.length > 0) {
       whereClause.id = { in: accountIds };
     }
@@ -383,15 +383,22 @@ export async function POST(req: NextRequest) {
 
     const { partnerId, partnerKey } = getPartnerCredentials();
     const refreshResults = await Promise.allSettled(
-      contasAtivas.map(conta =>
-        refreshShopeeAccountToken(conta, partnerId, partnerKey)
-          .then(refreshed => ({
-            ...conta,
-            access_token: refreshed.access_token,
-            refresh_token: refreshed.refresh_token,
-            expires_at: refreshed.expires_at,
-          }))
-      )
+      contasAtivas.map(async (conta) => {
+        // Só renova se estiver expirado ou expirar em menos de 10 minutos
+        const isExpiringSoon = conta.expires_at.getTime() - Date.now() < 10 * 60 * 1000;
+        
+        if (!isExpiringSoon) {
+          return conta;
+        }
+        
+        const refreshed = await refreshShopeeAccountToken(conta, partnerId, partnerKey);
+        return {
+          ...conta,
+          access_token: refreshed.access_token,
+          refresh_token: refreshed.refresh_token,
+          expires_at: refreshed.expires_at,
+        };
+      })
     );
 
     const contasAtualizadas = refreshResults
