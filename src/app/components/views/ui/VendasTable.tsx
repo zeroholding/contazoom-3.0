@@ -543,7 +543,7 @@ export default function VendasTable({
                               return (
                                 <>
                                   <div className={venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}>
-                                    {venda.frete === 0 ? <span className="text-xs text-gray-400">-</span> : formatCurrency(venda.frete)}
+                                    {formatCurrency(venda.frete)}
                                   </div>
                                   {shippingCarrier && (
                                     <div className="text-xs text-gray-500 mt-1 capitalize">
