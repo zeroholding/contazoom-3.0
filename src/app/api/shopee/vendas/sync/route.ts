@@ -224,7 +224,9 @@ async function fetchAllShopeeOrdersSince(
       current: i,
       total: windows.length,
       fetched: allOrders.length,
-      expected: 0
+      expected: 0,
+      accountId: account.id,
+      accountNickname: `Loja ${account.shop_id}`
     });
 
     const results = await Promise.allSettled(
@@ -251,7 +253,7 @@ async function fetchAllShopeeOrdersSince(
 // ==========================================
 // OTIMIZAÇÃO #3: Batch SQL insert com ON CONFLICT
 // ==========================================
-async function batchUpsertVendas(vendaRecords: any[], userId: string): Promise<number> {
+async function batchUpsertVendas(vendaRecords: any[], userId: string, accountId: string, accountNickname: string): Promise<number> {
   if (vendaRecords.length === 0) return 0;
 
   const BATCH_SIZE = 200; // Lotes maiores para menos queries
@@ -319,7 +321,9 @@ async function batchUpsertVendas(vendaRecords: any[], userId: string): Promise<n
       current: Math.min(i + BATCH_SIZE, vendaRecords.length),
       total: vendaRecords.length,
       fetched: totalSaved,
-      expected: vendaRecords.length
+      expected: vendaRecords.length,
+      accountId,
+      accountNickname
     });
   }
 
@@ -607,7 +611,7 @@ export async function POST(req: NextRequest) {
         });
 
         // OTIMIZAÇÃO #3: Batch upsert otimizado
-        const saved = await batchUpsertVendas(vendaRecords, userId);
+        const saved = await batchUpsertVendas(vendaRecords, userId, conta.id, `Loja ${conta.shop_id}`);
         totalSaved += saved;
         console.log(`[Shopee Sync] Conta ${conta.shop_id}: ${saved} vendas salvas com sucesso`);
 
