@@ -3,6 +3,7 @@
 import { openVendaDetails } from "./VendaDetailsModal";
 import { classifyFrete, formatCurrency, formatarFreteShopee } from "@/lib/frete";
 import FreteDetailsDropdown from "./FreteDetailsDropdown";
+import { PlataformaBadge } from "@/components/ui/PlataformaBadge";
 
 // Tipos para as vendas conforme especificação da API ML
 export interface Venda {
@@ -388,8 +389,8 @@ export default function VendasTable({
                 {/* Canal */}
                 {colunasVisiveis.canal && (
                   <td className="px-6 py-4 whitespace-nowrap min-w-[100px]">
-                    <div className="text-sm text-gray-900">
-                      {venda.canal || <span className="text-xs text-gray-400">-</span>}
+                    <div className="flex justify-center items-center">
+                      <PlataformaBadge plataforma={venda.canal || venda.plataforma} size={28} />
                     </div>
                   </td>
                 )}
