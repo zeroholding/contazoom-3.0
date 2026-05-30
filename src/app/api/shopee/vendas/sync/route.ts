@@ -498,10 +498,8 @@ export async function POST(req: NextRequest) {
           since, userId
         );
 
-        // Filtrar duplicatas (Se for auto-cura, não filtra nada para forçar o upsert de tudo)
-        const newOrders = needsHeal ? ordersFromAccount : ordersFromAccount.filter((order: any) => {
-          return !existingIds.has(String(order.order_sn || ""));
-        });
+        // Passar todos os pedidos para o batchUpsertVendas, para que pedidos existentes sejam ATUALIZADOS com novos status (READY_TO_SHIP -> COMPLETED, etc)
+        const newOrders = ordersFromAccount;
         
         console.log(`[Shopee Sync] Conta ${conta.shop_id}: ${newOrders.length} novas de ${ordersFromAccount.length}`);
 
