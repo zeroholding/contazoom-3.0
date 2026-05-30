@@ -81,8 +81,8 @@ export async function buildHistoricalCostMap(userId: string, skuCodes: string[])
         return timeline[result].cost;
       }
 
-      // Sale happened before first recorded cost — use the first known cost's "custoAnterior"
-      return timeline[0].custoAnterior;
+      // Sale happened before first recorded cost — apply first known cost retroactively
+      return timeline[0].cost;
     },
 
     /**
