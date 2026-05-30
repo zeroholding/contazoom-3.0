@@ -521,8 +521,8 @@ export async function POST(req: NextRequest) {
           const dataVenda = new Date((toFiniteNumber(order.create_time) ?? 0) * 1000);
           const status = String(order.order_status ?? "DESCONHECIDO");
           const itemList: any[] = Array.isArray(order.item_list) ? order.item_list : [];
-          const quantidade = itemList.reduce((acc: number, it: any) => acc + (toF          const incomeDetails = order.escrow_details?.order_income || {};
-          
+          const quantidade = itemList.reduce((acc: number, it: any) => acc + (toFiniteNumber(it?.model_quantity_purchased) ?? 0), 0);
+          const incomeDetails = order.escrow_details?.order_income || {};
           // === VALOR TOTAL E UNITÁRIO (Apenas Produto) ===
           // Usa original_price ou cost_of_goods_sold do escrow, senão calcula pelos itens
           let productSubtotal = toFiniteNumber(incomeDetails.original_price) || toFiniteNumber(incomeDetails.cost_of_goods_sold) || 0;
