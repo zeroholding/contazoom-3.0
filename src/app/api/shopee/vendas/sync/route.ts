@@ -523,9 +523,12 @@ export async function POST(req: NextRequest) {
           const itemList: any[] = Array.isArray(order.item_list) ? order.item_list : [];
           const quantidade = itemList.reduce((acc: number, it: any) => acc + (toFiniteNumber(it?.model_quantity_purchased) ?? 0), 0);
           const incomeDetails = order.escrow_details?.order_income || {};
-          // === VALOR TOTAL E UNITÁRIO (Apenas Produto) ===
-          // Usa original_price ou cost_of_goods_sold do escrow, senão calcula pelos itens
-          let productSubtotal = toFiniteNumber(incomeDetails.original_price) || toFiniteNumber(incomeDetails.cost_of_goods_sold) || 0;
+          // === VALOR TOTAL E UNITÁRIO (Apenas Produto, SEM frete) ===
+          // Prioridade: cost_of_goods_sold > order_discounted_price > order_selling_price > soma dos itens > total_amount (fallback)
+          let productSubtotal = toFiniteNumber(incomeDetails.cost_of_goods_sold)
+            || toFiniteNumber(incomeDetails.order_discounted_price)
+            || toFiniteNumber(incomeDetails.order_selling_price)
+            || 0;
           if (!productSubtotal) {
             productSubtotal = itemList.reduce((acc: number, it: any) => {
               const price = toFiniteNumber(it?.model_discounted_price) || toFiniteNumber(it?.model_original_price) || 0;
@@ -545,11 +548,12 @@ export async function POST(req: NextRequest) {
           // === TAXA DA PLATAFORMA (negativo = custo, igual ML) ===
           const commissionFee = toFiniteNumber(incomeDetails.commission_fee) ?? 0;
           const serviceFee = toFiniteNumber(incomeDetails.service_fee) ?? 0;
+          // "Taxa de Devolução Fácil Shopee" = shipping_seller_protection_fee_amount
+          const shippingSellerProtectionFee = toFiniteNumber(incomeDetails.shipping_seller_protection_fee_amount) ?? 0;
           const sellerTransactionFee = toFiniteNumber(incomeDetails.seller_transaction_fee) ?? 0;
-          const sellerReturnRefundAmount = toFiniteNumber(incomeDetails.seller_return_refund_amount) ?? 0;
-          const drcAdjustableRefundFee = toFiniteNumber(incomeDetails.drc_adjustable_refund_fee) ?? 0;
+          const drcAdjustableRefund = toFiniteNumber(incomeDetails.drc_adjustable_refund) ?? 0;
           
-          const devolucaoFacilOuOutros = sellerTransactionFee + sellerReturnRefundAmount + drcAdjustableRefundFee;
+          const devolucaoFacilOuOutros = shippingSellerProtectionFee + sellerTransactionFee + drcAdjustableRefund;
           const taxaPlataformaRaw = commissionFee + serviceFee + devolucaoFacilOuOutros;
           const taxaPlataforma = taxaPlataformaRaw > 0 ? -roundCurrency(taxaPlataformaRaw) : null;
           
