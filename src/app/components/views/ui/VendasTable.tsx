@@ -3,6 +3,7 @@
 import { openVendaDetails } from "./VendaDetailsModal";
 import { classifyFrete, formatCurrency, formatarFreteShopee } from "@/lib/frete";
 import FreteDetailsDropdown from "./FreteDetailsDropdown";
+import TaxaDetailsDropdown from "./TaxaDetailsDropdown";
 import { PlataformaBadge } from "@/components/ui/PlataformaBadge";
 
 // Tipos para as vendas conforme especificação da API ML
@@ -517,9 +518,11 @@ export default function VendasTable({
                   <td className="px-6 py-4 whitespace-nowrap min-w-[120px]">
                     <div className="text-sm">
                       {venda.taxaPlataforma ? (
-                        <span className="negative-value">
-                          {formatCurrency(venda.taxaPlataforma)}
-                        </span>
+                        <TaxaDetailsDropdown venda={venda}>
+                          <span className="negative-value">
+                            {formatCurrency(venda.taxaPlataforma)}
+                          </span>
+                        </TaxaDetailsDropdown>
                       ) : (
                         <span className="text-xs text-gray-400">-</span>
                       )}
@@ -542,7 +545,7 @@ export default function VendasTable({
                               const shippingCarrier = shipmentDetails.shipping_carrier || venda.shippingStatus;
                               
                               return (
-                                <>
+                                <FreteDetailsDropdown venda={venda}>
                                   <div className={venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}>
                                     {formatCurrency(venda.frete)}
                                   </div>
@@ -551,7 +554,7 @@ export default function VendasTable({
                                       {shippingCarrier}
                                     </div>
                                   )}
-                                </>
+                                </FreteDetailsDropdown>
                               );
                             })()
                           ) : (

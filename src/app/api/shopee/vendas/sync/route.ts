@@ -521,18 +521,36 @@ export async function POST(req: NextRequest) {
           const dataVenda = new Date((toFiniteNumber(order.create_time) ?? 0) * 1000);
           const status = String(order.order_status ?? "DESCONHECIDO");
           const itemList: any[] = Array.isArray(order.item_list) ? order.item_list : [];
-          const quantidade = itemList.reduce((acc: number, it: any) => acc + (toFiniteNumber(it?.model_quantity_purchased) ?? 0), 0);
-          const totalAmount = toFiniteNumber(order.total_amount) ?? 0;
+          const quantidade = itemList.reduce((acc: number, it: any) => acc + (toF          const incomeDetails = order.escrow_details?.order_income || {};
           
-          const unitario = quantidade > 0
-            ? roundCurrency(totalAmount / quantidade)
-            : (toFiniteNumber(itemList?.[0]?.model_original_price) ?? 0);
+          // === VALOR TOTAL E UNITÁRIO (Apenas Produto) ===
+          // Usa original_price ou cost_of_goods_sold do escrow, senão calcula pelos itens
+          let productSubtotal = toFiniteNumber(incomeDetails.original_price) || toFiniteNumber(incomeDetails.cost_of_goods_sold) || 0;
+          if (!productSubtotal) {
+            productSubtotal = itemList.reduce((acc: number, it: any) => {
+              const price = toFiniteNumber(it?.model_discounted_price) || toFiniteNumber(it?.model_original_price) || 0;
+              const qty = toFiniteNumber(it?.model_quantity_purchased) || 1;
+              return acc + (price * qty);
+            }, 0);
+          }
+          
+          // Fallback para total_amount caso o pedido ainda não tenha escrow (recém-criado) e os itens não tenham valor
+          if (productSubtotal === 0 && toFiniteNumber(order.total_amount)) {
+            productSubtotal = toFiniteNumber(order.total_amount) ?? 0;
+          }
+
+          const totalAmount = productSubtotal;
+          const unitario = quantidade > 0 ? roundCurrency(totalAmount / quantidade) : roundCurrency(totalAmount);
 
           // === TAXA DA PLATAFORMA (negativo = custo, igual ML) ===
-          const incomeDetails = order.escrow_details?.order_income || {};
           const commissionFee = toFiniteNumber(incomeDetails.commission_fee) ?? 0;
           const serviceFee = toFiniteNumber(incomeDetails.service_fee) ?? 0;
-          const taxaPlataformaRaw = commissionFee + serviceFee;
+          const sellerTransactionFee = toFiniteNumber(incomeDetails.seller_transaction_fee) ?? 0;
+          const sellerReturnRefundAmount = toFiniteNumber(incomeDetails.seller_return_refund_amount) ?? 0;
+          const drcAdjustableRefundFee = toFiniteNumber(incomeDetails.drc_adjustable_refund_fee) ?? 0;
+          
+          const devolucaoFacilOuOutros = sellerTransactionFee + sellerReturnRefundAmount + drcAdjustableRefundFee;
+          const taxaPlataformaRaw = commissionFee + serviceFee + devolucaoFacilOuOutros;
           const taxaPlataforma = taxaPlataformaRaw > 0 ? -roundCurrency(taxaPlataformaRaw) : null;
           
           // === FRETE (negativo = custo do vendedor, igual ML) ===
@@ -545,7 +563,6 @@ export async function POST(req: NextRequest) {
           // Custo do vendedor = frete real - o que o comprador pagou - subsídios
           const custoVendedorFrete = actualShippingFee - buyerPaidShippingFee - shopeeShippingRebate - shippingFeeDiscountFrom3pl + reverseShippingFee;
           // Se positivo → vendedor pagou → armazena como NEGATIVO (custo)
-          // Se zero/negativo → subsidiado → armazena como 0
           const frete = custoVendedorFrete > 0.005 ? -roundCurrency(custoVendedorFrete) : 0;
           
           // === MARGEM (igual ML: valorTotal + taxa(neg) + frete(neg)) ===
@@ -567,6 +584,30 @@ export async function POST(req: NextRequest) {
           const shippingCarrier = truncateString(packageInfo.shipping_carrier || order.shipping_carrier, 100) || null;
           const logisticsStatus = truncateString(packageInfo.logistics_status, 100) || null;
 
+          // Construir detalhes para Tooltips
+          const paymentDetailsExtended = {
+            ...(order.escrow_details || {}),
+            platformFeeBreakdown: {
+              commission_fee: commissionFee,
+              service_fee: serviceFee,
+              outros_encargos: devolucaoFacilOuOutros
+            }
+          };
+
+          const shipmentDetailsExtended = {
+            parcel_chargeable_weight_gram: parcelWeight,
+            shipping_carrier: shippingCarrier,
+            logistics_status: logisticsStatus,
+            actual_shipping_fee: actualShippingFee,
+            reverse_shipping_fee: reverseShippingFee,
+            shopee_shipping_rebate: shopeeShippingRebate,
+            buyer_paid_shipping_fee: buyerPaidShippingFee,
+            shipping_fee_discount_from_3pl: shippingFeeDiscountFrom3pl,
+            custo_vendedor_frete: custoVendedorFrete,
+            subsidio_automatico_aplicado: shopeeShippingRebate > 0 && incomeDetails.shopee_shipping_rebate === 0,
+            ...packageInfo
+          };
+
           return {
             orderId: orderSn,
             userId: session.sub,
@@ -580,7 +621,7 @@ export async function POST(req: NextRequest) {
             taxaPlataforma: taxaPlataforma !== null ? new Decimal(taxaPlataforma) : null,
             frete: new Decimal(frete),
             margemContribuicao: new Decimal(margem),
-            isMargemReal: false,
+            isMargemReal: true,
             titulo,
             sku,
             comprador,
@@ -589,21 +630,8 @@ export async function POST(req: NextRequest) {
             plataforma: "Shopee",
             canal: "SP",
             rawData: order,
-            paymentDetails: order.escrow_details || {},
-            shipmentDetails: {
-              parcel_chargeable_weight_gram: parcelWeight,
-              shipping_carrier: shippingCarrier,
-              logistics_status: logisticsStatus,
-              actual_shipping_fee: actualShippingFee,
-              reverse_shipping_fee: reverseShippingFee,
-              shopee_shipping_rebate: shopeeShippingRebate,
-              buyer_paid_shipping_fee: buyerPaidShippingFee,
-              shipping_fee_discount_from_3pl: shippingFeeDiscountFrom3pl,
-              custo_liquido_frete: custoVendedorFrete,
-              custo_implicito_frete: actualShippingFee - buyerPaidShippingFee,
-              subsidio_automatico_aplicado: shopeeShippingRebate > 0 && incomeDetails.shopee_shipping_rebate === 0,
-              ...order.package_list
-            },
+            paymentDetails: paymentDetailsExtended,
+            shipmentDetails: shipmentDetailsExtended,
             atualizadoEm: new Date(),
           };
         });
