@@ -132,11 +132,16 @@ export async function GET(req: NextRequest) {
         else if (baseCost !== null && baseCost > 0) freteRecalculado = baseCost;
         else if (shipCost !== null && shipCost > 0) freteRecalculado = shipCost;
       } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
-        if (baseCost !== null && baseCost > 0) freteRecalculado = -baseCost;
+        if (listCost !== null && chargedCost !== null) {
+          const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
+          freteRecalculado = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
+        } else if (baseCost !== null && baseCost > 0) {
+          freteRecalculado = -baseCost;
+        }
       } else {
         if (listCost !== null && chargedCost !== null) {
           const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
-          freteRecalculado = sellerFreightCost > 0 ? roundCurrency(-sellerFreightCost) : 0;
+          freteRecalculado = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
         } else if (orderCost !== null && orderCost > 0) {
           freteRecalculado = -orderCost;
         }

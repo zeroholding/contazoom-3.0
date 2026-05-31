@@ -309,7 +309,7 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   let adjustmentSource: FreightSource = null;
 
   if (logisticType === "self_service") {
-    // FLEX: O vendedor ganha o valor de shipping_option.cost (ou base_cost) como repasse (Crédito POSITIVO)
+    // FLEX: O vendedor ganha o valor de optCost (ou baseCost) como repasse (Crédito POSITIVO)
     if (optCost !== null && optCost > 0) {
       adjustedCost = optCost;
       adjustmentSource = "shipping_option";
@@ -323,20 +323,24 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
       adjustedCost = 0;
     }
   } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
-    // OUTRAS MODALIDADES: O vendedor só paga o frete se base_cost for maior que 0. (Custo NEGATIVO)
-    // base_cost no ML é o valor exato descontado do vendedor para a etiqueta.
-    if (baseCost !== null && baseCost > 0) {
+    // OUTRAS MODALIDADES: O custo do vendedor é o custo total (listCost) MENOS o que o comprador pagou (chargedCost).
+    // Se a etiqueta custa 18.85 e o comprador pagou 0 (frete grátis), o vendedor paga 18.85.
+    if (listCost !== null && chargedCost !== null) {
+      const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
+      adjustedCost = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
+      adjustmentSource = "shipping_option";
+    } else if (baseCost !== null && baseCost > 0) {
+      // Fallback para APIs antigas onde base_cost traz o valor líquido cobrado do vendedor
       adjustedCost = -baseCost;
       adjustmentSource = "shipment";
     } else {
-      // Se não tem base_cost, o vendedor não pagou nada.
       adjustedCost = 0;
     }
   } else {
-    // Fallback: se tivermos listCost e chargedCost e listCost > chargedCost, assumimos desconto dado pelo vendedor
+    // Fallback genérico
     if (listCost !== null && chargedCost !== null) {
       const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
-      adjustedCost = sellerFreightCost > 0 ? roundCurrency(-sellerFreightCost) : 0;
+      adjustedCost = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
       adjustmentSource = "shipping_option";
     } else if (orderCost !== null && orderCost > 0) {
       adjustedCost = -orderCost;
