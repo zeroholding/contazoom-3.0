@@ -174,10 +174,7 @@ export async function GET(req: NextRequest) {
 
       // `rawData` já foi declarado no recálculo acima.
 
-      const freightData =
-        rawData && rawData.freight && typeof rawData.freight === "object"
-          ? (rawData.freight as JsonRecord)
-          : {};
+
 
       const shipmentData =
         rawData && rawData.shipment && typeof rawData.shipment === "object"
