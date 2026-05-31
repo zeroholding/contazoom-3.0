@@ -105,10 +105,43 @@ export async function GET(req: NextRequest) {
       }
 
       const valorTotal = Number(venda.valorTotal);
-      const taxaPlataforma = venda.taxaPlataforma
-        ? Number(venda.taxaPlataforma)
-        : 0;
-      const frete = Number(venda.frete);
+      const taxaPlataforma = venda.taxaPlataforma ? Number(venda.taxaPlataforma) : 0;
+
+      // === RECÁLCULO DINÂMICO DO FRETE ===
+      const rawData = venda.rawData && typeof venda.rawData === "object" ? (venda.rawData as any) : null;
+      const shipment = rawData?.shipment || {};
+      const shippingOption = shipment?.shipping_option || {};
+      const orderShipping = rawData?.order?.shipping || {};
+      
+      const logisticTypeRaw = typeof shipment.logistic_type === "string" ? shipment.logistic_type : null;
+      const shippingMode = typeof orderShipping.mode === "string" ? orderShipping.mode : null;
+      const logisticType = logisticTypeRaw ?? shippingMode ?? null;
+
+      const optCost = typeof shippingOption.cost === "number" ? shippingOption.cost : null;
+      const baseCost = typeof shipment.base_cost === "number" ? shipment.base_cost : null;
+      const shipCost = typeof shipment.cost === "number" ? shipment.cost : null;
+      const listCost = typeof shippingOption.list_cost === "number" ? shippingOption.list_cost : null;
+      const orderCost = typeof orderShipping.cost === "number" ? orderShipping.cost : null;
+
+      let chargedCost = optCost !== null ? optCost : shipCost !== null ? shipCost : orderCost !== null ? orderCost : null;
+      if (chargedCost !== null) chargedCost = roundCurrency(chargedCost);
+
+      let freteRecalculado = 0;
+      if (logisticType === "self_service") {
+        if (optCost !== null && optCost > 0) freteRecalculado = optCost;
+        else if (baseCost !== null && baseCost > 0) freteRecalculado = baseCost;
+        else if (shipCost !== null && shipCost > 0) freteRecalculado = shipCost;
+      } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
+        if (baseCost !== null && baseCost > 0) freteRecalculado = -baseCost;
+      } else {
+        if (listCost !== null && chargedCost !== null) {
+          const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
+          freteRecalculado = sellerFreightCost > 0 ? roundCurrency(-sellerFreightCost) : 0;
+        } else if (orderCost !== null && orderCost > 0) {
+          freteRecalculado = -orderCost;
+        }
+      }
+      const frete = freteRecalculado;
 
       let margemContribuicao: number;
       let isMargemReal: boolean;

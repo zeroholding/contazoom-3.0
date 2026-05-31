@@ -308,17 +308,42 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   let adjustedCost: number | null = null;
   let adjustmentSource: FreightSource = null;
 
-  if (listCost !== null && chargedCost !== null) {
-    const sellerFreightCost = Math.max(
-      roundCurrency(listCost - chargedCost),
-      0
-    );
-
-    adjustedCost = sellerFreightCost > 0
-      ? roundCurrency(-sellerFreightCost)
-      : 0;
-
-    adjustmentSource = "shipping_option";
+  if (logisticType === "self_service") {
+    // FLEX: O vendedor ganha o valor de shipping_option.cost (ou base_cost) como repasse (Crédito POSITIVO)
+    if (optCost !== null && optCost > 0) {
+      adjustedCost = optCost;
+      adjustmentSource = "shipping_option";
+    } else if (baseCost !== null && baseCost > 0) {
+      adjustedCost = baseCost;
+      adjustmentSource = "shipment";
+    } else if (shipCost !== null && shipCost > 0) {
+      adjustedCost = shipCost;
+      adjustmentSource = "shipment";
+    } else {
+      adjustedCost = 0;
+    }
+  } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
+    // OUTRAS MODALIDADES: O vendedor só paga o frete se base_cost for maior que 0. (Custo NEGATIVO)
+    // base_cost no ML é o valor exato descontado do vendedor para a etiqueta.
+    if (baseCost !== null && baseCost > 0) {
+      adjustedCost = -baseCost;
+      adjustmentSource = "shipment";
+    } else {
+      // Se não tem base_cost, o vendedor não pagou nada.
+      adjustedCost = 0;
+    }
+  } else {
+    // Fallback: se tivermos listCost e chargedCost e listCost > chargedCost, assumimos desconto dado pelo vendedor
+    if (listCost !== null && chargedCost !== null) {
+      const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
+      adjustedCost = sellerFreightCost > 0 ? roundCurrency(-sellerFreightCost) : 0;
+      adjustmentSource = "shipping_option";
+    } else if (orderCost !== null && orderCost > 0) {
+      adjustedCost = -orderCost;
+      adjustmentSource = "order";
+    } else {
+      adjustedCost = 0;
+    }
   }
 
   return {
@@ -1712,9 +1737,7 @@ async function prepareVendaData(
         : 0);
 
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
-    const frete = unitario >= 79 ?
-      freight.adjustedCost :
-      0;
+    const frete = freight.adjustedCost || 0;
 
     const skuVendaRaw = itemData?.seller_sku || itemData?.sku || null;
     const skuVenda = skuVendaRaw
