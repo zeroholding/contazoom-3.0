@@ -241,15 +241,6 @@ async function processVendas(
       isMargemReal = false;
     }
 
-    const rawData =
-      venda.rawData && typeof venda.rawData === "object"
-        ? (venda.rawData as RawDataWithOrder)
-        : null;
-
-    const freightData =
-      rawData && rawData.freight && typeof rawData.freight === "object"
-        ? (rawData.freight as JsonRecord)
-        : {};
 
     const shipmentData =
       rawData && rawData.shipment && typeof rawData.shipment === "object"
