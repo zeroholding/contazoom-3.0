@@ -155,10 +155,7 @@ export async function GET(req: NextRequest) {
         isMargemReal = false;
       }
 
-      const rawData =
-        venda.rawData && typeof venda.rawData === "object"
-          ? (venda.rawData as RawDataWithOrder)
-          : null;
+      // `rawData` já foi declarado no recálculo acima.
 
       const freightData =
         rawData && rawData.freight && typeof rawData.freight === "object"
