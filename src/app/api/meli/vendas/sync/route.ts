@@ -308,19 +308,29 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   let adjustedCost: number | null = null;
   let adjustmentSource: FreightSource = null;
 
-  if (logisticType === "self_service") {
-    // FLEX: O vendedor ganha o valor de optCost (ou baseCost) como repasse (Crédito POSITIVO)
-    if (optCost !== null && optCost > 0) {
-      adjustedCost = optCost;
-      adjustmentSource = "shipping_option";
-    } else if (baseCost !== null && baseCost > 0) {
-      adjustedCost = baseCost;
-      adjustmentSource = "shipment";
-    } else if (shipCost !== null && shipCost > 0) {
-      adjustedCost = shipCost;
-      adjustmentSource = "shipment";
+  if (logisticType === "self_service" || logisticType === "FLEX") {
+    const totalAmountNum = Number(totalAmount) || 0;
+    if (totalAmountNum >= 79) {
+      if (chargedCost !== null && chargedCost > 0) {
+        adjustedCost = chargedCost;
+        adjustmentSource = "shipment";
+      } else {
+        adjustedCost = 0;
+      }
     } else {
-      adjustedCost = 0;
+      // FLEX: O vendedor ganha o valor de optCost (ou baseCost) como repasse (Crédito POSITIVO)
+      if (optCost !== null && optCost > 0) {
+        adjustedCost = optCost;
+        adjustmentSource = "shipping_option";
+      } else if (baseCost !== null && baseCost > 0) {
+        adjustedCost = baseCost;
+        adjustmentSource = "shipment";
+      } else if (shipCost !== null && shipCost > 0) {
+        adjustedCost = shipCost;
+        adjustmentSource = "shipment";
+      } else {
+        adjustedCost = 0;
+      }
     }
   } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
     // OUTRAS MODALIDADES: O custo do vendedor é o custo total (listCost) MENOS o que o comprador pagou (chargedCost).
