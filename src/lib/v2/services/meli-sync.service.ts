@@ -142,16 +142,41 @@ export default class MeliSyncService {
     let adjustedCost: number | null = null;
     let adjustmentSource: FreightSource = null;
 
-    if (listCost !== null && chargedCost !== null) {
-      const sellerFreightCost = Math.max(
-        roundCurrency(listCost - chargedCost),
-        0,
-      );
-
-      adjustedCost =
-        sellerFreightCost > 0 ? roundCurrency(-sellerFreightCost) : 0;
-
-      adjustmentSource = "shipping_option";
+    if (logisticType === "self_service" || logisticType === "FLEX") {
+      const totalAmountNum = Number(totalAmount) || 0;
+      if (totalAmountNum >= 79) {
+        if (chargedCost !== null && chargedCost > 0) {
+          adjustedCost = -chargedCost;
+          adjustmentSource = "shipment";
+        } else {
+          adjustedCost = 0;
+        }
+      } else {
+        adjustedCost = 0;
+        adjustmentSource = "shipping_option";
+      }
+    } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
+      if (listCost !== null && chargedCost !== null) {
+        const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
+        adjustedCost = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
+        adjustmentSource = "shipping_option";
+      } else if (baseCost !== null && baseCost > 0) {
+        adjustedCost = -baseCost;
+        adjustmentSource = "shipment";
+      } else {
+        adjustedCost = 0;
+      }
+    } else {
+      if (listCost !== null && chargedCost !== null) {
+        const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
+        adjustedCost = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
+        adjustmentSource = "shipping_option";
+      } else if (orderCost !== null && orderCost > 0) {
+        adjustedCost = -orderCost;
+        adjustmentSource = "order";
+      } else {
+        adjustedCost = 0;
+      }
     }
 
     return {
