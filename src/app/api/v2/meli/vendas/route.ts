@@ -208,9 +208,14 @@ async function processVendas(
     let calculated = 0;
 
     if (logisticType === "self_service" || logisticType === "FLEX") {
-      if (optCost !== null && optCost > 0) calculated = optCost;
-      else if (baseCost !== null && baseCost > 0) calculated = baseCost;
-      else if (shipCost !== null && shipCost > 0) calculated = shipCost;
+      const valorTotalNum = Number(venda.valorTotal);
+      if (valorTotalNum >= 79) {
+        if (chargedCost !== null && chargedCost > 0) calculated = chargedCost;
+      } else {
+        if (optCost !== null && optCost > 0) calculated = optCost;
+        else if (baseCost !== null && baseCost > 0) calculated = baseCost;
+        else if (shipCost !== null && shipCost > 0) calculated = shipCost;
+      }
     } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
       if (listCost !== null && chargedCost !== null) {
         const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
