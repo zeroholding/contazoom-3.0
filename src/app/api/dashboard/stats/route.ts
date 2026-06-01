@@ -310,7 +310,7 @@ export async function GET(req: NextRequest) {
     let vendasRealizadas = 0;
     let unidadesVendidas = 0;
     let taxasTotalAbs = 0;
-    let freteTotalAbs = 0;
+    let freteTotalLiquido = 0;
 
     // Breakdown by plataforma
     const taxasPorPlataforma = new Map<string, number>();
@@ -335,9 +335,8 @@ export async function GET(req: NextRequest) {
 
       const plataforma = v.plataforma || "Mercado Livre";
       const taxaAbs = Math.abs(tp);
-      const freteAbs = Math.abs(fr);
       taxasTotalAbs += taxaAbs;
-      freteTotalAbs += freteAbs;
+      freteTotalLiquido += fr;
 
       taxasPorPlataforma.set(
         plataforma,
@@ -345,7 +344,7 @@ export async function GET(req: NextRequest) {
       );
       fretePorPlataforma.set(
         plataforma,
-        (fretePorPlataforma.get(plataforma) || 0) + freteAbs,
+        (fretePorPlataforma.get(plataforma) || 0) + fr,
       );
     }
 
@@ -511,9 +510,9 @@ export async function GET(req: NextRequest) {
         shopee: safeNumber(shopeeTaxa),
       },
       custoFrete: {
-        total: safeNumber(freteTotalAbs),
-        mercadoLivre: safeNumber(mercadoLivreFrete),
-        shopee: safeNumber(shopeeFrete),
+        total: safeNumber(-freteTotalLiquido),
+        mercadoLivre: safeNumber(-(fretePorPlataforma.get("Mercado Livre") || 0)),
+        shopee: safeNumber(-(fretePorPlataforma.get("Shopee") || 0)),
       },
       margemContribuicao: safeNumber(receitaLiquida), // Receita líquida após taxas e frete
       cmv: safeNumber(cmvTotal),
