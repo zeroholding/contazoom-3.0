@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
       let freteRecalculado = Number(venda.frete) || 0;
       let calculated = 0;
 
-      if (logisticType === "self_service") {
+      if (logisticType === "self_service" || logisticType === "FLEX") {
         if (optCost !== null && optCost > 0) calculated = optCost;
         else if (baseCost !== null && baseCost > 0) calculated = baseCost;
         else if (shipCost !== null && shipCost > 0) calculated = shipCost;
