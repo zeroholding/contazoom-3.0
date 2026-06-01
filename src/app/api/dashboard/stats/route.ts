@@ -510,9 +510,9 @@ export async function GET(req: NextRequest) {
         shopee: safeNumber(shopeeTaxa),
       },
       custoFrete: {
-        total: safeNumber(-freteTotalLiquido),
-        mercadoLivre: safeNumber(-(fretePorPlataforma.get("Mercado Livre") || 0)),
-        shopee: safeNumber(-(fretePorPlataforma.get("Shopee") || 0)),
+        total: safeNumber(freteTotalLiquido),
+        mercadoLivre: safeNumber(fretePorPlataforma.get("Mercado Livre") || 0),
+        shopee: safeNumber(fretePorPlataforma.get("Shopee") || 0),
       },
       margemContribuicao: safeNumber(receitaLiquida), // Receita líquida após taxas e frete
       cmv: safeNumber(cmvTotal),

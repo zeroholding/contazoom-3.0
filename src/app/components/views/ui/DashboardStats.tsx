@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, memo } from "react";
 import NumberLoader from "../../../../components/NumberLoader";
@@ -247,7 +247,7 @@ const DashboardStats = memo(function DashboardStats({
           </div>
         </div>
         <div className="space-y-1">
-          <div className="text-lg font-bold text-gray-900">{renderValue(-Math.abs(stats.custoFrete.total), formatCurrency, "w-24", "currency")}</div>
+          <div className="text-lg font-bold text-gray-900">{renderValue(stats.custoFrete.total, formatCurrency, "w-24", "currency")}</div>
           <div className="flex flex-col text-xs text-gray-600 gap-0.5">
             {loading ? (
               <NumberLoader width="w-12" height="h-3" variant="percentage" />
