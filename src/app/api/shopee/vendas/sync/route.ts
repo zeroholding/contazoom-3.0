@@ -618,7 +618,7 @@ export async function POST(req: NextRequest) {
             shopeeAccountId: conta.id,
             dataVenda,
             status,
-            conta: conta.shop_id,
+            conta: conta.shop_name ?? conta.shop_id,
             valorTotal: new Decimal(totalAmount),
             quantidade: quantidade || 1,
             unitario: new Decimal(unitario),
