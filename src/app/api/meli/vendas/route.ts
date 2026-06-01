@@ -107,63 +107,9 @@ export async function GET(req: NextRequest) {
       const valorTotal = Number(venda.valorTotal);
       const taxaPlataforma = venda.taxaPlataforma ? Number(venda.taxaPlataforma) : 0;
 
-      // === RECÁLCULO DINÂMICO DO FRETE ===
       const rawData = venda.rawData && typeof venda.rawData === "object" ? (venda.rawData as any) : null;
-      const freightData = rawData && rawData.freight && typeof rawData.freight === "object" ? (rawData.freight as JsonRecord) : {};
 
-      const toNum = (val: unknown) => {
-        if (typeof val === "number") return val;
-        if (typeof val === "string") {
-          const parsed = parseFloat(val);
-          return isNaN(parsed) ? null : parsed;
-        }
-        return null;
-      };
-
-      const logisticType = typeof freightData.logisticType === "string" ? freightData.logisticType : null;
-      const optCost = toNum(freightData.shippingOptionCost);
-      const baseCost = toNum(freightData.baseCost);
-      const shipCost = toNum(freightData.shipmentCost);
-      const listCost = toNum(freightData.listCost);
-      const orderCost = toNum(freightData.orderCostFallback);
-
-      let chargedCost = toNum(freightData.chargedCost);
-      if (chargedCost === null) {
-        chargedCost = optCost !== null ? optCost : shipCost !== null ? shipCost : orderCost !== null ? orderCost : null;
-      }
-      if (chargedCost !== null) chargedCost = roundCurrency(chargedCost);
-
-      let freteRecalculado = Number(venda.frete) || 0;
-      let calculated = 0;
-
-      if (logisticType === "self_service" || logisticType === "FLEX") {
-        const valorTotalNum = Number(venda.valorTotal);
-        if (valorTotalNum >= 79) {
-          if (chargedCost !== null && chargedCost > 0) calculated = chargedCost;
-        } else {
-          if (optCost !== null && optCost > 0) calculated = optCost;
-          else if (baseCost !== null && baseCost > 0) calculated = baseCost;
-          else if (shipCost !== null && shipCost > 0) calculated = shipCost;
-        }
-      } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
-        if (listCost !== null && chargedCost !== null) {
-          const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
-          calculated = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
-        } else if (baseCost !== null && baseCost > 0) {
-          calculated = -baseCost;
-        }
-      } else {
-        if (listCost !== null && chargedCost !== null) {
-          const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
-          calculated = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
-        } else if (orderCost !== null && orderCost > 0) {
-          calculated = -orderCost;
-        }
-      }
-
-      // Se a nossa lógica nova achou um valor diferente de zero, usamos ele.
-      // Caso contrário, mantemos o frete do banco (que pode ter sido atualizado pelo sync).
-      const frete = calculated !== 0 ? calculated : freteRecalculado;
+      const frete = Number(venda.frete) || 0;
 
       let margemContribuicao: number;
       let isMargemReal: boolean;

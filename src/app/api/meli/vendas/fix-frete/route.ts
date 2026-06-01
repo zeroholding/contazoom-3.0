@@ -1,61 +1,77 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    // Buscar todas as vendas Flex que estão com frete positivo (bugadas)
     const vendas = await prisma.meliVenda.findMany({
-      where: {
-        logisticType: { in: ["self_service", "FLEX"] },
-        frete: { gt: 0 }
+      select: {
+        orderId: true,
+        frete: true,
+        rawData: true,
+        conta: true,
+        dataVenda: true
       }
     });
 
-    let atualizados = 0;
-    const logs = [];
+    let updatedCount = 0;
+    const logs: string[] = [];
 
-    for (const venda of vendas) {
-      const freteAtual = Number(venda.frete);
-      const valorTotal = Number(venda.valorTotal);
-      
-      let novoFrete: number;
+    const CHUNK_SIZE = 500;
+    
+    for (let i = 0; i < vendas.length; i += CHUNK_SIZE) {
+      const chunk = vendas.slice(i, i + CHUNK_SIZE);
+      const updates = [];
 
-      if (valorTotal >= 79) {
-        // Se >= 79, o valor positivo salvo deveria ser negativo (o custo cobrado)
-        novoFrete = -freteAtual;
-      } else {
-        // Se < 79, o valor positivo salvo era o repasse, que deve ser net 0
-        novoFrete = 0;
+      for (const venda of chunk) {
+        const rawData = venda.rawData as any;
+        const freightData = rawData?.freight || {};
+        
+        let correctFrete = 0;
+        
+        if (freightData.adjustedCost !== undefined && freightData.adjustedCost !== null) {
+          correctFrete = Number(freightData.adjustedCost);
+        } else {
+          // If adjustedCost is missing in rawData, fallback to old logic
+          continue;
+        }
+
+        const currentFrete = Number(venda.frete);
+        
+        // If there's a difference of more than 1 cent, update it
+        if (Math.abs(currentFrete - correctFrete) > 0.01) {
+          updates.push(
+            prisma.meliVenda.update({
+              where: { orderId: venda.orderId },
+              data: { frete: correctFrete }
+            })
+          );
+          
+          if (updatedCount < 20) {
+            logs.push(`Venda ${venda.orderId} (${venda.dataVenda.toISOString().split('T')[0]}): Frete DB ${currentFrete} -> Recalculado ${correctFrete}`);
+          }
+          updatedCount++;
+        }
       }
 
-      // Recalcular margem
-      const taxaPlataforma = Number(venda.taxaPlataforma || 0);
-      const cmv = Number(venda.cmv || 0);
-      const novaMargem = valorTotal + taxaPlataforma + novoFrete - cmv;
-
-      await prisma.meliVenda.update({
-        where: { id: venda.id },
-        data: {
-          frete: novoFrete,
-          margemContribuicao: novaMargem
-        }
-      });
-
-      atualizados++;
-      logs.push(`Venda ${venda.orderId} (Total: ${valorTotal}): Frete antigo = ${freteAtual}, Novo Frete = ${novoFrete}`);
+      if (updates.length > 0) {
+        await prisma.$transaction(updates);
+      }
     }
 
     return NextResponse.json({
       success: true,
-      message: `Tudo corrigido! Total de vendas com frete atualizado: ${atualizados}`,
-      logs
+      message: `Corrigidas ${updatedCount} vendas com base no rawData.freight.adjustedCost!`,
+      logs: logs
     });
 
-  } catch (error) {
-    console.error("Erro ao consertar fretes:", error);
-    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+  } catch (error: any) {
+    console.error("Erro no fix-frete:", error);
+    return NextResponse.json({
+      success: false,
+      error: error.message
+    }, { status: 500 });
   }
 }
