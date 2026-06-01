@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    // Buscar vendas do Mercado Livre do dia atual (ou todas pra garantir)
+    // Buscar todas as vendas Flex que estão com frete positivo (bugadas)
     const vendas = await prisma.meliVenda.findMany({
       where: {
-        freteCalculation: { not: null }
+        logisticType: { in: ["self_service", "FLEX"] },
+        frete: { gt: 0 }
       }
     });
 
@@ -16,48 +18,34 @@ export async function GET(req: NextRequest) {
     const logs = [];
 
     for (const venda of vendas) {
-      if (!venda.freteCalculation) continue;
+      const freteAtual = Number(venda.frete);
+      const valorTotal = Number(venda.valorTotal);
+      
+      let novoFrete: number;
 
-      const calc = venda.freteCalculation as any;
-      const logisticType = calc.logisticType;
-      const totalAmount = calc.totalAmount;
-      const chargedCost = calc.chargedCost;
-      const optCost = calc.shippingOptionCost;
-      const baseCost = calc.baseCost;
-      const shipCost = calc.shipmentCost;
-      const listCost = calc.listCost;
-
-      let adjustedCost: number | null = null;
-      let mudou = false;
-
-      // Nova lógica do Flex (self_service / FLEX)
-      if (logisticType === "self_service" || logisticType === "FLEX") {
-        const totalAmountNum = Number(totalAmount) || 0;
-        if (totalAmountNum >= 79) {
-          if (chargedCost !== null && chargedCost > 0) {
-            adjustedCost = -chargedCost; // AGORA NEGATIVO
-          } else {
-            adjustedCost = 0;
-          }
-        } else {
-          // FLEX < 79 é pass-through (Zero)
-          adjustedCost = 0;
-        }
-
-        // Atualizar se for diferente
-        if (adjustedCost !== null && Number(venda.frete) !== adjustedCost) {
-          await prisma.meliVenda.update({
-            where: { id: venda.id },
-            data: {
-              frete: adjustedCost,
-              margemContribuicao: Number(venda.valorTotal) + Number(venda.taxaPlataforma || 0) + adjustedCost - Number(venda.cmv || 0)
-            }
-          });
-          atualizados++;
-          logs.push(`Venda ${venda.orderId} (Flex): Frete antigo = ${venda.frete}, Novo = ${adjustedCost}`);
-          mudou = true;
-        }
+      if (valorTotal >= 79) {
+        // Se >= 79, o valor positivo salvo deveria ser negativo (o custo cobrado)
+        novoFrete = -freteAtual;
+      } else {
+        // Se < 79, o valor positivo salvo era o repasse, que deve ser net 0
+        novoFrete = 0;
       }
+
+      // Recalcular margem
+      const taxaPlataforma = Number(venda.taxaPlataforma || 0);
+      const cmv = Number(venda.cmv || 0);
+      const novaMargem = valorTotal + taxaPlataforma + novoFrete - cmv;
+
+      await prisma.meliVenda.update({
+        where: { id: venda.id },
+        data: {
+          frete: novoFrete,
+          margemContribuicao: novaMargem
+        }
+      });
+
+      atualizados++;
+      logs.push(`Venda ${venda.orderId} (Total: ${valorTotal}): Frete antigo = ${freteAtual}, Novo Frete = ${novoFrete}`);
     }
 
     return NextResponse.json({
