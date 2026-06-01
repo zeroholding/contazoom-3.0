@@ -158,34 +158,21 @@ export async function prepareSaleData(
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
     
     // ── Cálculo do frete ────────────────────────────────────────────────────
-    // FLEX (self_service): receita = gross_amount - (senders.cost - senders.save)
-    //   • Produto < R$79:  cost=0, save=0  → receita = gross_amount (+R$11)
-    //   • Produto >= R$79: cost=9.9, save=1.1 → receita = 22 - 8.8 = +R$13.20
-    // Outros: vendedor PAGA (senders.cost - senders.save) líquido (negativo)
+    // FLEX (self_service): O valor líquido para o vendedor é zero (entra o repasse e sai pro motoboy).
+    // Outros: vendedor PAGA o senders.cost diretamente (não devemos abater o save de novo).
     let frete: number;
 
-    const isFlex =
-      freight.logisticType === "FLEX" &&
-      freight.costsGrossAmount !== null &&
-      freight.costsGrossAmount > 0;
+    const isFlex = freight.logisticType === "FLEX" || freight.logisticType === "self_service";
 
     if (isFlex) {
-      const senderCost = freight.sellerShippingCost ?? 0;
-      const senderSave = freight.sellerShippingSave  ?? 0;
-      if (senderCost === 0) {
-        // Produto < R$79: ML paga gross_amount ao vendedor (varia por região: 8, 9, 11...)
-        frete = roundCurrency(freight.costsGrossAmount!);
-      } else {
-        // Produto >= R$79: FLEX reward = senders.save (incentivo obrigatório do ML)
-        frete = roundCurrency(senderSave);
-      }
-      console.log(`[Sync] FLEX — gross=${freight.costsGrossAmount} cost=${senderCost} save=${senderSave} → frete=+${frete}`);
+      // Para o FLEX, o repasse paga o motoboy. O valor líquido para o vendedor é zero.
+      frete = 0;
     } else if (freight.sellerShippingCost !== null && freight.sellerShippingCost !== undefined) {
-      // Custo real extraído de /shipments/{id}/costs -> senders[0].cost (normal)
-      const senderSave = freight.sellerShippingSave ?? 0;
-      frete = -roundCurrency(Math.max(freight.sellerShippingCost - senderSave, 0));
+      // Custo real extraído de /shipments/{id}/costs -> senders[0].cost
+      // Esse já é o custo final cobrado na Tarifa de Envio. O subsidy (save) não deve ser abatido novamente.
+      frete = -roundCurrency(freight.sellerShippingCost);
     } else {
-      // Fallback para lógica antiga quando /costs não disponível
+      // Fallback para lógica quando /costs não disponível
       frete = freight.adjustedCost ?? 0;
     }
 
