@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getStatusWhere } from "@/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,9 +9,10 @@ export async function GET(req: NextRequest) {
   try {
     const brazilToday = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
     
-    // Pegar o 'Hoje' igual o dashboard
     const start = new Date(Date.UTC(2026, 5, 1, 3, 0, 0, 0));
     const end = new Date(Date.UTC(2026, 5, 2, 2, 59, 59, 999));
+
+    const statusWhere = getStatusWhere('pagos');
 
     const vendas = await prisma.meliVenda.findMany({
       where: {
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
           gte: start,
           lte: end,
         },
-        status: 'pagos',
+        ...statusWhere
       },
       select: {
         orderId: true,
