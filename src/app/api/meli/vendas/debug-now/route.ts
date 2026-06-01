@@ -26,20 +26,41 @@ export async function GET() {
         orderId: true,
         valorTotal: true,
         frete: true,
-        dataVenda: true
+        dataVenda: true,
+        rawData: true,
+        logisticType: true
       },
       orderBy: { dataVenda: 'desc' }
     });
 
-    let log = "CURRENT DB VALUES:\\n\\n";
+    let log = "CURRENT DB VALUES WITH RAW DATA:\n\n";
     let sum = 0;
 
     for (const v of vendas) {
-      log += `[${v.orderId}] ${v.dataVenda.toISOString()} | Frete: ${v.frete}\\n`;
+      const raw = v.rawData as any;
+      const freight = raw?.freight || {};
+      const shipment = raw?.shipment || {};
+      const orderShipping = raw?.order?.shipping || {};
+      
+      const details = {
+        logisticType: v.logisticType,
+        baseCost: shipment.base_cost,
+        optCost: shipment.shipping_option?.cost,
+        listCost: shipment.shipping_option?.list_cost,
+        shipCost: shipment.cost,
+        orderCost: orderShipping.cost,
+        sellerCost: shipment._seller_shipping_cost,
+        sellerSave: shipment._seller_shipping_save,
+        grossAmount: shipment._costs_gross_amount,
+        freightAdjustedCost: freight.adjustedCost,
+        freightSellerShippingCost: freight.sellerShippingCost
+      };
+
+      log += `[${v.orderId}] Frete DB: ${v.frete} | Details: ${JSON.stringify(details)}\n`;
       sum += Number(v.frete);
     }
     
-    log += `\\nTOTAL FRETE DB NOW: ${sum}\\n`;
+    log += `\nTOTAL FRETE DB NOW: ${sum}\n`;
 
     return new NextResponse(log, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
