@@ -179,8 +179,9 @@ export async function GET(req: NextRequest) {
     
     const infoRes = await fetch(shopInfoUrl);
     const infoData = await infoRes.json();
-    if (infoData?.response?.shop_name) {
-      shopName = infoData.response.shop_name;
+    const shopNameFromApi = infoData?.shop_name || infoData?.response?.shop_name;
+    if (shopNameFromApi) {
+      shopName = shopNameFromApi;
     }
   } catch (err) {
     console.warn("Não foi possível buscar nome da loja Shopee:", err);

@@ -32,8 +32,9 @@ export async function GET(req: NextRequest) {
           const infoRes = await fetch(shopInfoUrl);
           const infoData = await infoRes.json();
           
-          if (infoData?.response?.shop_name) {
-            shopName = infoData.response.shop_name;
+          const shopNameFromApi = infoData?.shop_name || infoData?.response?.shop_name;
+          if (shopNameFromApi) {
+            shopName = shopNameFromApi;
             
             // Atualiza o cadastro da conta com o nome encontrado
             await prisma.shopeeAccount.update({
