@@ -7,6 +7,7 @@ import { EmptyState } from "./CardsContas";
 import EditModal from "./EditModal";
 import DeleteModal from "./DeleteModal";
 import Modal from "./Modal";
+import HistoricoCustosModal from "./HistoricoCustosModal";
 
 // Tipos atualizados para SKU
 export interface SKU {
@@ -140,6 +141,12 @@ export default function TabelaGestaoSKU({
   const [showDeleteSingleModal, setShowDeleteSingleModal] = useState(false);
   const [showToggleStatusModal, setShowToggleStatusModal] = useState(false);
   const [selectedSKU, setSelectedSKU] = useState<SKU | null>(null);
+  
+  // Estados para histórico e retroativo
+  const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  const [selectedSKUForHistorico, setSelectedSKUForHistorico] = useState<SKU | null>(null);
+  const [isApplyingRetroactive, setIsApplyingRetroactive] = useState<string | null>(null);
+
   const filhosDisponiveis = useMemo(
     () => skus.filter((sku) => sku.tipo === "filho"),
     [skus]
@@ -367,6 +374,38 @@ export default function TabelaGestaoSKU({
       title: "Status de estoque atualizado",
       description: `${selectedSKUs.length} SKU(s) foram marcados como ${temEstoque ? 'com estoque' : 'sem estoque'}`,
     });
+  };
+
+  const handleAplicarRetroativo = async (sku: SKU) => {
+    if (!window.confirm(`Tem certeza que deseja aplicar o custo atual (${formatCurrency(sku.custoUnitario)}) para todas as vendas passadas sem custo deste SKU?`)) {
+      return;
+    }
+    
+    setIsApplyingRetroactive(sku.id);
+    try {
+      const response = await fetch(`/api/sku/${sku.id}/aplicar-custo-retroativo`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Erro ao aplicar custo retroativo');
+      }
+      const data = await response.json();
+      toast({
+        variant: "success",
+        title: "Custo Aplicado",
+        description: data.message || `Custo aplicado com sucesso em ${data.vendasAtualizadas} vendas.`,
+      });
+    } catch (error) {
+      console.error('Erro ao aplicar custo retroativo:', error);
+      toast({
+        variant: "error",
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Não foi possível aplicar o custo",
+      });
+    } finally {
+      setIsApplyingRetroactive(null);
+    }
   };
 
   const handleFormChange = (
@@ -1083,10 +1122,17 @@ export default function TabelaGestaoSKU({
 
                   {/* Custo Unitário */}
                   <td className={`px-6 py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div>
-                      <span className="font-medium text-gray-900">{formatCurrency(sku.custoUnitario)}</span>
+                    <div 
+                      className="cursor-pointer group"
+                      onClick={() => {
+                        setSelectedSKUForHistorico(sku);
+                        setShowHistoricoModal(true);
+                      }}
+                      title="Clique para ver o histórico de custos"
+                    >
+                      <span className="font-medium text-gray-900 group-hover:text-orange-600 transition-colors border-b border-dashed border-gray-400">{formatCurrency(sku.custoUnitario)}</span>
                       {sku.custoHistorico && sku.custoHistorico.length > 0 && (
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-500 group-hover:text-orange-500 transition-colors mt-1">
                           Última alteração: {formatDate(sku.custoHistorico[0].createdAt)}
                         </div>
                       )}
@@ -1189,6 +1235,23 @@ export default function TabelaGestaoSKU({
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
+                      </button>
+                      <button
+                        onClick={() => handleAplicarRetroativo(sku)}
+                        disabled={isApplyingRetroactive === sku.id}
+                        className="text-blue-600 hover:text-blue-900 transition-colors disabled:opacity-50"
+                        title="Aplicar custo em vendas passadas sem CMV"
+                      >
+                        {isApplyingRetroactive === sku.id ? (
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </td>
@@ -1471,6 +1534,17 @@ export default function TabelaGestaoSKU({
           </div>
         </Modal>
       )}
+
+      {/* Modal Histórico de Custos */}
+      <HistoricoCustosModal
+        isOpen={showHistoricoModal}
+        onClose={() => {
+          setShowHistoricoModal(false);
+          setSelectedSKUForHistorico(null);
+        }}
+        skuId={selectedSKUForHistorico?.id || null}
+        skuName={selectedSKUForHistorico?.sku || ''}
+      />
     </div>
   );
 }
