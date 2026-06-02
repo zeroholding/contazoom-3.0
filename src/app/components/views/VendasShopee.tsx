@@ -389,6 +389,7 @@ export default function VendasShopee() {
     canal: true,
     conta: true,
     pedido: true,
+    comprador: true,
     ads: false,
     exposicao: false,
     tipo: false,
@@ -401,6 +402,7 @@ export default function VendasShopee() {
     frete: true,
     cmv: true,
     margem: true,
+    envioMode: true,
   });
 
   const containerRef = useRef<HTMLDivElement | null>(null);

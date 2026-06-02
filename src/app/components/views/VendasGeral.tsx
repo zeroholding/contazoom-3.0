@@ -156,6 +156,7 @@ const colunasVisiveisDefault: ColunasVisiveis = {
   canal: true,
   conta: true,
   pedido: true,
+  comprador: true,
   ads: false,
   exposicao: false,
   tipo: false,
@@ -168,6 +169,7 @@ const colunasVisiveisDefault: ColunasVisiveis = {
   frete: true,
   cmv: true,
   margem: true,
+  envioMode: true,
 };
 
 function VendasGeralContent() {

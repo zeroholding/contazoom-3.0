@@ -310,6 +310,7 @@ export default function VendasMercadolivre() {
     canal: true,
     conta: true,
     pedido: true,
+    comprador: true,
     ads: false,
     exposicao: true,
     tipo: true,
@@ -322,6 +323,7 @@ export default function VendasMercadolivre() {
     frete: true,
     cmv: true,
     margem: true,
+    envioMode: true,
   });
   
   const containerRef = useRef<HTMLDivElement | null>(null);
