@@ -161,6 +161,8 @@ export default function TabelaVendas({
     sku: true,
     unitario: true,
     cmv: true,
+    comprador: true,
+    envioMode: true,
   },
   dataInicioPersonalizada = null,
   dataFimPersonalizada = null,
