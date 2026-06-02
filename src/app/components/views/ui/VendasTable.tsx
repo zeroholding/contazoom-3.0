@@ -151,6 +151,7 @@ export default function VendasTable({
     canal: true,
     conta: true,
     pedido: true, // id venda
+    comprador: true, // comprador/cliente
     ads: false,
     exposicao: true,
     tipo: true, // tipo de anuncio
@@ -163,6 +164,7 @@ export default function VendasTable({
     frete: true,
     cmv: true,
     margem: true, // margem contribuição
+    envioMode: true, // modalidade de envio
   },
   platform = "Mercado Livre",
   managePage = false
@@ -311,6 +313,11 @@ export default function VendasTable({
                   Id venda
                 </th>
               )}
+              {colunasVisiveis.comprador && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px] bg-gray-50">
+                  Cliente
+                </th>
+              )}
               {colunasVisiveis.ads && platform !== "Shopee" && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px] bg-gray-50">
                   ADS
@@ -334,6 +341,11 @@ export default function VendasTable({
               {colunasVisiveis.sku && (
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] bg-gray-50">
                   SKU
+                </th>
+              )}
+              {colunasVisiveis.envioMode && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] bg-gray-50">
+                  Mod. Envio
                 </th>
               )}
               {colunasVisiveis.quantidade && (
@@ -413,6 +425,14 @@ export default function VendasTable({
                     <div className="text-sm font-mono text-gray-900">{venda.id}</div>
                   </td>
                 )}
+                {/* Cliente */}
+                {colunasVisiveis.comprador && (
+                  <td className="px-6 py-4 whitespace-nowrap min-w-[150px]">
+                    <div className="text-sm text-gray-900 font-medium max-w-[150px] truncate" title={venda.comprador || "-"}>
+                      {venda.comprador || <span className="text-xs text-gray-400">-</span>}
+                    </div>
+                  </td>
+                )}
                 {/* ADS - Apenas para Mercado Livre */}
                 {colunasVisiveis.ads && platform !== "Shopee" && (
                   <td className="px-6 py-4 whitespace-nowrap min-w-[80px]">
@@ -488,6 +508,55 @@ export default function VendasTable({
                   <td className="px-6 py-4 whitespace-nowrap min-w-[100px]">
                     <div className="text-sm text-gray-900">
                       {venda.sku || <span className="text-xs text-gray-400">-</span>}
+                    </div>
+                  </td>
+                )}
+                {/* Mod. Envio */}
+                {colunasVisiveis.envioMode && (
+                  <td className="px-6 py-4 whitespace-nowrap min-w-[120px]">
+                    <div className="text-sm text-gray-900">
+                      {(() => {
+                        const logistic = (venda.logisticType || venda.envioMode || "").toLowerCase();
+                        if (venda.plataforma === "Shopee") {
+                          const shipmentDetails = (venda as any).shipmentDetails || venda.raw?.shipmentDetails || {};
+                          const shippingCarrier = shipmentDetails.shipping_carrier || venda.shippingStatus || "";
+                          return shippingCarrier ? (
+                            <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-orange-50 text-orange-800 border border-orange-200 capitalize">
+                              {shippingCarrier}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          );
+                        } else {
+                          // Mercado Livre mappings
+                          if (logistic.includes("fulfillment") || logistic === "full") {
+                            return (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200">
+                                FULL
+                              </span>
+                            );
+                          } else if (logistic.includes("flex")) {
+                            return (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800 border border-green-200">
+                                FLEX
+                              </span>
+                            );
+                          } else if (logistic.includes("agencia") || logistic === "me2" || logistic === "coleta") {
+                            return (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                                Agência
+                              </span>
+                            );
+                          } else if (logistic) {
+                            return (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-800 border border-gray-200 capitalize">
+                                {venda.logisticType || venda.envioMode}
+                              </span>
+                            );
+                          }
+                          return <span className="text-xs text-gray-400">-</span>;
+                        }
+                      })()}
                     </div>
                   </td>
                 )}

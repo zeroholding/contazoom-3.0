@@ -16,6 +16,7 @@ export interface ColunasVisiveis {
   canal: boolean;
   conta: boolean;
   pedido: boolean;
+  comprador: boolean;
   ads: boolean;
   exposicao: boolean;
   tipo: boolean;
@@ -28,6 +29,7 @@ export interface ColunasVisiveis {
   frete: boolean;
   cmv: boolean;
   margem: boolean;
+  envioMode: boolean;
 }
 
 interface FiltrosVendasProps {
@@ -63,6 +65,7 @@ const colunasVisiveisDefault: ColunasVisiveis = {
   canal: true,
   conta: true,
   pedido: true,
+  comprador: true,
   ads: false,
   exposicao: true,
   tipo: true,
@@ -75,6 +78,7 @@ const colunasVisiveisDefault: ColunasVisiveis = {
   frete: true,
   cmv: true,
   margem: true,
+  envioMode: true,
 };
 
 export default function FiltrosVendas({
@@ -326,6 +330,7 @@ export default function FiltrosVendas({
         canal: true,
         conta: true,
         pedido: true,
+        comprador: true,
         ads: false,
         exposicao: true,
         tipo: true,
@@ -338,6 +343,7 @@ export default function FiltrosVendas({
         frete: true,
         cmv: true,
         margem: true,
+        envioMode: true,
       };
       onColunasChange(todasVisiveis);
     }
@@ -351,6 +357,7 @@ export default function FiltrosVendas({
         canal: false,
         conta: false,
         pedido: false,
+        comprador: false,
         ads: false,
         exposicao: false,
         tipo: false,
@@ -363,6 +370,7 @@ export default function FiltrosVendas({
         frete: false,
         cmv: false,
         margem: false,
+        envioMode: false,
       };
       onColunasChange(nenhumaVisivel);
     }
@@ -1125,6 +1133,7 @@ export default function FiltrosVendas({
                         { id: "canal" as keyof ColunasVisiveis, label: "Canal" },
                         { id: "conta" as keyof ColunasVisiveis, label: "Conta" },
                         { id: "pedido" as keyof ColunasVisiveis, label: "Id venda" },
+                        { id: "comprador" as keyof ColunasVisiveis, label: "Cliente" },
                         { id: "ads" as keyof ColunasVisiveis, label: "ADS" },
                         { id: "exposicao" as keyof ColunasVisiveis, label: "Exposição" },
                         { id: "tipo" as keyof ColunasVisiveis, label: "Tipo" },
@@ -1137,6 +1146,7 @@ export default function FiltrosVendas({
                         { id: "frete" as keyof ColunasVisiveis, label: "Frete" },
                         { id: "cmv" as keyof ColunasVisiveis, label: "CMV" },
                         { id: "margem" as keyof ColunasVisiveis, label: "Margem" },
+                        { id: "envioMode" as keyof ColunasVisiveis, label: "Mod. Envio" },
                       ].filter(coluna => {
                         // Esconde colunas de Mercado Livre APENAS quando for Shopee
                         // Na tabela Geral, mantém as colunas disponíveis (mas desmarcadas por padrão)

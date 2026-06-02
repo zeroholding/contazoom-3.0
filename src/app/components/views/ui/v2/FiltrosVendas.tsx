@@ -28,6 +28,7 @@ export interface ColunasVisiveis {
   canal: boolean;
   conta: boolean;
   pedido: boolean;
+  comprador: boolean;
   ads: boolean;
   exposicao: boolean;
   tipo: boolean;
@@ -40,6 +41,7 @@ export interface ColunasVisiveis {
   frete: boolean;
   cmv: boolean;
   margem: boolean;
+  envioMode: boolean;
 }
 
 interface FiltrosVendasProps {
@@ -61,6 +63,7 @@ const colunasVisiveisDefault: ColunasVisiveis = {
   canal: true,
   conta: true,
   pedido: true,
+  comprador: true,
   ads: false,
   exposicao: true,
   tipo: true,
@@ -73,6 +76,7 @@ const colunasVisiveisDefault: ColunasVisiveis = {
   frete: true,
   cmv: true,
   margem: true,
+  envioMode: true,
 };
 
 export default function FiltrosVendasV2({
@@ -497,6 +501,10 @@ export default function FiltrosVendasV2({
       id: "pedido" as keyof ColunasVisiveis,
       label: "Id venda",
     },
+    {
+      id: "comprador" as keyof ColunasVisiveis,
+      label: "Cliente",
+    },
     { id: "ads" as keyof ColunasVisiveis, label: "ADS" },
     {
       id: "exposicao" as keyof ColunasVisiveis,
@@ -530,6 +538,10 @@ export default function FiltrosVendasV2({
       id: "margem" as keyof ColunasVisiveis,
       label: "Margem",
     },
+    {
+      id: "envioMode" as keyof ColunasVisiveis,
+      label: "Mod. Envio",
+    },
   ];
 
   // Função para alternar visibilidade de coluna
@@ -550,6 +562,7 @@ export default function FiltrosVendasV2({
         canal: true,
         conta: true,
         pedido: true,
+        comprador: true,
         ads: false,
         exposicao: true,
         tipo: true,
@@ -562,6 +575,7 @@ export default function FiltrosVendasV2({
         frete: true,
         cmv: true,
         margem: true,
+        envioMode: true,
       };
       onColunasChange(todasVisiveis);
     }
@@ -575,6 +589,7 @@ export default function FiltrosVendasV2({
         canal: false,
         conta: false,
         pedido: false,
+        comprador: false,
         ads: false,
         exposicao: false,
         tipo: false,
@@ -587,6 +602,7 @@ export default function FiltrosVendasV2({
         frete: false,
         cmv: false,
         margem: false,
+        envioMode: false,
       };
       onColunasChange(nenhumaVisivel);
     }
