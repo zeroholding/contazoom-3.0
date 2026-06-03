@@ -288,14 +288,15 @@ export default function VendasTable({
 
           /* Efeitos Visuais Premium - Tabela de Vendas */
           .premium-row {
-            position: relative;
-            background-color: #ffffff;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           }
           .premium-row:nth-child(even) {
             background-color: #fafafa; /* Zebra sutil */
           }
-          .premium-row::before {
+          .premium-row > td:first-child {
+            position: relative;
+          }
+          .premium-row > td:first-child::before {
             content: '';
             position: absolute;
             left: 0;
@@ -310,9 +311,8 @@ export default function VendasTable({
           .premium-row:hover {
             background-color: #fffaf0 !important; /* Laranja ultra claro */
             box-shadow: inset 1px 0 0 #ffedd5, inset -1px 0 0 #ffedd5, 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            z-index: 5;
           }
-          .premium-row:hover::before {
+          .premium-row:hover > td:first-child::before {
             transform: scaleY(1);
           }
           .premium-th {
