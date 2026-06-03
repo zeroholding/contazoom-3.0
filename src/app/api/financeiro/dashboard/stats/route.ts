@@ -518,7 +518,7 @@ export async function GET(req: NextRequest) {
     };
 
     const response = {
-      faturamentoTotal: safeNumber(faturamentoTotal),
+      faturamentoBruto: safeNumber(faturamentoTotal),
       faturamentoTendencia: safeNumber(faturamentoTendencia),
       impostos: safeNumber(impostosTotal),
       taxasPlataformas: {
@@ -531,7 +531,7 @@ export async function GET(req: NextRequest) {
         mercadoLivre: safeNumber(fretePorPlataforma.get("Mercado Livre") || 0),
         shopee: safeNumber(fretePorPlataforma.get("Shopee") || 0),
       },
-      margemContribuicao: safeNumber(receitaLiquida), // Receita líquida após taxas e frete
+      receitaLiquida: safeNumber(receitaLiquida), // Receita líquida após taxas e frete
       cmv: safeNumber(cmvTotal),
       lucroBruto: safeNumber(lucroBruto - (Number.isFinite(impostosTotal) ? impostosTotal : 0)),
       despesasOperacionais: safeNumber(despesasOperacionais),

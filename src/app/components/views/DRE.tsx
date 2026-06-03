@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, {
   useEffect,
@@ -319,6 +319,10 @@ export default function DRE() {
     receitaOperacionalLiquida > 0
       ? resultadoLiquido / receitaOperacionalLiquida
       : 0;
+  
+  const margemContribuicaoPct = receitaBrutaTotal > 0 ? margemContribuicao / receitaBrutaTotal : 0;
+  const pontoEquilibrio = margemContribuicaoPct > 0 ? despesasOperacionais / margemContribuicaoPct : 0;
+
 
   return (
     <div ref={containerRef} className="min-h-screen overflow-x-hidden">
@@ -1010,7 +1014,9 @@ export default function DRE() {
               <div className="text-xs text-gray-600 mb-1">
                 Ponto de Equilibrio (Periodo)
               </div>
-              <div className="text-lg font-semibold text-gray-900">ÔÇö</div>
+              <div className="text-lg font-semibold text-gray-900">
+                {margemContribuicaoPct > 0 ? currency(pontoEquilibrio) : "—"}
+              </div>
             </div>
           </div>
         </section>
