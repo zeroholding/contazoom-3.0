@@ -332,25 +332,25 @@ export default function VendasTable({
             {platform === "Geral" ? (
               /* Layout Otimizado para Vendas Gerais (Sem scroll gigante) */
               <tr>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
                   Data / Canal
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[140px] premium-th">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[140px] premium-th">
                   Venda / Conta
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[180px] premium-th">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[180px] premium-th">
                   Produto / SKU
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[150px] premium-th">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[150px] premium-th">
                   Cliente / Envio
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[100px] premium-th">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[100px] premium-th">
                   Qtd / Unitário
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[160px] premium-th">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[160px] premium-th">
                   Financeiro Detalhado
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
+                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
                   CMV / Margem
                 </th>
               </tr>
@@ -461,7 +461,7 @@ export default function VendasTable({
                 return (
                   <tr key={venda.id} className="premium-row">
                     {/* 1. Data / Canal */}
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-6 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="flex-shrink-0">
                           <PlataformaBadge plataforma={venda.canal || venda.plataforma} size={26} />
@@ -474,7 +474,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 2. Venda / Conta */}
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-6 py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div 
                           className="font-semibold text-gray-800 cursor-pointer hover:text-orange-600 hover:underline transition-colors"
@@ -490,7 +490,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 3. Produto / SKU */}
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-3">
                       <div className="max-w-[240px] text-sm">
                         <div className="font-medium text-gray-900 line-clamp-1 hover:line-clamp-none transition-all" title={venda.titulo}>
                           {venda.titulo}
@@ -525,7 +525,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 4. Cliente / Envio */}
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-6 py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div className="font-semibold text-gray-900 max-w-[140px] truncate" title={venda.comprador || "-"}>
                           {venda.comprador || <span className="text-xs text-gray-400 font-normal">-</span>}
@@ -577,7 +577,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 5. Qtd / Unitário */}
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-6 py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div className="font-bold text-gray-900">
                           {venda.quantidade}x
@@ -589,7 +589,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 6. Financeiro Detalhado */}
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-6 py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div className="font-bold text-gray-900">
                           {formatCurrency(venda.valorTotal)}
@@ -626,7 +626,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 7. CMV / Margem */}
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-6 py-3 whitespace-nowrap">
                       <div className="text-sm">
                         {venda.margemContribuicao !== null && venda.margemContribuicao !== undefined ? (
                           <div>
