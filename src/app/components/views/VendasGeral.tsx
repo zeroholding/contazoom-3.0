@@ -340,8 +340,6 @@ function VendasGeralContent() {
               id: conta.id,
               nickname: conta.nickname || "",
             }))}
-            colunasVisiveis={colunasVisiveis}
-            onColunasChange={setColunasVisiveis}
             platform="Geral"
           />
 
@@ -349,7 +347,6 @@ function VendasGeralContent() {
             platform="Geral"
             isLoading={isLoading}
             isSyncing={false}
-            colunasVisiveis={colunasVisiveis}
             onPageChange={(page) => {
               setPage(page);
             }}

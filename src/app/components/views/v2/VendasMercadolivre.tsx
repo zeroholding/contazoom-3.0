@@ -464,8 +464,6 @@ export default function VendasMercadolivreV2() {
               id: conta.id,
               nickname: conta.nickname || "",
             }))}
-            colunasVisiveis={colunasVisiveis}
-            onColunasChange={setColunasVisiveis}
             platform="Mercado Livre"
           />
 
@@ -474,7 +472,6 @@ export default function VendasMercadolivreV2() {
             isLoading={isLoading}
             isSyncing={isSyncing}
             syncProgress={progress}
-            colunasVisiveis={colunasVisiveis}
             onPageChange={(page) => {
               setPage(page);
             }}

@@ -536,7 +536,6 @@ export default function TabelaVendasV2({
               isLoading={isTableLoading}
               currentPage={pagination.page}
               itemsPerPage={pagination.limit}
-              colunasVisiveis={colunasVisiveis}
               platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
             />
           </div>

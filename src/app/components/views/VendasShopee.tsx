@@ -606,8 +606,6 @@ export default function VendasShopee() {
               id: conta.id,
               nickname: conta.nickname || conta.shop_id || conta.merchant_id || conta.id,
             }))}
-            colunasVisiveis={colunasVisiveis}
-            onColunasChange={setColunasVisiveis}
             platform="Shopee"
             filtroModalidadeEnvio={filtroModalidadeEnvio}
             onModalidadeEnvioChange={setFiltroModalidadeEnvio}
@@ -615,7 +613,6 @@ export default function VendasShopee() {
 
           <TabelaVendas
             vendas={vendasFiltradas}
-            colunasVisiveis={colunasVisiveis}
             platform="Shopee"
           />
         </section>

@@ -547,8 +547,6 @@ export default function VendasMercadolivreSocket() {
               id: conta.id,
               nickname: conta.nickname || ""
             }))}
-            colunasVisiveis={colunasVisiveis}
-            onColunasChange={setColunasVisiveis}
             platform="Mercado Livre"
           />
 
@@ -566,7 +564,6 @@ export default function VendasMercadolivreSocket() {
               filtroTipoAnuncio={filtroTipoAnuncio}
               filtroModalidadeEnvio={filtroModalidadeEnvio}
               filtroConta={filtroConta}
-              colunasVisiveis={colunasVisiveis}
               dataInicioPersonalizada={dataInicioPersonalizada}
               dataFimPersonalizada={dataFimPersonalizada}
             />
