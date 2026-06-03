@@ -308,9 +308,9 @@ export default function DRE() {
   const freteShopee = dreData?.totals?.freteShopee || 0;
   const freteTotal = dreData?.totals?.freteTotal || 0;
   const receitaOperacionalLiquida =
-    receitaLiquidaTotal - taxasTotal - freteTotal;
+    receitaLiquidaTotal - Math.abs(taxasTotal) - Math.abs(freteTotal);
   const cmvTotal = dreData?.totals?.cmv || 0;
-  const lucroBruto = receitaOperacionalLiquida - cmvTotal;
+  const lucroBruto = receitaOperacionalLiquida - Math.abs(cmvTotal);
   const margemContribuicao = lucroBruto;
   const despesasOperacionais = despesasVisiveis;
   const ebitda = lucroBruto - despesasOperacionais;
@@ -732,10 +732,10 @@ export default function DRE() {
                           {dreData.months.map((m) => {
                             const receitaBruta = (dreData.receitaBrutaMeliPorMes[m.key] || 0) + (dreData.receitaBrutaShopeePorMes[m.key] || 0);
                             const deducoes = (dreData.deducoesMeliPorMes[m.key] || 0) + (dreData.deducoesShopeePorMes[m.key] || 0);
-                            const receitaLiquida = receitaBruta - deducoes;
+                            const receitaLiquida = receitaBruta - Math.abs(deducoes);
                             const taxas = (dreData.taxasMeliPorMes[m.key] || 0) + (dreData.taxasShopeePorMes[m.key] || 0);
                             const frete = (dreData.freteMeliPorMes[m.key] || 0) + (dreData.freteShopeePorMes[m.key] || 0);
-                            const v = receitaLiquida - taxas - frete;
+                            const v = receitaLiquida - Math.abs(taxas) - Math.abs(frete);
                             return (
                               <td key={m.key} className="py-2 px-2 text-right font-bold text-gray-900">
                                 {currency(v)}
@@ -765,12 +765,12 @@ export default function DRE() {
                           {dreData.months.map((m) => {
                             const receitaBruta = (dreData.receitaBrutaMeliPorMes[m.key] || 0) + (dreData.receitaBrutaShopeePorMes[m.key] || 0);
                             const deducoes = (dreData.deducoesMeliPorMes[m.key] || 0) + (dreData.deducoesShopeePorMes[m.key] || 0);
-                            const receitaLiquida = receitaBruta - deducoes;
+                            const receitaLiquida = receitaBruta - Math.abs(deducoes);
                             const taxas = (dreData.taxasMeliPorMes[m.key] || 0) + (dreData.taxasShopeePorMes[m.key] || 0);
                             const frete = (dreData.freteMeliPorMes[m.key] || 0) + (dreData.freteShopeePorMes[m.key] || 0);
-                            const receitaOperacional = receitaLiquida - taxas - frete;
+                            const receitaOperacional = receitaLiquida - Math.abs(taxas) - Math.abs(frete);
                             const cmv = dreData.cmvPorMes[m.key] || 0;
-                            const v = receitaOperacional - cmv;
+                            const v = receitaOperacional - Math.abs(cmv);
                             return (
                               <td key={m.key} className="py-2 px-2 text-right font-bold text-gray-900">
                                 {currency(v)}
