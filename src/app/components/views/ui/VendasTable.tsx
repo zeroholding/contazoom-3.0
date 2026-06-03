@@ -270,20 +270,57 @@ export default function VendasTable({
             }
           }
           .frete-positivo {
-            color: #27ae60; /* Green */
-            font-weight: 500;
+            color: #10b981; /* Emerald green modern */
+            font-weight: 600;
           }
           .frete-negativo {
-            color: #c0392b; /* Red */
-            font-weight: 500;
+            color: #ef4444; /* Red modern */
+            font-weight: 600;
           }
           .negative-value {
-            color: #c0392b; /* Red */
-            font-weight: 500;
+            color: #ef4444; /* Red modern */
+            font-weight: 600;
           }
           .frete-neutro {
-            color: #6b7280;
+            color: #9ca3af;
             font-weight: 400;
+          }
+
+          /* Efeitos Visuais Premium - Tabela de Vendas */
+          .premium-row {
+            position: relative;
+            background-color: #ffffff;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .premium-row:nth-child(even) {
+            background-color: #fafafa; /* Zebra sutil */
+          }
+          .premium-row::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background-color: #f97316; /* Laranja ContaZoom */
+            transform: scaleY(0);
+            transition: transform 0.2s ease-in-out;
+            z-index: 10;
+          }
+          .premium-row:hover {
+            background-color: #fffaf0 !important; /* Laranja ultra claro */
+            box-shadow: inset 1px 0 0 #ffedd5, inset -1px 0 0 #ffedd5, 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            z-index: 5;
+          }
+          .premium-row:hover::before {
+            transform: scaleY(1);
+          }
+          .premium-th {
+            background-color: #f8fafc !important;
+            border-bottom: 2px solid #e2e8f0;
+            letter-spacing: 0.05em;
+            color: #64748b !important;
+            font-weight: 700 !important;
           }
         `
       }} />
@@ -295,25 +332,25 @@ export default function VendasTable({
             {platform === "Geral" ? (
               /* Layout Otimizado para Vendas Gerais (Sem scroll gigante) */
               <tr>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[130px] bg-gray-50">
+                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
                   Data / Canal
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[140px] bg-gray-50">
+                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[140px] premium-th">
                   Venda / Conta
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[180px] bg-gray-50">
+                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[180px] premium-th">
                   Produto / SKU
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[150px] bg-gray-50">
+                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[150px] premium-th">
                   Cliente / Envio
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[100px] bg-gray-50">
+                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[100px] premium-th">
                   Qtd / Unitário
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[160px] bg-gray-50">
+                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[160px] premium-th">
                   Financeiro Detalhado
                 </th>
-                <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[130px] bg-gray-50">
+                <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
                   CMV / Margem
                 </th>
               </tr>
@@ -422,7 +459,7 @@ export default function VendasTable({
                 const isShopee = (venda.canal || venda.plataforma) === "Shopee";
                 
                 return (
-                  <tr key={venda.id} className="hover:bg-gray-50/80 transition-colors duration-150">
+                  <tr key={venda.id} className="premium-row">
                     {/* 1. Data / Canal */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-3">
