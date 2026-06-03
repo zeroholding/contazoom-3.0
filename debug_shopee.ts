@@ -61,6 +61,21 @@ async function main() {
   console.log("Detalhes brutos do pedido:");
   console.log(JSON.stringify(details.order_list[0], null, 2));
 
+  console.log("Buscando detalhes do escrow para o pedido:", orderSn);
+  try {
+    const { getShopeeEscrowDetail } = require('./src/lib/shopee');
+    const escrow = await getShopeeEscrowDetail({
+      partnerId,
+      partnerKey,
+      accessToken: tokenData.access_token,
+      shopId: conta.shop_id,
+      orderSn: orderSn
+    });
+    console.log("Detalhes do escrow:");
+    console.log(JSON.stringify(escrow, null, 2));
+  } catch (error) {
+    console.error("Erro ao buscar escrow:", error);
+  }
 }
 
 main()

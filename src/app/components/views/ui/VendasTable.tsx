@@ -904,19 +904,8 @@ export default function VendasTable({
                         </div>
                       ) : (
                         <span className="text-xs text-gray-400">-</span>
-                            venda.tipoAnuncio === 'Catálogo' ? 'bg-purple-100 text-purple-800' :
-                            venda.tipoAnuncio === 'Próprio' ? 'bg-orange-100 text-orange-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {venda.tipoAnuncio}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">N/A</span>
-                    )}
+                      )}
+                    </div>
                   </td>
                 )}
                 {/* Produto */}
