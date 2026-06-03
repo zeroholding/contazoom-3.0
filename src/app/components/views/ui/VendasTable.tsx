@@ -580,10 +580,10 @@ export default function VendasTable({
                     <td className="px-6 py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div className="font-bold text-gray-900">
-                          {venda.quantidade}x
+                          {formatCurrency(venda.quantidade * venda.unitario)}
                         </div>
                         <div className="text-xs text-gray-500 font-medium mt-0.5">
-                          {formatCurrency(venda.unitario)}
+                          {venda.quantidade}x {formatCurrency(venda.unitario)}
                         </div>
                       </div>
                     </td>
@@ -630,8 +630,13 @@ export default function VendasTable({
                       <div className="text-sm">
                         {venda.margemContribuicao !== null && venda.margemContribuicao !== undefined ? (
                           <div>
-                            <div className="font-bold text-gray-900">
-                              {formatCurrency(venda.margemContribuicao)}
+                            <div className="font-bold text-gray-900 flex items-baseline gap-1">
+                              <span>{formatCurrency(venda.margemContribuicao)}</span>
+                              {venda.valorTotal > 0 && (
+                                <span className="text-[11px] text-gray-500 font-medium font-mono">
+                                  ({((venda.margemContribuicao / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] text-gray-500 mt-0.5 flex flex-col gap-0.5 leading-tight">
                               <span className="font-medium">
