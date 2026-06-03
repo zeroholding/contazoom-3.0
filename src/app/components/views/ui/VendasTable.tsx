@@ -456,7 +456,7 @@ export default function VendasTable({
               
               if (platform === "Geral") {
                 const dateParts = formatDateTime(venda.dataVenda);
-                const isShopee = (venda.canal || venda.plataforma) === "Shopee";
+                const isShopee = venda.plataforma === "Shopee" || venda.canal === "SP" || venda.canal === "Shopee";
                 
                 return (
                   <tr key={venda.id} className="premium-row">
