@@ -57,8 +57,10 @@ export async function GET(req: NextRequest) {
     const monthRanges: Record<string, { start: Date, end: Date }> = {};
 
     for (const m of months) {
-      const start = new Date(m.ano, m.mes - 1, 1);
-      const end = new Date(m.ano, m.mes, 0, 23, 59, 59, 999);
+      // 🌍 Usar offset de 3 horas para alinhar com o horário do Brasil (assim como o dashboard/stats)
+      const start = new Date(Date.UTC(m.ano, m.mes - 1, 1, 3, 0, 0, 0));
+      const lastDayOfMonth = new Date(m.ano, m.mes, 0).getDate();
+      const end = new Date(Date.UTC(m.ano, m.mes - 1, lastDayOfMonth + 1, 2, 59, 59, 999));
       if (start < minDate) minDate = start;
       if (end > maxDate) maxDate = end;
       monthRanges[m.key] = { start, end };
@@ -127,11 +129,23 @@ export async function GET(req: NextRequest) {
       cmvPorMes[m] = 0;
     }
 
+    const orderIdsVistos = new Set<string>();
+
     const processarVendas = (vendas: any[], plataforma: "meli" | "shopee") => {
       for (const v of vendas) {
         if (!v.dataVenda) continue;
+        
+        // Deduplicação em JavaScript (garantir que orderIds não sejam somados duplamente)
+        const orderId = v.orderId;
+        if (orderId) {
+          if (orderIdsVistos.has(orderId)) continue;
+          orderIdsVistos.add(orderId);
+        }
+
         const d = new Date(v.dataVenda);
-        const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        // Converter de volta para horário do Brasil (-3h) para saber a qual mês pertence
+        const brazilDate = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+        const mKey = `${brazilDate.getUTCFullYear()}-${String(brazilDate.getUTCMonth() + 1).padStart(2, "0")}`;
         
         if (!mesesStr.includes(mKey)) continue; // Venda fora dos meses selecionados exatos
 
@@ -189,7 +203,8 @@ export async function GET(req: NextRequest) {
       const d = (tipoData === "caixa" ? cp.dataPagamento : cp.dataCompetencia) || cp.dataVencimento;
       if (!d) continue;
       
-      const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const brazilDate = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+      const mKey = `${brazilDate.getUTCFullYear()}-${String(brazilDate.getUTCMonth() + 1).padStart(2, "0")}`;
       if (!mesesStr.includes(mKey)) continue;
 
       const valor = toNumber(cp.valor);

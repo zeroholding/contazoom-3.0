@@ -101,7 +101,7 @@ export default function DashboardFinanceiro() {
     const [ano2, mes2] = ultimoMes.split('-').map(Number);
 
     const dataInicio = new Date(ano1, mes1 - 1, 1);
-    const dataFim = new Date(ano2, mes2, 0, 23, 59, 59, 999);
+    const dataFim = new Date(ano2, mes2, 0, 0, 0, 0, 0);
 
     setDataInicioPersonalizada(dataInicio);
     setDataFimPersonalizada(dataFim);
