@@ -143,17 +143,27 @@ export default class MeliSyncService {
     let adjustmentSource: FreightSource = null;
 
     if (logisticType === "self_service" || logisticType === "FLEX") {
-      const lc = listCost !== null && listCost > 0 ? listCost : (optCost !== null && optCost > 0 ? optCost : (baseCost !== null ? baseCost : 0));
-      const cc = chargedCost !== null ? chargedCost : 0;
-      
-      const repasse = roundCurrency(lc - cc);
+      const chargeFlex = toFiniteNumber((s as any)._charge_flex);
+      const grossAmount = toFiniteNumber((s as any)._costs_gross_amount);
 
-      if (repasse > 0) {
-        adjustedCost = repasse; // Ex: 11 - 9.90 = +1.10 (Subsídio >= 79) OU 11 - 0 = +11.00 (< 79)
+      if (chargeFlex !== null && chargeFlex > 0) {
+        adjustedCost = chargeFlex;
+        adjustmentSource = "shipment";
+      } else if (grossAmount !== null && grossAmount > 0) {
+        adjustedCost = grossAmount;
         adjustmentSource = "shipment";
       } else {
-        adjustedCost = 0;
-        adjustmentSource = "shipping_option";
+        const lc = listCost !== null && listCost > 0 ? listCost : (optCost !== null && optCost > 0 ? optCost : (baseCost !== null ? baseCost : 0));
+        const cc = chargedCost !== null ? chargedCost : 0;
+        const repasse = roundCurrency(lc - cc);
+
+        if (repasse > 0) {
+          adjustedCost = repasse;
+          adjustmentSource = "shipment";
+        } else {
+          adjustedCost = 0;
+          adjustmentSource = "shipping_option";
+        }
       }
     } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
       if (listCost !== null && chargedCost !== null) {
@@ -343,10 +353,13 @@ export default class MeliSyncService {
               if (senderSave !== undefined && senderSave !== null) {
                 shipmentData._seller_shipping_save = senderSave;
               }
-              // Salvar gross_amount para detectar receita FLEX
               const grossAmount = costsData.gross_amount;
               if (grossAmount !== undefined && grossAmount !== null) {
                 shipmentData._costs_gross_amount = grossAmount;
+              }
+              const chargeFlex = costsData.senders?.[0]?.charges?.charge_flex;
+              if (chargeFlex !== undefined && chargeFlex !== null) {
+                shipmentData._charge_flex = chargeFlex;
               }
             }
             return shipmentData;
