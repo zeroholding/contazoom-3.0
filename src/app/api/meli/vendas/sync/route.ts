@@ -77,6 +77,22 @@ const MAX_OFFSET = 9950; // Limite seguro antes do 10k da API
 // Mutex para evitar refresh concorrente de tokens por conta
 const tokenRefreshMutex = new Map<string, Promise<any>>();
 
+function sumPromotedAmount(discounts: unknown): number | null {
+  if (!Array.isArray(discounts)) return null;
+
+  let total = 0;
+  let hasValue = false;
+  for (const discount of discounts) {
+    const promotedAmount = toFiniteNumber((discount as any)?.promoted_amount);
+    if (promotedAmount !== null) {
+      total += promotedAmount;
+      hasValue = true;
+    }
+  }
+
+  return hasValue ? roundCurrency(total) : null;
+}
+
 type FreightSource = "shipment" | "order" | "shipping_option" | null;
 
 type MeliOrderFreight = {
@@ -105,6 +121,10 @@ type MeliOrderFreight = {
 
   sellerShippingCost: number | null;
   sellerShippingSave: number | null;
+  sellerShippingDiscount: number | null;
+  receiverShippingCost: number | null;
+  receiverShippingSave: number | null;
+  receiverShippingDiscount: number | null;
   costsGrossAmount: number | null;
 };
 
@@ -260,20 +280,39 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
       : null;
 
   let adjustedCost: number | null = null;
-  let adjustmentSource: FreightSource = null;
+  let adjustmentSource: string | null = null;
 
   if (logisticType === "self_service" || logisticType === "FLEX") {
     // Para FLEX, o valor real repassado pelo ML está em charge_flex (se >= 79)
-    // Se for < 79 (comprador paga), o repasse é o grossAmount ou charge_flex.
+    // Se nao houver charge_flex, o bonus vem dos descontos/save do sender ou receiver.
     const chargeFlex = toFiniteNumber((s as any)._charge_flex);
+    const sellerShippingCost = toFiniteNumber((s as any)._seller_shipping_cost);
+    const sellerShippingSave = toFiniteNumber((s as any)._seller_shipping_save);
+    const sellerShippingDiscount = toFiniteNumber((s as any)._seller_shipping_discount);
+    const receiverShippingCost = toFiniteNumber((s as any)._receiver_shipping_cost);
+    const receiverShippingSave = toFiniteNumber((s as any)._receiver_shipping_save);
+    const receiverShippingDiscount = toFiniteNumber((s as any)._receiver_shipping_discount);
     const grossAmount = toFiniteNumber((s as any)._costs_gross_amount);
+    const sellerFlexRebate = sellerShippingDiscount ?? sellerShippingSave;
+    const receiverFlexRebate =
+      receiverShippingDiscount ??
+      receiverShippingSave ??
+      (receiverShippingCost !== null && receiverShippingCost > 0
+        ? receiverShippingCost
+        : null);
 
     if (chargeFlex !== null && chargeFlex > 0) {
       adjustedCost = chargeFlex;
       adjustmentSource = "shipment";
-    } else if (grossAmount !== null && grossAmount > 0) {
-      adjustedCost = grossAmount;
-      adjustmentSource = "shipment";
+    } else if (sellerFlexRebate !== null && sellerFlexRebate > 0) {
+      adjustedCost = roundCurrency(sellerFlexRebate);
+      adjustmentSource = "sender_discount";
+    } else if (receiverFlexRebate !== null && receiverFlexRebate > 0) {
+      adjustedCost = roundCurrency(receiverFlexRebate);
+      adjustmentSource = "receiver";
+    } else if ((sellerShippingCost ?? 0) === 0 && grossAmount !== null && grossAmount > 0) {
+      adjustedCost = roundCurrency(grossAmount);
+      adjustmentSource = "gross_amount";
     } else {
       // Fallback
       const lc = listCost !== null && listCost > 0 ? listCost : (optCost !== null && optCost > 0 ? optCost : (baseCost !== null ? baseCost : 0));
@@ -348,6 +387,10 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
 
     sellerShippingCost: toFiniteNumber((s as any)._seller_shipping_cost),
     sellerShippingSave: toFiniteNumber((s as any)._seller_shipping_save),
+    sellerShippingDiscount: toFiniteNumber((s as any)._seller_shipping_discount),
+    receiverShippingCost: toFiniteNumber((s as any)._receiver_shipping_cost),
+    receiverShippingSave: toFiniteNumber((s as any)._receiver_shipping_save),
+    receiverShippingDiscount: toFiniteNumber((s as any)._receiver_shipping_discount),
     costsGrossAmount: toFiniteNumber((s as any)._costs_gross_amount),
   };
 }
@@ -698,9 +741,25 @@ async function fetchOrdersPage({
             if (senderSave !== undefined && senderSave !== null) {
               shipmentData._seller_shipping_save = senderSave;
             }
+            const senderDiscount = sumPromotedAmount(costsData.senders?.[0]?.discounts);
+            if (senderDiscount !== null) {
+              shipmentData._seller_shipping_discount = senderDiscount;
+            }
             const senderComp = costsData.senders?.[0]?.compensation;
             if (senderComp !== undefined && senderComp !== null) {
               shipmentData._seller_shipping_compensation = senderComp;
+            }
+            const receiverCost = costsData.receiver?.cost;
+            if (receiverCost !== undefined && receiverCost !== null) {
+              shipmentData._receiver_shipping_cost = receiverCost;
+            }
+            const receiverSave = costsData.receiver?.save;
+            if (receiverSave !== undefined && receiverSave !== null) {
+              shipmentData._receiver_shipping_save = receiverSave;
+            }
+            const receiverDiscount = sumPromotedAmount(costsData.receiver?.discounts);
+            if (receiverDiscount !== null) {
+              shipmentData._receiver_shipping_discount = receiverDiscount;
             }
             const grossAmount = costsData.gross_amount;
             if (grossAmount !== undefined && grossAmount !== null) {
@@ -1329,6 +1388,38 @@ async function fetchOrdersInDateRange(
                 const senderCost = costsData.senders?.[0]?.cost;
                 if (senderCost !== undefined && senderCost !== null) {
                   shipmentData._seller_shipping_cost = senderCost;
+                }
+                const senderSave = costsData.senders?.[0]?.save;
+                if (senderSave !== undefined && senderSave !== null) {
+                  shipmentData._seller_shipping_save = senderSave;
+                }
+                const senderDiscount = sumPromotedAmount(costsData.senders?.[0]?.discounts);
+                if (senderDiscount !== null) {
+                  shipmentData._seller_shipping_discount = senderDiscount;
+                }
+                const senderComp = costsData.senders?.[0]?.compensation;
+                if (senderComp !== undefined && senderComp !== null) {
+                  shipmentData._seller_shipping_compensation = senderComp;
+                }
+                const receiverCost = costsData.receiver?.cost;
+                if (receiverCost !== undefined && receiverCost !== null) {
+                  shipmentData._receiver_shipping_cost = receiverCost;
+                }
+                const receiverSave = costsData.receiver?.save;
+                if (receiverSave !== undefined && receiverSave !== null) {
+                  shipmentData._receiver_shipping_save = receiverSave;
+                }
+                const receiverDiscount = sumPromotedAmount(costsData.receiver?.discounts);
+                if (receiverDiscount !== null) {
+                  shipmentData._receiver_shipping_discount = receiverDiscount;
+                }
+                const grossAmount = costsData.gross_amount;
+                if (grossAmount !== undefined && grossAmount !== null) {
+                  shipmentData._costs_gross_amount = grossAmount;
+                }
+                const chargeFlex = costsData.senders?.[0]?.charges?.charge_flex;
+                if (chargeFlex !== undefined && chargeFlex !== null) {
+                  shipmentData._charge_flex = chargeFlex;
                 }
               }
               return shipmentData;

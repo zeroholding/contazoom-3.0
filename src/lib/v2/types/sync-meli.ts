@@ -26,7 +26,11 @@ export type MeliOrderFreight = {
 
   sellerShippingCost: number | null;
   sellerShippingSave: number | null; // senders[0].save do /costs endpoint
-  costsGrossAmount: number | null;  // gross_amount do /costs endpoint (usado para receita FLEX)
+  sellerShippingDiscount: number | null; // soma de senders[0].discounts[].promoted_amount
+  receiverShippingCost: number | null; // receiver.cost do /costs endpoint (frete pago pelo comprador no FLEX)
+  receiverShippingSave: number | null; // receiver.save do /costs endpoint
+  receiverShippingDiscount: number | null; // soma de receiver.discounts[].promoted_amount
+  costsGrossAmount: number | null;  // gross_amount do /costs endpoint (custo bruto, nao receita)
 };
 
 export type MeliOrderPayload = {

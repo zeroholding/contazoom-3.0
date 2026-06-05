@@ -37,7 +37,11 @@ type MeliOrderFreight = {
 
   sellerShippingCost: number | null;
   sellerShippingSave: number | null; // senders[0].save do /costs endpoint
-  costsGrossAmount: number | null; // gross_amount do /costs endpoint
+  sellerShippingDiscount: number | null; // soma de senders[0].discounts[].promoted_amount
+  receiverShippingCost: number | null; // receiver.cost do /costs endpoint (frete pago pelo comprador no FLEX)
+  receiverShippingSave: number | null; // receiver.save do /costs endpoint
+  receiverShippingDiscount: number | null; // soma de receiver.discounts[].promoted_amount
+  costsGrossAmount: number | null; // gross_amount do /costs endpoint (custo bruto, nao receita)
 };
 
 type MeliOrderPayload = {
@@ -158,7 +162,7 @@ export async function prepareSaleData(
     const taxaPlataforma = saleFee > 0 ? -roundCurrency(saleFee) : null;
     
     // ── Cálculo do frete ────────────────────────────────────────────────────
-    // FLEX (self_service): O valor líquido para o vendedor é zero (entra o repasse e sai pro motoboy).
+    // FLEX (self_service): usar a receita real do envio quando o ML repassa/estorna.
     // Outros: vendedor PAGA o senders.cost diretamente (não devemos abater o save de novo).
     let frete: number;
 

@@ -22,6 +22,14 @@ async function safeFetch(url: string, token: string) {
   }
 }
 
+function sumPromotedAmount(discounts: unknown): number {
+  if (!Array.isArray(discounts)) return 0;
+  return discounts.reduce((sum, discount: any) => {
+    const value = Number(discount?.promoted_amount);
+    return Number.isFinite(value) ? sum + value : sum;
+  }, 0);
+}
+
 async function analyzeShipment(shippingId: number | string, order: any, token: string) {
   const [shipment, costs, billing, itemsCosts] = await Promise.all([
     safeFetch(`${MELI_API_BASE}/shipments/${shippingId}`, token),
@@ -37,11 +45,18 @@ async function analyzeShipment(shippingId: number | string, order: any, token: s
   const senderSave = sender?.save ?? 0;
   const senderCompensation = sender?.compensation ?? 0;
   const receiverCost = costs?.receiver?.cost ?? 0;
+  const senderDiscount = sumPromotedAmount(sender?.discounts);
+  const receiverSave = costs?.receiver?.save ?? 0;
+  const receiverDiscount = sumPromotedAmount(costs?.receiver?.discounts);
+  const sellerFlexRebate = senderDiscount || senderSave;
+  const receiverFlexRebate = receiverDiscount || receiverSave || receiverCost;
   const netFreteVendedor = chargeFlex > 0
-    ? chargeFlex                                    // FLEX: receita positiva
-    : shipment?.logistic_type === "self_service" && receiverCost > 0
-      ? receiverCost                                // FLEX < 79: comprador paga e ML repassa ao vendedor
-      : -senderCost;                                // outros: despesa negativa
+    ? chargeFlex
+    : shipment?.logistic_type === "self_service" && sellerFlexRebate > 0
+      ? sellerFlexRebate
+      : shipment?.logistic_type === "self_service" && receiverFlexRebate > 0
+        ? receiverFlexRebate
+        : -senderCost;
 
   return {
     order_id: order?.id ?? null,
@@ -57,14 +72,19 @@ async function analyzeShipment(shippingId: number | string, order: any, token: s
       is_flex: shipment?.logistic_type === "self_service" || chargeFlex > 0,
       charge_flex: chargeFlex,
       receiver_cost: receiverCost,
+      receiver_save: receiverSave,
+      receiver_discount_promoted_amount: receiverDiscount,
       sender_cost: senderCost,
       sender_save: senderSave,
+      sender_discount_promoted_amount: senderDiscount,
       sender_compensation: senderCompensation,
       net_frete_vendedor: netFreteVendedor,
       interpretacao: chargeFlex > 0
         ? `✅ FLEX: Vendedor RECEBE R$${chargeFlex.toFixed(2)} do ML`
-        : shipment?.logistic_type === "self_service" && receiverCost > 0
-          ? `✅ FLEX: Comprador pagou R$${receiverCost.toFixed(2)} de envio e o vendedor RECEBE como bônus`
+        : shipment?.logistic_type === "self_service" && sellerFlexRebate > 0
+          ? `✅ FLEX: Vendedor RECEBE R$${sellerFlexRebate.toFixed(2)} pelo desconto/save do sender`
+          : shipment?.logistic_type === "self_service" && receiverFlexRebate > 0
+          ? `✅ FLEX: Vendedor RECEBE R$${receiverFlexRebate.toFixed(2)} pelo desconto/save do receiver`
           : `📦 Frete normal: Vendedor PAGA R$${senderCost.toFixed(2)}`,
     },
 

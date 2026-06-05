@@ -13,6 +13,22 @@ function roundCurrency(value: number): number {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
+function sumPromotedAmount(discounts: unknown): number | null {
+  if (!Array.isArray(discounts)) return null;
+
+  let total = 0;
+  let hasValue = false;
+  for (const discount of discounts) {
+    const value = Number((discount as any)?.promoted_amount);
+    if (Number.isFinite(value)) {
+      total += value;
+      hasValue = true;
+    }
+  }
+
+  return hasValue ? roundCurrency(total) : null;
+}
+
 export async function GET() {
   try {
     const vendas = await prisma.meliVenda.findMany({
@@ -57,7 +73,11 @@ export async function GET() {
       let chargeFlex = null;
       let sellerCost = null;
       let sellerSave = null;
+      let sellerDiscount = null;
       let sellerComp = null;
+      let receiverCost = null;
+      let receiverSave = null;
+      let receiverDiscount = null;
       let grossAmount = null;
 
       if (shippingId) {
@@ -70,7 +90,11 @@ export async function GET() {
             chargeFlex = costsData.senders?.[0]?.charges?.charge_flex;
             sellerCost = costsData.senders?.[0]?.cost;
             sellerSave = costsData.senders?.[0]?.save;
+            sellerDiscount = sumPromotedAmount(costsData.senders?.[0]?.discounts);
             sellerComp = costsData.senders?.[0]?.compensation;
+            receiverCost = costsData.receiver?.cost;
+            receiverSave = costsData.receiver?.save;
+            receiverDiscount = sumPromotedAmount(costsData.receiver?.discounts);
             grossAmount = costsData.gross_amount;
             
             // Save inside rawData for future cache
@@ -78,7 +102,11 @@ export async function GET() {
             if (chargeFlex !== undefined) raw.shipment._charge_flex = chargeFlex;
             if (sellerCost !== undefined) raw.shipment._seller_shipping_cost = sellerCost;
             if (sellerSave !== undefined) raw.shipment._seller_shipping_save = sellerSave;
+            if (sellerDiscount !== null) raw.shipment._seller_shipping_discount = sellerDiscount;
             if (sellerComp !== undefined) raw.shipment._seller_shipping_compensation = sellerComp;
+            if (receiverCost !== undefined) raw.shipment._receiver_shipping_cost = receiverCost;
+            if (receiverSave !== undefined) raw.shipment._receiver_shipping_save = receiverSave;
+            if (receiverDiscount !== null) raw.shipment._receiver_shipping_discount = receiverDiscount;
             if (grossAmount !== undefined) raw.shipment._costs_gross_amount = grossAmount;
             
             await prisma.meliVenda.update({
@@ -95,7 +123,11 @@ export async function GET() {
       if (chargeFlex === null || chargeFlex === undefined) chargeFlex = raw.shipment?._charge_flex;
       if (sellerCost === null || sellerCost === undefined) sellerCost = raw.shipment?._seller_shipping_cost;
       if (sellerSave === null || sellerSave === undefined) sellerSave = raw.shipment?._seller_shipping_save;
+      if (sellerDiscount === null || sellerDiscount === undefined) sellerDiscount = raw.shipment?._seller_shipping_discount;
       if (sellerComp === null || sellerComp === undefined) sellerComp = raw.shipment?._seller_shipping_compensation;
+      if (receiverCost === null || receiverCost === undefined) receiverCost = raw.shipment?._receiver_shipping_cost;
+      if (receiverSave === null || receiverSave === undefined) receiverSave = raw.shipment?._receiver_shipping_save;
+      if (receiverDiscount === null || receiverDiscount === undefined) receiverDiscount = raw.shipment?._receiver_shipping_discount;
       if (grossAmount === null || grossAmount === undefined) grossAmount = raw.shipment?._costs_gross_amount;
 
       const toNum = (val: any) => {
@@ -110,8 +142,14 @@ export async function GET() {
       const cF = toNum(chargeFlex);
       const sC = toNum(sellerCost) ?? 0;
       const sS = toNum(sellerSave) ?? 0;
+      const sD = toNum(sellerDiscount);
       const sComp = toNum(sellerComp) ?? 0;
+      const rC = toNum(receiverCost);
+      const rS = toNum(receiverSave);
+      const rD = toNum(receiverDiscount);
       const gA = toNum(grossAmount);
+      const sellerFlexRebate = sD ?? sS;
+      const receiverFlexRebate = rD ?? rS ?? (rC !== null && rC > 0 ? rC : null);
 
       let novoFrete = 0;
       let logMotivo = "";
@@ -120,9 +158,15 @@ export async function GET() {
         if (cF !== null && cF > 0) {
           novoFrete = cF;
           logMotivo = `FLEX (charge_flex: ${cF})`;
-        } else if (gA !== null && gA > 0) {
-          novoFrete = gA;
-          logMotivo = `FLEX (gross_amount: ${gA})`;
+        } else if (sellerFlexRebate !== null && sellerFlexRebate > 0) {
+          novoFrete = roundCurrency(sellerFlexRebate);
+          logMotivo = `FLEX (sender discount/save: ${sellerFlexRebate})`;
+        } else if (receiverFlexRebate !== null && receiverFlexRebate > 0) {
+          novoFrete = roundCurrency(receiverFlexRebate);
+          logMotivo = `FLEX (receiver discount/save: ${receiverFlexRebate})`;
+        } else if (sC === 0 && gA !== null && gA > 0) {
+          novoFrete = roundCurrency(gA);
+          logMotivo = `FLEX (gross_amount fallback: ${gA})`;
         } else {
           // Keep old fallback just in case
           const optCost = toNum(raw.freight?.shippingOptionCost);
