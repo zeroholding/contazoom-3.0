@@ -104,6 +104,8 @@ type MeliOrderFreight = {
   adjustmentSource: string | null;
 
   sellerShippingCost: number | null;
+  sellerShippingSave: number | null;
+  costsGrossAmount: number | null;
 };
 
 function extractOrderDate(order: unknown): Date | null {
@@ -184,54 +186,6 @@ function convertLogisticTypeName(logisticType: string | null): string | null {
   return logisticType;
 }
 
-function calculateFreightAdjustment(
-  logisticType: string | null,
-  unitPrice: number | null,
-  quantity: number | null,
-  baseCost: number | null,
-  listCost: number | null,
-  shippingOptionCost: number | null,
-  shipmentCost: number | null
-): { adjustedCost: number | null; adjustmentSource: string | null } {
-  if (!logisticType) return { adjustedCost: null, adjustmentSource: null };
-
-  // order_cost total = unitário * quantidade  (equivalente ao SQL)
-  const orderCost =
-    unitPrice !== null && quantity ? unitPrice * quantity : null;
-
-  const freteAdjust = calcularFreteAdjust({
-    shipment_logistic_type: logisticType,
-    base_cost: baseCost,
-    shipment_list_cost: listCost,
-    shipping_option_cost: shippingOptionCost,
-    shipment_cost: shipmentCost,
-    order_cost: orderCost,
-    quantity: quantity ?? 0,
-  });
-
-  // Se vier o sentinela (±999) do SQL, ignora override
-  if (Math.abs(freteAdjust) === 999) {
-    return { adjustedCost: null, adjustmentSource: null };
-  }
-
-  // IMPORTANTE: 0 é override válido (zera frete nos < 79 para NÃO-FLEX)
-  const adj = roundCurrency(freteAdjust);
-
-  const label =
-    logisticType === "self_service"
-      ? "FLEX"
-      : logisticType === "drop_off"
-      ? "Correios"
-      : logisticType === "xd_drop_off"
-      ? "Agência"
-      : logisticType === "fulfillment"
-      ? "FULL"
-      : logisticType === "cross_docking"
-      ? "Coleta"
-      : logisticType;
-
-  return { adjustedCost: adj, adjustmentSource: label };
-}
 
 function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   const o = order ?? {};
@@ -312,7 +266,7 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
     const totalAmountNum = Number(totalAmount) || 0;
     if (totalAmountNum >= 79) {
       if (chargedCost !== null && chargedCost > 0) {
-        adjustedCost = -chargedCost;
+        adjustedCost = chargedCost; // Subsídio do ML é um crédito positivo
         adjustmentSource = "shipment";
       } else {
         adjustedCost = 0;
@@ -378,6 +332,8 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
     adjustmentSource,
 
     sellerShippingCost: toFiniteNumber((s as any)._seller_shipping_cost),
+    sellerShippingSave: toFiniteNumber((s as any)._seller_shipping_save),
+    costsGrossAmount: toFiniteNumber((s as any)._costs_gross_amount),
   };
 }
 

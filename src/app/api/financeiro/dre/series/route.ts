@@ -151,8 +151,7 @@ export async function GET(req: NextRequest) {
 
         const vt = toNumber(v.valorTotal);
         const taxa = Math.abs(toNumber(v.taxaPlataforma)); // Taxa sempre como despesa (valor absoluto)
-        let fr = toNumber(v.frete);
-        if (Math.abs(fr) === 999) fr = 0;
+      let fr = toNumber(v.frete) || 0;
         const cmv = (v.sku ? costMap.getCostAtDate(v.sku, d) : 0) * toNumber(v.quantidade);
 
         if (plataforma === "meli") {

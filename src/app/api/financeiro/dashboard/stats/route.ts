@@ -320,10 +320,7 @@ export async function GET(req: NextRequest) {
     for (const v of vendas) {
       const vt = toNumber(v.valorTotal);
       const tp = toNumber(v.taxaPlataforma);
-      let fr = toNumber(v.frete);
-      if (Math.abs(fr) === 999) {
-        fr = 0; // Ignore 999 sentinel value to avoid inflating sums
-      }
+      let fr = toNumber(v.frete) || 0;
       const qtd = toNumber(v.quantidade);
       const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;

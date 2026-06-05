@@ -128,25 +128,7 @@ export default function TabelaVendasV2({
     const processedVendas = vendas.map((venda) => {
       let freteCorrigido = venda.frete;
 
-      if (Math.abs(Number(venda.frete)) === 999) {
-        const shipping = (venda as any).shipping;
-        const rawData = (venda as any).raw || (venda as any).rawData;
-        const rawShipping = rawData?.shipping;
-        const freight = rawData?.freight;
 
-        const adjustedCost =
-          shipping?.adjustedCost ??
-          rawShipping?.adjustedCost ??
-          freight?.adjustedCost;
-
-        if (
-          adjustedCost !== null &&
-          adjustedCost !== undefined &&
-          Math.abs(Number(adjustedCost)) !== 999
-        ) {
-          freteCorrigido = adjustedCost;
-        }
-      }
 
       return {
         venda: { ...venda, frete: freteCorrigido } as any,

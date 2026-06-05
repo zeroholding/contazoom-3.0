@@ -165,8 +165,8 @@ export async function prepareSaleData(
     const isFlex = freight.logisticType === "FLEX" || freight.logisticType === "self_service";
 
     if (isFlex) {
-      // Para o FLEX, o repasse paga o motoboy. O valor líquido para o vendedor é zero.
-      frete = 0;
+      // Para o FLEX, o valor ajustado contém o repasse (subsídio) positivo ou zero.
+      frete = freight.adjustedCost ?? 0;
     } else if (freight.sellerShippingCost !== null && freight.sellerShippingCost !== undefined) {
       // Custo real extraído de /shipments/{id}/costs -> senders[0].cost
       // Esse já é o custo final cobrado na Tarifa de Envio. O subsidy (save) não deve ser abatido novamente.

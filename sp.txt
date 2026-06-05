@@ -1,0 +1,217 @@
+ [API_CONFIG] Backend URL: https://app.contazoom.com.br
+ [API_CONFIG] NEXT_PUBLIC_BACKEND_URL: https://app.contazoom.com.br
+ [API_CONFIG] NODE_ENV: production
+ Dados do gráfico carregados: Array(0)
+ [TopProdutosFaturamento] Dados recebidos da API: Array(0)
+ [TopProdutosFaturamento] Quantidade de produtos: 0
+ [FaturamentoPorExposicao] Dados recebidos da API: Array(0)
+ [FaturamentoPorExposicao] Quantidade de tipos: 0
+ [TopProdutosMargem] Dados recebidos da API: Array(0)
+ [TopProdutosMargem] Quantidade de produtos: 0
+ [FaturamentoPorTipoAnuncio] Dados recebidos da API: Array(0)
+ [FaturamentoPorTipoAnuncio] Quantidade de tipos: 0
+ [FaturamentoPorExposicao] Dados recebidos da API: Array(1)
+ [FaturamentoPorExposicao] Quantidade de tipos: 1
+ [FaturamentoPorTipoAnuncio] Dados recebidos da API: Array(1)
+ [FaturamentoPorTipoAnuncio] Quantidade de tipos: 1
+ Dados do gráfico carregados: Array(29)
+ [TopProdutosFaturamento] Dados recebidos da API: Array(10)
+ [TopProdutosFaturamento] Quantidade de produtos: 10
+ [TopProdutosFaturamento] Primeiro produto: Object
+ [TopProdutosMargem] Dados recebidos da API: Array(10)
+ [TopProdutosMargem] Quantidade de produtos: 10
+ [TopProdutosMargem] Primeiro produto: Object
+ [SSE useVendasSyncProgress] 🔌 Função connect() chamada
+ [SSE useVendasSyncProgress] Flag shouldReconnect ativada
+ [SSE useVendasSyncProgress] Connecting to: /api/meli/vendas/sync-progress
+ [SSE useVendasSyncProgress] EventSource criado com sucesso, readyState: 0
+ [useVendas] Carregando contas conectadas para plataforma: Shopee
+ [useVendas] Chamando API de contas: /api/shopee/accounts
+ [useVendas] 🔗 Usando backend: https://app.contazoom.com.br
+ [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+ [useVendas] Carregando contas conectadas para plataforma: Shopee
+ [useVendas] Chamando API de contas: /api/shopee/accounts
+ [useVendas] 🔗 Usando backend: https://app.contazoom.com.br
+ [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+ [SSE useVendasSyncProgress] ✅ onopen disparado - conexão estabelecida!
+ [SSE useVendasSyncProgress] Estado atualizado: isConnected=true, reconnectAttempts=0
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"connected","message":"Conexão SSE estabelecida","timestamp":"2026-05-30T14:24:42.819Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [useVendas] Dados de contas recebidos de /api/shopee/accounts: Array(1)
+ [useVendas] Contas processadas (Shopee): Array(1)
+ [useVendas] Dados de contas recebidos de /api/shopee/accounts: Array(1)
+ [useVendas] Contas processadas (Shopee): Array(1)
+ [SSE] Conexão fechada
+ [SSE useVendasSyncProgress] 🔌 Função connect() chamada
+ [SSE useVendasSyncProgress] Flag shouldReconnect ativada
+ [SSE useVendasSyncProgress] Connecting to: /api/meli/vendas/sync-progress
+ [SSE useVendasSyncProgress] EventSource criado com sucesso, readyState: 0
+ [useVendas] Carregando contas conectadas para plataforma: Shopee
+ [useVendas] Chamando API de contas: /api/shopee/accounts
+ [useVendas] 🔗 Usando backend: https://app.contazoom.com.br
+ [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+ [useVendas] Carregando contas conectadas para plataforma: Shopee
+ [useVendas] Chamando API de contas: /api/shopee/accounts
+ [useVendas] 🔗 Usando backend: https://app.contazoom.com.br
+ [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+ [SSE useVendasSyncProgress] ✅ onopen disparado - conexão estabelecida!
+ [SSE useVendasSyncProgress] Estado atualizado: isConnected=true, reconnectAttempts=0
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"connected","message":"Conexão SSE estabelecida","timestamp":"2026-05-30T14:24:42.995Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [useVendas] Dados de contas recebidos de /api/shopee/accounts: Array(1)
+ [useVendas] Contas processadas (Shopee): Array(1)
+ [useVendas] Dados de contas recebidos de /api/shopee/accounts: Array(1)
+ [useVendas] Contas processadas (Shopee): Array(1)
+ [useVendas] ✅ Carregamento instantâneo: 183 vendas
+ [useVendas] ✅ Carregamento instantâneo: 183 vendas
+ [useVendas] ✅ Carregamento instantâneo: 183 vendas
+ [useVendas] ✅ Carregamento instantâneo: 183 vendas
+ [TabelaVendas] ✅ 99 vendas processadas
+ [useVendas] Timeout de segurança: forçando isTableLoading = false
+ [useVendas] Timeout de segurança: forçando isTableLoading = false
+ [useVendas] 🚀 Iniciando sincronização de vendas para Shopee
+ [useVendas] Parâmetros recebidos: Object
+ [useVendas] 🔌 Status SSE antes de conectar: isConnected=false
+ [useVendas] 🔌 SSE não está conectado, conectando agora...
+ [SSE useVendasSyncProgress] 🔌 Função connect() chamada
+ [SSE useVendasSyncProgress] Flag shouldReconnect ativada
+ [SSE useVendasSyncProgress] Connecting to: /api/meli/vendas/sync-progress
+ [SSE useVendasSyncProgress] EventSource criado com sucesso, readyState: 0
+ [useVendas] 🔌 Função connect() chamada, aguardando 1000ms...
+ [TabelaVendas] ✅ 99 vendas processadas
+ [ModalSyncVendas] Shopee sincronizando...
+ [SSE useVendasSyncProgress] ✅ onopen disparado - conexão estabelecida!
+ [SSE useVendasSyncProgress] Estado atualizado: isConnected=true, reconnectAttempts=0
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"connected","message":"Conexão SSE estabelecida","timestamp":"2026-05-30T14:24:58.684Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [TabelaVendas] ✅ 99 vendas processadas
+ [ModalSyncVendas] Shopee sincronizando...
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [TabelaVendas] ✅ 99 vendas processadas
+ [ModalSyncVendas] Shopee sincronizando...
+ [useVendas] 🔌 Aguardo concluído, verificando conexão...
+ [useVendas] 🔌 Status SSE após aguardar: isConnected= false
+ [useVendas] 🔗 Usando backend: https://app.contazoom.com.br
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_start","message":"Conectando ao Shopee...","current":0,"total":0,"fetched":0,"expected":0,"timestamp":"2026-05-30T14:24:59.676Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [SSE useVendasSyncProgress] Toast criado para sync_start
+ [SSE useVendasSyncProgress] Evento recebido: sync_start
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_start","message":"Conectando ao Shopee...","current":0,"total":0,"fetched":0,"expected":0,"timestamp":"2026-05-30T14:24:59.676Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [SSE useVendasSyncProgress] Toast criado para sync_start
+ [SSE useVendasSyncProgress] Evento recebido: sync_start
+ [TabelaVendas] ✅ 99 vendas processadas
+ [ModalSyncVendas] Shopee sincronizando...
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [useVendas] Sincronização em andamento detectada - ativando isSyncing
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [TabelaVendas] ✅ 99 vendas processadas
+ [ModalSyncVendas] Shopee sincronizando...
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Verificando tokens de acesso...","current":0,"total":0,"fetched":0,"expected":0,"timestamp":"2026-05-30T14:24:59.680Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [SSE useVendasSyncProgress] Toast atualizado: Verificando tokens de acesso...
+ [SSE useVendasSyncProgress] Progresso recebido: Verificando tokens de acesso...
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Verificando tokens de acesso...","current":0,"total":0,"fetched":0,"expected":0,"timestamp":"2026-05-30T14:24:59.680Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [SSE useVendasSyncProgress] Toast atualizado: Verificando tokens de acesso...
+ [SSE useVendasSyncProgress] Progresso recebido: Verificando tokens de acesso...
+ [TabelaVendas] ✅ 99 vendas processadas
+ [ModalSyncVendas] Shopee sincronizando...
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [useVendas] Progresso atualizado: 0/0
+ [useVendas] Progresso SSE recebido (Shopee): Object
+ [useVendas] Progresso atualizado: 0/0
+ [TabelaVendas] ✅ 99 vendas processadas
+ [ModalSyncVendas] Shopee sincronizando...
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Processando conta 1/1: Loja 1040268078","current":0,"total":1,"fetched":0,"expected":0,"accountId":"d3e00673-cf59-48bf-91cc-49fe4009f2a1","accountNickname":"Loja 1040268078","timestamp":"2026-05-30T14:25:00.649Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [SSE useVendasSyncProgress] Toast atualizado: Processando conta 1/1: Loja 1040268078 (0%)
+ [SSE useVendasSyncProgress] Progresso recebido: Processando conta 1/1: Loja 1040268078
+ [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Processando conta 1/1: Loja 1040268078","current":0,"total":1,"fetched":0,"expected":0,"accountId":"d3e00673-cf59-48bf-91cc-49fe4009f2a1","accountNickname":"Loja 1040268078","timestamp":"2026-05-30T14:25:00.649Z"}
+ [SSE useVendasSyncProgress] Dados parseados: Object
+ [SSE useVendasSyncProgress] Toast atualizado: Processando conta 1/1: Loja 1040268078 (0%)
+ [SSE useVendasSyncProgress] Progresso recebido: Processando conta 1/1: Loja 1040268078
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Shopee sincronizando...
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+5f80fcc591ba2b87.js:1 [useVendas] Progresso atualizado: 0/1
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+5f80fcc591ba2b87.js:1 [useVendas] Progresso atualizado: 0/1
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Shopee sincronizando...
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Buscando vendas: janela 1-1 de 1","current":0,"total":1,"fetched":0,"expected":0,"accountId":"d3e00673-cf59-48bf-91cc-49fe4009f2a1","accountNickname":"Loja 1040268078","timestamp":"2026-05-30T14:25:00.686Z"}
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] Dados parseados: Object
+d56009939d988d91.js:650 [SSE useVendasSyncProgress] Toast atualizado: Buscando vendas: janela 1-1 de 1 (0%)
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Progresso recebido: Buscando vendas: janela 1-1 de 1
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Buscando vendas: janela 1-1 de 1","current":0,"total":1,"fetched":0,"expected":0,"accountId":"d3e00673-cf59-48bf-91cc-49fe4009f2a1","accountNickname":"Loja 1040268078","timestamp":"2026-05-30T14:25:00.686Z"}
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] Dados parseados: Object
+d56009939d988d91.js:650 [SSE useVendasSyncProgress] Toast atualizado: Buscando vendas: janela 1-1 de 1 (0%)
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Progresso recebido: Buscando vendas: janela 1-1 de 1
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Shopee sincronizando...
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+5f80fcc591ba2b87.js:1 [useVendas] Progresso atualizado: 0/1
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+5f80fcc591ba2b87.js:1 [useVendas] Progresso atualizado: 0/1
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Shopee sincronizando...
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Salvando: 1 de 1 vendas","current":1,"total":1,"fetched":1,"expected":1,"accountId":"d3e00673-cf59-48bf-91cc-49fe4009f2a1","accountNickname":"Loja 1040268078","timestamp":"2026-05-30T14:25:04.549Z"}
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] Dados parseados: Object
+d56009939d988d91.js:650 [SSE useVendasSyncProgress] Toast atualizado: Salvando: 1 de 1 vendas (100%)
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Progresso recebido: Salvando: 1 de 1 vendas
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_complete","message":"Sincronização concluída! 1 vendas processadas","current":1,"total":1,"fetched":1,"expected":1,"timestamp":"2026-05-30T14:25:04.550Z"}
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] Dados parseados: Object
+d56009939d988d91.js:656 [SSE useVendasSyncProgress] Toast de conclusão mostrado
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Evento recebido: sync_complete
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+5f80fcc591ba2b87.js:1 [useVendas] Sincronização completa - processando apenas uma vez
+5f80fcc591ba2b87.js:1 [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_progress","message":"Salvando: 1 de 1 vendas","current":1,"total":1,"fetched":1,"expected":1,"accountId":"d3e00673-cf59-48bf-91cc-49fe4009f2a1","accountNickname":"Loja 1040268078","timestamp":"2026-05-30T14:25:04.549Z"}
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] Dados parseados: Object
+d56009939d988d91.js:650 [SSE useVendasSyncProgress] Toast atualizado: Salvando: 1 de 1 vendas (100%)
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Progresso recebido: Salvando: 1 de 1 vendas
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] 📨 Mensagem recebida: {"type":"sync_complete","message":"Sincronização concluída! 1 vendas processadas","current":1,"total":1,"fetched":1,"expected":1,"timestamp":"2026-05-30T14:25:04.550Z"}
+d56009939d988d91.js:649 [SSE useVendasSyncProgress] Dados parseados: Object
+d56009939d988d91.js:656 [SSE useVendasSyncProgress] Toast de conclusão mostrado
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Evento recebido: sync_complete
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Shopee sincronizando...
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+5f80fcc591ba2b87.js:1 [useVendas] Sincronização completa - processando apenas uma vez
+5f80fcc591ba2b87.js:1 [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Shopee: Sincronização terminou (detectado via isSyncing). Fechando em 2s...
+227a55d66ddd95ef.js:1 [ModalSyncVendas] sync_complete detectado (processando apenas uma vez), platform: Shopee
+5f80fcc591ba2b87.js:50 Sincronização concluída com sucesso - recarregando vendas...
+5f80fcc591ba2b87.js:1 [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Fechando modal em 2 segundos...
+5f80fcc591ba2b87.js:1 [useVendas] Progresso SSE recebido (Shopee): Object
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+5f80fcc591ba2b87.js:1 [useVendas] Shopee: Recarregando vendas do banco após sincronização...
+5f80fcc591ba2b87.js:1 [useVendas] Iniciando carregamento de vendas para plataforma: Shopee
+5f80fcc591ba2b87.js:1 [useVendas] ✅ Carregamento instantâneo: 184 vendas
+5f80fcc591ba2b87.js:1 [useVendas] ✅ Carregamento instantâneo: 184 vendas
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] ⚠️ onerror disparado
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Objeto de erro: Event
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Estado da conexão: Object
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Erro na conexão: Object
+e.onerror @ d56009939d988d91.js:660
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] ⚠️ onerror disparado
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Objeto de erro: Event
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Estado da conexão: Object
+d56009939d988d91.js:660 [SSE useVendasSyncProgress] Erro na conexão: Object
+e.onerror @ d56009939d988d91.js:660
+5f80fcc591ba2b87.js:1 [useVendas] ✅ Carregamento instantâneo: 184 vendas
+d56009939d988d91.js:660 [SSE] Conexão fechada
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+d56009939d988d91.js:660 [SSE] Conexão fechada
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Fechando modal do Shopee (fallback)
+227a55d66ddd95ef.js:1 [ModalSyncVendas] Fechando modal agora
+5f80fcc591ba2b87.js:1 [useVendas] ✅ Carregamento instantâneo: 184 vendas
+5f80fcc591ba2b87.js:1 [TabelaVendas] ✅ 99 vendas processadas

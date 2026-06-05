@@ -146,7 +146,7 @@ export default class MeliSyncService {
       const totalAmountNum = Number(totalAmount) || 0;
       if (totalAmountNum >= 79) {
         if (chargedCost !== null && chargedCost > 0) {
-          adjustedCost = -chargedCost;
+          adjustedCost = chargedCost; // Subsídio do ML é um crédito positivo
           adjustmentSource = "shipment";
         } else {
           adjustedCost = 0;
