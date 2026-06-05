@@ -166,7 +166,15 @@ export default class MeliSyncService {
         }
       }
     } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
-      if (listCost !== null && chargedCost !== null) {
+      const sellerCost = toFiniteNumber((s as any)._seller_shipping_cost) ?? 0;
+      const sellerSave = toFiniteNumber((s as any)._seller_shipping_save) ?? 0;
+      const sellerComp = toFiniteNumber((s as any)._seller_shipping_compensation) ?? 0;
+      const netSellerCost = sellerCost - sellerSave - sellerComp;
+
+      if (netSellerCost > 0) {
+        adjustedCost = -roundCurrency(netSellerCost);
+        adjustmentSource = "shipment";
+      } else if (listCost !== null && chargedCost !== null) {
         const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
         adjustedCost = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
         adjustmentSource = "shipping_option";
@@ -352,6 +360,10 @@ export default class MeliSyncService {
               const senderSave = costsData.senders?.[0]?.save;
               if (senderSave !== undefined && senderSave !== null) {
                 shipmentData._seller_shipping_save = senderSave;
+              }
+              const senderComp = costsData.senders?.[0]?.compensation;
+              if (senderComp !== undefined && senderComp !== null) {
+                shipmentData._seller_shipping_compensation = senderComp;
               }
               const grossAmount = costsData.gross_amount;
               if (grossAmount !== undefined && grossAmount !== null) {

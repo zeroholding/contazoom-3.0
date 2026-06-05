@@ -289,14 +289,19 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
       }
     }
   } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
-    // OUTRAS MODALIDADES: O custo do vendedor é o custo total (listCost) MENOS o que o comprador pagou (chargedCost).
-    // Se a etiqueta custa 18.85 e o comprador pagou 0 (frete grátis), o vendedor paga 18.85.
-    if (listCost !== null && chargedCost !== null) {
+    const sellerCost = toFiniteNumber((s as any)._seller_shipping_cost) ?? 0;
+    const sellerSave = toFiniteNumber((s as any)._seller_shipping_save) ?? 0;
+    const sellerComp = toFiniteNumber((s as any)._seller_shipping_compensation) ?? 0;
+    const netSellerCost = sellerCost - sellerSave - sellerComp;
+
+    if (netSellerCost > 0) {
+      adjustedCost = -roundCurrency(netSellerCost);
+      adjustmentSource = "shipment";
+    } else if (listCost !== null && chargedCost !== null) {
       const sellerFreightCost = Math.max(roundCurrency(listCost - chargedCost), 0);
       adjustedCost = sellerFreightCost > 0 ? -roundCurrency(sellerFreightCost) : 0;
       adjustmentSource = "shipping_option";
     } else if (baseCost !== null && baseCost > 0) {
-      // Fallback para APIs antigas onde base_cost traz o valor líquido cobrado do vendedor
       adjustedCost = -baseCost;
       adjustmentSource = "shipment";
     } else {
@@ -692,6 +697,10 @@ async function fetchOrdersPage({
             const senderSave = costsData.senders?.[0]?.save;
             if (senderSave !== undefined && senderSave !== null) {
               shipmentData._seller_shipping_save = senderSave;
+            }
+            const senderComp = costsData.senders?.[0]?.compensation;
+            if (senderComp !== undefined && senderComp !== null) {
+              shipmentData._seller_shipping_compensation = senderComp;
             }
             const grossAmount = costsData.gross_amount;
             if (grossAmount !== undefined && grossAmount !== null) {
