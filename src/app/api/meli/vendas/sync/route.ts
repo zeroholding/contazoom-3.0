@@ -263,21 +263,18 @@ function calculateFreight(order: any, shipment: any): MeliOrderFreight {
   let adjustmentSource: FreightSource = null;
 
   if (logisticType === "self_service" || logisticType === "FLEX") {
-    const totalAmountNum = Number(totalAmount) || 0;
-    if (totalAmountNum >= 79) {
-      if (chargedCost !== null && chargedCost > 0) {
-        adjustedCost = chargedCost; // Subsídio do ML é um crédito positivo
+      const lc = listCost !== null && listCost > 0 ? listCost : (optCost !== null && optCost > 0 ? optCost : (baseCost !== null ? baseCost : 0));
+      const cc = chargedCost !== null ? chargedCost : 0;
+      
+      const repasse = roundCurrency(lc - cc);
+
+      if (repasse > 0) {
+        adjustedCost = repasse; // Ex: 11 - 9.90 = +1.10 (Subsídio >= 79) OU 11 - 0 = +11.00 (< 79)
         adjustmentSource = "shipment";
       } else {
         adjustedCost = 0;
+        adjustmentSource = "shipping_option";
       }
-    } else {
-      // FLEX < 79: O vendedor ganha o repasse do comprador, mas gasta pagando o motoboy.
-      // O valor líquido para o vendedor é zero (entra X e sai X).
-      // Se colocarmos positivo, infla a margem e reduz o custo visual de frete.
-      adjustedCost = 0;
-      adjustmentSource = "shipping_option";
-    }
   } else if (["fulfillment", "cross_docking", "xd_drop_off", "drop_off"].includes(logisticType ?? "")) {
     // OUTRAS MODALIDADES: O custo do vendedor é o custo total (listCost) MENOS o que o comprador pagou (chargedCost).
     // Se a etiqueta custa 18.85 e o comprador pagou 0 (frete grátis), o vendedor paga 18.85.

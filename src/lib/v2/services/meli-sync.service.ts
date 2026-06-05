@@ -143,14 +143,14 @@ export default class MeliSyncService {
     let adjustmentSource: FreightSource = null;
 
     if (logisticType === "self_service" || logisticType === "FLEX") {
-      const totalAmountNum = Number(totalAmount) || 0;
-      if (totalAmountNum >= 79) {
-        if (chargedCost !== null && chargedCost > 0) {
-          adjustedCost = chargedCost; // Subsídio do ML é um crédito positivo
-          adjustmentSource = "shipment";
-        } else {
-          adjustedCost = 0;
-        }
+      const lc = listCost !== null && listCost > 0 ? listCost : (optCost !== null && optCost > 0 ? optCost : (baseCost !== null ? baseCost : 0));
+      const cc = chargedCost !== null ? chargedCost : 0;
+      
+      const repasse = roundCurrency(lc - cc);
+
+      if (repasse > 0) {
+        adjustedCost = repasse; // Ex: 11 - 9.90 = +1.10 (Subsídio >= 79) OU 11 - 0 = +11.00 (< 79)
+        adjustmentSource = "shipment";
       } else {
         adjustedCost = 0;
         adjustmentSource = "shipping_option";
