@@ -165,7 +165,14 @@ export async function POST(req: NextRequest) {
     console.log(`[Sync] 💾 Fase 2: Processando fila Redis → PostgreSQL...`);
 
     try {
-      await saveOrdersbuilder.saveOrdersFromCache();
+      if (downloadOrderbuilder.allOrders.length > 0) {
+        console.log(
+          `[Sync] 💾 Redis indisponível/vazio: salvando ${downloadOrderbuilder.allOrders.length} vendas direto no PostgreSQL...`,
+        );
+        await saveOrdersbuilder.saveOrdersDirect(downloadOrderbuilder.allOrders);
+      } else {
+        await saveOrdersbuilder.saveOrdersFromCache();
+      }
       progressSum.sumSavedOrders += saveOrdersbuilder.ctx.progress.saved;
     } catch (workerError) {
       console.error(

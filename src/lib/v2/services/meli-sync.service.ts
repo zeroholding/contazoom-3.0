@@ -38,6 +38,15 @@ function sumPromotedAmount(discounts: unknown): number | null {
   return hasValue ? roundCurrency(total) : null;
 }
 
+function firstPositive(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (value !== null && value !== undefined && value > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
 export default class MeliSyncService {
   async getAccountsByUserId(userId: string, accountIds?: string[]) {
     const accountsWhere: any = { userId };
@@ -167,13 +176,15 @@ export default class MeliSyncService {
       const receiverShippingSave = toFiniteNumber((s as any)._receiver_shipping_save);
       const receiverShippingDiscount = toFiniteNumber((s as any)._receiver_shipping_discount);
       const grossAmount = toFiniteNumber((s as any)._costs_gross_amount);
-      const sellerFlexRebate = sellerShippingDiscount ?? sellerShippingSave;
-      const receiverFlexRebate =
-        receiverShippingDiscount ??
-        receiverShippingSave ??
-        (receiverShippingCost !== null && receiverShippingCost > 0
-          ? receiverShippingCost
-          : null);
+      const sellerFlexRebate = firstPositive(
+        sellerShippingDiscount,
+        sellerShippingSave,
+      );
+      const receiverFlexRebate = firstPositive(
+        receiverShippingDiscount,
+        receiverShippingSave,
+        receiverShippingCost,
+      );
 
       if (chargeFlex !== null && chargeFlex > 0) {
         adjustedCost = chargeFlex;

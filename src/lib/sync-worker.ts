@@ -69,7 +69,7 @@ async function buildSkuCacheFromSales(
   const skuSet = new Set<string>();
 
   for (const payload of orders) {
-    const rawOrder: any = payload ?? {};
+    const rawOrder: any = payload?.order ?? {};
     const orderItems: any[] = Array.isArray(rawOrder.order_items)
       ? rawOrder.order_items
       : [];
@@ -247,6 +247,40 @@ export async function processAllUserSales(userId: string): Promise<{
     return { totalProcessed, totalErrors };
 }
 
+export async function processSalesDirect(
+    userId: string,
+    sales: QueuedSale[]
+): Promise<{ totalProcessed: number; totalErrors: number }> {
+    if (sales.length === 0) {
+        return { totalProcessed: 0, totalErrors: 0 };
+    }
+
+    console.log(`[Sync Worker] 💾 Direct save fallback for ${sales.length} sales`);
+
+    sendProgressToUser(userId, {
+        type: 'sync_save_starting',
+        message: 'Salvando vendas diretamente no banco de dados...',
+        current: 0,
+        total: sales.length,
+        phase: 'saving',
+    });
+
+    const result = await saveSalesToDatabase(userId, sales);
+
+    sendProgressToUser(userId, {
+        type: 'sync_save_complete',
+        message: `Salvamento direto concluído: ${result.saved} vendas salvas no banco de dados`,
+        current: result.saved,
+        total: sales.length,
+        phase: 'complete',
+    });
+
+    return {
+        totalProcessed: result.saved,
+        totalErrors: result.errors,
+    };
+}
+
 /**
  * Save sales to PostgreSQL database (adapted from original sync logic)
  */
@@ -257,8 +291,7 @@ async function saveSalesToDatabase(
     let saved = 0;
     let errors = 0;
 
-    // Load SKU cache for this user if not already loaded
-    await loadSkuCache(userId);
+    const currentSkuCache = await buildSkuCacheFromSales(sales, userId);
 
     // Process sales in smaller batches for better transaction management
     for (let i = 0; i < sales.length; i += BATCH_SIZE) {
@@ -286,7 +319,7 @@ async function saveSalesToDatabase(
         try {
             // Preparar todos os dados do batch primeiro
             const preparedData = await Promise.all(
-                batch.map((order) => prepareSaleData(order, userId, skuCache))
+                batch.map((order) => prepareSaleData(order, userId, currentSkuCache))
             );
 
             // Filtrar dados v�lidos

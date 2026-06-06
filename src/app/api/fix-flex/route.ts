@@ -13,6 +13,15 @@ function roundCurrency(value: number): number {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
+function firstPositive(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (value !== null && value !== undefined && value > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function sumPromotedAmount(discounts: unknown): number | null {
   if (!Array.isArray(discounts)) return null;
 
@@ -148,8 +157,8 @@ export async function GET() {
       const rS = toNum(receiverSave);
       const rD = toNum(receiverDiscount);
       const gA = toNum(grossAmount);
-      const sellerFlexRebate = sD ?? sS;
-      const receiverFlexRebate = rD ?? rS ?? (rC !== null && rC > 0 ? rC : null);
+      const sellerFlexRebate = firstPositive(sD, sS);
+      const receiverFlexRebate = firstPositive(rD, rS, rC);
 
       let novoFrete = 0;
       let logMotivo = "";
