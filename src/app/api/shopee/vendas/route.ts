@@ -20,12 +20,18 @@ export async function GET(req: NextRequest) {
 
   try {
     // Verificar cache primeiro (TTL de 5 minutos)
-    const cacheKey = createCacheKey("vendas-shopee", session.sub);
+    const cacheKey = createCacheKey(
+      "vendas-shopee",
+      session.sub,
+      SHOPEE_FINANCIAL_RULE_VERSION,
+    );
     const cachedData = cache.get<any>(cacheKey, 300000);
     
     if (cachedData) {
       console.log(`[Cache Hit] Retornando vendas do Shopee do cache`);
-      return NextResponse.json(cachedData);
+      return NextResponse.json(cachedData, {
+        headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+      });
     }
 
     // Buscar TODAS as vendas Shopee do usuário (sem filtro de 6 meses, igual ML)
@@ -196,13 +202,16 @@ export async function GET(req: NextRequest) {
       total: vendas.length,
       lastSync:
         vendas.length > 0 ? vendas[0].sincronizadoEm.toISOString() : null,
+      financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
     };
 
     // Armazenar no cache
     cache.set(cacheKey, response);
     console.log(`[Cache Miss] Vendas do Shopee salvas no cache`);
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    });
   } catch (error) {
     console.error("Erro ao buscar vendas Shopee:", error);
     return new NextResponse("Erro interno do servidor", { status: 500 });

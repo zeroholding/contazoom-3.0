@@ -39,12 +39,18 @@ export async function GET(req: NextRequest) {
 
   try {
     // Verificar cache primeiro (TTL de 5 minutos)
-    const cacheKey = createCacheKey("vendas-geral", session.sub);
+    const cacheKey = createCacheKey(
+      "vendas-geral",
+      session.sub,
+      SHOPEE_FINANCIAL_RULE_VERSION,
+    );
     const cachedData = cache.get<any>(cacheKey, 300000);
     
     if (cachedData) {
       console.log(`[Cache Hit] Retornando vendas gerais do cache`);
-      return NextResponse.json(cachedData);
+      return NextResponse.json(cachedData, {
+        headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+      });
     }
 
     // Calcular data de início: 6 meses atrás (alinhado com ML e Shopee)
@@ -436,6 +442,7 @@ export async function GET(req: NextRequest) {
       vendas: vendasDeduplicadas,
       total: vendasDeduplicadas.length,
       lastSync: ultimaSyncGeral?.toISOString() || null,
+      financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
     };
 
     // Armazenar no cache
@@ -443,7 +450,9 @@ export async function GET(req: NextRequest) {
     console.log(`[Cache Miss] Vendas gerais (${todasVendas.length} vendas) salvas no cache`);
     console.log(`[Vendas Gerais] ✅ Retornando ${vendasDeduplicadas.length} vendas combinadas (ML: ${vendasMeliFormatted.length}, Shopee: ${vendasShopeeFormatted.length})`);
 
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    });
   } catch (error) {
     console.error("Erro ao buscar vendas gerais:", error);
     return new NextResponse("Erro interno do servidor", { status: 500 });
