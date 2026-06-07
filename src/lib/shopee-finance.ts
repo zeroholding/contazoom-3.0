@@ -36,7 +36,7 @@ export type ShopeeFinancials = {
   };
 };
 
-export const SHOPEE_FINANCIAL_RULE_VERSION = "shopee-effective-sale-v3";
+export const SHOPEE_FINANCIAL_RULE_VERSION = "shopee-effective-sale-v4";
 
 function toFiniteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -77,7 +77,11 @@ function firstPositive(...values: unknown[]): number | null {
 
 function sumOrderQuantities(itemList: any[]): number {
   return itemList.reduce((acc: number, item: any) => {
-    const qty = toFiniteNumber(item?.model_quantity_purchased) ?? 0;
+    const qty =
+      toFiniteNumber(item?.model_quantity_purchased) ??
+      toFiniteNumber(item?.quantity_purchased) ??
+      toFiniteNumber(item?.quantity) ??
+      0;
     return acc + qty;
   }, 0);
 }
@@ -85,9 +89,25 @@ function sumOrderQuantities(itemList: any[]): number {
 function sumItemsSubtotal(itemList: any[], preferDiscounted: boolean): number {
   return itemList.reduce((acc: number, item: any) => {
     const price = preferDiscounted
-      ? firstPositive(item?.model_discounted_price, item?.model_original_price)
-      : firstPositive(item?.model_original_price, item?.model_discounted_price);
-    const qty = toFiniteNumber(item?.model_quantity_purchased) ?? 1;
+      ? firstPositive(
+          item?.model_discounted_price,
+          item?.discounted_price,
+          item?.model_original_price,
+          item?.original_price,
+          item?.price,
+        )
+      : firstPositive(
+          item?.model_original_price,
+          item?.original_price,
+          item?.model_discounted_price,
+          item?.discounted_price,
+          item?.price,
+        );
+    const qty =
+      toFiniteNumber(item?.model_quantity_purchased) ??
+      toFiniteNumber(item?.quantity_purchased) ??
+      toFiniteNumber(item?.quantity) ??
+      1;
     return acc + ((price ?? 0) * qty);
   }, 0);
 }
@@ -100,10 +120,31 @@ export function calculateShopeeFinancials(
     quantidade?: number | null;
     taxaPlataforma?: number | null;
     frete?: number | null;
+    paymentDetails?: any;
   },
 ): ShopeeFinancials {
-  const incomeDetails = order?.escrow_details?.order_income || {};
-  const itemList: any[] = Array.isArray(order?.item_list) ? order.item_list : [];
+  const paymentDetails =
+    fallback?.paymentDetails && typeof fallback.paymentDetails === "object"
+      ? fallback.paymentDetails
+      : {};
+  const escrowDetails =
+    order?.escrow_details && typeof order.escrow_details === "object"
+      ? order.escrow_details
+      : order?.order_income && typeof order.order_income === "object"
+        ? order
+        : paymentDetails;
+  const incomeDetails =
+    escrowDetails?.order_income ||
+    order?.order_income ||
+    paymentDetails?.order_income ||
+    {};
+  const productValueBreakdown = paymentDetails?.productValueBreakdown || {};
+  const platformFeeBreakdown = paymentDetails?.platformFeeBreakdown || {};
+  const itemList: any[] = Array.isArray(order?.item_list)
+    ? order.item_list
+    : Array.isArray(incomeDetails?.items)
+      ? incomeDetails.items
+      : [];
 
   const quantity =
     sumOrderQuantities(itemList) || positive(fallback?.quantidade) || 1;
@@ -112,6 +153,7 @@ export function calculateShopeeFinancials(
 
   const explicitGrossProductSource = firstPositive(
     incomeDetails.original_cost_of_goods_sold,
+    productValueBreakdown.product_gross_subtotal,
     grossItemsSubtotal,
   );
   const grossProductSource = firstPositive(
@@ -122,30 +164,46 @@ export function calculateShopeeFinancials(
     firstPositive(
       grossProductSource,
       incomeDetails.cost_of_goods_sold,
+      productValueBreakdown.product_effective_subtotal,
       order?.total_amount,
       fallback?.valorTotal,
     ) ?? 0,
   );
 
-  const pixPaymentAdjustment = positive(incomeDetails.seller_transaction_fee);
+  const pixPaymentAdjustment =
+    positive(incomeDetails.seller_transaction_fee) ||
+    positive(productValueBreakdown.pix_payment_adjustment);
   const sellerDiscount = maxPositive(
     incomeDetails.seller_discount,
     incomeDetails.voucher_from_seller,
+    productValueBreakdown.seller_discount,
+    productValueBreakdown.voucher_from_seller,
   );
   const shopeeDiscount = maxPositive(
     incomeDetails.shopee_discount,
     incomeDetails.voucher_from_shopee,
     incomeDetails.drc_adjustable_refund,
+    productValueBreakdown.shopee_discount,
+    productValueBreakdown.voucher_from_shopee,
   );
-  const buyerCouponAdjustment = maxPositive(sellerDiscount, shopeeDiscount);
-  const voucherFromSeller = positive(incomeDetails.voucher_from_seller);
-  const voucherFromShopee = positive(incomeDetails.voucher_from_shopee);
-  const coins = positive(incomeDetails.coins);
+  const buyerCouponAdjustment = maxPositive(
+    sellerDiscount,
+    shopeeDiscount,
+    productValueBreakdown.buyer_coupon_adjustment,
+  );
+  const voucherFromSeller =
+    positive(incomeDetails.voucher_from_seller) ||
+    positive(productValueBreakdown.voucher_from_seller);
+  const voucherFromShopee =
+    positive(incomeDetails.voucher_from_shopee) ||
+    positive(productValueBreakdown.voucher_from_shopee);
+  const coins = positive(incomeDetails.coins) || positive(productValueBreakdown.coins);
   const paymentPromotion = maxPositive(
     incomeDetails.payment_promotion,
     incomeDetails.credit_card_promotion,
     incomeDetails.buyer_payment_method_discount,
     incomeDetails.payment_channel_discount,
+    productValueBreakdown.payment_promotion,
   );
 
   let productDiscountTotal = roundCurrency(
@@ -156,9 +214,13 @@ export function calculateShopeeFinancials(
 
   const directDiscountedSubtotal = firstPositive(
     incomeDetails.order_discounted_price,
+    productValueBreakdown.product_effective_subtotal,
     discountedItemsSubtotal,
   );
-  const costOfGoodsSold = firstPositive(incomeDetails.cost_of_goods_sold);
+  const costOfGoodsSold = firstPositive(
+    incomeDetails.cost_of_goods_sold,
+    productValueBreakdown.product_effective_subtotal,
+  );
 
   let effectiveProductSubtotal = grossProductSubtotal;
   if (
@@ -184,11 +246,15 @@ export function calculateShopeeFinancials(
   }
   effectiveProductSubtotal = roundCurrency(effectiveProductSubtotal);
 
-  const commissionFee = positive(incomeDetails.commission_fee);
-  const serviceFee = positive(incomeDetails.service_fee);
-  const shippingSellerProtectionFee = positive(
-    incomeDetails.shipping_seller_protection_fee_amount,
-  );
+  const commissionFee =
+    positive(incomeDetails.commission_fee) ||
+    positive(platformFeeBreakdown.commission_fee);
+  const serviceFee =
+    positive(incomeDetails.service_fee) ||
+    positive(platformFeeBreakdown.service_fee);
+  const shippingSellerProtectionFee =
+    positive(incomeDetails.shipping_seller_protection_fee_amount) ||
+    positive(platformFeeBreakdown.outros_encargos);
 
   const actualShippingFee = positive(incomeDetails.actual_shipping_fee);
   const reverseShippingFee = positive(incomeDetails.reverse_shipping_fee);
@@ -207,8 +273,9 @@ export function calculateShopeeFinancials(
   const freight = custoVendedorFrete > 0.005 ? -custoVendedorFrete : 0;
 
   const directNetRevenue = firstPositive(
+    escrowDetails?.escrow_amount,
     incomeDetails.escrow_amount,
-    order?.escrow_details?.escrow_amount,
+    paymentDetails?.escrow_amount,
     incomeDetails.actual_income,
     incomeDetails.estimated_income,
     incomeDetails.seller_income,

@@ -298,12 +298,14 @@ export async function GET(req: NextRequest) {
       }
 
       const rawData = venda.rawData as any;
+      const paymentDetails = (venda as any).paymentDetails || {};
       const financials = calculateShopeeFinancials(rawData, {
         valorTotal: Number(venda.valorTotal),
         unitario: Number(venda.unitario),
         quantidade: venda.quantidade,
         taxaPlataforma: venda.taxaPlataforma ? Number(venda.taxaPlataforma) : null,
         frete: Number(venda.frete),
+        paymentDetails,
       });
 
       const valorTotal = financials.effectiveProductSubtotal;
@@ -361,7 +363,7 @@ export async function GET(req: NextRequest) {
           tags: venda.tags,
           internal_tags: venda.internalTags,
           paymentDetails: {
-            ...((venda as any).paymentDetails || {}),
+            ...paymentDetails,
             financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
             productValueBreakdown: financials.paymentBreakdown,
             platformFeeBreakdown: {
@@ -378,7 +380,7 @@ export async function GET(req: NextRequest) {
           },
         },
         paymentDetails: {
-          ...((venda as any).paymentDetails || {}),
+          ...paymentDetails,
           financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
           productValueBreakdown: financials.paymentBreakdown,
           platformFeeBreakdown: {

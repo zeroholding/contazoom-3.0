@@ -174,6 +174,7 @@ export async function GET(req: NextRequest) {
                 ? Number(venda.taxaPlataforma)
                 : null,
               frete: Number(venda.frete),
+              paymentDetails: venda.paymentDetails || null,
             })
           : null;
 

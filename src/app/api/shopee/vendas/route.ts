@@ -96,14 +96,16 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // === RECÁLCULO A PARTIR DO rawData (escrow_details) ===
+      // === RECÁLCULO A PARTIR DO rawData + paymentDetails (escrow/order_income) ===
       const rawData = venda.rawData as any;
+      const paymentDetails = venda.paymentDetails as any || {};
       const financials = calculateShopeeFinancials(rawData, {
         valorTotal: Number(venda.valorTotal),
         unitario: Number(venda.unitario),
         quantidade: venda.quantidade,
         taxaPlataforma: venda.taxaPlataforma ? Number(venda.taxaPlataforma) : null,
         frete: Number(venda.frete),
+        paymentDetails,
       });
       const valorTotal = financials.effectiveProductSubtotal;
       const unitario = financials.unitPrice;
@@ -122,7 +124,6 @@ export async function GET(req: NextRequest) {
       }
 
       // Montar paymentDetails com breakdown para tooltips
-      const paymentDetails = venda.paymentDetails as any || {};
       const enrichedPaymentDetails = {
         ...paymentDetails,
         financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,

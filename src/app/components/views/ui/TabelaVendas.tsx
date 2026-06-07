@@ -17,6 +17,10 @@ import {
 import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
 import { useToast } from "./toaster";
 import { useVendas } from "@/hooks/useVendas";
+import {
+  calculateShopeeFinancials,
+  SHOPEE_FINANCIAL_RULE_VERSION,
+} from "@/lib/shopee-finance";
 
 interface SyncProgressTotals {
   fetched?: number;
@@ -103,6 +107,14 @@ function mapListingTypeToLabel(listingType: string | null): string | null {
     return "Catálogo";
   }
   return "Próprio";
+}
+
+function isShopeeVenda(platform: string, venda: Venda): boolean {
+  return (
+    platform === "Shopee" ||
+    venda.plataforma === "Shopee" ||
+    venda.canal === "SP"
+  );
 }
 
 /**
@@ -253,13 +265,92 @@ export default function TabelaVendas({
       return [];
     }
 
-    const processedVendas = vendas.map((venda) => {
-      let freteCorrigido = venda.frete;
+    const processedVendas = vendas.map((vendaOriginal) => {
+      const venda = vendaOriginal as Venda;
+      let vendaCorrigida: Venda = venda;
+
+      if (isShopeeVenda(platform, venda)) {
+        const rawShopeeData = (venda as any).rawData || venda.raw || {};
+        const paymentDetails =
+          (venda as any).paymentDetails ||
+          (venda.raw as any)?.paymentDetails ||
+          {};
+        const shipmentDetails =
+          (venda as any).shipmentDetails ||
+          (venda.raw as any)?.shipmentDetails ||
+          {};
+        const hasShopeeFinancialDetails =
+          !!rawShopeeData?.escrow_details ||
+          !!rawShopeeData?.order_income ||
+          !!paymentDetails?.order_income ||
+          !!paymentDetails?.productValueBreakdown ||
+          !!paymentDetails?.platformFeeBreakdown ||
+          !!paymentDetails?.escrow_amount;
+
+        if (hasShopeeFinancialDetails) {
+          const financials = calculateShopeeFinancials(rawShopeeData, {
+            valorTotal: venda.valorTotal,
+            unitario: venda.unitario,
+            quantidade: venda.quantidade,
+            taxaPlataforma: venda.taxaPlataforma ?? null,
+            frete: venda.frete,
+            paymentDetails,
+          });
+
+          if (
+            financials.effectiveProductSubtotal > 0 &&
+            financials.platformFee !== null
+          ) {
+            const margem = calculateMargemContribuicao(
+              financials.effectiveProductSubtotal,
+              financials.platformFee,
+              financials.freight,
+              venda.cmv ?? null,
+            );
+            const normalizedPaymentDetails = {
+              ...paymentDetails,
+              financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
+              productValueBreakdown: financials.paymentBreakdown,
+              platformFeeBreakdown: {
+                commission_fee: financials.paymentBreakdown.commission_fee,
+                service_fee: financials.paymentBreakdown.service_fee,
+                outros_encargos: financials.paymentBreakdown.outros_encargos,
+                ignored_as_platform_fee:
+                  financials.paymentBreakdown.ignored_as_platform_fee,
+              },
+            };
+            const normalizedShipmentDetails = {
+              ...shipmentDetails,
+              ...financials.shipmentBreakdown,
+            };
+
+            vendaCorrigida = {
+              ...venda,
+              valorTotal: financials.effectiveProductSubtotal,
+              unitario: financials.unitPrice,
+              taxaPlataforma: financials.platformFee,
+              frete: financials.freight,
+              preco: financials.effectiveProductSubtotal,
+              margemContribuicao: margem.valor,
+              isMargemReal: margem.isMargemReal,
+              paymentDetails: normalizedPaymentDetails,
+              shipmentDetails: normalizedShipmentDetails,
+              raw: {
+                ...(venda.raw || {}),
+                paymentDetails: normalizedPaymentDetails,
+                shipmentDetails: normalizedShipmentDetails,
+              },
+            } as any;
+          }
+        }
+      }
+
+      const freteCorrigido = vendaCorrigida.frete;
 
 
 
       return {
-        venda: { ...venda, frete: freteCorrigido } as any,
+        venda: { ...vendaCorrigida, frete: freteCorrigido } as any,
         isCalculating: false,
       };
     });
@@ -268,7 +359,7 @@ export default function TabelaVendas({
       `[TabelaVendas] ✅ ${processedVendas.length} vendas processadas`,
     );
     return processedVendas;
-  }, [vendas]);
+  }, [vendas, platform]);
 
   const filtrarPorPeriodo = (
     item: ProcessedVenda,
