@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import "@/lib/metadata";
 import { assertSessionToken } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
+import { calculateShopeeFinancials } from "@/lib/shopee-finance";
 
 export const runtime = "nodejs";
 
@@ -76,7 +77,10 @@ export async function GET(req: NextRequest) {
         "canal",
         "sincronizado_em" as "sincronizadoEm",
         "latitude",
-        "longitude"
+        "longitude",
+        NULL as "rawData",
+        NULL as "paymentDetails",
+        NULL as "shipmentDetails"
       FROM meli_venda
       WHERE "user_id" = ${session.sub} 
       ${dateCondition} 
@@ -111,7 +115,10 @@ export async function GET(req: NextRequest) {
         "canal",
         "sincronizado_em" as "sincronizadoEm",
         "latitude",
-        "longitude"
+        "longitude",
+        "raw_data" as "rawData",
+        "payment_details" as "paymentDetails",
+        "shipment_details" as "shipmentDetails"
       FROM shopee_venda
       WHERE "user_id" = ${session.sub}
       ${dateCondition}
@@ -157,9 +164,30 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const valorTotal = Number(venda.valorTotal);
-      const taxaPlataforma = venda.taxaPlataforma ? Number(venda.taxaPlataforma) : 0;
-      const frete = Number(venda.frete);
+      const shopeeFinancials =
+        venda.plataforma === "Shopee"
+          ? calculateShopeeFinancials(venda.rawData, {
+              valorTotal: Number(venda.valorTotal),
+              unitario: Number(venda.unitario),
+              quantidade: venda.quantidade,
+              taxaPlataforma: venda.taxaPlataforma
+                ? Number(venda.taxaPlataforma)
+                : null,
+              frete: Number(venda.frete),
+            })
+          : null;
+
+      const valorTotal = shopeeFinancials
+        ? shopeeFinancials.effectiveProductSubtotal
+        : Number(venda.valorTotal);
+      const taxaPlataforma = shopeeFinancials
+        ? (shopeeFinancials.platformFee ?? 0)
+        : venda.taxaPlataforma
+          ? Number(venda.taxaPlataforma)
+          : 0;
+      const frete = shopeeFinancials
+        ? shopeeFinancials.freight
+        : Number(venda.frete);
 
       let margemContribuicao: number;
       let isMargemReal: boolean;
@@ -180,8 +208,14 @@ export async function GET(req: NextRequest) {
         contaId: venda.accountId,
         valorTotal,
         quantidade: venda.quantidade,
-        unitario: Number(venda.unitario),
-        taxaPlataforma: venda.taxaPlataforma ? Number(venda.taxaPlataforma) : null,
+        unitario: shopeeFinancials
+          ? shopeeFinancials.unitPrice
+          : Number(venda.unitario),
+        taxaPlataforma: shopeeFinancials
+          ? shopeeFinancials.platformFee
+          : venda.taxaPlataforma
+            ? Number(venda.taxaPlataforma)
+            : null,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
         cmv,

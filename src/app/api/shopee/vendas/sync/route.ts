@@ -10,6 +10,7 @@ import {
 } from "@/lib/shopee";
 import { sendProgressToUser, closeUserConnections } from "@/lib/sse-progress";
 import { invalidateVendasCache } from "@/lib/cache";
+import { calculateShopeeFinancials } from "@/lib/shopee-finance";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,10 +29,6 @@ function toFiniteNumber(value: unknown): number | null {
     return Number.isFinite(n) ? n : null;
   }
   return null;
-}
-
-function roundCurrency(v: number): number {
-  return Math.round((v + Number.EPSILON) * 100) / 100;
 }
 
 function truncateString(str: string | null | undefined, maxLength: number): string {
@@ -297,7 +294,7 @@ async function batchUpsertVendas(vendaRecords: any[], userId: string, accountId:
             })
           )
         );
-        let saved = results.filter(r => r.status === 'fulfilled').length;
+        const saved = results.filter(r => r.status === 'fulfilled').length;
         
         // Log errors if any
         results.forEach((r, idx) => {
@@ -459,7 +456,7 @@ export async function POST(req: NextRequest) {
         });
         const existingIds = new Set(existingOrderIds.map(v => v.orderId));
 
-        // Auto-cura: Verifica se há pedidos COMPLETED com taxa >= 0 (sinal antigo era positivo, agora deve ser negativo)
+        // Auto-cura: taxa antiga com sinal errado ou financeiro sem breakdown novo.
         const corruptOrders = await prisma.shopeeVenda.count({
           where: {
             shopeeAccountId: conta.id,
@@ -467,10 +464,23 @@ export async function POST(req: NextRequest) {
             taxaPlataforma: { gte: 0 }
           }
         });
-        const needsHeal = corruptOrders > 0;
+        const financialHealRows = await prisma.$queryRaw<Array<{ count: number }>>`
+          SELECT COUNT(*)::int AS count
+          FROM shopee_venda
+          WHERE shopee_account_id = ${conta.id}
+            AND raw_data IS NOT NULL
+            AND (
+              payment_details IS NULL
+              OR NOT jsonb_exists(payment_details::jsonb, 'productValueBreakdown')
+            )
+        `;
+        const financialRowsToHeal = Number(financialHealRows[0]?.count || 0);
+        const needsHeal = corruptOrders > 0 || financialRowsToHeal > 0;
 
         if (needsHeal) {
-          console.log(`[Shopee Sync] 🚑 AUTO-CURA ATIVADA - Conta ${conta.shop_id}: Encontrados ${corruptOrders} pedidos corrompidos.`);
+          console.log(
+            `[Shopee Sync] 🚑 AUTO-CURA ATIVADA - Conta ${conta.shop_id}: ${corruptOrders} com taxa antiga, ${financialRowsToHeal} sem breakdown financeiro.`,
+          );
         }
 
         const ultimaVenda = await prisma.shopeeVenda.findFirst({
@@ -521,56 +531,13 @@ export async function POST(req: NextRequest) {
           const dataVenda = new Date((toFiniteNumber(order.create_time) ?? 0) * 1000);
           const status = String(order.order_status ?? "DESCONHECIDO");
           const itemList: any[] = Array.isArray(order.item_list) ? order.item_list : [];
-          const quantidade = itemList.reduce((acc: number, it: any) => acc + (toFiniteNumber(it?.model_quantity_purchased) ?? 0), 0);
-          const incomeDetails = order.escrow_details?.order_income || {};
-          // === VALOR TOTAL E UNITÁRIO (Apenas Produto, SEM frete) ===
-          // Prioridade: cost_of_goods_sold > order_discounted_price > order_selling_price > soma dos itens > total_amount (fallback)
-          let productSubtotal = toFiniteNumber(incomeDetails.cost_of_goods_sold)
-            || toFiniteNumber(incomeDetails.order_discounted_price)
-            || toFiniteNumber(incomeDetails.order_selling_price)
-            || 0;
-          if (!productSubtotal) {
-            productSubtotal = itemList.reduce((acc: number, it: any) => {
-              const price = toFiniteNumber(it?.model_discounted_price) || toFiniteNumber(it?.model_original_price) || 0;
-              const qty = toFiniteNumber(it?.model_quantity_purchased) || 1;
-              return acc + (price * qty);
-            }, 0);
-          }
-          
-          // Fallback para total_amount caso o pedido ainda não tenha escrow (recém-criado) e os itens não tenham valor
-          if (productSubtotal === 0 && toFiniteNumber(order.total_amount)) {
-            productSubtotal = toFiniteNumber(order.total_amount) ?? 0;
-          }
-
-          const totalAmount = productSubtotal;
-          const unitario = quantidade > 0 ? roundCurrency(totalAmount / quantidade) : roundCurrency(totalAmount);
-
-          // === TAXA DA PLATAFORMA (negativo = custo, igual ML) ===
-          const commissionFee = toFiniteNumber(incomeDetails.commission_fee) ?? 0;
-          const serviceFee = toFiniteNumber(incomeDetails.service_fee) ?? 0;
-          // "Taxa de Devolução Fácil Shopee" = shipping_seller_protection_fee_amount
-          const shippingSellerProtectionFee = toFiniteNumber(incomeDetails.shipping_seller_protection_fee_amount) ?? 0;
-          const sellerTransactionFee = toFiniteNumber(incomeDetails.seller_transaction_fee) ?? 0;
-          const drcAdjustableRefund = toFiniteNumber(incomeDetails.drc_adjustable_refund) ?? 0;
-          
-          const devolucaoFacilOuOutros = shippingSellerProtectionFee + sellerTransactionFee + drcAdjustableRefund;
-          const taxaPlataformaRaw = commissionFee + serviceFee + devolucaoFacilOuOutros;
-          const taxaPlataforma = taxaPlataformaRaw > 0 ? -roundCurrency(taxaPlataformaRaw) : null;
-          
-          // === FRETE (negativo = custo do vendedor, igual ML) ===
-          const actualShippingFee = toFiniteNumber(incomeDetails.actual_shipping_fee) ?? 0;
-          const reverseShippingFee = toFiniteNumber(incomeDetails.reverse_shipping_fee) ?? 0;
-          const shopeeShippingRebate = toFiniteNumber(incomeDetails.shopee_shipping_rebate) ?? 0;
-          const buyerPaidShippingFee = toFiniteNumber(incomeDetails.buyer_paid_shipping_fee) ?? 0;
-          const shippingFeeDiscountFrom3pl = toFiniteNumber(incomeDetails.shipping_fee_discount_from_3pl) ?? 0;
-          
-          // Custo do vendedor = frete real - o que o comprador pagou - subsídios
-          const custoVendedorFrete = actualShippingFee - buyerPaidShippingFee - shopeeShippingRebate - shippingFeeDiscountFrom3pl + reverseShippingFee;
-          // Se positivo → vendedor pagou → armazena como NEGATIVO (custo)
-          const frete = custoVendedorFrete > 0.005 ? -roundCurrency(custoVendedorFrete) : 0;
-          
-          // === MARGEM (igual ML: valorTotal + taxa(neg) + frete(neg)) ===
-          const margem = roundCurrency(totalAmount + (taxaPlataforma ?? 0) + frete);
+          const financials = calculateShopeeFinancials(order);
+          const quantidade = financials.quantity;
+          const totalAmount = financials.effectiveProductSubtotal;
+          const unitario = financials.unitPrice;
+          const taxaPlataforma = financials.platformFee;
+          const frete = financials.freight;
+          const margem = financials.netRevenue;
 
           const titulo = truncateString(itemList?.[0]?.item_name, 500) || "Pedido";
           
@@ -587,14 +554,30 @@ export async function POST(req: NextRequest) {
           const parcelWeight = toFiniteNumber(packageInfo.parcel_chargeable_weight_gram) || 0;
           const shippingCarrier = truncateString(packageInfo.shipping_carrier || order.shipping_carrier, 100) || null;
           const logisticsStatus = truncateString(packageInfo.logistics_status, 100) || null;
+          const paymentBreakdown = financials.paymentBreakdown;
+          const shipmentBreakdown = financials.shipmentBreakdown;
 
           // Construir detalhes para Tooltips
           const paymentDetailsExtended = {
             ...(order.escrow_details || {}),
+            productValueBreakdown: {
+              product_gross_subtotal: paymentBreakdown.product_gross_subtotal,
+              product_effective_subtotal: paymentBreakdown.product_effective_subtotal,
+              product_discount_total: paymentBreakdown.product_discount_total,
+              pix_payment_adjustment: paymentBreakdown.pix_payment_adjustment,
+              buyer_coupon_adjustment: paymentBreakdown.buyer_coupon_adjustment,
+              seller_discount: paymentBreakdown.seller_discount,
+              shopee_discount: paymentBreakdown.shopee_discount,
+              voucher_from_seller: paymentBreakdown.voucher_from_seller,
+              voucher_from_shopee: paymentBreakdown.voucher_from_shopee,
+              coins: paymentBreakdown.coins,
+              payment_promotion: paymentBreakdown.payment_promotion,
+            },
             platformFeeBreakdown: {
-              commission_fee: commissionFee,
-              service_fee: serviceFee,
-              outros_encargos: devolucaoFacilOuOutros
+              commission_fee: paymentBreakdown.commission_fee,
+              service_fee: paymentBreakdown.service_fee,
+              outros_encargos: paymentBreakdown.outros_encargos,
+              ignored_as_platform_fee: paymentBreakdown.ignored_as_platform_fee,
             }
           };
 
@@ -602,13 +585,12 @@ export async function POST(req: NextRequest) {
             parcel_chargeable_weight_gram: parcelWeight,
             shipping_carrier: shippingCarrier,
             logistics_status: logisticsStatus,
-            actual_shipping_fee: actualShippingFee,
-            reverse_shipping_fee: reverseShippingFee,
-            shopee_shipping_rebate: shopeeShippingRebate,
-            buyer_paid_shipping_fee: buyerPaidShippingFee,
-            shipping_fee_discount_from_3pl: shippingFeeDiscountFrom3pl,
-            custo_vendedor_frete: custoVendedorFrete,
-            subsidio_automatico_aplicado: shopeeShippingRebate > 0 && incomeDetails.shopee_shipping_rebate === 0,
+            actual_shipping_fee: shipmentBreakdown.actual_shipping_fee,
+            reverse_shipping_fee: shipmentBreakdown.reverse_shipping_fee,
+            shopee_shipping_rebate: shipmentBreakdown.shopee_shipping_rebate,
+            buyer_paid_shipping_fee: shipmentBreakdown.buyer_paid_shipping_fee,
+            shipping_fee_discount_from_3pl: shipmentBreakdown.shipping_fee_discount_from_3pl,
+            custo_vendedor_frete: shipmentBreakdown.custo_vendedor_frete,
             ...packageInfo
           };
 

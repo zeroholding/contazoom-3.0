@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
+import { calculateShopeeFinancials } from "@/lib/shopee-finance";
 
 export const runtime = "nodejs";
 
@@ -133,6 +134,7 @@ export async function GET(req: NextRequest) {
           longitude: true,
           paymentDetails: true,
           shipmentDetails: true,
+          rawData: true,
         },
         orderBy: { dataVenda: "desc" },
       })
@@ -278,17 +280,26 @@ export async function GET(req: NextRequest) {
 
     // Formatar vendas do Shopee
     const vendasShopeeFormatted = vendasShopee.map((venda) => {
-      let cmv: number | null = venda.cmv ? Number(venda.cmv) : null;
-      if (cmv === null && venda.sku && mapaCustos.has(venda.sku)) {
-        const custoUnitario = mapaCustos.get(venda.sku)!;
-        cmv = roundCurrency(custoUnitario * venda.quantidade);
+      let cmv: number | null = null;
+      if (venda.sku) {
+        const custoUnitario = costMap.getCostAtDate(venda.sku, venda.dataVenda);
+        if (custoUnitario > 0) {
+          cmv = roundCurrency(custoUnitario * venda.quantidade);
+        }
       }
 
-      const valorTotal = Number(venda.valorTotal);
-      const taxaPlataforma = venda.taxaPlataforma
-        ? Number(venda.taxaPlataforma)
-        : 0;
-      const frete = Number(venda.frete);
+      const rawData = venda.rawData as any;
+      const financials = calculateShopeeFinancials(rawData, {
+        valorTotal: Number(venda.valorTotal),
+        unitario: Number(venda.unitario),
+        quantidade: venda.quantidade,
+        taxaPlataforma: venda.taxaPlataforma ? Number(venda.taxaPlataforma) : null,
+        frete: Number(venda.frete),
+      });
+
+      const valorTotal = financials.effectiveProductSubtotal;
+      const taxaPlataforma = financials.platformFee ?? 0;
+      const frete = financials.freight;
 
       let margemContribuicao: number;
       let isMargemReal: boolean;
@@ -309,10 +320,8 @@ export async function GET(req: NextRequest) {
         conta: venda.conta,
         valorTotal,
         quantidade: venda.quantidade,
-        unitario: Number(venda.unitario),
-        taxaPlataforma: venda.taxaPlataforma
-          ? Number(venda.taxaPlataforma)
-          : null,
+        unitario: financials.unitPrice,
+        taxaPlataforma: financials.platformFee,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
         cmv,
@@ -342,11 +351,37 @@ export async function GET(req: NextRequest) {
           listing_type_id: null,
           tags: venda.tags,
           internal_tags: venda.internalTags,
-          paymentDetails: (venda as any).paymentDetails || {},
-          shipmentDetails: (venda as any).shipmentDetails || {},
+          paymentDetails: {
+            ...((venda as any).paymentDetails || {}),
+            productValueBreakdown: financials.paymentBreakdown,
+            platformFeeBreakdown: {
+              commission_fee: financials.paymentBreakdown.commission_fee,
+              service_fee: financials.paymentBreakdown.service_fee,
+              outros_encargos: financials.paymentBreakdown.outros_encargos,
+              ignored_as_platform_fee:
+                financials.paymentBreakdown.ignored_as_platform_fee,
+            },
+          },
+          shipmentDetails: {
+            ...((venda as any).shipmentDetails || {}),
+            ...financials.shipmentBreakdown,
+          },
         },
-        paymentDetails: (venda as any).paymentDetails || {},
-        shipmentDetails: (venda as any).shipmentDetails || {},
+        paymentDetails: {
+          ...((venda as any).paymentDetails || {}),
+          productValueBreakdown: financials.paymentBreakdown,
+          platformFeeBreakdown: {
+            commission_fee: financials.paymentBreakdown.commission_fee,
+            service_fee: financials.paymentBreakdown.service_fee,
+            outros_encargos: financials.paymentBreakdown.outros_encargos,
+            ignored_as_platform_fee:
+              financials.paymentBreakdown.ignored_as_platform_fee,
+          },
+        },
+        shipmentDetails: {
+          ...((venda as any).shipmentDetails || {}),
+          ...financials.shipmentBreakdown,
+        },
         preco: valorTotal,
         shipping: {},
         shipment: null,

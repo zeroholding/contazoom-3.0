@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { cache, createCacheKey } from "@/lib/cache";
+import { calculateShopeeFinancials } from "@/lib/shopee-finance";
 
 export const runtime = "nodejs";
 
@@ -88,49 +89,17 @@ export async function GET(req: NextRequest) {
 
       // === RECÁLCULO A PARTIR DO rawData (escrow_details) ===
       const rawData = venda.rawData as any;
-      const incomeDetails = rawData?.escrow_details?.order_income || {};
-      const itemList: any[] = Array.isArray(rawData?.item_list) ? rawData.item_list : [];
-
-      // Valor Total = subtotal do produto (SEM frete)
-      let valorTotal = Number(venda.valorTotal); // fallback
-      const costOfGoodsSold = incomeDetails.cost_of_goods_sold 
-        || incomeDetails.order_discounted_price 
-        || incomeDetails.order_selling_price 
-        || 0;
-      if (costOfGoodsSold > 0) {
-        valorTotal = roundCurrency(costOfGoodsSold);
-      } else if (itemList.length > 0) {
-        const itemSubtotal = itemList.reduce((acc: number, it: any) => {
-          const price = it?.model_discounted_price || it?.model_original_price || 0;
-          const qty = it?.model_quantity_purchased || 1;
-          return acc + (price * qty);
-        }, 0);
-        if (itemSubtotal > 0) valorTotal = roundCurrency(itemSubtotal);
-      }
-
-      // Unitário
-      const unitario = venda.quantidade > 0 
-        ? roundCurrency(valorTotal / venda.quantidade) 
-        : valorTotal;
-
-      // Taxa da Plataforma (incluindo Devolução Fácil)
-      const commissionFee = incomeDetails.commission_fee || 0;
-      const serviceFee = incomeDetails.service_fee || 0;
-      const shippingSellerProtectionFee = incomeDetails.shipping_seller_protection_fee_amount || 0;
-      const sellerTransactionFee = incomeDetails.seller_transaction_fee || 0;
-      const drcAdjustableRefund = incomeDetails.drc_adjustable_refund || 0;
-      const devolucaoFacilOuOutros = shippingSellerProtectionFee + sellerTransactionFee + drcAdjustableRefund;
-      const taxaPlataformaRaw = commissionFee + serviceFee + devolucaoFacilOuOutros;
-      const taxaPlataforma = taxaPlataformaRaw > 0 ? -roundCurrency(taxaPlataformaRaw) : 0;
-
-      // Frete (custo líquido do vendedor)
-      const actualShippingFee = incomeDetails.actual_shipping_fee || 0;
-      const reverseShippingFee = incomeDetails.reverse_shipping_fee || 0;
-      const shopeeShippingRebate = incomeDetails.shopee_shipping_rebate || 0;
-      const buyerPaidShippingFee = incomeDetails.buyer_paid_shipping_fee || 0;
-      const shippingFeeDiscountFrom3pl = incomeDetails.shipping_fee_discount_from_3pl || 0;
-      const custoVendedorFrete = actualShippingFee - buyerPaidShippingFee - shopeeShippingRebate - shippingFeeDiscountFrom3pl + reverseShippingFee;
-      const frete = custoVendedorFrete > 0.005 ? -roundCurrency(custoVendedorFrete) : 0;
+      const financials = calculateShopeeFinancials(rawData, {
+        valorTotal: Number(venda.valorTotal),
+        unitario: Number(venda.unitario),
+        quantidade: venda.quantidade,
+        taxaPlataforma: venda.taxaPlataforma ? Number(venda.taxaPlataforma) : null,
+        frete: Number(venda.frete),
+      });
+      const valorTotal = financials.effectiveProductSubtotal;
+      const unitario = financials.unitPrice;
+      const taxaPlataforma = financials.platformFee ?? 0;
+      const frete = financials.freight;
 
       // Margem: recalcular com CMV
       let margemContribuicao: number;
@@ -147,10 +116,13 @@ export async function GET(req: NextRequest) {
       const paymentDetails = venda.paymentDetails as any || {};
       const enrichedPaymentDetails = {
         ...paymentDetails,
+        productValueBreakdown: financials.paymentBreakdown,
         platformFeeBreakdown: {
-          commission_fee: commissionFee,
-          service_fee: serviceFee,
-          outros_encargos: devolucaoFacilOuOutros
+          commission_fee: financials.paymentBreakdown.commission_fee,
+          service_fee: financials.paymentBreakdown.service_fee,
+          outros_encargos: financials.paymentBreakdown.outros_encargos,
+          ignored_as_platform_fee:
+            financials.paymentBreakdown.ignored_as_platform_fee,
         }
       };
 
@@ -158,12 +130,16 @@ export async function GET(req: NextRequest) {
       const rawShipmentDetails = venda.shipmentDetails as any || {};
       const enrichedShipmentDetails = {
         ...rawShipmentDetails,
-        actual_shipping_fee: actualShippingFee,
-        reverse_shipping_fee: reverseShippingFee,
-        shopee_shipping_rebate: shopeeShippingRebate,
-        buyer_paid_shipping_fee: buyerPaidShippingFee,
-        shipping_fee_discount_from_3pl: shippingFeeDiscountFrom3pl,
-        custo_vendedor_frete: custoVendedorFrete,
+        actual_shipping_fee: financials.shipmentBreakdown.actual_shipping_fee,
+        reverse_shipping_fee: financials.shipmentBreakdown.reverse_shipping_fee,
+        shopee_shipping_rebate:
+          financials.shipmentBreakdown.shopee_shipping_rebate,
+        buyer_paid_shipping_fee:
+          financials.shipmentBreakdown.buyer_paid_shipping_fee,
+        shipping_fee_discount_from_3pl:
+          financials.shipmentBreakdown.shipping_fee_discount_from_3pl,
+        custo_vendedor_frete:
+          financials.shipmentBreakdown.custo_vendedor_frete,
       };
 
       return {
