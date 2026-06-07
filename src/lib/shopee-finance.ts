@@ -36,7 +36,7 @@ export type ShopeeFinancials = {
   };
 };
 
-export const SHOPEE_FINANCIAL_RULE_VERSION = "shopee-effective-sale-v2";
+export const SHOPEE_FINANCIAL_RULE_VERSION = "shopee-effective-sale-v3";
 
 function toFiniteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -148,11 +148,10 @@ export function calculateShopeeFinancials(
     incomeDetails.payment_channel_discount,
   );
 
-  const productDiscountTotal = roundCurrency(
+  let productDiscountTotal = roundCurrency(
     pixPaymentAdjustment +
       buyerCouponAdjustment +
-      coins +
-      paymentPromotion,
+      coins,
   );
 
   const directDiscountedSubtotal = firstPositive(
@@ -216,13 +215,30 @@ export function calculateShopeeFinancials(
     incomeDetails.final_income,
     incomeDetails.net_income,
   );
+  const platformFeeRaw = roundCurrency(
+    commissionFee + serviceFee + shippingSellerProtectionFee,
+  );
+  const effectiveSubtotalFromNet =
+    directNetRevenue !== null && platformFeeRaw > 0
+      ? roundCurrency(directNetRevenue + platformFeeRaw - freight)
+      : null;
+
+  if (
+    effectiveSubtotalFromNet !== null &&
+    effectiveSubtotalFromNet > 0 &&
+    (grossProductSubtotal <= 0 ||
+      effectiveSubtotalFromNet <= grossProductSubtotal + 0.005)
+  ) {
+    effectiveProductSubtotal = effectiveSubtotalFromNet;
+    productDiscountTotal = roundCurrency(
+      Math.max(0, grossProductSubtotal - effectiveProductSubtotal),
+    );
+  }
+
   const platformFeeFromNet =
     directNetRevenue !== null
       ? roundCurrency(directNetRevenue - effectiveProductSubtotal - freight)
       : null;
-  const platformFeeRaw = roundCurrency(
-    commissionFee + serviceFee + shippingSellerProtectionFee,
-  );
   const platformFee =
     platformFeeFromNet !== null && platformFeeFromNet < -0.005
       ? platformFeeFromNet
