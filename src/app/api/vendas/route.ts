@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
-import { calculateShopeeFinancials } from "@/lib/shopee-finance";
+import {
+  calculateShopeeFinancials,
+  SHOPEE_FINANCIAL_RULE_VERSION,
+} from "@/lib/shopee-finance";
 
 export const runtime = "nodejs";
 
@@ -353,6 +356,7 @@ export async function GET(req: NextRequest) {
           internal_tags: venda.internalTags,
           paymentDetails: {
             ...((venda as any).paymentDetails || {}),
+            financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
             productValueBreakdown: financials.paymentBreakdown,
             platformFeeBreakdown: {
               commission_fee: financials.paymentBreakdown.commission_fee,
@@ -369,6 +373,7 @@ export async function GET(req: NextRequest) {
         },
         paymentDetails: {
           ...((venda as any).paymentDetails || {}),
+          financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
           productValueBreakdown: financials.paymentBreakdown,
           platformFeeBreakdown: {
             commission_fee: financials.paymentBreakdown.commission_fee,

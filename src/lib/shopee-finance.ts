@@ -36,6 +36,8 @@ export type ShopeeFinancials = {
   };
 };
 
+export const SHOPEE_FINANCIAL_RULE_VERSION = "shopee-effective-sale-v2";
+
 function toFiniteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
@@ -54,6 +56,15 @@ function positive(value: unknown): number {
   const n = toFiniteNumber(value);
   if (n === null || n <= 0) return 0;
   return n;
+}
+
+function maxPositive(...values: unknown[]): number {
+  let max = 0;
+  for (const value of values) {
+    const n = positive(value);
+    if (n > max) max = n;
+  }
+  return max;
 }
 
 function firstPositive(...values: unknown[]): number | null {
@@ -99,10 +110,13 @@ export function calculateShopeeFinancials(
   const grossItemsSubtotal = sumItemsSubtotal(itemList, false);
   const discountedItemsSubtotal = sumItemsSubtotal(itemList, true);
 
-  const grossProductSource = firstPositive(
+  const explicitGrossProductSource = firstPositive(
     incomeDetails.original_cost_of_goods_sold,
-    incomeDetails.order_selling_price,
     grossItemsSubtotal,
+  );
+  const grossProductSource = firstPositive(
+    explicitGrossProductSource,
+    incomeDetails.order_selling_price,
   );
   const grossProductSubtotal = roundCurrency(
     firstPositive(
@@ -114,25 +128,29 @@ export function calculateShopeeFinancials(
   );
 
   const pixPaymentAdjustment = positive(incomeDetails.seller_transaction_fee);
-  const buyerCouponAdjustment = positive(incomeDetails.drc_adjustable_refund);
-  const sellerDiscount = positive(incomeDetails.seller_discount);
-  const shopeeDiscount = positive(incomeDetails.shopee_discount);
+  const sellerDiscount = maxPositive(
+    incomeDetails.seller_discount,
+    incomeDetails.voucher_from_seller,
+  );
+  const shopeeDiscount = maxPositive(
+    incomeDetails.shopee_discount,
+    incomeDetails.voucher_from_shopee,
+    incomeDetails.drc_adjustable_refund,
+  );
+  const buyerCouponAdjustment = maxPositive(sellerDiscount, shopeeDiscount);
   const voucherFromSeller = positive(incomeDetails.voucher_from_seller);
   const voucherFromShopee = positive(incomeDetails.voucher_from_shopee);
   const coins = positive(incomeDetails.coins);
-  const paymentPromotion =
-    positive(incomeDetails.payment_promotion) +
-    positive(incomeDetails.credit_card_promotion) +
-    positive(incomeDetails.buyer_payment_method_discount) +
-    positive(incomeDetails.payment_channel_discount);
+  const paymentPromotion = maxPositive(
+    incomeDetails.payment_promotion,
+    incomeDetails.credit_card_promotion,
+    incomeDetails.buyer_payment_method_discount,
+    incomeDetails.payment_channel_discount,
+  );
 
   const productDiscountTotal = roundCurrency(
     pixPaymentAdjustment +
       buyerCouponAdjustment +
-      sellerDiscount +
-      shopeeDiscount +
-      voucherFromSeller +
-      voucherFromShopee +
       coins +
       paymentPromotion,
   );
@@ -145,17 +163,17 @@ export function calculateShopeeFinancials(
 
   let effectiveProductSubtotal = grossProductSubtotal;
   if (
+    explicitGrossProductSource !== null &&
+    productDiscountTotal > 0 &&
+    grossProductSubtotal > productDiscountTotal
+  ) {
+    effectiveProductSubtotal = grossProductSubtotal - productDiscountTotal;
+  } else if (
     directDiscountedSubtotal !== null &&
     directDiscountedSubtotal > 0 &&
     directDiscountedSubtotal < grossProductSubtotal - 0.005
   ) {
     effectiveProductSubtotal = directDiscountedSubtotal;
-  } else if (
-    grossProductSource !== null &&
-    productDiscountTotal > 0 &&
-    grossProductSubtotal > productDiscountTotal
-  ) {
-    effectiveProductSubtotal = grossProductSubtotal - productDiscountTotal;
   } else if (
     costOfGoodsSold !== null &&
     costOfGoodsSold > 0 &&
@@ -172,10 +190,6 @@ export function calculateShopeeFinancials(
   const shippingSellerProtectionFee = positive(
     incomeDetails.shipping_seller_protection_fee_amount,
   );
-  const platformFeeRaw = roundCurrency(
-    commissionFee + serviceFee + shippingSellerProtectionFee,
-  );
-  const platformFee = platformFeeRaw > 0 ? -platformFeeRaw : null;
 
   const actualShippingFee = positive(incomeDetails.actual_shipping_fee);
   const reverseShippingFee = positive(incomeDetails.reverse_shipping_fee);
@@ -193,12 +207,36 @@ export function calculateShopeeFinancials(
   );
   const freight = custoVendedorFrete > 0.005 ? -custoVendedorFrete : 0;
 
+  const directNetRevenue = firstPositive(
+    incomeDetails.escrow_amount,
+    order?.escrow_details?.escrow_amount,
+    incomeDetails.actual_income,
+    incomeDetails.estimated_income,
+    incomeDetails.seller_income,
+    incomeDetails.final_income,
+    incomeDetails.net_income,
+  );
+  const platformFeeFromNet =
+    directNetRevenue !== null
+      ? roundCurrency(directNetRevenue - effectiveProductSubtotal - freight)
+      : null;
+  const platformFeeRaw = roundCurrency(
+    commissionFee + serviceFee + shippingSellerProtectionFee,
+  );
+  const platformFee =
+    platformFeeFromNet !== null && platformFeeFromNet < -0.005
+      ? platformFeeFromNet
+      : platformFeeRaw > 0
+        ? -platformFeeRaw
+        : null;
+
   const unitPrice = roundCurrency(
     (grossProductSubtotal || effectiveProductSubtotal) / quantity,
   );
-  const netRevenue = roundCurrency(
-    effectiveProductSubtotal + (platformFee ?? 0) + freight,
-  );
+  const netRevenue =
+    directNetRevenue !== null
+      ? roundCurrency(directNetRevenue)
+      : roundCurrency(effectiveProductSubtotal + (platformFee ?? 0) + freight);
 
   return {
     quantity,

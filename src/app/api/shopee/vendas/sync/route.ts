@@ -10,7 +10,10 @@ import {
 } from "@/lib/shopee";
 import { sendProgressToUser, closeUserConnections } from "@/lib/sse-progress";
 import { invalidateVendasCache } from "@/lib/cache";
-import { calculateShopeeFinancials } from "@/lib/shopee-finance";
+import {
+  calculateShopeeFinancials,
+  SHOPEE_FINANCIAL_RULE_VERSION,
+} from "@/lib/shopee-finance";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -472,6 +475,7 @@ export async function POST(req: NextRequest) {
             AND (
               payment_details IS NULL
               OR NOT jsonb_exists(payment_details::jsonb, 'productValueBreakdown')
+              OR payment_details->>'financialRuleVersion' IS DISTINCT FROM ${SHOPEE_FINANCIAL_RULE_VERSION}
             )
         `;
         const financialRowsToHeal = Number(financialHealRows[0]?.count || 0);
@@ -479,7 +483,7 @@ export async function POST(req: NextRequest) {
 
         if (needsHeal) {
           console.log(
-            `[Shopee Sync] 🚑 AUTO-CURA ATIVADA - Conta ${conta.shop_id}: ${corruptOrders} com taxa antiga, ${financialRowsToHeal} sem breakdown financeiro.`,
+            `[Shopee Sync] 🚑 AUTO-CURA ATIVADA - Conta ${conta.shop_id}: ${corruptOrders} com taxa antiga, ${financialRowsToHeal} com breakdown financeiro ausente/antigo.`,
           );
         }
 
@@ -560,6 +564,7 @@ export async function POST(req: NextRequest) {
           // Construir detalhes para Tooltips
           const paymentDetailsExtended = {
             ...(order.escrow_details || {}),
+            financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
             productValueBreakdown: {
               product_gross_subtotal: paymentBreakdown.product_gross_subtotal,
               product_effective_subtotal: paymentBreakdown.product_effective_subtotal,
