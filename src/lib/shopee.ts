@@ -153,6 +153,7 @@ export interface GetShopeeOrderDetailParams {
   accessToken: string;
   shopId: string;
   orderSnList: string;
+  responseOptionalFields?: string;
 }
 
 export async function getShopeeOrderDetail(params: GetShopeeOrderDetailParams) {
@@ -167,7 +168,11 @@ export async function getShopeeOrderDetail(params: GetShopeeOrderDetailParams) {
   url.searchParams.append("shop_id", params.shopId);
   url.searchParams.append("sign", sign);
   url.searchParams.append("order_sn_list", params.orderSnList);
-  url.searchParams.append("response_optional_fields", "buyer_user_id,buyer_username,estimated_shipping_fee,actual_shipping_fee,item_list,total_amount,package_list,shipping_carrier");
+  url.searchParams.append(
+    "response_optional_fields",
+    params.responseOptionalFields ||
+      "buyer_user_id,buyer_username,estimated_shipping_fee,actual_shipping_fee,item_list,total_amount,package_list,shipping_carrier",
+  );
 
   const response = await fetch(url.toString());
   const data = await response.json();
