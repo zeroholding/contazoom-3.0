@@ -11,6 +11,11 @@ import {
 import { sendProgressToUser, closeUserConnections } from "@/lib/sse-progress";
 import { invalidateVendasCache } from "@/lib/cache";
 import {
+  collectSkuCandidatesFromShopeeOrders,
+  fetchShopeeCatalogSkuCandidates,
+  registerDiscoveredSkus,
+} from "@/lib/sku-discovery";
+import {
   calculateShopeeFinancials,
   SHOPEE_FINANCIAL_RULE_VERSION,
 } from "@/lib/shopee-finance";
@@ -449,6 +454,40 @@ export async function POST(req: NextRequest) {
       });
 
       try {
+        try {
+          const catalogCandidates = await fetchShopeeCatalogSkuCandidates(
+            {
+              id: conta.id,
+              shop_id: conta.shop_id,
+              shop_name: conta.shop_name,
+              access_token: conta.access_token,
+            },
+            { partnerId, partnerKey },
+          );
+          const catalogResult = await registerDiscoveredSkus(
+            userId,
+            catalogCandidates,
+          );
+
+          if (catalogResult.found > 0) {
+            console.log("[SKU Discovery][Shopee] Catalogo processado", {
+              accountId: conta.id,
+              shopId: conta.shop_id,
+              found: catalogResult.found,
+              created: catalogResult.created,
+              existing: catalogResult.existing,
+              skipped: catalogResult.skipped,
+            });
+          }
+        } catch (skuError) {
+          console.warn("[SKU Discovery][Shopee] Falha ao ler catalogo", {
+            accountId: conta.id,
+            shopId: conta.shop_id,
+            error:
+              skuError instanceof Error ? skuError.message : String(skuError),
+          });
+        }
+
         // Buscar IDs existentes de forma otimizada (só consideramos como válidas as vendas com valor > 0)
         const existingOrderIds = await prisma.shopeeVenda.findMany({
           where: { 
@@ -516,6 +555,21 @@ export async function POST(req: NextRequest) {
         const newOrders = ordersFromAccount;
         
         console.log(`[Shopee Sync] Conta ${conta.shop_id}: ${newOrders.length} novas de ${ordersFromAccount.length}`);
+
+        const orderSkuResult = await registerDiscoveredSkus(
+          userId,
+          collectSkuCandidatesFromShopeeOrders(newOrders, conta),
+        );
+        if (orderSkuResult.found > 0) {
+          console.log("[SKU Discovery][Shopee] Vendas processadas", {
+            accountId: conta.id,
+            shopId: conta.shop_id,
+            found: orderSkuResult.found,
+            created: orderSkuResult.created,
+            existing: orderSkuResult.existing,
+            skipped: orderSkuResult.skipped,
+          });
+        }
 
         if (newOrders.length === 0) {
           sendProgressToUser(userId, {

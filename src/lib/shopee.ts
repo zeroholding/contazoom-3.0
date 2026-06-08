@@ -210,3 +210,119 @@ export async function getShopeeEscrowDetail(params: GetShopeeEscrowDetailParams)
   }
   return data.response;
 }
+
+export interface GetShopeeItemListParams {
+  partnerId: string;
+  partnerKey: string;
+  accessToken: string;
+  shopId: string;
+  offset: number;
+  pageSize: number;
+  itemStatus?: string;
+}
+
+export async function getShopeeItemList(params: GetShopeeItemListParams) {
+  const path = "/api/v2/product/get_item_list";
+  const timestamp = Math.floor(Date.now() / 1000);
+  const sign = generateShopeeSign(
+    params.partnerId,
+    params.partnerKey,
+    path,
+    params.accessToken,
+    params.shopId,
+    timestamp,
+  );
+
+  const url = new URL(`https://partner.shopeemobile.com${path}`);
+  url.searchParams.append("partner_id", params.partnerId);
+  url.searchParams.append("timestamp", timestamp.toString());
+  url.searchParams.append("access_token", params.accessToken);
+  url.searchParams.append("shop_id", params.shopId);
+  url.searchParams.append("sign", sign);
+  url.searchParams.append("offset", params.offset.toString());
+  url.searchParams.append("page_size", params.pageSize.toString());
+  if (params.itemStatus) {
+    url.searchParams.append("item_status", params.itemStatus);
+  }
+
+  const response = await fetch(url.toString());
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Shopee getItemList error: ${data.message || data.error}`);
+  }
+  return data.response;
+}
+
+export interface GetShopeeItemBaseInfoParams {
+  partnerId: string;
+  partnerKey: string;
+  accessToken: string;
+  shopId: string;
+  itemIdList: string;
+}
+
+export async function getShopeeItemBaseInfo(params: GetShopeeItemBaseInfoParams) {
+  const path = "/api/v2/product/get_item_base_info";
+  const timestamp = Math.floor(Date.now() / 1000);
+  const sign = generateShopeeSign(
+    params.partnerId,
+    params.partnerKey,
+    path,
+    params.accessToken,
+    params.shopId,
+    timestamp,
+  );
+
+  const url = new URL(`https://partner.shopeemobile.com${path}`);
+  url.searchParams.append("partner_id", params.partnerId);
+  url.searchParams.append("timestamp", timestamp.toString());
+  url.searchParams.append("access_token", params.accessToken);
+  url.searchParams.append("shop_id", params.shopId);
+  url.searchParams.append("sign", sign);
+  url.searchParams.append("item_id_list", params.itemIdList);
+
+  const response = await fetch(url.toString());
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(
+      `Shopee getItemBaseInfo error: ${data.message || data.error}`,
+    );
+  }
+  return data.response;
+}
+
+export interface GetShopeeModelListParams {
+  partnerId: string;
+  partnerKey: string;
+  accessToken: string;
+  shopId: string;
+  itemId: string;
+}
+
+export async function getShopeeModelList(params: GetShopeeModelListParams) {
+  const path = "/api/v2/product/get_model_list";
+  const timestamp = Math.floor(Date.now() / 1000);
+  const sign = generateShopeeSign(
+    params.partnerId,
+    params.partnerKey,
+    path,
+    params.accessToken,
+    params.shopId,
+    timestamp,
+  );
+
+  const url = new URL(`https://partner.shopeemobile.com${path}`);
+  url.searchParams.append("partner_id", params.partnerId);
+  url.searchParams.append("timestamp", timestamp.toString());
+  url.searchParams.append("access_token", params.accessToken);
+  url.searchParams.append("shop_id", params.shopId);
+  url.searchParams.append("sign", sign);
+  url.searchParams.append("item_id", params.itemId);
+
+  const response = await fetch(url.toString());
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(`Shopee getModelList error: ${data.message || data.error}`);
+  }
+  return data.response;
+}

@@ -24,6 +24,11 @@ const FULL_W = "16rem";
 const RAIL_W = "4rem";
 const LS_KEY = "cz_sidebar_collapsed";
 
+type SKUStats = {
+  totalSkus: number;
+  skusSemCusto: number;
+};
+
 // useLayoutEffect no browser; fallback para useEffect no SSR
 const useIsoLayout =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -40,6 +45,10 @@ export default function GestaoSKU() {
   // Estados dos SKUs
   const [skus, setSkus] = useState<SKU[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [skuStats, setSkuStats] = useState<SKUStats>({
+    totalSkus: 0,
+    skusSemCusto: 0,
+  });
   const [filtros, setFiltros] = useState<FiltrosSKU>({
     search: '',
     tipo: '',
@@ -112,9 +121,28 @@ export default function GestaoSKU() {
     }
   }, [filtros, toast]);
 
+  const loadSKUStats = useCallback(async () => {
+    try {
+      const response = await fetch('/api/sku/stats');
+      if (!response.ok) throw new Error('Erro ao carregar estatísticas de SKU');
+
+      const data = await response.json();
+      setSkuStats({
+        totalSkus: Number(data.totalSkus || 0),
+        skusSemCusto: Number(data.skusSemCusto || 0),
+      });
+    } catch (error) {
+      console.error('Erro ao carregar estatísticas de SKU:', error);
+    }
+  }, []);
+
   useEffect(() => {
     loadSKUs();
   }, [loadSKUs]);
+
+  useEffect(() => {
+    loadSKUStats();
+  }, [loadSKUStats]);
 
   // Define a var CSS logo na 1ª pintura do cliente (conforme o estado inicial)
   const hasInitialSet = useRef(false);
@@ -161,10 +189,12 @@ export default function GestaoSKU() {
 
   const handleImportComplete = () => {
     loadSKUs();
+    loadSKUStats();
   };
 
   const handleSKUsCreated = () => {
     loadSKUs();
+    loadSKUStats();
   };
 
   const handlePickToCreate = (data: { sku: string; produto: string; custoUnitario?: number }) => {
@@ -254,6 +284,7 @@ export default function GestaoSKU() {
   const handleEditSKU = async (sku: SKU) => {
     console.log('SKU editado, recarregando lista:', sku);
     await loadSKUs(); // Recarregar a lista após edição
+    await loadSKUStats();
   };
 
   const handleCreateSKU = async (payload: CreateSKUInput) => {
@@ -304,6 +335,7 @@ export default function GestaoSKU() {
       });
       
       await loadSKUs();
+      await loadSKUStats();
     } catch (error) {
       console.error('Erro ao criar SKU:', error);
       // Não lançar o erro novamente para evitar toast duplicado
@@ -331,6 +363,7 @@ export default function GestaoSKU() {
       }
       
       await loadSKUs();
+      await loadSKUStats();
       toast({
         variant: "success",
         title: "SKU excluído",
@@ -370,6 +403,7 @@ export default function GestaoSKU() {
       
       await Promise.all(promises);
       await loadSKUs();
+      await loadSKUStats();
       setSelectedSKUs([]);
       
       toast({
@@ -399,6 +433,7 @@ export default function GestaoSKU() {
       
       await Promise.all(promises);
       await loadSKUs(); // Recarregar lista após atualização
+      await loadSKUStats();
       setSelectedSKUs([]);
       
       toast({
@@ -428,6 +463,7 @@ export default function GestaoSKU() {
       
       await Promise.all(promises);
       await loadSKUs();
+      await loadSKUStats();
       setSelectedSKUs([]);
     } catch (error) {
       console.error('Erro ao atualizar estoque:', error);
@@ -476,6 +512,37 @@ export default function GestaoSKU() {
             onNovoSKU={handleNovoSKU}
             isLoading={isLoading}
           />
+
+          <button
+            type="button"
+            onClick={handleSKUsPendentes}
+            className="mb-4 w-full rounded-lg border border-gray-200 bg-[#F3F3F3] p-4 text-left shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-50/40 md:max-w-sm"
+            title="SKUs ativos sem custo unitário"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white border border-gray-200">
+                  <svg className="h-4 w-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                    SKUs sem custo
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {skuStats.totalSkus} SKUs ativos
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className={`text-2xl font-bold ${skuStats.skusSemCusto > 0 ? 'text-orange-700' : 'text-green-700'}`}>
+                  {skuStats.skusSemCusto}
+                </p>
+                <p className="text-xs text-gray-500">meta 0</p>
+              </div>
+            </div>
+          </button>
           
           <FiltrosGestaoSKU
             onFiltrosChange={handleFiltrosChange}

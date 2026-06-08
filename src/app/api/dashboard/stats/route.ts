@@ -302,6 +302,14 @@ export async function GET(req: NextRequest) {
 
     const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
+    const skusSemCusto = await prisma.sKU.count({
+      where: {
+        userId: session.sub,
+        tipo: "filho",
+        ativo: true,
+        custoUnitario: { lte: 0 },
+      },
+    });
 
     // Aggregate current period
     let faturamentoTotal = 0;
@@ -319,7 +327,7 @@ export async function GET(req: NextRequest) {
     for (const v of vendas) {
       const vt = toNumber(v.valorTotal);
       const tp = toNumber(v.taxaPlataforma);
-      let fr = toNumber(v.frete) || 0;
+      const fr = toNumber(v.frete) || 0;
       const qtd = toNumber(v.quantidade);
       const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;
@@ -516,6 +524,7 @@ export async function GET(req: NextRequest) {
       lucroBruto: safeNumber(lucroBruto - (Number.isFinite(impostosTotal) ? impostosTotal : 0)),
       vendasRealizadas: safeNumber(vendasRealizadas),
       unidadesVendidas: safeNumber(unidadesVendidas),
+      skusSemCusto: safeNumber(skusSemCusto),
       periodo: useRange ? { start: start.toISOString(), end: end.toISOString() } : null,
     };
 

@@ -27,6 +27,7 @@ type Stats = {
   custoFrete: { total: number; mercadoLivre: number; shopee: number };
   margemContribuicao: number; // Receita líquida após taxas e frete
   cmv: number;
+  skusSemCusto: number;
   lucroBruto: number;
   vendasRealizadas: number;
   unidadesVendidas: number;
@@ -40,6 +41,7 @@ const DEFAULT_STATS: Stats = {
   custoFrete: { total: 0, mercadoLivre: 0, shopee: 0 },
   margemContribuicao: 0,
   cmv: 0,
+  skusSemCusto: 0,
   lucroBruto: 0,
   vendasRealizadas: 0,
   unidadesVendidas: 0,
@@ -321,6 +323,28 @@ const DashboardStats = memo(function DashboardStats({
           </div>
         </div>
       </div>
+
+      {/* SKUs sem Custo */}
+      <a href="/sku" className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm hover:border-orange-300 hover:bg-orange-50/40 transition-colors" title="SKUs ativos sem custo unitário">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center">
+            <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
+              <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-xs font-medium text-gray-600">SKUs sem Custo</h3>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className={`text-lg font-bold ${stats.skusSemCusto > 0 ? 'text-orange-700' : 'text-green-700'}`}>
+            {renderValue(stats.skusSemCusto, formatNumber, "w-16", "number")}
+          </div>
+          <p className="text-xs text-gray-600">meta: 0 pendentes</p>
+        </div>
+      </a>
 
       {/* Lucro Bruto */}
       <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Receita líquida - Impostos - CMV">

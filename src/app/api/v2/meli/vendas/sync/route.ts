@@ -1,5 +1,10 @@
 import { assertSessionToken } from "@/lib/auth";
 import { invalidateVendasCache } from "@/lib/cache";
+import {
+  collectSkuCandidatesFromMeliOrders,
+  fetchMeliCatalogSkuCandidates,
+  registerDiscoveredSkus,
+} from "@/lib/sku-discovery";
 import { closeUserConnections, sendProgressToUser } from "@/lib/sse-progress";
 import { DownloadMeliOrdersBuilder } from "@/lib/v2/builders/meli/download-meli-orders.builder";
 import { SaveMeliOrdersBuilder } from "@/lib/v2/builders/meli/save-meli-orders.builder";
@@ -136,7 +141,46 @@ export async function POST(req: NextRequest) {
     }
 
     try {
+      const catalogCandidates = await fetchMeliCatalogSkuCandidates(
+        downloadOrderbuilder.ctx.current.accountData,
+        userId,
+      );
+      const catalogResult = await registerDiscoveredSkus(
+        userId,
+        catalogCandidates,
+      );
+
+      if (catalogResult.found > 0) {
+        console.log("[SKU Discovery][ML] Catalogo processado", {
+          accountId: account.id,
+          found: catalogResult.found,
+          created: catalogResult.created,
+          existing: catalogResult.existing,
+          skipped: catalogResult.skipped,
+        });
+      }
+    } catch (skuError) {
+      console.warn("[SKU Discovery][ML] Falha ao ler catalogo da conta", {
+        accountId: account.id,
+        error: skuError instanceof Error ? skuError.message : String(skuError),
+      });
+    }
+
+    try {
       await downloadOrderbuilder.fetchAllOrders();
+      const orderSkuResult = await registerDiscoveredSkus(
+        userId,
+        collectSkuCandidatesFromMeliOrders(downloadOrderbuilder.allOrders),
+      );
+      if (orderSkuResult.found > 0) {
+        console.log("[SKU Discovery][ML] Vendas processadas", {
+          accountId: account.id,
+          found: orderSkuResult.found,
+          created: orderSkuResult.created,
+          existing: orderSkuResult.existing,
+          skipped: orderSkuResult.skipped,
+        });
+      }
       progressSum.sumFetchedOrders += downloadOrderbuilder.ctx.progress.fetched
       progressSum.sumExpectedOrders += downloadOrderbuilder.ctx.progress.expected
     } catch (fetchError) {

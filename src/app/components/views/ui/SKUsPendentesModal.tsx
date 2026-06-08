@@ -10,6 +10,10 @@ interface SKUPendente {
   plataforma: string;
   primeiraVenda?: string;
   ultimaVenda?: string;
+  cadastrado?: boolean;
+  skuId?: string;
+  custoUnitario?: number;
+  situacao?: "Sem custo" | "Nao cadastrado";
   estatisticas: {
     totalVendas: number;
     totalQuantidadeVendida: number;
@@ -96,9 +100,23 @@ export default function SKUsPendentesModal({
       return;
     }
 
-    // Caso de criação assistida: se houver exatamente 1 selecionado e callback disponível,
+    const selectedItems = skusPendentes.filter(sku =>
+      selectedSKUs.includes(sku.sku)
+    );
+    const skusCriaveis = selectedItems.filter(sku => !sku.cadastrado);
+
+    if (skusCriaveis.length === 0) {
+      toast({
+        variant: "error",
+        title: "SKU já cadastrado",
+        description: "Ajuste o custo unitário na tabela de Gestão de SKU",
+      });
+      return;
+    }
+
+    // Caso de criação assistida: se houver exatamente 1 selecionado não cadastrado e callback disponível,
     // apenas preenche a linha na tabela e fecha o modal (não chama API aqui)
-    if (selectedSKUs.length === 1 && onPickToCreate) {
+    if (selectedSKUs.length === 1 && skusCriaveis.length === 1 && onPickToCreate) {
       const unico = skusPendentes.find(s => s.sku === selectedSKUs[0]);
       if (unico) {
         onPickToCreate({
@@ -118,11 +136,11 @@ export default function SKUsPendentesModal({
 
     try {
       setIsCreating(true);
-      const skusToCreate = skusPendentes
-        .filter(sku => selectedSKUs.includes(sku.sku))
+      const skusToCreate = skusCriaveis
         .map(sku => ({
           sku: sku.sku,
           produto: sku.produto,
+          plataforma: sku.plataforma,
           custoUnitario: 0, // Custo padrão será 0
         }));
 
@@ -170,6 +188,11 @@ export default function SKUsPendentesModal({
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
+  const selectedItems = skusPendentes.filter(sku =>
+    selectedSKUs.includes(sku.sku)
+  );
+  const selectedCreatableCount = selectedItems.filter(sku => !sku.cadastrado).length;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -180,7 +203,7 @@ export default function SKUsPendentesModal({
       <div className="space-y-4">
         {/* Descrição */}
         <p className="text-sm text-gray-600">
-          SKUs encontrados nas vendas que ainda não estão cadastrados
+          SKUs sem custo unitário ou encontrados nas vendas ainda sem cadastro
         </p>
 
         {/* Ações em lote */}
@@ -192,10 +215,14 @@ export default function SKUsPendentesModal({
               </span>
               <button
                 onClick={handleCreateSKUs}
-                disabled={isCreating}
+                disabled={isCreating || selectedCreatableCount === 0}
                 className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors"
               >
-                {isCreating ? 'Criando...' : 'Criar SKUs Selecionados'}
+                {isCreating
+                  ? 'Criando...'
+                  : selectedCreatableCount > 0
+                    ? `Criar ${selectedCreatableCount} SKU(s)`
+                    : 'Ajuste custo na tabela'}
               </button>
             </div>
           </div>
@@ -213,7 +240,7 @@ export default function SKUsPendentesModal({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum SKU pendente</h3>
-              <p className="text-gray-600">Todos os SKUs das vendas já estão cadastrados.</p>
+              <p className="text-gray-600">Todos os SKUs estão cadastrados e com custo.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -236,6 +263,9 @@ export default function SKUsPendentesModal({
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Plataforma
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Situação
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Vendas
@@ -281,6 +311,15 @@ export default function SKUsPendentesModal({
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          sku.cadastrado
+                            ? 'bg-orange-100 text-orange-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {sku.cadastrado ? 'Sem custo' : 'Não cadastrado'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div>
                           <div className="font-medium">{sku.estatisticas.totalVendas}</div>
                           <div className="text-xs text-gray-500">
@@ -310,7 +349,7 @@ export default function SKUsPendentesModal({
         {/* Footer */}
         <div className="flex items-center justify-between pt-4 border-t border-gray-200">
           <div className="text-sm text-gray-600">
-            {skusPendentes.length} SKU(s) pendente(s) encontrado(s)
+            {skusPendentes.length} SKU(s) pendente(s)
           </div>
           <div className="flex space-x-3">
             <button
@@ -322,10 +361,14 @@ export default function SKUsPendentesModal({
             {selectedSKUs.length > 0 && (
               <button
                 onClick={handleCreateSKUs}
-                disabled={isCreating}
+                disabled={isCreating || selectedCreatableCount === 0}
                 className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors"
               >
-                {isCreating ? 'Criando...' : `Criar ${selectedSKUs.length} SKU(s)`}
+                {isCreating
+                  ? 'Criando...'
+                  : selectedCreatableCount > 0
+                    ? `Criar ${selectedCreatableCount} SKU(s)`
+                    : 'Ajuste custo na tabela'}
               </button>
             )}
           </div>
