@@ -4,6 +4,7 @@ import { openVendaDetails } from "./VendaDetailsModal";
 import { classifyFrete, formatCurrency, formatarFreteShopee } from "@/lib/frete";
 import FreteDetailsDropdown from "./FreteDetailsDropdown";
 import TaxaDetailsDropdown from "./TaxaDetailsDropdown";
+import FinanceiroDetailsDropdown from "./FinanceiroDetailsDropdown";
 import { PlataformaBadge } from "@/components/ui/PlataformaBadge";
 
 // Tipos para as vendas conforme especificação da API ML
@@ -474,9 +475,17 @@ export default function VendasTable({
                     {/* 6. Financeiro Detalhado */}
                     <td className="px-6 py-3 whitespace-nowrap">
                       <div className="text-sm">
-                        <div className="font-bold text-gray-900">
-                          {formatCurrency(venda.valorTotal)}
-                        </div>
+                        {isShopee ? (
+                          <FinanceiroDetailsDropdown venda={venda}>
+                            <div className="font-bold text-gray-900 cursor-pointer hover:underline">
+                              {formatCurrency(venda.valorTotal)}
+                            </div>
+                          </FinanceiroDetailsDropdown>
+                        ) : (
+                          <div className="font-bold text-gray-900">
+                            {formatCurrency(venda.valorTotal)}
+                          </div>
+                        )}
                         <div className="text-[11px] text-gray-500 font-medium mt-0.5 flex flex-col gap-0.5 leading-tight">
                           {venda.taxaPlataforma ? (
                             <div className="flex items-center gap-1">
