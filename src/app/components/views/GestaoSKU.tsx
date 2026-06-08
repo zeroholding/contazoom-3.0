@@ -382,6 +382,7 @@ export default function GestaoSKU() {
         title: "Erro ao excluir SKU",
         description: error instanceof Error ? error.message : "Não foi possível excluir o SKU",
       });
+      throw error;
     }
   };
 
@@ -407,7 +408,13 @@ export default function GestaoSKU() {
         fetch(`/api/sku/${id}`, { method: 'DELETE' })
       );
       
-      await Promise.all(promises);
+      const responses = await Promise.all(promises);
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse) {
+        const error = await failedResponse.json().catch(() => null);
+        throw new Error(error?.error || 'Erro ao excluir alguns SKUs');
+      }
+
       await loadSKUs();
       await loadSKUStats();
       setSelectedSKUs([]);
@@ -422,8 +429,9 @@ export default function GestaoSKU() {
       toast({
         variant: "error",
         title: "Erro ao excluir SKUs",
-        description: "Não foi possível excluir alguns SKUs",
+        description: error instanceof Error ? error.message : "Não foi possível excluir alguns SKUs",
       });
+      throw error;
     }
   };
 

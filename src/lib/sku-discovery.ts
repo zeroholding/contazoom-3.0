@@ -126,34 +126,20 @@ export async function registerDiscoveredSkus(
       .join(" - ");
 
     try {
-      await prisma.$transaction(async (tx) => {
-        const createdSku = await tx.sKU.create({
-          data: {
-            userId,
-            sku,
-            produto,
-            tipo: "filho",
-            custoUnitario: 0,
-            quantidade: 1,
-            ativo: true,
-            temEstoque: true,
-            proporcao: 1,
-            observacoes: sourceText,
-            tags: ["auto-sync", candidate.plataforma],
-          },
-        });
-
-        await tx.sKUCustoHistorico.create({
-          data: {
-            skuId: createdSku.id,
-            userId,
-            custoNovo: 0,
-            quantidade: 1,
-            motivo: sourceText,
-            tipoAlteracao: "auto-sync",
-            alteradoPor: "system",
-          },
-        });
+      await prisma.sKU.create({
+        data: {
+          userId,
+          sku,
+          produto,
+          tipo: "filho",
+          custoUnitario: 0,
+          quantidade: 1,
+          ativo: true,
+          temEstoque: true,
+          proporcao: 1,
+          observacoes: sourceText,
+          tags: ["auto-sync", candidate.plataforma],
+        },
       });
 
       existingSet.add(sku);

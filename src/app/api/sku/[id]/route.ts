@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
+import { applySkuCostRetroactively } from "@/lib/sku-retroactive-cost";
+import { invalidateVendasCache } from "@/lib/cache";
 
 export async function PUT(
   request: NextRequest,
@@ -81,8 +83,18 @@ export async function PUT(
         });
       }
 
+      if (custoChanged && oldCusto <= 0 && newCusto > 0 && updated.tipo === "filho") {
+        await applySkuCostRetroactively(tx, {
+          userId: session.sub,
+          sku: updated.sku,
+          custoUnitario: newCusto,
+        });
+      }
+
       return updated;
     });
+
+    invalidateVendasCache(session.sub);
 
     return NextResponse.json(updatedSku);
   } catch (error) {
@@ -118,6 +130,8 @@ export async function DELETE(
     await prisma.sKU.delete({
       where: { id },
     });
+
+    invalidateVendasCache(session.sub);
 
     return NextResponse.json({ success: true });
   } catch (error) {

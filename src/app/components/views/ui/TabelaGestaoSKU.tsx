@@ -102,10 +102,10 @@ interface TabelaGestaoSKUProps {
   selectedSKUs?: string[];
   onEditSKU?: (sku: SKU) => void;
   onCreateSKU?: (sku: CreateSKUInput) => Promise<void> | void;
-  onDeleteSKU?: (sku: SKU) => void;
+  onDeleteSKU?: (sku: SKU) => Promise<void> | void;
   onSelectSKU?: (skuId: string, selected: boolean) => void;
   onSelectAll?: (selected: boolean) => void;
-  onBulkDelete?: (skuIds: string[]) => void;
+  onBulkDelete?: (skuIds: string[]) => Promise<void> | void;
   onToggleStatus?: (skuIds: string[], ativo: boolean) => void;
   onToggleEstoque?: (skuIds: string[], temEstoque: boolean) => void;
   prefillNovoSku?: PrefillNovoSku;
@@ -345,15 +345,14 @@ export default function TabelaGestaoSKU({
     setShowDeleteModal(true);
   };
 
-  const confirmBulkDelete = () => {
-    onBulkDelete?.(skusToDelete);
-    setShowDeleteModal(false);
-    setSkusToDelete([]);
-    toast({
-      variant: "success",
-      title: "SKUs excluídos",
-      description: `${skusToDelete.length} SKU(s) foram excluídos com sucesso`,
-    });
+  const confirmBulkDelete = async () => {
+    try {
+      await onBulkDelete?.(skusToDelete);
+      setShowDeleteModal(false);
+      setSkusToDelete([]);
+    } catch (error) {
+      console.error('Erro ao excluir SKUs em lote:', error);
+    }
   };
 
   const handleBulkToggleStatus = (ativo: boolean) => {
@@ -1389,6 +1388,11 @@ export default function TabelaGestaoSKU({
           }}
           onConfirm={async () => {
             try {
+              if (onDeleteSKU) {
+                await onDeleteSKU(selectedSKU);
+                return;
+              }
+
               const response = await fetch(`/api/sku/${selectedSKU.id}`, {
                 method: 'DELETE',
               });
@@ -1403,18 +1407,15 @@ export default function TabelaGestaoSKU({
                 title: "SKU excluído",
                 description: `SKU ${selectedSKU.sku} foi excluído com sucesso`,
               });
-
-              // Callback para recarregar lista
-              if (onDeleteSKU) {
-                onDeleteSKU(selectedSKU);
-              }
             } catch (error) {
               console.error('Erro ao excluir SKU:', error);
-              toast({
-                variant: "error",
-                title: "Erro ao excluir",
-                description: error instanceof Error ? error.message : "Não foi possível excluir o SKU",
-              });
+              if (!onDeleteSKU) {
+                toast({
+                  variant: "error",
+                  title: "Erro ao excluir",
+                  description: error instanceof Error ? error.message : "Não foi possível excluir o SKU",
+                });
+              }
               throw error;
             }
           }}

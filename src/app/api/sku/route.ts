@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { verifySessionToken } from '@/lib/auth';
+import { applySkuCostRetroactively } from '@/lib/sku-retroactive-cost';
+import { invalidateVendasCache } from '@/lib/cache';
 
 // GET /api/sku - Listar SKUs
 export async function GET(request: NextRequest) {
@@ -229,6 +231,15 @@ export async function POST(request: NextRequest) {
           },
         });
         console.log('Histórico de custo criado');
+
+        const custoInicial = Number(custoUnitario);
+        if (Number.isFinite(custoInicial) && custoInicial > 0) {
+          await applySkuCostRetroactively(tx, {
+            userId: session.sub,
+            sku: createdSku.sku,
+            custoUnitario: custoInicial,
+          });
+        }
       }
 
       // Se for um kit (tipo pai) com filhos, atualizar os filhos para apontarem para este kit
@@ -254,6 +265,7 @@ export async function POST(request: NextRequest) {
     });
 
     console.log('SKU criado com sucesso:', newSku);
+    invalidateVendasCache(session.sub);
     return NextResponse.json(newSku, { status: 201 });
   } catch (error) {
     console.error('Erro ao criar SKU:', error);

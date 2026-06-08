@@ -39,11 +39,21 @@ export async function buildHistoricalCostMap(userId: string, skuCodes: string[])
       const currentCost = Number(sku.custoUnitario) || 0;
       currentCosts.set(sku.sku, currentCost);
   
-      const timeline = sku.custoHistorico.map((h) => ({
+      const rawTimeline = sku.custoHistorico.map((h) => ({
         date: new Date(h.createdAt),
         cost: Number(h.custoNovo),
         custoAnterior: Number(h.custoAnterior) || 0,
       }));
+
+      const firstRealCostIndex = rawTimeline.findIndex((entry) => entry.cost > 0);
+      let timeline =
+        firstRealCostIndex > 0
+          ? rawTimeline.slice(firstRealCostIndex)
+          : rawTimeline;
+
+      if (firstRealCostIndex === -1 && currentCost > 0) {
+        timeline = [];
+      }
   
       if (timeline.length === 0) {
         // No history at all — use current cost for all dates
