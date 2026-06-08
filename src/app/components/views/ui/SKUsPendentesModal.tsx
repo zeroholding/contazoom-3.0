@@ -198,9 +198,9 @@ export default function SKUsPendentesModal({
       isOpen={isOpen}
       onClose={onClose}
       title="SKUs Pendentes"
-      size="2xl"
+      size="full"
     >
-      <div className="space-y-4">
+      <div className="flex h-full min-h-0 flex-col gap-4">
         {/* Descrição */}
         <p className="text-sm text-gray-600">
           SKUs sem custo unitário ou encontrados nas vendas ainda sem cadastro
@@ -229,9 +229,9 @@ export default function SKUsPendentesModal({
         )}
 
         {/* Conteúdo */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="min-h-0 flex-1 border border-gray-200 rounded-lg overflow-hidden">
           {isLoading ? (
-            <div className="flex items-center justify-center h-64">
+            <div className="flex h-full min-h-64 items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
             </div>
           ) : skusPendentes.length === 0 ? (
@@ -243,11 +243,11 @@ export default function SKUsPendentesModal({
               <p className="text-gray-600">Todos os SKUs estão cadastrados e com custo.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+            <div className="h-full overflow-auto">
+              <table className="w-full table-fixed divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left">
+                    <th className="w-12 px-4 py-3 text-left">
                       <input
                         type="checkbox"
                         checked={selectedSKUs.length === skusPendentes.length && skusPendentes.length > 0}
@@ -255,28 +255,28 @@ export default function SKUsPendentesModal({
                         className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
                       />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[18%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       SKU
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[30%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Produto
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Plataforma
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Situação
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[8%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Vendas
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Valor Total
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[8%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Primeira Venda
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="w-[8%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Última Venda
                     </th>
                   </tr>
@@ -289,7 +289,7 @@ export default function SKUsPendentesModal({
                         selectedSKUs.includes(sku.sku) ? 'bg-blue-50' : ''
                       }`}
                     >
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4">
                         <input
                           type="checkbox"
                           checked={selectedSKUs.includes(sku.sku)}
@@ -297,20 +297,20 @@ export default function SKUsPendentesModal({
                           className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
                         />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 font-mono">
-                        {sku.sku}
+                      <td className="px-4 py-4 text-sm font-medium text-gray-900 font-mono">
+                        <span className="block truncate" title={sku.sku}>{sku.sku}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        <div className="max-w-xs">
+                      <td className="px-4 py-4 text-sm text-gray-900">
+                        <div className="min-w-0">
                           <p className="truncate">{sku.produto}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-4 text-sm text-gray-900">
                         <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                           {sku.plataforma}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-4 text-sm text-gray-900">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           sku.cadastrado
                             ? 'bg-orange-100 text-orange-800'
@@ -319,7 +319,7 @@ export default function SKUsPendentesModal({
                           {sku.cadastrado ? 'Sem custo' : 'Não cadastrado'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-4 text-sm text-gray-900">
                         <div>
                           <div className="font-medium">{sku.estatisticas.totalVendas}</div>
                           <div className="text-xs text-gray-500">
@@ -327,15 +327,15 @@ export default function SKUsPendentesModal({
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-4 text-sm text-gray-900">
                         <span className="font-medium">
                           {formatCurrency(sku.estatisticas.totalValorVendido)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-4 py-4 text-sm text-gray-500">
                         {sku.primeiraVenda ? formatDate(sku.primeiraVenda) : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-4 py-4 text-sm text-gray-500">
                         {sku.ultimaVenda ? formatDate(sku.ultimaVenda) : '-'}
                       </td>
                     </tr>

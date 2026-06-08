@@ -73,8 +73,9 @@ export default function Modal({
     lg: "max-w-lg",
     xl: "max-w-xl",
     "2xl": "max-w-2xl",
-    full: "max-w-full mx-4",
+    full: "max-w-[calc(100vw-2rem)]",
   };
+  const isFullSize = size === "full";
 
   const modalContent = (
     <>
@@ -99,7 +100,7 @@ export default function Modal({
       >
         <div
           ref={modalRef}
-          className={`relative w-full ${sizeClasses[size]} pointer-events-auto transition-all duration-350 ease-out ${
+          className={`relative w-full ${sizeClasses[size]} ${isFullSize ? "h-[calc(100vh-2rem)]" : ""} pointer-events-auto transition-all duration-350 ease-out ${
             isAnimating
               ? "opacity-100 scale-100 translate-y-0"
               : "opacity-0 scale-90 translate-y-8"
@@ -107,7 +108,7 @@ export default function Modal({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Card do modal com glassmorphism */}
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden">
+          <div className={`bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden ${isFullSize ? "h-full flex flex-col" : ""}`}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200/70 bg-gradient-to-r from-gray-50/50 to-white/50">
               <h2 className="text-xl font-semibold text-gray-900 tracking-tight">
@@ -139,7 +140,7 @@ export default function Modal({
             </div>
 
             {/* Content */}
-            <div className="px-6 py-5 max-h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
+            <div className={`px-6 py-5 custom-scrollbar ${isFullSize ? "min-h-0 flex-1 overflow-auto" : "max-h-[calc(100vh-200px)] overflow-y-auto"}`}>
               {children}
             </div>
           </div>
