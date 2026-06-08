@@ -192,6 +192,9 @@ export default function SKUsPendentesModal({
     selectedSKUs.includes(sku.sku)
   );
   const selectedCreatableCount = selectedItems.filter(sku => !sku.cadastrado).length;
+  const totalPendingCount = skusPendentes.length;
+  const semCustoCount = skusPendentes.filter(sku => sku.cadastrado).length;
+  const naoCadastradosCount = skusPendentes.filter(sku => !sku.cadastrado).length;
 
   return (
     <Modal
@@ -205,6 +208,33 @@ export default function SKUsPendentesModal({
         <p className="text-sm text-gray-600">
           SKUs sem custo unitário ou encontrados nas vendas ainda sem cadastro
         </p>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+              Pendentes
+            </p>
+            <p className="text-xl font-bold text-gray-900">
+              {isLoading ? '-' : totalPendingCount}
+            </p>
+          </div>
+          <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-orange-700">
+              Sem custo
+            </p>
+            <p className="text-xl font-bold text-orange-800">
+              {isLoading ? '-' : semCustoCount}
+            </p>
+          </div>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-blue-700">
+              Sem cadastro
+            </p>
+            <p className="text-xl font-bold text-blue-800">
+              {isLoading ? '-' : naoCadastradosCount}
+            </p>
+          </div>
+        </div>
 
         {/* Ações em lote */}
         {selectedSKUs.length > 0 && (

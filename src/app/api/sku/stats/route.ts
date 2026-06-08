@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
+import { buildPendingSkuSummary } from "@/lib/sku-pending";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,26 +13,22 @@ export async function GET(request: NextRequest) {
 
     const session = await verifySessionToken(sessionCookie);
 
-    const [totalSkus, skusSemCusto] = await Promise.all([
+    const [totalSkus, pendingSummary] = await Promise.all([
       prisma.sKU.count({
         where: {
           userId: session.sub,
           ativo: true,
         },
       }),
-      prisma.sKU.count({
-        where: {
-          userId: session.sub,
-          tipo: "filho",
-          ativo: true,
-          custoUnitario: { lte: 0 },
-        },
-      }),
+      buildPendingSkuSummary(session.sub),
     ]);
 
     return NextResponse.json({
       totalSkus,
-      skusSemCusto,
+      skusSemCusto: pendingSummary.total,
+      skusPendentes: pendingSummary.total,
+      semCusto: pendingSummary.semCusto,
+      naoCadastrados: pendingSummary.naoCadastrados,
     });
   } catch (error) {
     console.error("Erro ao buscar estatisticas de SKU:", error);

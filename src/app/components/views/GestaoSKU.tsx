@@ -27,6 +27,8 @@ const LS_KEY = "cz_sidebar_collapsed";
 type SKUStats = {
   totalSkus: number;
   skusSemCusto: number;
+  semCusto: number;
+  naoCadastrados: number;
 };
 
 // useLayoutEffect no browser; fallback para useEffect no SSR
@@ -48,6 +50,8 @@ export default function GestaoSKU() {
   const [skuStats, setSkuStats] = useState<SKUStats>({
     totalSkus: 0,
     skusSemCusto: 0,
+    semCusto: 0,
+    naoCadastrados: 0,
   });
   const [filtros, setFiltros] = useState<FiltrosSKU>({
     search: '',
@@ -130,6 +134,8 @@ export default function GestaoSKU() {
       setSkuStats({
         totalSkus: Number(data.totalSkus || 0),
         skusSemCusto: Number(data.skusSemCusto || 0),
+        semCusto: Number(data.semCusto || 0),
+        naoCadastrados: Number(data.naoCadastrados || 0),
       });
     } catch (error) {
       console.error('Erro ao carregar estatísticas de SKU:', error);
@@ -517,7 +523,7 @@ export default function GestaoSKU() {
             type="button"
             onClick={handleSKUsPendentes}
             className="mb-4 w-full rounded-lg border border-gray-200 bg-[#F3F3F3] p-4 text-left shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-50/40 md:max-w-sm"
-            title="SKUs ativos sem custo unitário"
+            title="SKUs pendentes de cadastro ou custo"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -528,10 +534,10 @@ export default function GestaoSKU() {
                 </div>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    SKUs sem custo
+                    SKUs pendentes
                   </p>
                   <p className="text-sm text-gray-600">
-                    {skuStats.totalSkus} SKUs ativos
+                    {skuStats.semCusto} sem custo · {skuStats.naoCadastrados} sem cadastro
                   </p>
                 </div>
               </div>

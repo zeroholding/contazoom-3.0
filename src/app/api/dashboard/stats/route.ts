@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getStatusWhere, getCanalWhere, getTipoAnuncioWhere, getModalidadeWhere } from "@/lib/dashboard-filters";
+import { buildPendingSkuSummary } from "@/lib/sku-pending";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -302,14 +303,7 @@ export async function GET(req: NextRequest) {
 
     const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
-    const skusSemCusto = await prisma.sKU.count({
-      where: {
-        userId: session.sub,
-        tipo: "filho",
-        ativo: true,
-        custoUnitario: { lte: 0 },
-      },
-    });
+    const pendingSkuSummary = await buildPendingSkuSummary(session.sub);
 
     // Aggregate current period
     let faturamentoTotal = 0;
@@ -524,7 +518,9 @@ export async function GET(req: NextRequest) {
       lucroBruto: safeNumber(lucroBruto - (Number.isFinite(impostosTotal) ? impostosTotal : 0)),
       vendasRealizadas: safeNumber(vendasRealizadas),
       unidadesVendidas: safeNumber(unidadesVendidas),
-      skusSemCusto: safeNumber(skusSemCusto),
+      skusSemCusto: safeNumber(pendingSkuSummary.total),
+      semCusto: safeNumber(pendingSkuSummary.semCusto),
+      naoCadastrados: safeNumber(pendingSkuSummary.naoCadastrados),
       periodo: useRange ? { start: start.toISOString(), end: end.toISOString() } : null,
     };
 
