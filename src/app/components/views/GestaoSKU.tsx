@@ -203,14 +203,14 @@ export default function GestaoSKU() {
     loadSKUStats();
   };
 
-  const handlePickToCreate = (data: { sku: string; produto: string; custoUnitario?: number }) => {
+  const handlePickToCreate = (data: { sku: string; produto: string; custoUnitario?: number; quantidade?: number }) => {
     // Preenche a linha de criação com dados vindos do modal
     setPrefillNovoSku({
       sku: data.sku,
       produto: data.produto,
       tipo: 'filho',
       custoUnitario: data.custoUnitario ?? 0,
-      quantidade: 0,
+      quantidade: data.quantidade && data.quantidade > 0 ? data.quantidade : 1,
       ativo: true,
       temEstoque: true,
     });

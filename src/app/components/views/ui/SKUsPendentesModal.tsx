@@ -31,7 +31,7 @@ interface SKUsPendentesModalProps {
   onClose: () => void;
   onSKUsCreated: () => void;
   // Quando selecionar 1 SKU e optar por criar preenchendo a linha da tabela
-  onPickToCreate?: (data: { sku: string; produto: string; custoUnitario?: number }) => void;
+  onPickToCreate?: (data: { sku: string; produto: string; custoUnitario?: number; quantidade?: number }) => void;
 }
 
 export default function SKUsPendentesModal({ 
@@ -123,6 +123,7 @@ export default function SKUsPendentesModal({
           sku: unico.sku,
           produto: unico.produto,
           custoUnitario: 0, // Custo padrão será 0
+          quantidade: 1,
         });
         onClose();
         toast({

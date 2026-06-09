@@ -94,6 +94,24 @@ type NovoSkuState = {
 
 type PrefillNovoSku = Partial<NovoSkuState>;
 
+function parseDecimalInput(value: string): number {
+  const cleaned = value.trim().replace(/[^\d,.-]/g, "");
+  if (!cleaned) return 0;
+
+  const hasComma = cleaned.includes(",");
+  const normalized = hasComma
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+  const parsed = Number.parseFloat(normalized);
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDecimalForInput(value: number | undefined): string {
+  if (!value || value <= 0) return "";
+  return String(value).replace(".", ",");
+}
+
 interface TabelaGestaoSKUProps {
   skus: SKU[];
   isLoading?: boolean;
@@ -244,6 +262,7 @@ export default function TabelaGestaoSKU({
     temEstoque: true, // Sempre true conforme solicitado
     skusFilhos: [],
   });
+  const [custoUnitarioInput, setCustoUnitarioInput] = useState("");
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -281,6 +300,7 @@ export default function TabelaGestaoSKU({
       temEstoque: prefillNovoSku.temEstoque ?? prev.temEstoque,
       skusFilhos: prefillNovoSku.skusFilhos ?? prev.skusFilhos,
     }));
+    setCustoUnitarioInput(formatDecimalForInput(prefillNovoSku.custoUnitario));
 
     // Foco/scroll para facilitar preenchimento
     skuInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
@@ -319,6 +339,7 @@ export default function TabelaGestaoSKU({
       temEstoque: true, // Sempre true conforme solicitado
       skusFilhos: [],
     });
+    setCustoUnitarioInput("");
     setFormErrors({});
   };
 
@@ -433,6 +454,11 @@ export default function TabelaGestaoSKU({
     }
   };
 
+  const handleCustoUnitarioChange = (value: string) => {
+    setCustoUnitarioInput(value);
+    handleFormChange("custoUnitario", parseDecimalInput(value));
+  };
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -490,7 +516,7 @@ export default function TabelaGestaoSKU({
         produto: novoSku.produto.trim(),
         tipo: novoSku.tipo,
         custoUnitario: novoSku.custoUnitario,
-        quantidade: novoSku.tipo === 'pai' ? 0 : 1,
+        quantidade: novoSku.tipo === 'pai' ? 0 : novoSku.quantidade,
         skuPai: novoSku.skuPai.trim() || undefined,
         hierarquia1: novoSku.hierarquia1.trim() || undefined,
         hierarquia2: novoSku.hierarquia2.trim() || undefined,
@@ -504,7 +530,7 @@ export default function TabelaGestaoSKU({
         produto: novoSku.produto.trim(),
         tipo: novoSku.tipo,
         custoUnitario: novoSku.custoUnitario,
-        quantidade: novoSku.tipo === 'pai' ? 0 : 1, // Kits não têm quantidade, individuais sempre 1
+        quantidade: novoSku.tipo === 'pai' ? 0 : novoSku.quantidade,
         skuPai: novoSku.skuPai.trim() || undefined,
         hierarquia1: novoSku.hierarquia1.trim() || undefined,
         hierarquia2: novoSku.hierarquia2.trim() || undefined,
@@ -758,11 +784,10 @@ export default function TabelaGestaoSKU({
                 <th className="px-4 py-3">
                   <div>
                     <input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      value={novoSku.custoUnitario}
-                      onChange={(e) => handleFormChange("custoUnitario", parseFloat(e.target.value || '0'))}
+                      type="text"
+                      inputMode="decimal"
+                      value={custoUnitarioInput}
+                      onChange={(e) => handleCustoUnitarioChange(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
                       className={`w-full px-3 py-2 border rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
                         formErrors.custoUnitario ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'
@@ -785,11 +810,11 @@ export default function TabelaGestaoSKU({
                       <input
                         type="number"
                         min={1}
-                        max={1}
-                        value={novoSku.quantidade}
+                        step={1}
+                        value={novoSku.quantidade > 0 ? novoSku.quantidade : ""}
                         onChange={(e) => {
-                          const val = parseInt(e.target.value || '1', 10);
-                          handleFormChange("quantidade", val === 0 ? 1 : 1);
+                          const value = Number.parseInt(e.target.value, 10);
+                          handleFormChange("quantidade", Number.isFinite(value) ? value : 0);
                         }}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
                         className={`w-full px-3 py-2 border rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
@@ -797,8 +822,7 @@ export default function TabelaGestaoSKU({
                         }`}
                         placeholder="1"
                         disabled={isSaving}
-                        readOnly
-                        title="Itens individuais sempre têm quantidade 1"
+                        title="Informe a quantidade do SKU"
                       />
                       {formErrors.quantidade && (
                         <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.quantidade}</p>
