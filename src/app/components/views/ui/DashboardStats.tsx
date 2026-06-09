@@ -82,7 +82,7 @@ const DashboardStats = memo(function DashboardStats({
           params.append("dataFim", dataFimPersonalizada.toISOString());
         }
         if (canalAtivo && canalAtivo !== 'todos') params.append('canal', canalAtivo);
-        if (statusAtivo && statusAtivo !== 'todos') params.append('status', statusAtivo);
+        if (statusAtivo) params.append('status', statusAtivo);
         if (tipoAnuncioAtivo && tipoAnuncioAtivo !== 'todos') params.append('tipoAnuncio', tipoAnuncioAtivo);
         if (modalidadeEnvioAtiva && modalidadeEnvioAtiva !== 'todos') params.append('modalidade', modalidadeEnvioAtiva);
         if (agrupamentoSKUAtivo && agrupamentoSKUAtivo !== 'mlb') params.append('agrupamentoSKU', agrupamentoSKUAtivo);

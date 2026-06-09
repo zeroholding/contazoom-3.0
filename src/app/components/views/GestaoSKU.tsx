@@ -184,9 +184,9 @@ export default function GestaoSKU() {
   }, [isSidebarCollapsed, isClient]);
 
   // Handlers dos filtros
-  const handleFiltrosChange = (novosFiltros: FiltrosSKU) => {
+  const handleFiltrosChange = useCallback((novosFiltros: FiltrosSKU) => {
     setFiltros(novosFiltros);
-  };
+  }, []);
 
   // Handlers do header
   const handleImportExcel = () => {

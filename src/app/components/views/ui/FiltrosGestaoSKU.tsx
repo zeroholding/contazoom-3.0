@@ -47,6 +47,7 @@ export default function FiltrosGestaoSKU({
     page: 1,
     limit: 25,
   });
+  const [searchDraft, setSearchDraft] = useState('');
 
   const [filtroAtivo, setFiltroAtivo] = useState<FiltroStatus>('todos');
   const [isAnimating, setIsAnimating] = useState(false);
@@ -85,6 +86,21 @@ export default function FiltrosGestaoSKU({
   useEffect(() => {
     onFiltrosChange(filtros);
   }, [filtros, onFiltrosChange]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setFiltros(prev => {
+        if (prev.search === searchDraft) return prev;
+        return {
+          ...prev,
+          search: searchDraft,
+          page: 1,
+        };
+      });
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [searchDraft]);
 
   const handleInputChange = (campo: keyof FiltrosSKU, valor: string | number | null) => {
     setFiltros(prev => ({
@@ -170,15 +186,17 @@ export default function FiltrosGestaoSKU({
         </div>
         <input
           type="text"
-          value={filtros.search}
-          onChange={(e) => handleInputChange('search', e.target.value)}
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
           placeholder="Buscar por SKU ou descrição do produto..."
           className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
-          disabled={isLoading}
         />
-        {filtros.search && (
+        {searchDraft && (
           <button
-            onClick={() => handleInputChange('search', '')}
+            onClick={() => {
+              setSearchDraft('');
+              handleInputChange('search', '');
+            }}
             className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
             title="Limpar busca"
           >

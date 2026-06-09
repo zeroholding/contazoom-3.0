@@ -117,6 +117,31 @@ function isShopeeVenda(platform: string, venda: Venda): boolean {
   );
 }
 
+function getBrazilDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const getPart = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+
+  return {
+    year: getPart("year"),
+    month: getPart("month"),
+    day: getPart("day"),
+  };
+}
+
+function getBrazilDayRange(dayOffset: number) {
+  const { year, month, day } = getBrazilDateParts();
+  const start = new Date(Date.UTC(year, month - 1, day + dayOffset, 3, 0, 0, 0));
+  const endExclusive = new Date(Date.UTC(year, month - 1, day + dayOffset + 1, 3, 0, 0, 0));
+  return { start, endExclusive };
+}
+
 /**
  * Mantida por compatibilidade; cálculo vem do backend.
  */
@@ -404,27 +429,12 @@ export default function TabelaVendas({
         );
       }
       case "hoje": {
-        const hoje = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          agora.getDate(),
-        );
-        const amanha = new Date(hoje);
-        amanha.setDate(amanha.getDate() + 1);
-        return dataVenda >= hoje && dataVenda < amanha;
+        const { start, endExclusive } = getBrazilDayRange(0);
+        return dataVenda >= start && dataVenda < endExclusive;
       }
       case "ontem": {
-        const ontem = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          agora.getDate() - 1,
-        );
-        const hoje = new Date(
-          agora.getFullYear(),
-          agora.getMonth(),
-          agora.getDate(),
-        );
-        return dataVenda >= ontem && dataVenda < hoje;
+        const { start, endExclusive } = getBrazilDayRange(-1);
+        return dataVenda >= start && dataVenda < endExclusive;
       }
       case "personalizado": {
         if (dataInicioPersonalizada && dataFimPersonalizada) {

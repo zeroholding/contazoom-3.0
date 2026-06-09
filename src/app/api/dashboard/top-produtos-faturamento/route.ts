@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getStatusWhere, getCanalWhere, getTipoAnuncioWhere, getModalidadeWhere } from "@/lib/dashboard-filters";
+import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 
@@ -123,10 +123,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Buscar vendas no período
-    const statusWhere = getStatusWhere(statusParam);
-    const canalWhere = getCanalWhere(canalParam);
-    const tipoWhere = getTipoAnuncioWhere(tipoAnuncioParam);
-    const modalidadeWhere = getModalidadeWhere(modalidadeParam);
+    const dashboardWhereMeli = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+      tipoAnuncio: tipoAnuncioParam,
+      modalidade: modalidadeParam,
+    });
+    const dashboardWhereShopee = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
 
     // Adicionar filtro de conta específica se fornecido
     const accountWhere = accountIdParam ? { meliAccountId: accountIdParam } : {};
@@ -134,13 +140,13 @@ export async function GET(req: NextRequest) {
 
     // WhereClause para Mercado Livre (com tipoAnuncio e modalidade)
     const whereClauseMeli = usarTodasVendas
-      ? { userId: session.sub, ...statusWhere, ...canalWhere, ...tipoWhere, ...modalidadeWhere, ...accountWhere }
-      : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...statusWhere, ...canalWhere, ...tipoWhere, ...modalidadeWhere, ...accountWhere };
+      ? { userId: session.sub, ...dashboardWhereMeli, ...accountWhere }
+      : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereMeli, ...accountWhere };
 
     // WhereClause para Shopee (sem tipoAnuncio e modalidade)
     const whereClauseShopee = usarTodasVendas
-      ? { userId: session.sub, ...statusWhere, ...canalWhere, ...accountWhereShopee }
-      : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...statusWhere, ...canalWhere, ...accountWhereShopee };
+      ? { userId: session.sub, ...dashboardWhereShopee, ...accountWhereShopee }
+      : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereShopee, ...accountWhereShopee };
 
     // Buscar vendas do Mercado Livre
     const vendasMeli = await prisma.meliVenda.findMany({

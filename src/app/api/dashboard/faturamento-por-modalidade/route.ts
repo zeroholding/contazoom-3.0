@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getStatusWhere, getCanalWhere, getTipoAnuncioWhere, getModalidadeWhere } from "@/lib/dashboard-filters";
+import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,16 +61,18 @@ export async function GET(req: NextRequest) {
       ({ start, end, useRange } = getDateRange(periodoParam));
     }
 
-    const statusWhere = getStatusWhere(statusParam);
-    const canalWhere = getCanalWhere(canalParam);
-    const tipoWhere = getTipoAnuncioWhere(tipoAnuncioParam);
-    const modalidadeWhere = getModalidadeWhere(modalidadeParam);
+    const dashboardWhereMeli = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+      tipoAnuncio: tipoAnuncioParam,
+      modalidade: modalidadeParam,
+    });
 
     const whereMeli = {
       userId: session.sub,
       ...(useRange ? { dataVenda: { gte: start, lte: end } } : {}),
       ...(accountPlatformParam === "meli" && accountIdParam ? { meliAccountId: accountIdParam } : {}),
-      ...statusWhere, ...canalWhere, ...tipoWhere, ...modalidadeWhere,
+      ...dashboardWhereMeli,
     };
 
     // Para Meli, agrupar por logisticType

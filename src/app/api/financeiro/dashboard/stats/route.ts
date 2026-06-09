@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getStatusWhere, getCanalWhere, getTipoAnuncioWhere, getModalidadeWhere } from "@/lib/dashboard-filters";
+import { getDashboardFiltersWhere, getStatusWhere } from "@/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -191,10 +191,16 @@ export async function GET(req: NextRequest) {
     const penultEnd = endOfMonth(penultimateRef);
 
     // Aplicar filtros usando helpers centralizados
-    const statusWhere = getStatusWhere(statusParam);
-    const canalWhere = getCanalWhere(canalParam);
-    const tipoWhere = getTipoAnuncioWhere(tipoAnuncioParam);
-    const modalidadeWhere = getModalidadeWhere(modalidadeParam);
+    const dashboardWhereMeli = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+      tipoAnuncio: tipoAnuncioParam,
+      modalidade: modalidadeParam,
+    });
+    const dashboardWhereShopee = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
 
     // Helper for trend calculations (apenas vendas pagas/completas)
     const paidOnly = getStatusWhere('pagos');
@@ -205,8 +211,8 @@ export async function GET(req: NextRequest) {
     const [vendasMeli, vendasShopee] = await Promise.all([
       prisma.meliVenda.findMany({
         where: useRange
-          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...statusWhere, ...tipoWhere, ...modalidadeWhere }
-          : { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...statusWhere, ...tipoWhere, ...modalidadeWhere },
+          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli }
+          : { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli },
         select: {
           orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
           valorTotal: true,
@@ -222,8 +228,8 @@ export async function GET(req: NextRequest) {
       }),
       prisma.shopeeVenda.findMany({
         where: useRange
-          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...statusWhere }
-          : { userId: session.sub, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...statusWhere },
+          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee }
+          : { userId: session.sub, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee },
         select: {
           orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
           valorTotal: true,
@@ -320,7 +326,7 @@ export async function GET(req: NextRequest) {
     for (const v of vendas) {
       const vt = toNumber(v.valorTotal);
       const tp = toNumber(v.taxaPlataforma);
-      let fr = toNumber(v.frete) || 0;
+      const fr = toNumber(v.frete) || 0;
       const qtd = toNumber(v.quantidade);
       const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;
@@ -372,7 +378,6 @@ export async function GET(req: NextRequest) {
     // Buscar alíquotas ativas do usuário (com fallback se modelo não existir)
     let aliquotas: any[] = [];
     try {
-      // @ts-expect-error - modelo será disponível após executar migration
       if (prisma.aliquotaImposto) {
         aliquotas = await prisma.aliquotaImposto.findMany({
           where: {
@@ -540,7 +545,7 @@ export async function GET(req: NextRequest) {
 
     console.log('[Dashboard Stats] ✅ Resposta calculada com sucesso:', {
       vendas: response.vendasRealizadas,
-      faturamento: response.faturamentoTotal,
+      faturamento: response.faturamentoBruto,
     });
 
     return NextResponse.json(response);

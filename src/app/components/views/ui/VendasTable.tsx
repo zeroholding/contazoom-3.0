@@ -91,6 +91,7 @@ interface VendasTableProps {
   currentPage: number;
   itemsPerPage: number;
 
+  colunasVisiveis?: unknown;
   platform?: "Mercado Livre" | "Shopee" | "Geral";
   managePage?: boolean;
 }

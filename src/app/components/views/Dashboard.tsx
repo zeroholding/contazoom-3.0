@@ -37,7 +37,6 @@ export default function Dashboard() {
   const { user } = useAuthContext();
   const { 
     hasAccounts, 
-    hasSales, 
     isLoading, 
     showConnectAccounts, 
     showSyncVendas, 
@@ -127,43 +126,6 @@ export default function Dashboard() {
       checkAccountsAndSales();
     }
   }, [user, refreshKey]);
-  // Fallback automático de período quando há vendas, mas o período selecionado retorna vazio
-  const hasAutoPeriodFallback = useRef(false);
-  useEffect(() => {
-    if (hasAutoPeriodFallback.current) return;
-    if (!hasSales) return; // Só tenta fallback se sabemos que há vendas no banco
-
-    (async () => {
-      try {
-        const params = new URLSearchParams();
-        if (periodoAtivo && periodoAtivo !== 'todos') params.append('periodo', periodoAtivo);
-        if (canalAtivo && canalAtivo !== 'todos') params.append('canal', canalAtivo);
-        if (statusAtivo && statusAtivo !== 'todos') params.append('status', statusAtivo);
-        if (tipoAnuncioAtivo && tipoAnuncioAtivo !== 'todos') params.append('tipoAnuncio', tipoAnuncioAtivo);
-        if (modalidadeEnvioAtiva && modalidadeEnvioAtiva !== 'todos') params.append('modalidade', modalidadeEnvioAtiva);
-        if (agrupamentoSKUAtivo && agrupamentoSKUAtivo !== 'mlb') params.append('agrupamentoSKU', agrupamentoSKUAtivo);
-        if (selectedAccount && selectedAccount.platform !== 'todos' && selectedAccount.id) {
-          params.append('accountPlatform', selectedAccount.platform);
-          params.append('accountId', selectedAccount.id);
-        }
-        const res = await fetch(`/api/dashboard/series?${params.toString()}` , { credentials: 'include' });
-        const arr = res.ok ? await res.json() : [];
-        if (Array.isArray(arr) && arr.length === 0) {
-          hasAutoPeriodFallback.current = true;
-          let nextPeriod: FiltroPeriodo | null = null;
-          if (periodoAtivo === 'hoje') nextPeriod = 'ultimos_30d';
-          else if (periodoAtivo === 'este_mes') nextPeriod = 'mes_passado';
-          else if (periodoAtivo === 'mes_passado') nextPeriod = 'ultimos_30d';
-          else nextPeriod = 'ultimos_30d';
-          setPeriodoAtivo(nextPeriod);
-          setRefreshKey((v) => v + 1);
-        }
-      } catch {}
-    })();
-  }, [periodoAtivo, hasSales]);
-
-  
-
   // FunÃ§Ãµes de callback para os filtros
   const handlePeriodoChange = (periodo: FiltroPeriodo) => {
     setPeriodoAtivo(periodo);

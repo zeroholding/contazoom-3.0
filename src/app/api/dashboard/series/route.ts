@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getStatusWhere, getCanalWhere, getTipoAnuncioWhere, getModalidadeWhere } from "@/lib/dashboard-filters";
+import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 
 export const runtime = "nodejs";
 
@@ -193,28 +193,28 @@ export async function GET(req: NextRequest) {
     }
 
     // Aplicar filtros usando helpers centralizados
-    const statusWhere = getStatusWhere(statusParam);
-    const canalWhere = getCanalWhere(canalParam);
-    const tipoWhere = getTipoAnuncioWhere(tipoAnuncioParam);
-    const modalidadeWhere = getModalidadeWhere(modalidadeParam);
+    const dashboardWhereMeli = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+      tipoAnuncio: tipoAnuncioParam,
+      modalidade: modalidadeParam,
+    });
+    const dashboardWhereShopee = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
     // WhereClause para Mercado Livre (com tipoAnuncio e modalidade)
     const whereClauseMeli = usarTodasVendas
       ? { 
           userId: session.sub, 
           ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}),
-          ...statusWhere, 
-          ...canalWhere, 
-          ...tipoWhere, 
-          ...modalidadeWhere 
+          ...dashboardWhereMeli
         }
       : { 
           userId: session.sub, 
           dataVenda: { gte: start, lte: end }, 
           ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}),
-          ...statusWhere, 
-          ...canalWhere, 
-          ...tipoWhere, 
-          ...modalidadeWhere 
+          ...dashboardWhereMeli
         };
 
     // WhereClause para Shopee (sem tipoAnuncio e modalidade)
@@ -222,15 +222,13 @@ export async function GET(req: NextRequest) {
       ? { 
           userId: session.sub, 
           ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}),
-          ...statusWhere, 
-          ...canalWhere 
+          ...dashboardWhereShopee
         }
       : { 
           userId: session.sub, 
           dataVenda: { gte: start, lte: end }, 
           ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}),
-          ...statusWhere, 
-          ...canalWhere 
+          ...dashboardWhereShopee
         };
 
     // Buscar vendas do Mercado Livre

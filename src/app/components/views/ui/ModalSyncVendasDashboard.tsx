@@ -165,17 +165,22 @@ export default function ModalSyncVendasDashboard({
 
       const totalNew = contasCarregadas.reduce((sum, c) => sum + (c.newOrdersCount || 0), 0);
       setContas(contasCarregadas);
+      setSelectedAccountIds(contasCarregadas.map((conta) => conta.id));
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
+      if (contasCarregadas.length === 0) {
+        setError("Nenhuma conta conectada encontrada para sincronizar.");
+        return;
+      }
+
       if (totalNew > 0) {
         setVerificationLog(`${totalNew} venda(s) nova(s) encontrada(s)!`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setStep("select");
       } else {
-        setVerificationLog('Nenhuma venda nova encontrada');
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        onClose();
+        setVerificationLog('Nenhuma venda nova detectada. Você ainda pode forçar a sincronização.');
       }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setStep("select");
     } catch (err) {
       console.error("Erro ao verificar vendas:", err);
       setError("Erro ao verificar vendas. Tente novamente.");
