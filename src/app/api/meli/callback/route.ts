@@ -12,6 +12,7 @@ import {
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
+  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_MELI_REDIRECT_ORIGIN || req.nextUrl.origin;
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
   if (!userId) {
     console.error("Usuário não está logado para conectar conta do MercadoLibre");
     // Redirecionar para login com parâmetro de callback
-    const loginUrl = new URL("/login", req.url);
+    const loginUrl = new URL("/login", baseUrl);
     // Forçar HTTP em desenvolvimento local
     if (loginUrl.hostname === "localhost" || loginUrl.hostname === "127.0.0.1") {
       loginUrl.protocol = "http:";
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
   const session = await tryVerifySessionToken(req.cookies.get("session")?.value);
   if (!session) {
     console.error("Sessão inexistente no callback do MercadoLibre");
-    const loginUrl = new URL("/login", req.url);
+    const loginUrl = new URL("/login", baseUrl);
     if (loginUrl.hostname === "localhost" || loginUrl.hostname === "127.0.0.1") {
       loginUrl.protocol = "http:";
     }
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
 
   if (session.sub !== userId) {
     console.error("Sessão atual não corresponde ao state registrado");
-    const loginUrl = new URL("/login", req.url);
+    const loginUrl = new URL("/login", baseUrl);
     if (loginUrl.hostname === "localhost" || loginUrl.hostname === "127.0.0.1") {
       loginUrl.protocol = "http:";
     }
@@ -167,7 +168,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Redirecionar para a página de contas com parâmetros de sucesso
-  const contasUrl = new URL("/contas", req.url);
+  const contasUrl = new URL("/contas", baseUrl);
   contasUrl.searchParams.set("meli_connected", "true");
   contasUrl.searchParams.set("meli_user_id", String(user_id));
   if (nickname) {
