@@ -66,6 +66,13 @@ export default function Dashboard() {
   // Alerta de custo de SKU
   const [pendingSkusCount, setPendingSkusCount] = useState<number>(0);
 
+  const [statusAtivo, setStatusAtivo] = useState<FiltroStatus>("pagos");
+  const [tipoAnuncioAtivo, setTipoAnuncioAtivo] = useState<FiltroTipoAnuncio>("todos");
+  const [modalidadeEnvioAtiva, setModalidadeEnvioAtiva] = useState<FiltroModalidadeEnvio>("todos");
+  const [agrupamentoSKUAtivo, setAgrupamentoSKUAtivo] = useState<FiltroAgrupamentoSKU>("mlb");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
+
   useEffect(() => {
     fetch('/api/sku/stats')
       .then(res => res.json())
@@ -75,12 +82,6 @@ export default function Dashboard() {
       })
       .catch(() => {});
   }, [refreshKey]);
-  const [statusAtivo, setStatusAtivo] = useState<FiltroStatus>("pagos");
-  const [tipoAnuncioAtivo, setTipoAnuncioAtivo] = useState<FiltroTipoAnuncio>("todos");
-  const [modalidadeEnvioAtiva, setModalidadeEnvioAtiva] = useState<FiltroModalidadeEnvio>("todos");
-  const [agrupamentoSKUAtivo, setAgrupamentoSKUAtivo] = useState<FiltroAgrupamentoSKU>("mlb");
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
