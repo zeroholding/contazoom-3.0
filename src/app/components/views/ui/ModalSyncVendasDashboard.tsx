@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { API_CONFIG } from "@/lib/api-config";
+import { useToast } from "./toaster";
 
 interface ContaInfo {
   id: string;
@@ -37,6 +38,7 @@ export default function ModalSyncVendasDashboard({
   selectedPlatform,
   onSyncComplete,
 }: ModalSyncVendasDashboardProps) {
+  const { toast } = useToast();
   const [step, setStep] = useState<"verify" | "select" | "syncing">("verify");
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -274,10 +276,37 @@ export default function ModalSyncVendasDashboard({
     setIsSyncing(false);
     onSyncComplete?.();
     
-    // Fechar após 2 segundos
+    // Verificar SKUs pendentes após a sincronização (Feedback 6 e 10)
+    try {
+      const res = await fetch('/api/sku/pendentes');
+      if (res.ok) {
+        const data = await res.json();
+        const numPending = data.total || 0;
+        
+        if (numPending > 0) {
+          toast({
+            variant: "warning",
+            title: "SKUs pendentes de cadastro!",
+            description: `Encontramos ${numPending} novo(s) SKU(s) nas suas vendas. Vá em 'Gestão SKU' para cadastrar o custo unitário.`,
+            duration: 10000,
+          });
+        } else {
+          toast({
+            variant: "success",
+            title: "Dashboard atualizado",
+            description: "Sincronização concluída e painéis atualizados com os novos dados.",
+            duration: 6000,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao verificar SKUs pós-sync:", err);
+    }
+
+    // Fechar após 2.5 segundos
     setTimeout(() => {
       onClose();
-    }, 2000);
+    }, 2500);
   };
 
   const getDisplayName = (conta: ContaInfo) => {

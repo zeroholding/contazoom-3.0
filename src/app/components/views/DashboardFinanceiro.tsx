@@ -56,7 +56,20 @@ export default function DashboardFinanceiro() {
   const [filtroDataCompInicio, setFiltroDataCompInicio] = useState<Date | null>(null);
   const [filtroDataCompFim, setFiltroDataCompFim] = useState<Date | null>(null);
   
+  // Alerta de custo de SKU
+  const [pendingSkusCount, setPendingSkusCount] = useState<number>(0);
+
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/sku/stats')
+      .then(res => res.json())
+      .then(data => {
+        const count = Number(data.skusSemCusto || 0);
+        setPendingSkusCount(count);
+      })
+      .catch(() => {});
+  }, [refreshKey]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hasInitialSet = useRef(false);
@@ -132,6 +145,38 @@ export default function DashboardFinanceiro() {
 
       <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
         <section className="p-6">
+          {pendingSkusCount > 0 && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
+              <div className="flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-red-800">
+                    ⚠️ Alerta Crítico na DRE (Lucratividade Mascarada)
+                  </h3>
+                  <p className="mt-1 text-sm text-red-700">
+                    Você possui <strong>{pendingSkusCount} SKU(s)</strong> vinculados a vendas recentes que não possuem o custo unitário cadastrado.
+                    <br />O CMV (Custo das Mercadorias Vendidas) e o Lucro Líquido exibidos aqui estão incorretos, pois faltam custos de produtos.
+                  </p>
+                  <div className="mt-3">
+                    <a
+                      href="/sku"
+                      className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    >
+                      Cadastrar Custos Agora
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                      </svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <HeaderFinanceiro
             mesesSelecionados={mesesSelecionados}
             onMesesChange={setMesesSelecionados}

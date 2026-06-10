@@ -62,6 +62,19 @@ export default function Dashboard() {
   const [dataInicioPersonalizada, setDataInicioPersonalizada] = useState<Date | null>(null);
   const [dataFimPersonalizada, setDataFimPersonalizada] = useState<Date | null>(null);
   const [canalAtivo, setCanalAtivo] = useState<FiltroCanal>("todos");
+  
+  // Alerta de custo de SKU
+  const [pendingSkusCount, setPendingSkusCount] = useState<number>(0);
+
+  useEffect(() => {
+    fetch('/api/sku/stats')
+      .then(res => res.json())
+      .then(data => {
+        const count = Number(data.skusSemCusto || 0);
+        setPendingSkusCount(count);
+      })
+      .catch(() => {});
+  }, [refreshKey]);
   const [statusAtivo, setStatusAtivo] = useState<FiltroStatus>("pagos");
   const [tipoAnuncioAtivo, setTipoAnuncioAtivo] = useState<FiltroTipoAnuncio>("todos");
   const [modalidadeEnvioAtiva, setModalidadeEnvioAtiva] = useState<FiltroModalidadeEnvio>("todos");
@@ -204,6 +217,38 @@ export default function Dashboard() {
               dismissible={true}
               onDismiss={() => dismissNotification('showViewVendas')}
             />
+          )}
+
+          {pendingSkusCount > 0 && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
+              <div className="flex items-start gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-red-800">
+                    ⚠️ Alerta Crítico de Lucratividade
+                  </h3>
+                  <p className="mt-1 text-sm text-red-700">
+                    Você possui <strong>{pendingSkusCount} SKU(s)</strong> vendidos recentemente que não possuem o custo unitário cadastrado. 
+                    <br />O lucro líquido e a margem exibidos neste Dashboard estão mascarados e incompletos.
+                  </p>
+                  <div className="mt-3">
+                    <a
+                      href="/sku"
+                      className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    >
+                      Cadastrar Custos Agora
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                      </svg>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           <HeaderDashboard

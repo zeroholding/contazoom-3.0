@@ -530,30 +530,42 @@ export default function GestaoSKU() {
           <button
             type="button"
             onClick={handleSKUsPendentes}
-            className="mb-4 w-full rounded-lg border border-gray-200 bg-[#F3F3F3] p-4 text-left shadow-sm transition-colors hover:border-orange-300 hover:bg-orange-50/40 md:max-w-sm"
+            className={`mb-4 w-full rounded-lg border p-4 text-left shadow-sm transition-all md:max-w-sm ${
+              skuStats.skusSemCusto > 0
+                ? "border-orange-300 bg-orange-50 hover:bg-orange-100 animate-pulse"
+                : "border-gray-200 bg-[#F3F3F3] hover:border-orange-300 hover:bg-orange-50/40"
+            }`}
             title="SKUs pendentes de cadastro ou custo"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white border border-gray-200">
-                  <svg className="h-4 w-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg border ${
+                  skuStats.skusSemCusto > 0 ? "bg-orange-100 border-orange-200 text-orange-600" : "bg-white border-gray-200 text-gray-700"
+                }`}>
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    SKUs pendentes
+                  <p className={`text-xs font-bold uppercase tracking-wide ${
+                    skuStats.skusSemCusto > 0 ? "text-orange-700" : "text-gray-500"
+                  }`}>
+                    ⚠️ SKUs Pendentes
                   </p>
-                  <p className="text-sm text-gray-600">
-                    {skuStats.semCusto} sem custo · {skuStats.naoCadastrados} sem cadastro
+                  <p className={`text-sm ${
+                    skuStats.skusSemCusto > 0 ? "text-orange-800 font-medium" : "text-gray-600"
+                  }`}>
+                    {skuStats.semCusto} sem custo · {skuStats.naoCadastrados} não mapeados
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className={`text-2xl font-bold ${skuStats.skusSemCusto > 0 ? 'text-orange-700' : 'text-green-700'}`}>
+                <p className={`text-2xl font-bold ${skuStats.skusSemCusto > 0 ? 'text-red-600' : 'text-green-600'}`}>
                   {skuStats.skusSemCusto}
                 </p>
-                <p className="text-xs text-gray-500">meta 0</p>
+                <p className={`text-xs ${skuStats.skusSemCusto > 0 ? 'text-red-400 font-semibold' : 'text-gray-500'}`}>
+                  meta 0
+                </p>
               </div>
             </div>
           </button>
