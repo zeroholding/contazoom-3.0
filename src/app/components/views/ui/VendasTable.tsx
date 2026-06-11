@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { openVendaDetails } from "./VendaDetailsModal";
 import { classifyFrete, formatCurrency, formatarFreteShopee } from "@/lib/frete";
 import FreteDetailsDropdown from "./FreteDetailsDropdown";
@@ -85,6 +86,11 @@ export type ProcessedVenda = {
   isCalculating: boolean;
 };
 
+type PendingSkuStatus = {
+  cadastrado: boolean;
+  situacao?: "Sem custo" | "Nao cadastrado";
+};
+
 interface VendasTableProps {
   vendas: ProcessedVenda[];
   isLoading?: boolean;
@@ -152,10 +158,47 @@ export default function VendasTable({
   platform = "Mercado Livre",
   managePage = false
 }: VendasTableProps) {
+  const [pendingSkuStatus, setPendingSkuStatus] = useState<Record<string, PendingSkuStatus>>({});
+
   const paginatedVendas = managePage ? vendas.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   ) : vendas;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPendingSkus() {
+      try {
+        const response = await fetch("/api/sku/pendentes", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const map: Record<string, PendingSkuStatus> = {};
+        for (const item of data?.skusPendentes || []) {
+          const sku = String(item?.sku || "").trim();
+          if (!sku) continue;
+          map[sku] = {
+            cadastrado: Boolean(item?.cadastrado),
+            situacao: item?.situacao,
+          };
+        }
+
+        if (isMounted) setPendingSkuStatus(map);
+      } catch (error) {
+        console.warn("Não foi possível carregar status de SKUs pendentes:", error);
+      }
+    }
+
+    loadPendingSkus();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -339,6 +382,9 @@ export default function VendasTable({
           <tbody className="bg-white divide-y divide-gray-200">
             {paginatedVendas.map((item) => {
               const { venda, isCalculating } = item;
+              const skuStatus = venda.sku
+                ? pendingSkuStatus[String(venda.sku).trim()]
+                : undefined;
               
                 const dateParts = formatDateTime(venda.dataVenda);
                 const isShopee = venda.plataforma === "Shopee" || venda.canal === "SP" || venda.canal === "Shopee";
@@ -404,6 +450,23 @@ export default function VendasTable({
                                 </span>
                               )}
                             </>
+                          )}
+                          {skuStatus && (
+                            <a
+                              href="/sku?pendentes=1"
+                              className={`inline-flex px-1.5 py-0.5 text-[9px] font-bold rounded border transition-colors ${
+                                skuStatus.cadastrado
+                                  ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                                  : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                              }`}
+                              title={
+                                skuStatus.cadastrado
+                                  ? "SKU cadastrado sem custo unitário. O CMV e a margem dependem desse custo."
+                                  : "SKU encontrado na venda, mas ainda sem cadastro na Gestão de SKU."
+                              }
+                            >
+                              {skuStatus.cadastrado ? "SKU sem custo" : "SKU sem cadastro"}
+                            </a>
                           )}
                         </div>
                       </div>

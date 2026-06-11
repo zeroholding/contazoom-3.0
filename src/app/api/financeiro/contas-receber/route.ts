@@ -55,7 +55,6 @@ export async function POST(request: NextRequest) {
         // Since the UI only provides dataPagamento right now, we will use it as vencimento and recebimento
         dataVencimento: new Date(dataPagamento),
         dataRecebimento: dataPagamento ? new Date(dataPagamento) : null,
-        dataCompetencia: dataPagamento ? new Date(dataPagamento) : null,
         categoriaId: categoriaId || null,
         formaPagamentoId: formaPagamentoId || null,
         status: "recebido", // As it's being inserted manually with a date

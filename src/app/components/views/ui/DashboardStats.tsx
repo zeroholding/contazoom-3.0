@@ -303,7 +303,18 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* CMV */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Custo das mercadorias vendidas">
+      <div
+        className={`rounded-lg border p-3 shadow-sm ${
+          stats.skusSemCusto > 0
+            ? "border-orange-200 bg-orange-50"
+            : "border-gray-200 bg-[#F3F3F3]"
+        }`}
+        title={
+          stats.skusSemCusto > 0
+            ? "Custo das mercadorias vendidas. Há SKUs pendentes que podem afetar este cálculo."
+            : "Custo das mercadorias vendidas"
+        }
+      >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -325,6 +336,11 @@ const DashboardStats = memo(function DashboardStats({
               `${(safeDiv(stats.cmv, stats.faturamentoTotal) * 100).toFixed(1)}% do faturamento`
             )}
           </div>
+          {!loading && stats.skusSemCusto > 0 && (
+            <a href="/sku?pendentes=1" className="block text-[10px] font-semibold text-orange-700 hover:underline">
+              {stats.skusSemCusto} SKU(s) pendente(s) afetam o CMV
+            </a>
+          )}
         </div>
       </div>
 

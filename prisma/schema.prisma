@@ -273,7 +273,7 @@ model SyncNotification {
 model SKU {
   id             String              @id @default(cuid())
   userId         String              @map("user_id")
-  sku            String              @unique
+  sku            String
   produto        String
   tipo           String              @default("filho")
   skuPai         String?             @map("sku_pai")

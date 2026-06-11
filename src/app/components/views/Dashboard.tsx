@@ -28,6 +28,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 const FULL_W = "16rem";
 const RAIL_W = "4rem";
 const LS_KEY = "cz_sidebar_collapsed";
+const SKU_ALERT_DISMISS_KEY = "cz_dashboard_sku_alert_dismissed_count";
 
 // useLayoutEffect no browser; fallback para useEffect no SSR
 const useIsoLayout =
@@ -65,6 +66,11 @@ export default function Dashboard() {
   
   // Alerta de custo de SKU
   const [pendingSkusCount, setPendingSkusCount] = useState<number>(0);
+  const [pendingSkuBreakdown, setPendingSkuBreakdown] = useState({
+    semCusto: 0,
+    naoCadastrados: 0,
+  });
+  const [isPendingSkuAlertHidden, setIsPendingSkuAlertHidden] = useState(false);
 
   const [statusAtivo, setStatusAtivo] = useState<FiltroStatus>("pagos");
   const [tipoAnuncioAtivo, setTipoAnuncioAtivo] = useState<FiltroTipoAnuncio>("todos");
@@ -78,7 +84,18 @@ export default function Dashboard() {
       .then(res => res.json())
       .then(data => {
         const count = Number(data.skusSemCusto || 0);
+        const semCusto = Number(data.semCusto || 0);
+        const naoCadastrados = Number(data.naoCadastrados || 0);
         setPendingSkusCount(count);
+        setPendingSkuBreakdown({ semCusto, naoCadastrados });
+
+        try {
+          const dismissedCount = Number(localStorage.getItem(SKU_ALERT_DISMISS_KEY) || 0);
+          setIsPendingSkuAlertHidden(count > 0 && dismissedCount >= count);
+          if (count === 0) localStorage.removeItem(SKU_ALERT_DISMISS_KEY);
+        } catch {
+          setIsPendingSkuAlertHidden(false);
+        }
       })
       .catch(() => {});
   }, [refreshKey]);
@@ -220,7 +237,7 @@ export default function Dashboard() {
             />
           )}
 
-          {pendingSkusCount > 0 && (
+          {pendingSkusCount > 0 && !isPendingSkuAlertHidden && (
             <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
@@ -233,12 +250,14 @@ export default function Dashboard() {
                     ⚠️ Alerta Crítico de Lucratividade
                   </h3>
                   <p className="mt-1 text-sm text-red-700">
-                    Você possui <strong>{pendingSkusCount} SKU(s)</strong> vendidos recentemente que não possuem o custo unitário cadastrado. 
-                    <br />O lucro líquido e a margem exibidos neste Dashboard estão mascarados e incompletos.
+                    Você possui <strong>{pendingSkusCount} SKU(s) pendente(s)</strong>:{" "}
+                    <strong>{pendingSkuBreakdown.semCusto}</strong> sem custo e{" "}
+                    <strong>{pendingSkuBreakdown.naoCadastrados}</strong> sem cadastro.
+                    <br />CMV, lucro e margem dependem desses custos para fechar corretamente.
                   </p>
                   <div className="mt-3">
                     <a
-                      href="/sku"
+                      href="/sku?pendentes=1"
                       className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                     >
                       Cadastrar Custos Agora
@@ -248,6 +267,22 @@ export default function Dashboard() {
                     </a>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPendingSkuAlertHidden(true);
+                    try {
+                      localStorage.setItem(SKU_ALERT_DISMISS_KEY, String(pendingSkusCount));
+                    } catch {}
+                  }}
+                  className="rounded-md p-1 text-red-400 transition-colors hover:bg-red-100 hover:text-red-700"
+                  aria-label="Ocultar alerta de SKUs pendentes"
+                  title="Ocultar alerta"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
           )}

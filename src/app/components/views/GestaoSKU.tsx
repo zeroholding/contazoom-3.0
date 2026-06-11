@@ -90,6 +90,11 @@ export default function GestaoSKU() {
     if (savedState === "1") {
       setIsSidebarCollapsed(true);
     }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("pendentes") === "1") {
+      setShowSKUsPendentes(true);
+    }
   }, []);
 
   // Carregamento inicial dos SKUs
@@ -555,7 +560,7 @@ export default function GestaoSKU() {
                   <p className={`text-sm ${
                     skuStats.skusSemCusto > 0 ? "text-orange-800 font-medium" : "text-gray-600"
                   }`}>
-                    {skuStats.semCusto} sem custo · {skuStats.naoCadastrados} não mapeados
+                    {skuStats.semCusto} sem custo · {skuStats.naoCadastrados} sem cadastro
                   </p>
                 </div>
               </div>

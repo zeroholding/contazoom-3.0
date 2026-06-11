@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "./toaster";
 import Modal from "./Modal";
 
@@ -46,6 +46,10 @@ export default function SKUsPendentesModal({
   const [isCreating, setIsCreating] = useState(false);
   const [selectedSKUs, setSelectedSKUs] = useState<string[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [sortKey, setSortKey] = useState<
+    "sku" | "produto" | "plataforma" | "situacao" | "vendas" | "quantidade" | "valor" | "primeiraVenda" | "ultimaVenda"
+  >("ultimaVenda");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
     if (isOpen && !hasLoaded) {
@@ -83,11 +87,21 @@ export default function SKUsPendentesModal({
   };
 
   const handleSelectAll = () => {
-    if (selectedSKUs.length === skusPendentes.length) {
+    if (selectedSKUs.length === sortedSkusPendentes.length) {
       setSelectedSKUs([]);
     } else {
-      setSelectedSKUs(skusPendentes.map(sku => sku.sku));
+      setSelectedSKUs(sortedSkusPendentes.map(sku => sku.sku));
     }
+  };
+
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) {
+      setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection(["vendas", "quantidade", "valor", "primeiraVenda", "ultimaVenda"].includes(key) ? "desc" : "asc");
   };
 
   const handleCreateSKUs = async () => {
@@ -189,6 +203,67 @@ export default function SKUsPendentesModal({
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
+  const sortedSkusPendentes = useMemo(() => {
+    const getValue = (item: SKUPendente) => {
+      switch (sortKey) {
+        case "sku":
+          return item.sku;
+        case "produto":
+          return item.produto;
+        case "plataforma":
+          return item.plataforma;
+        case "situacao":
+          return item.cadastrado ? "Sem custo" : "Nao cadastrado";
+        case "vendas":
+          return item.estatisticas.totalVendas;
+        case "quantidade":
+          return item.estatisticas.totalQuantidadeVendida;
+        case "valor":
+          return item.estatisticas.totalValorVendido;
+        case "primeiraVenda":
+          return item.primeiraVenda ? new Date(item.primeiraVenda).getTime() : 0;
+        case "ultimaVenda":
+          return item.ultimaVenda ? new Date(item.ultimaVenda).getTime() : 0;
+      }
+    };
+
+    return [...skusPendentes].sort((a, b) => {
+      const aValue = getValue(a);
+      const bValue = getValue(b);
+      let result = 0;
+
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        result = aValue - bValue;
+      } else {
+        result = String(aValue || "").localeCompare(String(bValue || ""), "pt-BR", {
+          numeric: true,
+          sensitivity: "base",
+        });
+      }
+
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [skusPendentes, sortDirection, sortKey]);
+
+  const renderSortHeader = (
+    key: typeof sortKey,
+    label: string,
+    className: string,
+  ) => (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => handleSort(key)}
+        className="inline-flex w-full items-center gap-1 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900"
+      >
+        <span>{label}</span>
+        <span className="text-[10px] text-gray-400">
+          {sortKey === key ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
+
   const selectedItems = skusPendentes.filter(sku =>
     selectedSKUs.includes(sku.sku)
   );
@@ -207,7 +282,7 @@ export default function SKUsPendentesModal({
       <div className="flex h-full min-h-0 flex-col gap-4">
         {/* Descrição */}
         <p className="text-sm text-gray-600">
-          SKUs sem custo unitário ou encontrados nas vendas ainda sem cadastro
+                  SKUs já cadastrados sem custo unitário ou encontrados nas vendas ainda sem cadastro
         </p>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -281,39 +356,24 @@ export default function SKUsPendentesModal({
                     <th className="w-12 px-4 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={selectedSKUs.length === skusPendentes.length && skusPendentes.length > 0}
+                        checked={selectedSKUs.length === sortedSkusPendentes.length && sortedSkusPendentes.length > 0}
                         onChange={handleSelectAll}
                         className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
                       />
                     </th>
-                    <th className="w-[18%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      SKU
-                    </th>
-                    <th className="w-[30%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Produto
-                    </th>
-                    <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Plataforma
-                    </th>
-                    <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Situação
-                    </th>
-                    <th className="w-[8%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Vendas
-                    </th>
-                    <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Valor Total
-                    </th>
-                    <th className="w-[8%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Primeira Venda
-                    </th>
-                    <th className="w-[8%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Última Venda
-                    </th>
+                    {renderSortHeader("sku", "SKU", "w-[16%] px-4 py-3 text-left")}
+                    {renderSortHeader("produto", "Produto", "w-[26%] px-4 py-3 text-left")}
+                    {renderSortHeader("plataforma", "Plataforma", "w-[10%] px-4 py-3 text-left")}
+                    {renderSortHeader("situacao", "Situação", "w-[10%] px-4 py-3 text-left")}
+                    {renderSortHeader("vendas", "Vendas", "w-[7%] px-4 py-3 text-left")}
+                    {renderSortHeader("quantidade", "Qtd", "w-[7%] px-4 py-3 text-left")}
+                    {renderSortHeader("valor", "Valor Total", "w-[10%] px-4 py-3 text-left")}
+                    {renderSortHeader("primeiraVenda", "Primeira Venda", "w-[8%] px-4 py-3 text-left")}
+                    {renderSortHeader("ultimaVenda", "Última Venda", "w-[8%] px-4 py-3 text-left")}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {skusPendentes.map((sku) => (
+                  {sortedSkusPendentes.map((sku) => (
                     <tr 
                       key={sku.sku}
                       className={`hover:bg-gray-50 transition-colors ${
@@ -353,10 +413,12 @@ export default function SKUsPendentesModal({
                       <td className="px-4 py-4 text-sm text-gray-900">
                         <div>
                           <div className="font-medium">{sku.estatisticas.totalVendas}</div>
-                          <div className="text-xs text-gray-500">
-                            {sku.estatisticas.totalQuantidadeVendida} unidades
-                          </div>
+                          <div className="text-xs text-gray-500">vendas</div>
                         </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900">
+                        <div className="font-medium">{sku.estatisticas.totalQuantidadeVendida}</div>
+                        <div className="text-xs text-gray-500">unidades</div>
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-900">
                         <span className="font-medium">

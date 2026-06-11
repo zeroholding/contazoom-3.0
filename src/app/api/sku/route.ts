@@ -269,6 +269,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(newSku, { status: 201 });
   } catch (error) {
     console.error('Erro ao criar SKU:', error);
+    if ((error as any)?.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'SKU já existe para este usuário' },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       { error: 'Erro interno do servidor' },
       { status: 500 }

@@ -299,6 +299,7 @@ export default function Financas() {
   // Estados para modais de edição e exclusão
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isEditOptionsLoading, setIsEditOptionsLoading] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [deletingItem, setDeletingItem] = useState<any>(null);
   
@@ -1115,9 +1116,28 @@ export default function Financas() {
   };
 
   // Funções para editar e excluir
-  const handleEdit = (item: any) => {
-    setEditingItem(item);
-    setIsEditModalOpen(true);
+  const handleEdit = async (item: any) => {
+    try {
+      setIsEditOptionsLoading(true);
+
+      if (activeTab === "contas_pagar" || activeTab === "contas_receber") {
+        await Promise.all([loadFormasPagamento(), loadCategorias()]);
+      } else if (activeTab === "categorias") {
+        await loadCategorias();
+      }
+
+      setEditingItem(item);
+      setIsEditModalOpen(true);
+    } catch (error) {
+      console.error("Erro ao preparar edição:", error);
+      toast.toast({
+        variant: "error",
+        title: "Erro ao abrir edição",
+        description: "Não foi possível carregar categorias e formas de pagamento.",
+      });
+    } finally {
+      setIsEditOptionsLoading(false);
+    }
   };
 
   const handleDelete = (item: any) => {
@@ -1361,6 +1381,40 @@ export default function Financas() {
       default:
         return [];
     }
+  };
+
+  const getEditModalData = () => {
+    if (!editingItem) return null;
+
+    if (activeTab === "contas_pagar") {
+      return {
+        ...editingItem,
+        dataPagamento: editingItem.dataPagamento || editingItem.dataVencimento,
+      };
+    }
+
+    if (activeTab === "contas_receber") {
+      return {
+        ...editingItem,
+        dataPagamento: editingItem.dataRecebimento || editingItem.dataVencimento,
+      };
+    }
+
+    if (activeTab === "categorias") {
+      return {
+        ...editingItem,
+        descricao: editingItem.descricao || editingItem.nome,
+      };
+    }
+
+    if (activeTab === "formas_pagamento") {
+      return {
+        ...editingItem,
+        descricao: editingItem.descricao || editingItem.nome,
+      };
+    }
+
+    return editingItem;
   };
 
   const getDeleteMessage = () => {
@@ -2237,9 +2291,9 @@ export default function Financas() {
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleEditSave}
         title={`Editar ${activeTab === "contas_pagar" ? "Despesa" : activeTab === "contas_receber" ? "Receita" : activeTab === "categorias" ? "Categoria" : "Forma de Pagamento"}`}
-        data={editingItem}
+        data={getEditModalData()}
         fields={getEditFields()}
-        isLoading={isSaving}
+        isLoading={isSaving || isEditOptionsLoading}
       />
 
       {/* Modal de Exclusão */}

@@ -22,7 +22,11 @@ export async function PUT(
       where: { id },
     });
 
-    if (!existingSku || existingSku.userId !== session.sub) {
+    if (!existingSku) {
+      return NextResponse.json({ success: true, alreadyDeleted: true });
+    }
+
+    if (existingSku.userId !== session.sub) {
       return NextResponse.json({ error: "SKU não encontrado" }, { status: 404 });
     }
 
