@@ -670,7 +670,7 @@ export default function TabelaGestaoSKU({
       )}
 
       <div className="overflow-x-auto scrollbar-hidden">
-        <table ref={tableRef} className="min-w-full divide-y divide-gray-200 table-fixed">
+        <table ref={tableRef} className="min-w-[1680px] w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-gray-50">
             <tr>
               {/* Checkbox para seleção múltipla */}
@@ -685,22 +685,22 @@ export default function TabelaGestaoSKU({
                 </th>
               )}
               
-              <th className="w-36 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-56 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 SKU
               </th>
-              <th className="w-64 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-72 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Produto
               </th>
-              <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-36 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Tipo
               </th>
               <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
-              <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Custo Unitário
               </th>
-              <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Quantidade
               </th>
               <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -709,10 +709,10 @@ export default function TabelaGestaoSKU({
               <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Vendas
               </th>
-              <th className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-96 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Hierarquia
               </th>
-              <th className="w-60 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-96 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Ações
               </th>
             </tr>
@@ -839,13 +839,13 @@ export default function TabelaGestaoSKU({
 
                 {/* Hierarquia (categoria/subcategoria) */}
                 <th className="px-4 py-3">
-                  <div className="flex gap-1">
+                  <div className="flex gap-2">
                     <input
                       type="text"
                       value={novoSku.hierarquia1}
                       onChange={(e) => handleFormChange("hierarquia1", e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                      className="w-1/2 px-2 py-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="w-1/2 px-3 py-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
                       placeholder="Hierarquia 1"
                       disabled={isSaving}
                     />
@@ -854,7 +854,7 @@ export default function TabelaGestaoSKU({
                       value={novoSku.hierarquia2}
                       onChange={(e) => handleFormChange("hierarquia2", e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                      className="w-1/2 px-2 py-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      className="w-1/2 px-3 py-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
                       placeholder="Hierarquia 2"
                       disabled={isSaving}
                     />
@@ -863,9 +863,9 @@ export default function TabelaGestaoSKU({
 
                 {/* Ações: vínculo de kit/individual + salvar */}
                 <th className="px-4 py-3">
-                  <div className="flex items-start gap-2">
+                  <div className="flex items-start gap-3">
                     {novoSku.tipo === 'filho' ? (
-                      <div className="flex-1">
+                      <div className="min-w-[230px] flex-1">
                         <select
                           value={ novoSku.skuPai }
                           onChange={(e) => handleFormChange('skuPai', e.target.value)}
@@ -888,7 +888,7 @@ export default function TabelaGestaoSKU({
                         )}
                       </div>
                     ) : (
-                      <div ref={filhosDropdownRef} className={`relative flex-1 ${isSaving || filhosDisponiveis.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <div ref={filhosDropdownRef} className={`relative min-w-[230px] flex-1 ${isSaving || filhosDisponiveis.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
                         {/* Campo compacto com tags dentro */}
                         <div
                           className={`flex items-center flex-wrap gap-1 px-3 py-2 border rounded text-xs bg-white text-gray-900 min-h-[38px] max-h-[60px] overflow-y-auto cursor-pointer ${

@@ -193,7 +193,9 @@ function VendasGeralContent() {
     pagination,
     countVendas,
     contasConectadas,
-    reloadVendas
+    reloadVendas,
+    handleSyncOrders,
+    isSyncing,
   } = useVendasContext();
 
   useEffect(() => {
@@ -264,6 +266,11 @@ function VendasGeralContent() {
     checkAccountsAndSales();
   }, [updateGuidanceState]);
 
+  const handleGuidanceSync = () => {
+    if (isSyncing) return;
+    handleSyncOrders(undefined, undefined, true);
+  };
+
   const mdLeftVar = "md:left-[var(--sidebar-w,16rem)]";
   const mdMlVar = "md:ml-[var(--sidebar-w,16rem)]";
 
@@ -311,8 +318,8 @@ function VendasGeralContent() {
               type="sync"
               title="🔄 Sincronize suas vendas"
               message="Suas contas estão conectadas! Agora você pode sincronizar suas vendas para visualizar os dados na tabela abaixo."
-              actionLabel="Sincronizar Agora"
-              actionHref="#"
+              actionLabel={isSyncing ? "Sincronizando..." : "Sincronizar Agora"}
+              onAction={handleGuidanceSync}
               dismissible={true}
               onDismiss={() => dismissNotification('showSyncVendas')}
             />

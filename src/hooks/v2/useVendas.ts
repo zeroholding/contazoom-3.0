@@ -64,7 +64,11 @@ export interface CountVenda {
 export interface ContaConectada {
   id: string;
   nickname: string | null;
-  ml_user_id: number;
+  ml_user_id?: number | string;
+  shop_id?: string;
+  shop_name?: string | null;
+  merchant_id?: string | null;
+  platform?: "Mercado Livre" | "Shopee";
   expires_at: string;
 }
 
@@ -142,13 +146,18 @@ export function useVendasV2(
   // Hook para progresso em tempo real
   const { isConnected, progress, connect, disconnect,
     clearProgress,
-    error: sseError,
   } = useVendasSyncProgress();
 
   // Conectar SSE automaticamente para acompanhar sincronizações em background (ex.: cron)
   useEffect(() => {
     if (!autoConnectSSE) return;
-    if (platform !== "Mercado Livre" && platform !== "Shopee") return;
+    if (
+      platform !== "Mercado Livre" &&
+      platform !== "Shopee" &&
+      platform !== "Geral"
+    ) {
+      return;
+    }
 
     connect();
     return () => {
@@ -177,7 +186,10 @@ export function useVendasV2(
 
       syncTimeoutRef.current = setTimeout(
         () => {
-          if (isSyncing && platform === "Mercado Livre") {
+          if (
+            isSyncing &&
+            (platform === "Mercado Livre" || platform === "Geral")
+          ) {
             console.warn(
               "[useVendas] ⚠️ Timeout de sincronização atingido (10min) - forçando conclusão",
             );
@@ -210,7 +222,12 @@ export function useVendasV2(
 
   // Atualizar progresso quando receber eventos SSE (Mercado Livre e Shopee)
   useEffect(() => {
-    if (progress && (platform === "Mercado Livre" || platform === "Shopee")) {
+    if (
+      progress &&
+      (platform === "Mercado Livre" ||
+        platform === "Shopee" ||
+        platform === "Geral")
+    ) {
       console.log(
         `[useVendas] Progresso SSE recebido (${platform}):`,
         progress,
@@ -283,6 +300,18 @@ export function useVendasV2(
         setIsSyncing(false);
         setIsTableLoading(false);
         disconnect();
+      } else if (progress.type === "sync_warning") {
+        if (progress.alreadyRunning && pendingAccountsRef.current > 0) {
+          pendingAccountsRef.current = Math.max(
+            0,
+            pendingAccountsRef.current - 1,
+          );
+        }
+
+        if (pendingAccountsRef.current === 0) {
+          setIsSyncing(false);
+          setIsTableLoading(false);
+        }
       }
     }
   }, [progress, platform, disconnect, autoConnectSSE, isSyncing]);
@@ -345,7 +374,11 @@ export function useVendasV2(
       setSyncErrors([]);
 
       // IMPORTANTE: Sempre conectar SSE para Mercado Livre
-      if (platform === "Mercado Livre" || platform === "Shopee") {
+      if (
+        platform === "Mercado Livre" ||
+        platform === "Shopee" ||
+        platform === "Geral"
+      ) {
         console.log(
           `[useVendas] 🔌 Status SSE antes de conectar: isConnected=${isConnected}`,
         );
@@ -512,7 +545,100 @@ export function useVendasV2(
         // Finalizar sincronização do Shopee
         return;
       } else if (platform === "Geral") {
-        // Sincronização geral não existe na v2
+        const [meliAccountsRes, shopeeAccountsRes] = await Promise.all([
+          API_CONFIG.fetch("/api/meli/accounts", {
+            cache: "no-store",
+            credentials: "include",
+          }),
+          API_CONFIG.fetch("/api/shopee/accounts", {
+            cache: "no-store",
+            credentials: "include",
+          }),
+        ]);
+
+        const meliAccounts = meliAccountsRes.ok
+          ? await meliAccountsRes.json()
+          : [];
+        const shopeeAccounts = shopeeAccountsRes.ok
+          ? await shopeeAccountsRes.json()
+          : [];
+        const meliAccountIds = (Array.isArray(meliAccounts)
+          ? meliAccounts
+          : [])
+          .map((account: ContaConectada) => account.id)
+          .filter(Boolean);
+        const shopeeAccountIds = (Array.isArray(shopeeAccounts)
+          ? shopeeAccounts
+          : [])
+          .map((account: ContaConectada) => account.id)
+          .filter(Boolean);
+        const jobs =
+          (meliAccountIds.length > 0 ? 1 : 0) +
+          (shopeeAccountIds.length > 0 ? 1 : 0);
+
+        if (jobs === 0) {
+          throw new Error("Nenhuma conta conectada para sincronizar vendas.");
+        }
+
+        pendingAccountsRef.current = jobs;
+
+        const handleAlreadyRunning = () => {
+          pendingAccountsRef.current = Math.max(
+            0,
+            pendingAccountsRef.current - 1,
+          );
+
+          if (pendingAccountsRef.current === 0) {
+            setIsSyncing(false);
+            setIsTableLoading(false);
+          }
+        };
+
+        if (meliAccountIds.length > 0) {
+          isMeliFireAndForget = true;
+          API_CONFIG.fetch("/api/v2/meli/sync-trigger", {
+            method: "POST",
+            cache: "no-store",
+            credentials: "include",
+            body: JSON.stringify({ accountIds: meliAccountIds, fullSync }),
+          })
+            .then(async (response) => {
+              if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                if (payload?.alreadyRunning) {
+                  handleAlreadyRunning();
+                }
+              }
+            })
+            .catch((error) => {
+              console.warn(
+                "[useVendas] Mercado Livre geral iniciado sem resposta HTTP final:",
+                error,
+              );
+            });
+        }
+
+        if (shopeeAccountIds.length > 0) {
+          const shopeeRes = await API_CONFIG.fetch("/api/shopee/vendas/sync", {
+            method: "POST",
+            cache: "no-store",
+            credentials: "include",
+            body: JSON.stringify({ accountIds: shopeeAccountIds }),
+          });
+
+          if (!shopeeRes.ok) {
+            const payload = await shopeeRes.json().catch(() => ({}));
+            if (payload?.alreadyRunning) {
+              handleAlreadyRunning();
+            } else {
+              throw new Error(
+                payload?.message || `Erro ${shopeeRes.status}`,
+              );
+            }
+          }
+        }
+
+        await loadVendasFromDatabase();
         return;
       }
       // NOTA: Código após todos os returns foi removido pois era inacessível
@@ -563,9 +689,41 @@ export function useVendasV2(
       } else if (platform === "Shopee") {
         apiUrl = "/api/shopee/accounts";
       } else if (platform === "Geral") {
+        const [meliRes, shopeeRes] = await Promise.all([
+          API_CONFIG.fetch("/api/meli/accounts", {
+            cache: "no-store",
+            credentials: "include",
+          }),
+          API_CONFIG.fetch("/api/shopee/accounts", {
+            cache: "no-store",
+            credentials: "include",
+          }),
+        ]);
+        const meliAccounts = meliRes.ok ? await meliRes.json() : [];
+        const shopeeAccounts = shopeeRes.ok ? await shopeeRes.json() : [];
+        const contas = [
+          ...(Array.isArray(meliAccounts) ? meliAccounts : []).map(
+            (account: ContaConectada) => ({
+              ...account,
+              nickname: account.nickname || `ML ${account.ml_user_id ?? ""}`,
+              platform: "Mercado Livre" as const,
+            }),
+          ),
+          ...(Array.isArray(shopeeAccounts) ? shopeeAccounts : []).map(
+            (account: ContaConectada) => ({
+              ...account,
+              nickname:
+                account.nickname ||
+                account.shop_name ||
+                `Shopee ${account.shop_id ?? ""}`,
+              platform: "Shopee" as const,
+            }),
+          ),
+        ];
+
         // Para "Geral", combinar contas de ambas plataformas
         console.log(`[useVendas] Plataforma Geral: não há contas específicas`);
-        setContasConectadas([]);
+        setContasConectadas(contas);
         setIsLoadingAccounts(false);
         return;
       }

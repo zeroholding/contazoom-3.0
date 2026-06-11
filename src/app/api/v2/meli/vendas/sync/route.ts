@@ -1,5 +1,6 @@
 import { assertSessionToken } from "@/lib/auth";
 import { invalidateVendasCache } from "@/lib/cache";
+import { acquireSyncLock } from "@/lib/sync-lock";
 import {
   collectSkuCandidatesFromMeliOrders,
   fetchMeliCatalogSkuCandidates,
@@ -83,7 +84,38 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const steps = accounts.map((acc) => ({
+  const syncLock = await acquireSyncLock([
+    "vendas",
+    "meli",
+    userId,
+    ...accounts.map((account) => account.id).sort(),
+  ]);
+
+  if (!syncLock.acquired) {
+    sendProgressToUser(userId, {
+      type: "sync_warning",
+      message:
+        "Ja existe uma sincronizacao do Mercado Livre em andamento. Aguarde finalizar antes de iniciar outra.",
+      current: 0,
+      total: 0,
+      fetched: 0,
+      expected: 0,
+      alreadyRunning: true,
+    });
+
+    return NextResponse.json(
+      {
+        success: false,
+        alreadyRunning: true,
+        message:
+          "Ja existe uma sincronizacao do Mercado Livre em andamento. Aguarde finalizar antes de iniciar outra.",
+      },
+      { status: 409 },
+    );
+  }
+
+  try {
+    const steps = accounts.map((acc) => ({
     accountId: acc.id,
     accountName: acc.nickname || `Conta ${acc.ml_user_id}`,
     currentStep: "pending" as
@@ -97,21 +129,21 @@ export async function POST(req: NextRequest) {
     expected: 0,
     error: undefined as string | undefined,
   }));
-  const progressSum = {
-    sumFetchedOrders: 0,
-    sumExpectedOrders: 0,
-    sumSavedOrders: 0,
-  };
+    const progressSum = {
+      sumFetchedOrders: 0,
+      sumExpectedOrders: 0,
+      sumSavedOrders: 0,
+    };
 
-  for (let accountIndex = 0; accountIndex < accounts.length; accountIndex++) {
-    const account = accounts[accountIndex];
+    for (let accountIndex = 0; accountIndex < accounts.length; accountIndex++) {
+      const account = accounts[accountIndex];
 
-    const downloadOrderbuilder = new DownloadMeliOrdersBuilder({
-      account,
-      meliSyncService: service,
-      userId,
-      steps,
-    });
+      const downloadOrderbuilder = new DownloadMeliOrdersBuilder({
+        account,
+        meliSyncService: service,
+        userId,
+        steps,
+      });
 
     // Atualizar step para fetching
     steps[accountIndex].currentStep = "fetching";
@@ -241,23 +273,26 @@ export async function POST(req: NextRequest) {
   invalidateVendasCache(userId);
   console.log(`[Cache] Cache de vendas invalidado para usuário ${userId}`);
 
-  return NextResponse.json({
-    syncedAt: new Date().toISOString(),
-    accounts: accounts.map(account => ({
-      id: account.id,
-      nickname: account.nickname,
-      ml_user_id: Number(account.ml_user_id),
-      expires_at: account.expires_at.toISOString(),
-    })),
-    orders: [] as MeliOrderPayload[],
-    errors: [], // TODO: implement error handler
-    totals: {
-      expected: progressSum.sumExpectedOrders,
-      fetched: progressSum.sumFetchedOrders,
-      saved: progressSum.sumSavedOrders,
-    },
-    hasMoreToSync: false, // NOVO: flag indicando se há vendas antigas pendentes
-    quickMode: false, // NOVO: indica qual modo foi usado
-    autoSyncTriggered: false,
-  });
+    return NextResponse.json({
+      syncedAt: new Date().toISOString(),
+      accounts: accounts.map(account => ({
+        id: account.id,
+        nickname: account.nickname,
+        ml_user_id: Number(account.ml_user_id),
+        expires_at: account.expires_at.toISOString(),
+      })),
+      orders: [] as MeliOrderPayload[],
+      errors: [], // TODO: implement error handler
+      totals: {
+        expected: progressSum.sumExpectedOrders,
+        fetched: progressSum.sumFetchedOrders,
+        saved: progressSum.sumSavedOrders,
+      },
+      hasMoreToSync: false, // NOVO: flag indicando se há vendas antigas pendentes
+      quickMode: false, // NOVO: indica qual modo foi usado
+      autoSyncTriggered: false,
+    });
+  } finally {
+    await syncLock.release();
+  }
 }

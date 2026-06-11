@@ -10,6 +10,7 @@ import {
 } from "@/lib/shopee";
 import { sendProgressToUser, closeUserConnections } from "@/lib/sse-progress";
 import { invalidateVendasCache } from "@/lib/cache";
+import { acquireSyncLock } from "@/lib/sync-lock";
 import {
   collectSkuCandidatesFromShopeeOrders,
   fetchShopeeCatalogSkuCandidates,
@@ -352,6 +353,8 @@ export async function POST(req: NextRequest) {
     // continuar sem filtro
   }
 
+  let syncLock: Awaited<ReturnType<typeof acquireSyncLock>> | null = null;
+
   try {
     console.log(`[Shopee Sync] Iniciando sincronização para usuário ${userId}`);
 
@@ -381,6 +384,36 @@ export async function POST(req: NextRequest) {
         current: 0, total: 0, fetched: 0, expected: 0
       });
       return NextResponse.json({ message: "Nenhuma conta Shopee ativa." }, { status: 404 });
+    }
+
+    syncLock = await acquireSyncLock([
+      "vendas",
+      "shopee",
+      userId,
+      ...contasAtivas.map((conta) => conta.id).sort(),
+    ]);
+
+    if (!syncLock.acquired) {
+      sendProgressToUser(userId, {
+        type: "sync_warning",
+        message:
+          "Ja existe uma sincronizacao da Shopee em andamento. Aguarde finalizar antes de iniciar outra.",
+        current: 0,
+        total: 0,
+        fetched: 0,
+        expected: 0,
+        alreadyRunning: true,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          alreadyRunning: true,
+          message:
+            "Ja existe uma sincronizacao da Shopee em andamento. Aguarde finalizar antes de iniciar outra.",
+        },
+        { status: 409 },
+      );
     }
 
     // OTIMIZAÇÃO #4: Renovar tokens em PARALELO
@@ -732,5 +765,9 @@ export async function POST(req: NextRequest) {
       { message: error instanceof Error ? error.message : "Erro interno no servidor." },
       { status: 500 },
     );
+  } finally {
+    if (syncLock?.acquired) {
+      await syncLock.release();
+    }
   }
 }

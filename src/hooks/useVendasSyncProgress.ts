@@ -16,6 +16,7 @@ export interface VendasSyncProgress {
   timestamp?: string;
   userId?: string;
   errorCode?: string;
+  alreadyRunning?: boolean;
   debugData?: any;
   hasMoreToSync?: boolean;
   pendingJobs?: number;
