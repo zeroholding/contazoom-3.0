@@ -49,15 +49,20 @@ export function ImportSKUExcelModal({
     const validTypes = [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
       'application/vnd.ms-excel', // .xls
+      'text/csv', // .csv
     ];
 
-    const isValidExtension = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    const lowerFileName = file.name.toLowerCase();
+    const isValidExtension =
+      lowerFileName.endsWith('.xlsx') ||
+      lowerFileName.endsWith('.xls') ||
+      lowerFileName.endsWith('.csv');
 
     if (!validTypes.includes(file.type) && !isValidExtension) {
       toast({
         variant: "error",
         title: "Arquivo inválido",
-        description: "Por favor, selecione um arquivo Excel (.xlsx ou .xls).",
+        description: "Por favor, selecione um arquivo Excel ou CSV (.xlsx, .xls ou .csv).",
       });
       return;
     }
@@ -90,13 +95,15 @@ export function ImportSKUExcelModal({
           throw new Error('A importação demorou muito tempo. Tente com um arquivo menor ou divida em múltiplos arquivos.');
         }
 
-        // Tentar parsear erro JSON
+        const errorText = await response.text();
+        let errorMessage = `Erro no servidor (${response.status}). Tente novamente.`;
         try {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Erro ao importar arquivo');
-        } catch (jsonError) {
-          throw new Error(`Erro no servidor (${response.status}). Tente novamente.`);
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          if (errorText.trim()) errorMessage = errorText;
         }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -107,6 +114,8 @@ export function ImportSKUExcelModal({
             result.results.skipped > 0 ? `${result.results.skipped} já existiam. ` : ''
           }${
             result.results.errors > 0 ? `${result.results.errors} erro(s) encontrado(s).` : ''
+          }${
+            result.results.warnings > 0 ? ` ${result.results.warnings} aviso(s).` : ''
           }`
         : 'Importação concluída!';
 
@@ -119,6 +128,9 @@ export function ImportSKUExcelModal({
       // Mostrar erros se houver
       if (result.results?.errorDetails && result.results.errorDetails.length > 0) {
         console.warn('Erros na importação:', result.results.errorDetails);
+      }
+      if (result.results?.warningDetails && result.results.warningDetails.length > 0) {
+        console.warn('Avisos na importação:', result.results.warningDetails);
       }
 
       onImportComplete?.();
@@ -230,7 +242,7 @@ export function ImportSKUExcelModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx,.xls,.csv"
                 onChange={handleFileInput}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 disabled={isUploading}
@@ -249,7 +261,7 @@ export function ImportSKUExcelModal({
                   <div className="text-sm text-gray-600">
                     <p className="font-medium">Clique para selecionar ou arraste o arquivo aqui</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      Formatos aceitos: .xlsx, .xls (máximo 10MB)
+                      Formatos aceitos: .xlsx, .xls, .csv (máximo 10MB)
                     </p>
                   </div>
                 </div>
@@ -302,7 +314,7 @@ export function ImportSKUExcelModal({
                 <li>• A primeira linha deve conter os cabeçalhos das colunas</li>
                 <li>• Campos obrigatórios: SKU e Produto</li>
                 <li>• Tipo pode ser &quot;Individual&quot; ou &quot;Kit&quot;</li>
-                <li>• Valores monetários devem usar ponto como separador decimal</li>
+                <li>• Valores monetários aceitam vírgula ou ponto como separador decimal</li>
                 <li>• SKUs duplicados serão ignorados automaticamente</li>
                 <li>• Para Kits, separe os SKUs Filhos por vírgula</li>
               </ul>

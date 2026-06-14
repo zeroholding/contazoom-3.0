@@ -13,9 +13,13 @@ interface ImportProgress {
   totalRows: number;
   processedRows: number;
   importedRows: number;
+  skippedRows: number;
   errorRows: number;
   message?: string;
+  errorDetails?: Array<{ row: number; message: string }>;
 }
+
+type ImportFinalData = ImportProgress | { error: string };
 
 export function ImportFinanceModal({ 
   isOpen, 
@@ -70,7 +74,13 @@ export function ImportFinanceModal({
       'text/csv' // .csv
     ];
 
-    if (!validTypes.includes(file.type)) {
+    const lowerFileName = file.name.toLowerCase();
+    const isValidExtension =
+      lowerFileName.endsWith('.xlsx') ||
+      lowerFileName.endsWith('.xls') ||
+      lowerFileName.endsWith('.csv');
+
+    if (!validTypes.includes(file.type) && !isValidExtension) {
       toast.toast({
         variant: "error",
         title: "Arquivo inválido",
@@ -111,12 +121,14 @@ export function ImportFinanceModal({
         }
         
         const text = await response.text();
+        let errorMessage = `Erro no servidor (${response.status}). Tente novamente.`;
         try {
           const errorData = JSON.parse(text);
-          throw new Error(errorData.error || 'Erro ao importar arquivo');
+          errorMessage = errorData.error || errorMessage;
         } catch {
-          throw new Error(`Erro no servidor (${response.status}). Tente novamente.`);
+          if (text.trim()) errorMessage = text;
         }
+        throw new Error(errorMessage);
       }
 
       // Ler stream SSE
@@ -128,7 +140,7 @@ export function ImportFinanceModal({
       }
 
       let buffer = '';
-      let finalData: any = null;
+      let finalData: ImportFinalData | null = null;
       
       while (true) {
         const { done, value } = await reader.read();
@@ -150,14 +162,16 @@ export function ImportFinanceModal({
                   totalRows: data.totalRows,
                   processedRows: data.processedRows,
                   importedRows: data.importedRows,
+                  skippedRows: data.skippedRows || 0,
                   errorRows: data.errorRows,
-                  message: data.message
+                  message: data.message,
+                  errorDetails: data.errorDetails,
                 });
                 
                 if (data.type === 'import_complete') {
                   finalData = data;
                 } else if (data.type === 'import_error') {
-                  throw new Error(data.message || 'Erro na importação');
+                  finalData = { error: data.message || 'Erro na importação' };
                 }
               }
             } catch (error) {
@@ -167,11 +181,15 @@ export function ImportFinanceModal({
         }
       }
       
+      if (finalData && 'error' in finalData) {
+        throw new Error(finalData.error);
+      }
+
       if (finalData) {
         toast.toast({
           variant: "success",
           title: "Importação concluída!",
-          description: `${finalData.importedRows} registros importados. ${finalData.errorRows > 0 ? `${finalData.errorRows} erros encontrados.` : ''}`,
+          description: `${finalData.importedRows} importado(s), ${finalData.skippedRows || 0} ignorado(s) e ${finalData.errorRows} erro(s).`,
         });
 
         onImportSuccess?.();
@@ -180,6 +198,8 @@ export function ImportFinanceModal({
           setIsUploading(false);
           onClose();
         }, 2000);
+      } else {
+        throw new Error('A importação terminou sem retornar um resultado.');
       }
     } catch (error) {
       console.error('Erro ao importar:', error);
@@ -354,7 +374,7 @@ export function ImportFinanceModal({
                       </div>
                       
                       {/* Estatísticas */}
-                      <div className="grid grid-cols-3 gap-3 text-center">
+                      <div className="grid grid-cols-4 gap-3 text-center">
                         <div className="bg-blue-50 rounded-lg p-2">
                           <div className="text-xs text-blue-600 font-medium">Total</div>
                           <div className="text-lg font-bold text-blue-900">{progress.totalRows}</div>
@@ -362,6 +382,10 @@ export function ImportFinanceModal({
                         <div className="bg-green-50 rounded-lg p-2">
                           <div className="text-xs text-green-600 font-medium">Importados</div>
                           <div className="text-lg font-bold text-green-900">{progress.importedRows}</div>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-2">
+                          <div className="text-xs text-amber-700 font-medium">Ignorados</div>
+                          <div className="text-lg font-bold text-amber-900">{progress.skippedRows}</div>
                         </div>
                         <div className="bg-red-50 rounded-lg p-2">
                           <div className="text-xs text-red-600 font-medium">Erros</div>
@@ -435,8 +459,19 @@ export function ImportFinanceModal({
                 <li>• Use o modelo baixado para garantir o formato correto</li>
                 <li>• A primeira linha deve conter os cabeçalhos das colunas</li>
                 <li>• Datas devem estar no formato DD/MM/AAAA</li>
-                <li>• Valores monetários devem usar ponto como separador decimal</li>
-                <li>• Campos obrigatórios: {getFields().join(', ')}</li>
+                <li>• Valores monetários aceitam vírgula ou ponto como separador decimal</li>
+                {activeTab === 'contas_pagar' && (
+                  <li>• Obrigatórios: Descrição, Valor e Data de Vencimento</li>
+                )}
+                {activeTab === 'contas_receber' && (
+                  <li>• Obrigatórios: Descrição, Valor e Data de Vencimento</li>
+                )}
+                {activeTab === 'categorias' && (
+                  <li>• Obrigatórios: Descrição e Tipo</li>
+                )}
+                {activeTab === 'formas_pagamento' && (
+                  <li>• Obrigatório: Nome</li>
+                )}
                 {activeTab === 'categorias' && (
                   <li>• Tipo deve ser &quot;receita&quot; ou &quot;despesa&quot;</li>
                 )}
