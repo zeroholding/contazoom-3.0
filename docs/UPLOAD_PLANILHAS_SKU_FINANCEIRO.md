@@ -111,8 +111,8 @@ respectivos pais e a estrutura sera validada.
 | 4. Fluxo de SKU | Concluido | Modelo, importacao e exportacao |
 | 5. Fluxo financeiro | Concluido | Modelos e importacao por tipo |
 | 6. Integracao da interface | Concluido | Feedback detalhado e validacoes |
-| 7. Testes e validacao | Em andamento | Casos unitarios, build e fluxos |
-| 8. Revisao e entrega Git | Pendente | Diff revisado, commit e push |
+| 7. Testes e validacao | Concluido localmente | Casos unitarios, lint e build |
+| 8. Revisao e entrega Git | Concluido | Diff revisado, commit e push |
 
 ## Criterios de aceite
 
@@ -293,3 +293,30 @@ Avisos encontrados e anteriores a esta entrega:
 
 - chave `eslint` nao reconhecida no `next.config.ts`;
 - base `baseline-browser-mapping` desatualizada.
+
+### Revisao Git
+
+- `git diff --check`: sem problemas de espacos ou marcadores.
+- `AGENTS.md` local nao foi incluido na entrega.
+- Commit funcional: `5afff57 Implement spreadsheet imports for SKU and finance`.
+- Push concluido para `origin/main`.
+- `origin/main` confirmado em
+  `5afff57675c46ec38313cc39e260aa049bd17638`.
+
+### Verificacao da VPS/Coolify
+
+A verificacao foi feita diretamente em `https://app.contazoom.com.br`, sem usar
+servidor local.
+
+Enquanto a VPS ainda executa a versao anterior:
+
+- `GET /api/sku/template` responde `405`, pois cai na rota dinamica antiga
+  `/api/sku/[id]`;
+- `POST /api/sku/import` responde `405` pelo mesmo motivo;
+- `GET /api/financeiro/download-template` responde `404`;
+- `POST /api/financeiro/import-excel` responde `404`.
+
+Esses quatro sinais comprovam que o container do Coolify ainda nao publicou o
+commit enviado. Depois do deploy, sem uma sessao autenticada, todos os endpoints
+devem responder `401`. Essa sera a confirmacao objetiva de que as novas rotas
+entraram na VPS.
