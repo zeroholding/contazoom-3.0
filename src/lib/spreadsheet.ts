@@ -10,6 +10,11 @@ export type SpreadsheetRecord = {
   values: Record<string, unknown>;
 };
 
+export type SpreadsheetColumnRequirement = {
+  label: string;
+  aliases: string[];
+};
+
 export type ImportErrorDetail = {
   row: number;
   message: string;
@@ -88,33 +93,47 @@ export async function readSpreadsheetRecords(file: File): Promise<SpreadsheetRec
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
-  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+    header: 1,
     defval: null,
     raw: true,
-    blankrows: false,
+    blankrows: true,
   });
 
-  if (rawRows.length === 0) {
+  const headerRowIndex = rawRows.findIndex((row) =>
+    row.some((value) => value !== null && value !== undefined && String(value).trim() !== ""),
+  );
+  if (headerRowIndex < 0) {
     throw new Error("A planilha não possui linhas para importar.");
   }
 
-  if (rawRows.length > MAX_SPREADSHEET_ROWS) {
+  const normalizedHeaders = rawRows[headerRowIndex].map(normalizeSpreadsheetKey);
+  const validHeaders = normalizedHeaders.filter(Boolean);
+  if (validHeaders.length === 0) {
+    throw new Error("A planilha não possui cabeçalhos válidos.");
+  }
+  if (new Set(validHeaders).size !== validHeaders.length) {
+    throw new Error("A planilha possui cabeçalhos duplicados.");
+  }
+
+  const dataRows = rawRows.slice(headerRowIndex + 1);
+  if (dataRows.length > MAX_SPREADSHEET_ROWS) {
     throw new Error(
-      `A planilha possui ${rawRows.length} linhas. O limite por importação é ${MAX_SPREADSHEET_ROWS}.`,
+      `A planilha possui ${dataRows.length} linhas. O limite por importação é ${MAX_SPREADSHEET_ROWS}.`,
     );
   }
 
-  return rawRows
+  const records = dataRows
     .map((row, index) => {
       const values: Record<string, unknown> = {};
 
-      for (const [key, value] of Object.entries(row)) {
-        const normalizedKey = normalizeSpreadsheetKey(key);
-        if (normalizedKey) values[normalizedKey] = value;
+      for (let columnIndex = 0; columnIndex < normalizedHeaders.length; columnIndex += 1) {
+        const normalizedKey = normalizedHeaders[columnIndex];
+        if (normalizedKey) values[normalizedKey] = row[columnIndex] ?? null;
       }
 
       return {
-        rowNumber: index + 2,
+        rowNumber: headerRowIndex + index + 2,
         values,
       };
     })
@@ -123,6 +142,12 @@ export async function readSpreadsheetRecords(file: File): Promise<SpreadsheetRec
         (value) => value !== null && value !== undefined && String(value).trim() !== "",
       ),
     );
+
+  if (records.length === 0) {
+    throw new Error("A planilha possui cabeçalhos, mas não possui dados para importar.");
+  }
+
+  return records;
 }
 
 export function getSpreadsheetValue(
@@ -137,6 +162,29 @@ export function getSpreadsheetValue(
   }
 
   return undefined;
+}
+
+export function assertSpreadsheetColumns(
+  records: SpreadsheetRecord[],
+  requirements: SpreadsheetColumnRequirement[],
+): void {
+  const availableColumns = new Set(
+    records.flatMap((record) => Object.keys(record.values)),
+  );
+  const missing = requirements
+    .filter(
+      (requirement) =>
+        !requirement.aliases.some((alias) =>
+          availableColumns.has(normalizeSpreadsheetKey(alias)),
+        ),
+    )
+    .map((requirement) => requirement.label);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Coluna(s) obrigatória(s) ausente(s): ${missing.join(", ")}. Baixe e use o modelo correto.`,
+    );
+  }
 }
 
 export function parseSpreadsheetMoney(value: unknown): number | null {
@@ -166,6 +214,14 @@ export function parseSpreadsheetMoney(value: unknown): number | null {
     }
   } else if (commaPosition >= 0) {
     text = text.replace(/\./g, "").replace(",", ".");
+  } else if (dotPosition >= 0) {
+    const dotParts = text.split(".");
+    const usesThousandsSeparators =
+      dotParts.length > 2 ||
+      (dotParts.length === 2 && dotParts[1].length === 3);
+    if (usesThousandsSeparators) {
+      text = text.replace(/\./g, "");
+    }
   }
 
   const parsed = Number(text);
@@ -204,6 +260,26 @@ export function parseSpreadsheetBoolean(
   }
 
   return defaultValue;
+}
+
+export function parseSpreadsheetBooleanStrict(value: unknown): boolean | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") {
+    if (value === 1) return true;
+    if (value === 0) return false;
+    return null;
+  }
+
+  const normalized = normalizeSpreadsheetKey(value);
+  if (["sim", "s", "true", "verdadeiro", "ativo", "1"].includes(normalized)) {
+    return true;
+  }
+  if (["nao", "n", "false", "falso", "inativo", "0"].includes(normalized)) {
+    return false;
+  }
+
+  return null;
 }
 
 function buildUtcDate(year: number, month: number, day: number): Date | null {

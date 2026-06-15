@@ -17,6 +17,8 @@ interface ImportProgress {
   errorRows: number;
   message?: string;
   errorDetails?: Array<{ row: number; message: string }>;
+  createdCategories?: number;
+  createdPaymentMethods?: number;
 }
 
 type ImportFinalData = ImportProgress | { error: string };
@@ -30,6 +32,7 @@ export function ImportFinanceModal({
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const [importResults, setImportResults] = useState<ImportProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   
@@ -37,6 +40,7 @@ export function ImportFinanceModal({
   useEffect(() => {
     if (!isOpen) {
       setProgress(null);
+      setImportResults(null);
     }
   }, [isOpen]);
 
@@ -101,6 +105,7 @@ export function ImportFinanceModal({
 
     setIsUploading(true);
     setProgress(null);
+    setImportResults(null);
 
     try {
       console.log('[Import] Iniciando upload');
@@ -166,6 +171,8 @@ export function ImportFinanceModal({
                   errorRows: data.errorRows,
                   message: data.message,
                   errorDetails: data.errorDetails,
+                  createdCategories: data.createdCategories,
+                  createdPaymentMethods: data.createdPaymentMethods,
                 });
                 
                 if (data.type === 'import_complete') {
@@ -186,18 +193,39 @@ export function ImportFinanceModal({
       }
 
       if (finalData) {
-        toast.toast({
-          variant: "success",
-          title: "Importação concluída!",
-          description: `${finalData.importedRows} importado(s), ${finalData.skippedRows || 0} ignorado(s) e ${finalData.errorRows} erro(s).`,
-        });
+        setImportResults(finalData);
+        const summary = `${finalData.importedRows} importado(s), ${finalData.skippedRows} ignorado(s) e ${finalData.errorRows} erro(s).`;
 
-        onImportSuccess?.();
-        
-        setTimeout(() => {
-          setIsUploading(false);
+        if (finalData.importedRows === 0 && finalData.errorRows > 0) {
+          toast.toast({
+            variant: "error",
+            title: "Nenhum registro foi importado",
+            description: summary,
+            duration: 7000,
+          });
+        } else if (finalData.errorRows > 0) {
+          toast.toast({
+            variant: "warning",
+            title: "Importação concluída com pendências",
+            description: summary,
+            duration: 7000,
+          });
+          if (finalData.importedRows > 0) onImportSuccess?.();
+        } else if (finalData.importedRows > 0) {
+          toast.toast({
+            variant: "success",
+            title: "Importação concluída",
+            description: summary,
+          });
+          onImportSuccess?.();
           onClose();
-        }, 2000);
+        } else {
+          toast.toast({
+            variant: "info",
+            title: "Nenhuma alteração necessária",
+            description: summary,
+          });
+        }
       } else {
         throw new Error('A importação terminou sem retornar um resultado.');
       }
@@ -210,6 +238,9 @@ export function ImportFinanceModal({
       });
       setIsUploading(false);
       setProgress(null);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -300,9 +331,9 @@ export function ImportFinanceModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
-      title={`Importar ${getTitle()} - Excel`}
-      size="lg"
+      onClose={isUploading ? () => undefined : onClose}
+      title={`Importar ${getTitle()} por planilha`}
+      size="xl"
     >
       <div className="space-y-6">
         {/* Seção de Download do Modelo */}
@@ -429,6 +460,45 @@ export function ImportFinanceModal({
             </div>
           </div>
         </div>
+
+        {importResults && (
+          <div className="space-y-3 border-t border-gray-200 pt-5">
+            <h3 className="text-sm font-semibold text-gray-900">Resultado da importação</h3>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                ["Importados", importResults.importedRows, "bg-green-50 text-green-800"],
+                ["Ignorados", importResults.skippedRows, "bg-gray-100 text-gray-700"],
+                ["Erros", importResults.errorRows, "bg-red-50 text-red-800"],
+              ].map(([label, value, color]) => (
+                <div key={String(label)} className={`rounded-lg p-3 ${color}`}>
+                  <div className="text-xs font-medium">{label}</div>
+                  <div className="mt-1 text-xl font-bold">{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {importResults.errorDetails && importResults.errorDetails.length > 0 && (
+              <div className="max-h-52 overflow-y-auto rounded-lg border border-red-200">
+                {importResults.errorDetails.map((detail, index) => (
+                  <div
+                    key={`${detail.row}-${index}`}
+                    className="border-b border-red-100 bg-red-50 px-3 py-2 text-xs text-red-800 last:border-b-0"
+                  >
+                    <strong>Linha {detail.row}:</strong> {detail.message}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {((importResults.createdCategories ?? 0) > 0 ||
+              (importResults.createdPaymentMethods ?? 0) > 0) && (
+              <p className="text-xs text-gray-600">
+                Cadastros auxiliares criados: {importResults.createdCategories ?? 0} categoria(s)
+                e {importResults.createdPaymentMethods ?? 0} forma(s) de pagamento.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Campos do Modelo */}
         <div className="bg-gray-50 rounded-lg p-4">

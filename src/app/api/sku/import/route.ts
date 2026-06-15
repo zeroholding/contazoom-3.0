@@ -6,11 +6,12 @@ import { applySkuCostRetroactively } from "@/lib/sku-retroactive-cost";
 import {
   addImportError,
   addImportWarning,
+  assertSpreadsheetColumns,
   createImportResults,
   getSpreadsheetValue,
   normalizeSpreadsheetKey,
   normalizeSpreadsheetText,
-  parseSpreadsheetBoolean,
+  parseSpreadsheetBooleanStrict,
   parseSpreadsheetInteger,
   parseSpreadsheetMoney,
   readSpreadsheetRecords,
@@ -47,6 +48,21 @@ function parseSkuType(value: unknown): "pai" | "filho" | null {
   if (!normalized || ["individual", "filho", "produto"].includes(normalized)) return "filho";
   if (["kit", "pai"].includes(normalized)) return "pai";
   return null;
+}
+
+function parseOptionalBoolean(
+  value: unknown,
+  defaultValue: boolean,
+  fieldName: string,
+): boolean {
+  const text = normalizeSpreadsheetText(value);
+  if (!text) return defaultValue;
+
+  const parsed = parseSpreadsheetBooleanStrict(value);
+  if (parsed === null) {
+    throw new Error(`${fieldName} inválido. Use Sim/Não, Ativo/Inativo ou 1/0.`);
+  }
+  return parsed;
 }
 
 function parseSkuRow(record: SpreadsheetRecord): ParsedSkuRow {
@@ -106,10 +122,15 @@ function parseSkuRow(record: SpreadsheetRecord): ParsedSkuRow {
     hierarquia2:
       normalizeSpreadsheetText(getSpreadsheetValue(values, ["hierarquia 2", "hierarquia2"])) ||
       null,
-    ativo: parseSpreadsheetBoolean(getSpreadsheetValue(values, ["ativo", "status"]), true),
-    temEstoque: parseSpreadsheetBoolean(
+    ativo: parseOptionalBoolean(
+      getSpreadsheetValue(values, ["ativo", "status"]),
+      true,
+      "Ativo",
+    ),
+    temEstoque: parseOptionalBoolean(
       getSpreadsheetValue(values, ["tem estoque", "estoque"]),
       true,
+      "Tem Estoque",
     ),
     skusFilhos:
       tipo === "pai"
@@ -138,10 +159,14 @@ export async function POST(request: NextRequest) {
     }
 
     const records = await readSpreadsheetRecords(file);
+    assertSpreadsheetColumns(records, [
+      { label: "SKU", aliases: ["sku", "codigo", "codigo sku"] },
+      { label: "Produto", aliases: ["produto", "nome do produto", "descricao"] },
+    ]);
     const results = createImportResults(records.length);
     const existingSkus = await prisma.sKU.findMany({
       where: { userId: session.sub },
-      select: { sku: true, tipo: true },
+      select: { sku: true, tipo: true, skusFilhos: true },
     });
     const existingBySku = new Map(
       existingSkus.map((item) => [skuComparisonKey(item.sku), item]),
@@ -266,6 +291,7 @@ export async function POST(request: NextRequest) {
         existingBySku.set(skuComparisonKey(row.sku), {
           sku: row.sku,
           tipo: row.tipo,
+          skusFilhos: row.skusFilhos,
         });
         results.success += 1;
       } catch (error) {
@@ -282,42 +308,111 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    for (const parent of orderedRows.filter(
-      (row) =>
-        row.tipo === "pai" &&
-        row.skusFilhos.length > 0 &&
-        createdSkus.has(skuComparisonKey(row.sku)),
-    )) {
-      const validChildren = parent.skusFilhos.flatMap((childSku) => {
-        const key = skuComparisonKey(childSku);
-        const createdSku = createdSkus.get(key);
-        if (createdSku) return [createdSku];
-        const existingSku = existingBySku.get(key);
-        return existingSku?.tipo === "filho" ? [existingSku.sku] : [];
-      });
-
-      if (validChildren.length > 0) {
-        await prisma.sKU.updateMany({
-          where: {
-            userId: session.sub,
-            sku: { in: validChildren },
-            tipo: "filho",
-          },
-          data: { skuPai: parent.sku },
+    const parentRelations = new Map<
+      string,
+      { parentSku: string; rowNumber: number; childCandidates: string[] }
+    >();
+    const addParentRelation = (
+      parentSku: string,
+      rowNumber: number,
+      childCandidates: string[],
+    ) => {
+      const parentKey = skuComparisonKey(parentSku);
+      const current = parentRelations.get(parentKey);
+      if (current) {
+        current.childCandidates.push(...childCandidates);
+      } else {
+        parentRelations.set(parentKey, {
+          parentSku,
+          rowNumber,
+          childCandidates: [...childCandidates],
         });
       }
+    };
 
-      const missingChildren = parent.skusFilhos.filter(
-        (childSku) => {
-          const key = skuComparisonKey(childSku);
-          return !createdSkus.has(key) && !existingBySku.has(key);
-        },
-      );
-      if (missingChildren.length > 0) {
+    for (const parent of orderedRows) {
+      if (
+        parent.tipo === "pai" &&
+        createdSkus.has(skuComparisonKey(parent.sku)) &&
+        parent.skusFilhos.length > 0
+      ) {
+        addParentRelation(parent.sku, parent.rowNumber, parent.skusFilhos);
+      }
+    }
+
+    for (const child of orderedRows) {
+      if (
+        child.tipo === "filho" &&
+        child.skuPai &&
+        createdSkus.has(skuComparisonKey(child.sku))
+      ) {
+        addParentRelation(child.skuPai, child.rowNumber, [child.sku]);
+      }
+    }
+
+    for (const relation of parentRelations.values()) {
+      const parentKey = skuComparisonKey(relation.parentSku);
+      const parent = existingBySku.get(parentKey);
+      if (parent?.tipo !== "pai") {
         addImportWarning(
           results,
-          parent.rowNumber,
-          `Filhos não encontrados e não vinculados: ${missingChildren.join(", ")}.`,
+          relation.rowNumber,
+          `O kit "${relation.parentSku}" não foi encontrado para concluir os vínculos.`,
+        );
+        continue;
+      }
+
+      const existingChildren = Array.isArray(parent.skusFilhos)
+        ? parent.skusFilhos.map(normalizeSpreadsheetText).filter(Boolean)
+        : [];
+      const validChildrenByKey = new Map<string, string>();
+      const invalidChildren: string[] = [];
+
+      for (const candidate of [...existingChildren, ...relation.childCandidates]) {
+        const candidateKey = skuComparisonKey(candidate);
+        const child = existingBySku.get(candidateKey);
+        if (child?.tipo === "filho") {
+          validChildrenByKey.set(candidateKey, child.sku);
+        } else if (!invalidChildren.some((item) => skuComparisonKey(item) === candidateKey)) {
+          invalidChildren.push(candidate);
+        }
+      }
+
+      const validChildren = [...validChildrenByKey.values()];
+      try {
+        await prisma.$transaction([
+          prisma.sKU.updateMany({
+            where: {
+              userId: session.sub,
+              sku: { in: validChildren },
+              tipo: "filho",
+            },
+            data: { skuPai: parent.sku },
+          }),
+          prisma.sKU.update({
+            where: {
+              userId_sku: {
+                userId: session.sub,
+                sku: parent.sku,
+              },
+            },
+            data: { skusFilhos: validChildren },
+          }),
+        ]);
+      } catch (error) {
+        console.error(`Erro ao vincular filhos do kit ${parent.sku}:`, error);
+        addImportWarning(
+          results,
+          relation.rowNumber,
+          "Os SKUs foram criados, mas não foi possível concluir o vínculo do kit.",
+        );
+      }
+
+      if (invalidChildren.length > 0) {
+        addImportWarning(
+          results,
+          relation.rowNumber,
+          `SKUs inexistentes ou que não são filhos e não foram vinculados: ${invalidChildren.join(", ")}.`,
         );
       }
     }

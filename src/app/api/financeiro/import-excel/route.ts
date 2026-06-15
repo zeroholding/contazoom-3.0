@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
 import {
+  assertSpreadsheetColumns,
   getSpreadsheetValue,
   normalizeComparisonText,
   normalizeSpreadsheetKey,
@@ -108,6 +109,25 @@ export async function POST(request: NextRequest) {
     }
 
     const records = await readSpreadsheetRecords(file);
+    if (rawType === "contas_pagar" || rawType === "contas_receber") {
+      assertSpreadsheetColumns(records, [
+        { label: "Descrição", aliases: ["descricao", "historico", "conta"] },
+        { label: "Valor", aliases: ["valor", "valor total"] },
+        {
+          label: "Data de Vencimento",
+          aliases: ["data de vencimento", "vencimento", "data vencimento"],
+        },
+      ]);
+    } else if (rawType === "categorias") {
+      assertSpreadsheetColumns(records, [
+        { label: "Descrição", aliases: ["descricao", "nome", "categoria"] },
+        { label: "Tipo", aliases: ["tipo"] },
+      ]);
+    } else {
+      assertSpreadsheetColumns(records, [
+        { label: "Nome", aliases: ["nome", "descricao", "forma de pagamento"] },
+      ]);
+    }
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream<Uint8Array>({
@@ -171,52 +191,6 @@ export async function POST(request: NextRequest) {
           for (const paymentMethod of paymentMethods) {
             paymentByName.set(normalizeComparisonText(paymentMethod.nome), paymentMethod);
           }
-
-          const resolveCategory = async (
-            name: string,
-            expectedType: "RECEITA" | "DESPESA",
-          ): Promise<CategoryRef | null> => {
-            if (!name) return null;
-            const nameKey = normalizeComparisonText(name);
-            const exact =
-              categoryByTypeAndName.get(`${expectedType}|${nameKey}`) ??
-              categoryByTypeAndName.get(`|${nameKey}`);
-            if (exact) return exact;
-
-            const created = await prisma.categoria.create({
-              data: {
-                userId: session.sub,
-                nome: name,
-                descricao: name,
-                tipo: expectedType,
-                ativo: true,
-              },
-              select: { id: true, nome: true, tipo: true },
-            });
-            categoryByTypeAndName.set(`${expectedType}|${nameKey}`, created);
-            createdCategories += 1;
-            return created;
-          };
-
-          const resolvePaymentMethod = async (name: string): Promise<PaymentMethodRef | null> => {
-            if (!name) return null;
-            const nameKey = normalizeComparisonText(name);
-            const existing = paymentByName.get(nameKey);
-            if (existing) return existing;
-
-            const created = await prisma.formaPagamento.create({
-              data: {
-                userId: session.sub,
-                nome: name,
-                descricao: name,
-                ativo: true,
-              },
-              select: { id: true, nome: true },
-            });
-            paymentByName.set(nameKey, created);
-            createdPaymentMethods += 1;
-            return created;
-          };
 
           const existingAccountKeys = new Set<string>();
           if (rawType === "contas_pagar") {
@@ -358,51 +332,109 @@ export async function POST(request: NextRequest) {
                   ]),
                 );
                 const expectedCategoryType = isPayable ? "DESPESA" : "RECEITA";
-                const category = await resolveCategory(categoriaNome, expectedCategoryType);
-                const paymentMethod = await resolvePaymentMethod(formaPagamentoNome);
                 const accountKey = buildAccountKey({
                   descricao,
                   valor,
                   dataVencimento,
                   settlementDate,
-                  categoria: category?.nome ?? "",
-                  formaPagamento: paymentMethod?.nome ?? "",
+                  categoria: categoriaNome,
+                  formaPagamento: formaPagamentoNome,
                 });
 
                 if (existingAccountKeys.has(accountKey) || seenRows.has(accountKey)) {
                   skippedRows += 1;
-                } else if (isPayable) {
-                  await prisma.contaPagar.create({
-                    data: {
-                      userId: session.sub,
-                      descricao,
-                      valor,
-                      dataVencimento,
-                      dataPagamento: settlementDate,
-                      dataCompetencia: dataVencimento,
-                      categoriaId: category?.id ?? null,
-                      formaPagamentoId: paymentMethod?.id ?? null,
-                      status: settlementDate ? "pago" : "pendente",
-                      origem: "EXCEL",
-                    },
-                  });
-                  seenRows.add(accountKey);
-                  existingAccountKeys.add(accountKey);
-                  importedRows += 1;
                 } else {
-                  await prisma.contaReceber.create({
-                    data: {
-                      userId: session.sub,
-                      descricao,
-                      valor,
-                      dataVencimento,
-                      dataRecebimento: settlementDate,
-                      categoriaId: category?.id ?? null,
-                      formaPagamentoId: paymentMethod?.id ?? null,
-                      status: settlementDate ? "recebido" : "pendente",
-                      origem: "EXCEL",
-                    },
+                  const categoryNameKey = normalizeComparisonText(categoriaNome);
+                  const categoryMapKey = `${expectedCategoryType}|${categoryNameKey}`;
+                  const paymentNameKey = normalizeComparisonText(formaPagamentoNome);
+                  const existingCategory = categoriaNome
+                    ? categoryByTypeAndName.get(categoryMapKey) ?? null
+                    : null;
+                  const existingPaymentMethod = formaPagamentoNome
+                    ? paymentByName.get(paymentNameKey) ?? null
+                    : null;
+
+                  const transactionResult = await prisma.$transaction(async (tx) => {
+                    let category = existingCategory;
+                    let paymentMethod = existingPaymentMethod;
+                    let categoryCreated = false;
+                    let paymentMethodCreated = false;
+
+                    if (categoriaNome && !category) {
+                      category = await tx.categoria.create({
+                        data: {
+                          userId: session.sub,
+                          nome: categoriaNome,
+                          descricao: categoriaNome,
+                          tipo: expectedCategoryType,
+                          ativo: true,
+                        },
+                        select: { id: true, nome: true, tipo: true },
+                      });
+                      categoryCreated = true;
+                    }
+
+                    if (formaPagamentoNome && !paymentMethod) {
+                      paymentMethod = await tx.formaPagamento.create({
+                        data: {
+                          userId: session.sub,
+                          nome: formaPagamentoNome,
+                          descricao: formaPagamentoNome,
+                          ativo: true,
+                        },
+                        select: { id: true, nome: true },
+                      });
+                      paymentMethodCreated = true;
+                    }
+
+                    if (isPayable) {
+                      await tx.contaPagar.create({
+                        data: {
+                          userId: session.sub,
+                          descricao,
+                          valor,
+                          dataVencimento,
+                          dataPagamento: settlementDate,
+                          dataCompetencia: dataVencimento,
+                          categoriaId: category?.id ?? null,
+                          formaPagamentoId: paymentMethod?.id ?? null,
+                          status: settlementDate ? "pago" : "pendente",
+                          origem: "EXCEL",
+                        },
+                      });
+                    } else {
+                      await tx.contaReceber.create({
+                        data: {
+                          userId: session.sub,
+                          descricao,
+                          valor,
+                          dataVencimento,
+                          dataRecebimento: settlementDate,
+                          categoriaId: category?.id ?? null,
+                          formaPagamentoId: paymentMethod?.id ?? null,
+                          status: settlementDate ? "recebido" : "pendente",
+                          origem: "EXCEL",
+                        },
+                      });
+                    }
+
+                    return {
+                      category,
+                      paymentMethod,
+                      categoryCreated,
+                      paymentMethodCreated,
+                    };
                   });
+
+                  if (transactionResult.category) {
+                    categoryByTypeAndName.set(categoryMapKey, transactionResult.category);
+                  }
+                  if (transactionResult.paymentMethod) {
+                    paymentByName.set(paymentNameKey, transactionResult.paymentMethod);
+                  }
+                  if (transactionResult.categoryCreated) createdCategories += 1;
+                  if (transactionResult.paymentMethodCreated) createdPaymentMethods += 1;
+
                   seenRows.add(accountKey);
                   existingAccountKeys.add(accountKey);
                   importedRows += 1;

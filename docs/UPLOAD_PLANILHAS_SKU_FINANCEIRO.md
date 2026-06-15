@@ -105,7 +105,7 @@ respectivos pais e a estrutura sera validada.
 
 | Etapa | Status | Entrega |
 | --- | --- | --- |
-| 1. Documento tecnico vivo | Em andamento | Escopo, diagnostico, decisoes e criterios |
+| 1. Documento tecnico vivo | Concluido | Escopo, diagnostico, decisoes e criterios |
 | 2. Mapeamento dos contratos existentes | Concluido | Modelos, APIs, componentes e regras |
 | 3. Infraestrutura compartilhada | Concluido | Parser, normalizadores e relatorio |
 | 4. Fluxo de SKU | Concluido | Modelo, importacao e exportacao |
@@ -209,6 +209,38 @@ respectivos pais e a estrutura sera validada.
   obrigatorios.
 - Valores monetarios sao documentados como compativeis com ponto ou virgula.
 
+### 2026-06-15 - Endurecimento e correcao de consistencia
+
+- O leitor de planilhas passou a localizar a primeira linha real de cabecalho,
+  preservar o numero original das linhas mesmo com linhas vazias e rejeitar
+  cabecalhos duplicados.
+- Cada tipo de importacao valida suas colunas obrigatorias antes de iniciar
+  qualquer gravacao.
+- Valores booleanos invalidos em SKU nao usam mais um valor padrao silencioso:
+  a linha e recusada com a orientacao dos formatos aceitos.
+- Valores monetarios textuais passaram a aceitar tambem separadores de milhar,
+  incluindo `1.234` e `1.234.567`.
+- O cadastro de cada conta financeira, sua categoria e sua forma de pagamento
+  ocorre em uma unica transacao. Se a conta falhar, os cadastros auxiliares
+  daquela linha tambem sao revertidos.
+- A verificacao de duplicidade financeira ocorre antes da criacao de categoria
+  ou forma de pagamento, evitando cadastros auxiliares sem uma conta associada.
+- O relacionamento de kits e sincronizado nos dois sentidos:
+  - o filho recebe `skuPai`;
+  - o kit recebe a lista canonica em `skusFilhos`;
+  - filhos informados pela coluna `SKU Pai` entram na lista do kit;
+  - filhos inexistentes ou SKUs que nao sao do tipo filho geram aviso e nao sao
+    gravados na estrutura.
+- Os modais nao exibem mais sucesso quando todas as linhas falham.
+- Importacoes parciais mantem o modal aberto e mostram os erros por linha.
+- Importacoes financeiras informam quantas categorias e formas de pagamento
+  foram criadas automaticamente.
+- A atualizacao da tela financeira passou a recarregar somente a lista ativa,
+  preservando o relatorio da importacao em vez de executar `window.reload()`.
+- As cores de status de contas a pagar e receber agora distinguem registros
+  liquidados dos pendentes.
+- Foi adicionado o teste permanente `npm run test:spreadsheet`.
+
 ## Validacoes executadas
 
 ### TypeScript inicial
@@ -255,14 +287,32 @@ usado pelas APIs e validados:
 - lista separada por ponto e virgula;
 - numeracao da linha original.
 
-Resultado:
+Resultado anterior:
 
 ```text
 Spreadsheet validation passed.
 ```
 
-O script temporario de validacao foi removido depois da execucao para nao
-adicionar manutencao artificial ao repositorio.
+O teste deixou de ser temporario e passou a fazer parte do repositorio em
+`scripts/test-spreadsheet.mjs`. Ele pode ser executado com:
+
+```text
+npm run test:spreadsheet
+```
+
+Resultado em 2026-06-15:
+
+```text
+Spreadsheet tests passed.
+```
+
+Foram cobertos adicionalmente:
+
+- cabecalho obrigatorio ausente;
+- linha vazia entre registros;
+- booleano invalido;
+- separadores de milhar;
+- formato decimal com ponto.
 
 ### Build oficial do projeto
 
@@ -294,6 +344,10 @@ Avisos encontrados e anteriores a esta entrega:
 - chave `eslint` nao reconhecida no `next.config.ts`;
 - base `baseline-browser-mapping` desatualizada.
 
+O build foi repetido depois das correcoes de consistencia de 2026-06-15 e
+continuou concluindo com sucesso, com as mesmas 79 paginas e apenas os avisos
+preexistentes acima.
+
 ### Revisao Git
 
 - `git diff --check`: sem problemas de espacos ou marcadores.
@@ -303,12 +357,12 @@ Avisos encontrados e anteriores a esta entrega:
 - `origin/main` confirmado em
   `5afff57675c46ec38313cc39e260aa049bd17638`.
 
-### Verificacao da VPS/Coolify
+### Verificacao historica da VPS/Coolify
 
 A verificacao foi feita diretamente em `https://app.contazoom.com.br`, sem usar
 servidor local.
 
-Enquanto a VPS ainda executa a versao anterior:
+Antes do primeiro deploy dessas rotas, a VPS ainda executava a versao anterior:
 
 - `GET /api/sku/template` responde `405`, pois cai na rota dinamica antiga
   `/api/sku/[id]`;
@@ -316,7 +370,7 @@ Enquanto a VPS ainda executa a versao anterior:
 - `GET /api/financeiro/download-template` responde `404`;
 - `POST /api/financeiro/import-excel` responde `404`.
 
-Esses quatro sinais comprovam que o container do Coolify ainda nao publicou o
-commit enviado. Depois do deploy, sem uma sessao autenticada, todos os endpoints
-devem responder `401`. Essa sera a confirmacao objetiva de que as novas rotas
-entraram na VPS.
+Esses quatro sinais foram usados para identificar que o container do Coolify
+ainda nao tinha publicado o commit naquele momento. Depois do deploy, sem uma
+sessao autenticada, os endpoints devem responder `401`, confirmando que as rotas
+existem e estao protegidas.

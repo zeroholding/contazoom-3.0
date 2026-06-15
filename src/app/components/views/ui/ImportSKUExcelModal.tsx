@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Modal from './Modal';
 import { useToast } from './toaster';
 
@@ -8,6 +8,16 @@ interface ImportSKUExcelModalProps {
   onImportComplete?: () => void;
 }
 
+interface SKUImportResults {
+  total: number;
+  success: number;
+  skipped: number;
+  errors: number;
+  warnings: number;
+  errorDetails: Array<{ row: number; message: string }>;
+  warningDetails: Array<{ row: number; message: string }>;
+}
+
 export function ImportSKUExcelModal({
   isOpen,
   onClose,
@@ -15,8 +25,13 @@ export function ImportSKUExcelModal({
 }: ImportSKUExcelModalProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [importResults, setImportResults] = useState<SKUImportResults | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (!isOpen) setImportResults(null);
+  }, [isOpen]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -78,6 +93,7 @@ export function ImportSKUExcelModal({
     }
 
     setIsUploading(true);
+    setImportResults(null);
 
     try {
       const formData = new FormData();
@@ -107,34 +123,43 @@ export function ImportSKUExcelModal({
       }
 
       const result = await response.json();
-
-      // Montar mensagem de sucesso
-      const successMsg = result.results
-        ? `${result.results.success} SKU(s) importado(s) com sucesso! ${
-            result.results.skipped > 0 ? `${result.results.skipped} já existiam. ` : ''
-          }${
-            result.results.errors > 0 ? `${result.results.errors} erro(s) encontrado(s).` : ''
-          }${
-            result.results.warnings > 0 ? ` ${result.results.warnings} aviso(s).` : ''
-          }`
-        : 'Importação concluída!';
-
-      toast({
-        variant: "success",
-        title: "Importação concluída!",
-        description: successMsg,
-      });
-
-      // Mostrar erros se houver
-      if (result.results?.errorDetails && result.results.errorDetails.length > 0) {
-        console.warn('Erros na importação:', result.results.errorDetails);
+      const results = result.results as SKUImportResults | undefined;
+      if (!results) {
+        throw new Error('O servidor não retornou o resultado da importação.');
       }
-      if (result.results?.warningDetails && result.results.warningDetails.length > 0) {
-        console.warn('Avisos na importação:', result.results.warningDetails);
-      }
+      setImportResults(results);
 
-      onImportComplete?.();
-      onClose();
+      const summary = `${results.success} importado(s), ${results.skipped} ignorado(s), ${results.errors} erro(s) e ${results.warnings} aviso(s).`;
+      if (results.success === 0 && results.errors > 0) {
+        toast({
+          variant: "error",
+          title: "Nenhum SKU foi importado",
+          description: summary,
+          duration: 7000,
+        });
+      } else if (results.errors > 0 || results.warnings > 0) {
+        toast({
+          variant: "warning",
+          title: "Importação concluída com pendências",
+          description: summary,
+          duration: 7000,
+        });
+        if (results.success > 0) onImportComplete?.();
+      } else if (results.success > 0) {
+        toast({
+          variant: "success",
+          title: "Importação concluída",
+          description: summary,
+        });
+        onImportComplete?.();
+        onClose();
+      } else {
+        toast({
+          variant: "info",
+          title: "Nenhuma alteração necessária",
+          description: summary,
+        });
+      }
     } catch (error) {
       console.error('Erro ao importar:', error);
       toast({
@@ -189,9 +214,9 @@ export function ImportSKUExcelModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
-      title="Importar SKUs - Excel"
-      size="lg"
+      onClose={isUploading ? () => undefined : onClose}
+      title="Importar SKUs por planilha"
+      size="xl"
     >
       <div className="space-y-6">
         {/* Seção de Download do Template */}
@@ -269,6 +294,46 @@ export function ImportSKUExcelModal({
             </div>
           </div>
         </div>
+
+        {importResults && (
+          <div className="space-y-3 border-t border-gray-200 pt-5">
+            <h3 className="text-sm font-semibold text-gray-900">Resultado da importação</h3>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                ["Importados", importResults.success, "bg-green-50 text-green-800"],
+                ["Ignorados", importResults.skipped, "bg-gray-100 text-gray-700"],
+                ["Erros", importResults.errors, "bg-red-50 text-red-800"],
+                ["Avisos", importResults.warnings, "bg-amber-50 text-amber-800"],
+              ].map(([label, value, color]) => (
+                <div key={String(label)} className={`rounded-lg p-3 ${color}`}>
+                  <div className="text-xs font-medium">{label}</div>
+                  <div className="mt-1 text-xl font-bold">{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {(importResults.errorDetails.length > 0 || importResults.warningDetails.length > 0) && (
+              <div className="max-h-52 overflow-y-auto rounded-lg border border-gray-200">
+                {importResults.errorDetails.map((detail, index) => (
+                  <div
+                    key={`error-${detail.row}-${index}`}
+                    className="border-b border-red-100 bg-red-50 px-3 py-2 text-xs text-red-800 last:border-b-0"
+                  >
+                    <strong>Linha {detail.row}:</strong> {detail.message}
+                  </div>
+                ))}
+                {importResults.warningDetails.map((detail, index) => (
+                  <div
+                    key={`warning-${detail.row}-${index}`}
+                    className="border-b border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800 last:border-b-0"
+                  >
+                    <strong>Linha {detail.row}:</strong> {detail.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Campos do Template */}
         <div className="bg-gray-50 rounded-lg p-4">
