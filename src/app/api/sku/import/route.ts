@@ -180,12 +180,22 @@ export async function POST(request: NextRequest) {
         const normalizedSku = skuComparisonKey(parsed.sku);
 
         if (seenInFile.has(normalizedSku)) {
+          addImportWarning(
+            results,
+            record.rowNumber,
+            `SKU "${parsed.sku}" está duplicado na planilha e foi ignorado.`,
+          );
           results.skipped += 1;
           continue;
         }
         seenInFile.add(normalizedSku);
 
         if (existingBySku.has(normalizedSku)) {
+          addImportWarning(
+            results,
+            record.rowNumber,
+            `SKU "${parsed.sku}" já está cadastrado no sistema e foi ignorado.`,
+          );
           results.skipped += 1;
           continue;
         }

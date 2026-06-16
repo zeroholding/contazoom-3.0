@@ -195,8 +195,15 @@ export async function POST(request: NextRequest) {
           const existingAccountKeys = new Set<string>();
           if (rawType === "contas_pagar") {
             const accounts = await prisma.contaPagar.findMany({
-              where: { userId: session.sub },
-              include: { categoria: true, formaPagamento: true },
+              where: { userId: session.sub, origem: "EXCEL" },
+              select: {
+                descricao: true,
+                valor: true,
+                dataVencimento: true,
+                dataPagamento: true,
+                categoria: { select: { nome: true } },
+                formaPagamento: { select: { nome: true } },
+              },
             });
             for (const account of accounts) {
               existingAccountKeys.add(
@@ -212,8 +219,15 @@ export async function POST(request: NextRequest) {
             }
           } else if (rawType === "contas_receber") {
             const accounts = await prisma.contaReceber.findMany({
-              where: { userId: session.sub },
-              include: { categoria: true, formaPagamento: true },
+              where: { userId: session.sub, origem: "EXCEL" },
+              select: {
+                descricao: true,
+                valor: true,
+                dataVencimento: true,
+                dataRecebimento: true,
+                categoria: { select: { nome: true } },
+                formaPagamento: { select: { nome: true } },
+              },
             });
             for (const account of accounts) {
               existingAccountKeys.add(

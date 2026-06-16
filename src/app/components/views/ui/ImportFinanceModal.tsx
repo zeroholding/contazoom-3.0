@@ -34,7 +34,7 @@ export function ImportFinanceModal({
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [importResults, setImportResults] = useState<ImportProgress | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const toast = useToast();
+  const { toast } = useToast();
   
   // Limpar progresso ao fechar modal
   useEffect(() => {
@@ -85,7 +85,7 @@ export function ImportFinanceModal({
       lowerFileName.endsWith('.csv');
 
     if (!validTypes.includes(file.type) && !isValidExtension) {
-      toast.toast({
+      toast({
         variant: "error",
         title: "Arquivo inválido",
         description: "Por favor, selecione um arquivo Excel (.xlsx, .xls) ou CSV (.csv).",
@@ -95,7 +95,7 @@ export function ImportFinanceModal({
 
     // Validar tamanho (máximo 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      toast.toast({
+      toast({
         variant: "error",
         title: "Arquivo muito grande",
         description: "O arquivo deve ter no máximo 10MB.",
@@ -197,14 +197,14 @@ export function ImportFinanceModal({
         const summary = `${finalData.importedRows} importado(s), ${finalData.skippedRows} ignorado(s) e ${finalData.errorRows} erro(s).`;
 
         if (finalData.importedRows === 0 && finalData.errorRows > 0) {
-          toast.toast({
+          toast({
             variant: "error",
             title: "Nenhum registro foi importado",
             description: summary,
             duration: 7000,
           });
         } else if (finalData.errorRows > 0) {
-          toast.toast({
+          toast({
             variant: "warning",
             title: "Importação concluída com pendências",
             description: summary,
@@ -212,7 +212,7 @@ export function ImportFinanceModal({
           });
           if (finalData.importedRows > 0) onImportSuccess?.();
         } else if (finalData.importedRows > 0) {
-          toast.toast({
+          toast({
             variant: "success",
             title: "Importação concluída",
             description: summary,
@@ -220,7 +220,7 @@ export function ImportFinanceModal({
           onImportSuccess?.();
           onClose();
         } else {
-          toast.toast({
+          toast({
             variant: "info",
             title: "Nenhuma alteração necessária",
             description: summary,
@@ -231,15 +231,14 @@ export function ImportFinanceModal({
       }
     } catch (error) {
       console.error('Erro ao importar:', error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro na importação",
         description: error instanceof Error ? error.message : "Erro ao processar arquivo. Tente novamente.",
       });
-      setIsUploading(false);
-      setProgress(null);
     } finally {
       setIsUploading(false);
+      setProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -264,14 +263,14 @@ export function ImportFinanceModal({
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Modelo baixado!",
         description: "O arquivo modelo foi baixado com sucesso.",
       });
     } catch (error) {
       console.error('Erro ao baixar modelo:', error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao baixar",
         description: "Erro ao baixar o modelo. Tente novamente.",
