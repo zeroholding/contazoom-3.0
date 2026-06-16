@@ -18,7 +18,7 @@ export function ImportExcelModal({
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const toast = useToast();
+  const { toast } = useToast();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -55,7 +55,7 @@ export function ImportExcelModal({
     ];
 
     if (!validTypes.includes(file.type)) {
-      toast.toast({
+      toast({
         variant: "error",
         title: "Arquivo inválido",
         description: "Por favor, selecione um arquivo Excel (.xlsx, .xls) ou CSV (.csv).",
@@ -65,7 +65,7 @@ export function ImportExcelModal({
 
     // Validar tamanho (máximo 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      toast.toast({
+      toast({
         variant: "error",
         title: "Arquivo muito grande",
         description: "O arquivo deve ter no máximo 10MB.",
@@ -93,7 +93,7 @@ export function ImportExcelModal({
 
       const result = await response.json();
       
-      toast.toast({
+      toast({
         variant: "success",
         title: "Importação concluída!",
         description: `${result.imported} vendas importadas com sucesso. ${result.errors > 0 ? `${result.errors} erros encontrados.` : ''}`,
@@ -103,7 +103,7 @@ export function ImportExcelModal({
       onClose();
     } catch (error) {
       console.error('Erro ao importar:', error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro na importação",
         description: error instanceof Error ? error.message : "Erro ao processar arquivo. Tente novamente.",
@@ -133,14 +133,14 @@ export function ImportExcelModal({
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Modelo baixado!",
         description: "O arquivo modelo foi baixado com sucesso.",
       });
     } catch (error) {
       console.error('Erro ao baixar modelo:', error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao baixar",
         description: "Erro ao baixar o modelo. Tente novamente.",

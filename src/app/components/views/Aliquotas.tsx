@@ -37,7 +37,7 @@ interface Conta {
 }
 
 export default function Aliquotas() {
-  const toast = useToast();
+  const { toast } = useToast();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
 
@@ -110,7 +110,7 @@ export default function Aliquotas() {
       }
     } catch (error) {
       console.error("Erro ao carregar alíquotas:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao carregar",
         description: "Não foi possível carregar as alíquotas.",
@@ -195,7 +195,7 @@ export default function Aliquotas() {
 
       await loadAliquotas();
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Sucesso!",
         description: "Alíquota cadastrada com sucesso!",
@@ -204,7 +204,7 @@ export default function Aliquotas() {
       handleCloseModal();
     } catch (error) {
       console.error("Erro ao salvar:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao salvar",
         description: error instanceof Error ? error.message : "Erro ao salvar alíquota. Tente novamente.",
@@ -251,14 +251,14 @@ export default function Aliquotas() {
 
       await loadAliquotas();
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Sucesso!",
         description: "Alíquota atualizada com sucesso!",
       });
     } catch (error) {
       console.error("Erro ao atualizar:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao atualizar",
         description: error instanceof Error ? error.message : "Erro ao atualizar alíquota. Tente novamente.",
@@ -281,14 +281,14 @@ export default function Aliquotas() {
 
       await loadAliquotas();
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Sucesso!",
         description: "Alíquota excluída com sucesso!",
       });
     } catch (error) {
       console.error("Erro ao excluir:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao excluir",
         description: error instanceof Error ? error.message : "Erro ao excluir alíquota. Tente novamente.",

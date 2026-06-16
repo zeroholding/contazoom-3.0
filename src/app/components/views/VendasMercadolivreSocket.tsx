@@ -260,7 +260,7 @@ const HeaderVendasMercadolivre = ({
 };
 
 export default function VendasMercadolivreSocket() {
-  const toast = useToast();
+  const { toast } = useToast();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
 

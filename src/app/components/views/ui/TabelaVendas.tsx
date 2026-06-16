@@ -206,19 +206,19 @@ export default function TabelaVendas({
   syncProgress = null,
   vendas: propVendas, // Recebe vendas via prop (renomeado para evitar conflito)
 }: TabelaVendasProps) {
-  const toast = useToast();
+  const { toast } = useToast();
   const [isStartingSync, setIsStartingSync] = useState(false);
 
   const handleConnectAccountWithToast = () => {
     if (platform === "Geral") {
-      toast.toast({
+      toast({
         variant: "info",
         title: "Conectar contas",
         description:
           "Para conectar contas, acesse as páginas individuais do Shopee ou Mercado Livre.",
       });
     } else if (platform !== "Mercado Livre" && platform !== "Shopee") {
-      toast.toast({
+      toast({
         variant: "warning",
         title: "Integração não disponível",
         description: `Integração com ${platform} ainda não disponível.`,

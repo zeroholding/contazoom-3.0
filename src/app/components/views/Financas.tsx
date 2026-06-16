@@ -248,7 +248,7 @@ const emptyStateIcons = [
 ];
 
 export default function Financas() {
-  const toast = useToast();
+  const { toast } = useToast();
   const { connect, disconnect, isConnected } = useSyncProgress();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
@@ -661,7 +661,7 @@ export default function Financas() {
         await loadContasReceber();
       }
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "✅ Atualização Concluída",
         description: "Dados atualizados com sucesso!",
@@ -670,7 +670,7 @@ export default function Financas() {
 
     } catch (error) {
       console.error("Erro na sincronização incremental:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "❌ Erro na Atualização",
         description: `Erro ao atualizar dados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
@@ -1096,7 +1096,7 @@ export default function Financas() {
         await loadContasReceber();
       }
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Sucesso!",
         description: `Registro ${activeTab === "contas_pagar" ? "de despesa" : activeTab === "contas_receber" ? "de receita" : activeTab === "categorias" ? "de categoria" : "de forma de pagamento"} salvo com sucesso!`,
@@ -1105,7 +1105,7 @@ export default function Financas() {
       handleCloseModal();
     } catch (error) {
       console.error("Erro ao salvar:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao salvar",
         description: "Erro ao salvar registro. Tente novamente.",
@@ -1130,7 +1130,7 @@ export default function Financas() {
       setIsEditModalOpen(true);
     } catch (error) {
       console.error("Erro ao preparar edição:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao abrir edição",
         description: "Não foi possível carregar categorias e formas de pagamento.",
@@ -1235,14 +1235,14 @@ export default function Financas() {
           break;
       }
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Sucesso!",
         description: `Registro ${activeTab === "contas_pagar" ? "de despesa" : activeTab === "contas_receber" ? "de receita" : activeTab === "categorias" ? "de categoria" : "de forma de pagamento"} atualizado com sucesso!`,
       });
     } catch (error) {
       console.error("Erro ao atualizar:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao atualizar",
         description: "Erro ao atualizar registro. Tente novamente.",
@@ -1304,7 +1304,7 @@ export default function Financas() {
           break;
       }
 
-      toast.toast({
+      toast({
         variant: "success",
         title: "Sucesso!",
         description: `Registro ${activeTab === "contas_pagar" ? "de despesa" : activeTab === "contas_receber" ? "de receita" : activeTab === "categorias" ? "de categoria" : "de forma de pagamento"} excluído com sucesso!`,
@@ -1314,13 +1314,13 @@ export default function Financas() {
       
       // Verificar se é um erro específico de validação
       if (error instanceof Error && error.message.includes("não é possível excluir")) {
-        toast.toast({
+        toast({
           variant: "warning",
           title: "Não é possível excluir",
           description: error.message,
         });
       } else {
-        toast.toast({
+        toast({
           variant: "error",
           title: "Erro ao excluir",
           description: "Erro ao excluir registro. Tente novamente.",

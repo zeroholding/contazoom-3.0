@@ -46,7 +46,7 @@ const HeaderVendasShopee = ({
   reloadVendas
 }: HeaderVendasShopeeProps) => {
   const router = useRouter();
-  const toast = useToast();
+  const { toast } = useToast();
   const hasBeenSynced = lastSyncedAt !== null;
   const [showInfoDropdown, setShowInfoDropdown] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
@@ -151,7 +151,7 @@ const HeaderVendasShopee = ({
       }
     } catch (error) {
       console.error("Erro ao alternar auto-sync:", error);
-      toast.toast({
+      toast({
         variant: "error",
         title: "Erro ao atualizar configuraÃ§Ãµes",
         description: `Erro ao atualizar configuraÃ§Ãµes: ${
@@ -362,7 +362,7 @@ const HeaderVendasShopee = ({
 };
 
 export default function VendasShopee() {
-  const toast = useToast();
+  const { toast } = useToast();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
 
