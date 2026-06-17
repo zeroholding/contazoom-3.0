@@ -164,6 +164,24 @@ export function getSpreadsheetValue(
   return undefined;
 }
 
+export function hasSpreadsheetColumn(
+  values: Record<string, unknown>,
+  aliases: string[],
+): boolean {
+  return aliases.some((alias) =>
+    Object.prototype.hasOwnProperty.call(values, normalizeSpreadsheetKey(alias)),
+  );
+}
+
+export function hasSpreadsheetValue(
+  values: Record<string, unknown>,
+  aliases: string[],
+): boolean {
+  if (!hasSpreadsheetColumn(values, aliases)) return false;
+  const value = getSpreadsheetValue(values, aliases);
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
 export function assertSpreadsheetColumns(
   records: SpreadsheetRecord[],
   requirements: SpreadsheetColumnRequirement[],

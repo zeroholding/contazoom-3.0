@@ -241,6 +241,47 @@ respectivos pais e a estrutura sera validada.
   liquidados dos pendentes.
 - Foi adicionado o teste permanente `npm run test:spreadsheet`.
 
+### 2026-06-17 - Previa obrigatoria e aprovacao por linha
+
+- A importacao deixou de ser uma gravacao direta e passou a operar em dois
+  modos no mesmo endpoint:
+  - `mode=preview`: le a planilha, valida as linhas e retorna o que aconteceria;
+  - `mode=commit`: reprocessa a mesma planilha e grava somente as linhas
+    selecionadas pelo usuario.
+- O commit reexecuta a analise no servidor antes de gravar. Isso evita aplicar
+  uma decisao baseada em uma previa antiga ou adulterada no navegador.
+- Chamadas sem `mode` caem em `preview`; gravacao so acontece com
+  `mode=commit` explicito.
+- O modal de SKU agora ocupa a tela quase inteira e mostra linha por linha:
+  - SKU novo a cadastrar;
+  - SKU existente que sera atualizado;
+  - SKU sem diferenca;
+  - duplicidade na propria planilha;
+  - erros bloqueantes.
+- Para SKU existente, nenhum campo e atualizado em silencio. O modal mostra o
+  diff `valor atual -> valor da planilha` antes da aprovacao.
+- Campos opcionais vazios nao viram atualizacao. Exemplo: custo vazio nao zera
+  o custo atual; quantidade vazia nao vira `1` em SKU existente.
+- Tipo de SKU existente nao pode ser alterado por planilha, pois trocar
+  individual/kit em lote pode quebrar CMV e relacionamento de filhos.
+- Atualizacao de custo por planilha cria historico com
+  `tipoAlteracao=importacao_excel`.
+- Primeiro custo positivo em SKU individual continua aplicando custo
+  retroativo nas vendas do SKU.
+- Relacionamento de kit foi reforcado:
+  - lista `skusFilhos` explicita substitui a lista do kit;
+  - filho com `SKU Pai` entra na lista do pai;
+  - ao mover filho de um kit para outro, ele sai da lista antiga;
+  - filhos invalidos aparecem como aviso e nao entram na estrutura.
+- O modal financeiro tambem passou para previa/aprovacao:
+  - contas a pagar/receber sao analisadas antes de gravar;
+  - categorias e formas de pagamento tambem entram na previa;
+  - duplicados equivalentes no sistema ou no proprio arquivo ficam bloqueados;
+  - categorias/formas auxiliares que serao criadas aparecem no detalhe.
+- O financeiro compara duplicidade contra todos os registros do usuario, nao
+  apenas contra registros de origem `EXCEL`, reduzindo risco de duplicar uma
+  conta manual ou sincronizada.
+
 ## Validacoes executadas
 
 ### TypeScript inicial

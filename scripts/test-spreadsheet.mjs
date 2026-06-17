@@ -3,6 +3,7 @@ import {
   assertSpreadsheetColumns,
   createWorkbookBuffer,
   getSpreadsheetValue,
+  hasSpreadsheetValue,
   parseSpreadsheetBooleanStrict,
   parseSpreadsheetDate,
   parseSpreadsheetMoney,
@@ -44,6 +45,8 @@ assert.throws(
 );
 
 assert.equal(getSpreadsheetValue(records[0].values, ["descricao"]), "Aluguel");
+assert.equal(hasSpreadsheetValue(records[0].values, ["valor"]), true);
+assert.equal(hasSpreadsheetValue(records[0].values, ["sku inexistente"]), false);
 assert.equal(parseSpreadsheetMoney(getSpreadsheetValue(records[0].values, ["valor"])), 1234.56);
 assert.equal(parseSpreadsheetMoney(getSpreadsheetValue(records[1].values, ["valor"])), 1234.56);
 assert.equal(parseSpreadsheetMoney("(R$ 10,50)"), -10.5);
