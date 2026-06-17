@@ -236,6 +236,7 @@ function parseSkuRow(record: SpreadsheetRecord): ParsedSkuRow {
       : null;
 
   const skusFilhosAliases = ["skus filhos", "sku filhos", "filhos"];
+  const skusFilhos = splitSpreadsheetList(getSpreadsheetValue(values, skusFilhosAliases));
 
   return {
     rowNumber,
@@ -257,8 +258,7 @@ function parseSkuRow(record: SpreadsheetRecord): ParsedSkuRow {
       true,
       "Tem Estoque",
     ),
-    skusFilhos:
-      parsedTipo === "pai" ? splitSpreadsheetList(getSpreadsheetValue(values, skusFilhosAliases)) : [],
+    skusFilhos,
     observacoes: normalizeSpreadsheetText(getSpreadsheetValue(values, TEXT_FIELDS.observacoes)) || null,
     tags: splitSpreadsheetList(getSpreadsheetValue(values, ["tags", "etiquetas"])),
     provided: {
@@ -441,6 +441,8 @@ async function buildSkuImportAnalysis(userId: string, file: File) {
             `Filhos inexistentes ou que não são individuais serão ignorados: ${invalidChildren.join(", ")}.`,
           );
         }
+      } else if (parsed.provided.skusFilhos) {
+        warnings.push("Lista de filhos só é aplicada em SKUs do tipo kit.");
       }
 
       rows.push({
@@ -631,10 +633,8 @@ async function buildSkuImportAnalysis(userId: string, file: File) {
   };
 }
 
-function parseSelectedRows(value: FormDataEntryValue | null, rows: InternalPreviewRow[]): Set<string> {
-  if (!value) {
-    return new Set(rows.filter((row) => row.selectable).map((row) => row.id));
-  }
+function parseSelectedRows(value: FormDataEntryValue | null): Set<string> {
+  if (!value) return new Set();
   try {
     const parsed = JSON.parse(String(value));
     if (Array.isArray(parsed)) return new Set(parsed.map(String));
@@ -789,6 +789,11 @@ async function applySkuImport(
   });
 
   for (const row of rowsToProcess) {
+    if (row.action === "error") {
+      addImportError(results, row.rowNumber, row.errors.join(" ") || "Linha inválida.");
+      continue;
+    }
+
     if (!row.selectable || !selectedRows.has(row.id)) {
       results.skipped += 1;
       continue;
@@ -830,7 +835,7 @@ async function applySkuImport(
               ativo: parsed.ativo,
               temEstoque: parsed.temEstoque,
               proporcao: parsed.tipo === "filho" ? 1 : null,
-              skusFilhos: row.replacementChildren ?? parsed.skusFilhos,
+              skusFilhos: parsed.tipo === "pai" ? row.replacementChildren ?? parsed.skusFilhos : undefined,
               observacoes: parsed.observacoes,
               tags: parsed.tags.length > 0 ? parsed.tags : undefined,
             },
@@ -1000,7 +1005,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ preview: analysis.preview });
     }
 
-    const selectedRows = parseSelectedRows(formData.get("selectedRows"), analysis.internalRows);
+    const selectedRowsPayload = formData.get("selectedRows");
+    if (!selectedRowsPayload) {
+      return NextResponse.json(
+        { error: "Selecione as linhas que devem ser aplicadas antes de importar." },
+        { status: 400 },
+      );
+    }
+
+    const selectedRows = parseSelectedRows(selectedRowsPayload);
     const results = await applySkuImport(
       session.sub,
       analysis.internalRows,

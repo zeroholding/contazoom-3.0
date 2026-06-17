@@ -55,6 +55,10 @@ function toDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function skuLookupKey(value: unknown): string {
+  return (normalizeDiscoveredSku(value) || "").toLocaleLowerCase("pt-BR");
+}
+
 function platformFromTags(tags: unknown): Plataforma {
   if (Array.isArray(tags) && tags.some((tag) => String(tag) === "Shopee")) {
     return "Shopee";
@@ -74,7 +78,8 @@ function ensureEntry(
     situacao: "Sem custo" | "Nao cadastrado";
   },
 ) {
-  const existing = map.get(input.sku);
+  const key = skuLookupKey(input.sku);
+  const existing = map.get(key);
   if (existing) {
     if (!existing.produto && input.produto) existing.produto = input.produto;
     if (input.cadastrado) {
@@ -102,7 +107,7 @@ function ensureEntry(
     },
   };
 
-  map.set(input.sku, created);
+  map.set(key, created);
   return created;
 }
 
@@ -158,7 +163,7 @@ function addSaleCandidate(
   const sku = normalizeDiscoveredSku(input.sku);
   if (!sku) return;
 
-  const registered = registeredSkus.get(sku);
+  const registered = registeredSkus.get(skuLookupKey(sku));
   const custoUnitario = registered ? toNumber(registered.custoUnitario) : 0;
 
   if (registered && (!registered.ativo || custoUnitario > 0)) {
@@ -314,7 +319,7 @@ export async function buildPendingSkuSummary(
   ]);
 
   const registeredSkus = new Map(
-    registeredSkusRows.map((sku) => [sku.sku, sku]),
+    registeredSkusRows.map((sku) => [skuLookupKey(sku.sku), sku]),
   );
   const pending = new Map<string, MutablePendingSkuEntry>();
 
@@ -337,8 +342,9 @@ export async function buildPendingSkuSummary(
     const seenInSale = new Set<string>();
     for (const candidate of extractMeliSaleCandidates(venda)) {
       const sku = normalizeDiscoveredSku(candidate.sku);
-      if (!sku || seenInSale.has(sku)) continue;
-      seenInSale.add(sku);
+      const key = skuLookupKey(sku);
+      if (!sku || seenInSale.has(key)) continue;
+      seenInSale.add(key);
 
       addSaleCandidate(pending, registeredSkus, {
         ...candidate,
@@ -353,8 +359,9 @@ export async function buildPendingSkuSummary(
     const seenInSale = new Set<string>();
     for (const candidate of extractShopeeSaleCandidates(venda)) {
       const sku = normalizeDiscoveredSku(candidate.sku);
-      if (!sku || seenInSale.has(sku)) continue;
-      seenInSale.add(sku);
+      const key = skuLookupKey(sku);
+      if (!sku || seenInSale.has(key)) continue;
+      seenInSale.add(key);
 
       addSaleCandidate(pending, registeredSkus, {
         ...candidate,

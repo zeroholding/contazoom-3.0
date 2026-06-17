@@ -443,10 +443,8 @@ async function buildFinanceImportAnalysis(userId: string, file: File, type: Fina
   };
 }
 
-function parseSelectedRows(value: FormDataEntryValue | null, rows: InternalPreviewRow[]): Set<string> {
-  if (!value) {
-    return new Set(rows.filter((row) => row.selectable).map((row) => row.id));
-  }
+function parseSelectedRows(value: FormDataEntryValue | null): Set<string> {
+  if (!value) return new Set();
   try {
     const parsed = JSON.parse(String(value));
     if (Array.isArray(parsed)) return new Set(parsed.map(String));
@@ -475,8 +473,25 @@ async function applyFinanceImport(
 
   for (const row of rows) {
     results.processedRows += 1;
-    if (!row.selectable || !selectedRows.has(row.id) || !row.parsed) {
+    if (row.action === "error") {
+      results.errorRows += 1;
+      results.errorDetails.push({
+        row: row.rowNumber,
+        message: row.errors.join(" ") || "Linha inválida.",
+      });
+      continue;
+    }
+
+    if (!row.selectable || !selectedRows.has(row.id)) {
       results.skippedRows += 1;
+      continue;
+    }
+    if (!row.parsed) {
+      results.errorRows += 1;
+      results.errorDetails.push({
+        row: row.rowNumber,
+        message: "Linha inválida.",
+      });
       continue;
     }
 
@@ -651,7 +666,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ preview: analysis.preview });
     }
 
-    const selectedRows = parseSelectedRows(formData.get("selectedRows"), analysis.internalRows);
+    const selectedRowsPayload = formData.get("selectedRows");
+    if (!selectedRowsPayload) {
+      return NextResponse.json(
+        { error: "Selecione as linhas que devem ser aplicadas antes de importar." },
+        { status: 400 },
+      );
+    }
+
+    const selectedRows = parseSelectedRows(selectedRowsPayload);
     const results = await applyFinanceImport(
       session.sub,
       rawType,

@@ -225,6 +225,18 @@ export default function FiltrosVendasV2({
   const [currentPeriodoOption, setCurrentPeriodoOption] =
     useState<FiltroPeriodo>("todos");
 
+  const startOfDay = (date: Date) => {
+    const value = new Date(date);
+    value.setHours(0, 0, 0, 0);
+    return value;
+  };
+
+  const endOfDay = (date: Date) => {
+    const value = new Date(date);
+    value.setHours(23, 59, 59, 999);
+    return value;
+  };
+
   const handlePeriodoFilter = (periodo: FiltroPeriodo) => {
     if (periodo === "personalizado") {
       setShowCalendarioPersonalizado(true);
@@ -237,16 +249,16 @@ export default function FiltrosVendasV2({
 
     switch (periodo) {
       case "mes_passado": {
-        const primeiroDiaMesPassado = new Date(
+        const primeiroDiaMesPassado = startOfDay(new Date(
           now.getFullYear(),
           now.getMonth() - 1,
           1,
-        );
-        const ultimoDiaMesPassado = new Date(
+        ));
+        const ultimoDiaMesPassado = endOfDay(new Date(
           now.getFullYear(),
           now.getMonth(),
           0,
-        );
+        ));
 
         dataVendaFilter = {
           min: primeiroDiaMesPassado,
@@ -255,16 +267,16 @@ export default function FiltrosVendasV2({
         break;
       }
       case "este_mes": {
-        const primeiroDiaMesAtual = new Date(
+        const primeiroDiaMesAtual = startOfDay(new Date(
           now.getFullYear(),
           now.getMonth(),
           1,
-        );
-        const ultimoDiaMesAtual = new Date(
+        ));
+        const ultimoDiaMesAtual = endOfDay(new Date(
           now.getFullYear(),
           now.getMonth() + 1,
           0,
-        );
+        ));
 
         dataVendaFilter = {
           min: primeiroDiaMesAtual,
@@ -274,12 +286,10 @@ export default function FiltrosVendasV2({
       }
       case "hoje": {
         const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const amanha = new Date(hoje);
-        amanha.setDate(amanha.getDate() + 1);
 
         dataVendaFilter = {
-          min: hoje,
-          max: amanha,
+          min: startOfDay(hoje),
+          max: endOfDay(hoje),
         };
         break;
       }
@@ -289,11 +299,10 @@ export default function FiltrosVendasV2({
           now.getMonth(),
           now.getDate() - 1,
         );
-        // const hoje = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         dataVendaFilter = {
-          min: ontem,
-          max: ontem,
+          min: startOfDay(ontem),
+          max: endOfDay(ontem),
         };
         break;
       }
@@ -311,8 +320,8 @@ export default function FiltrosVendasV2({
     if (startDate && endDate) {
       updateFilters({
         dataVenda: {
-          min: startDate,
-          max: endDate,
+          min: startOfDay(startDate),
+          max: endOfDay(endDate),
         },
       });
       setDataInicio(startDate);

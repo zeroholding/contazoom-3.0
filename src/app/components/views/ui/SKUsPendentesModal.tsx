@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useToast } from "./toaster";
 import Modal from "./Modal";
 
@@ -45,19 +45,12 @@ export default function SKUsPendentesModal({
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedSKUs, setSelectedSKUs] = useState<string[]>([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [sortKey, setSortKey] = useState<
     "sku" | "produto" | "plataforma" | "situacao" | "vendas" | "quantidade" | "valor" | "primeiraVenda" | "ultimaVenda"
   >("ultimaVenda");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
-  useEffect(() => {
-    if (isOpen && !hasLoaded) {
-      loadSKUsPendentes();
-    }
-  }, [isOpen, hasLoaded]);
-
-  const loadSKUsPendentes = async () => {
+  const loadSKUsPendentes = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await fetch('/api/sku/pendentes');
@@ -65,7 +58,6 @@ export default function SKUsPendentesModal({
       
       const data = await response.json();
       setSkusPendentes(data.skusPendentes || []);
-      setHasLoaded(true);
     } catch (error) {
       console.error('Erro ao carregar SKUs pendentes:', error);
       toast({
@@ -76,7 +68,14 @@ export default function SKUsPendentesModal({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedSKUs([]);
+      loadSKUsPendentes();
+    }
+  }, [isOpen, loadSKUsPendentes]);
 
   const handleSelectSKU = (sku: string) => {
     setSelectedSKUs(prev => 
@@ -178,7 +177,6 @@ export default function SKUsPendentesModal({
       });
 
       onSKUsCreated();
-      setHasLoaded(false); // Força recarregamento na próxima abertura
       onClose();
     } catch (error) {
       console.error('Erro ao criar SKUs:', error);

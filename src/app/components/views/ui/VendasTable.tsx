@@ -149,6 +149,10 @@ function TabelaVendasSkeleton() {
   );
 }
 
+function skuStatusKey(value: unknown): string {
+  return String(value ?? "").trim().toLocaleLowerCase("pt-BR");
+}
+
 export default function VendasTable({ 
   vendas, 
   isLoading, 
@@ -164,11 +168,21 @@ export default function VendasTable({
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   ) : vendas;
+  const pendingSkuRefreshKey = paginatedVendas
+    .map((item) => skuStatusKey(item.venda.sku))
+    .filter(Boolean)
+    .sort()
+    .join("|");
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPendingSkus() {
+      if (!pendingSkuRefreshKey) {
+        if (isMounted) setPendingSkuStatus({});
+        return;
+      }
+
       try {
         const response = await fetch("/api/sku/pendentes", {
           cache: "no-store",
@@ -181,7 +195,7 @@ export default function VendasTable({
         for (const item of data?.skusPendentes || []) {
           const sku = String(item?.sku || "").trim();
           if (!sku) continue;
-          map[sku] = {
+          map[skuStatusKey(sku)] = {
             cadastrado: Boolean(item?.cadastrado),
             situacao: item?.situacao,
           };
@@ -198,7 +212,7 @@ export default function VendasTable({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [pendingSkuRefreshKey]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -383,7 +397,7 @@ export default function VendasTable({
             {paginatedVendas.map((item) => {
               const { venda, isCalculating } = item;
               const skuStatus = venda.sku
-                ? pendingSkuStatus[String(venda.sku).trim()]
+                ? pendingSkuStatus[skuStatusKey(venda.sku)]
                 : undefined;
               
                 const dateParts = formatDateTime(venda.dataVenda);

@@ -450,7 +450,13 @@ export default function GestaoSKU() {
         })
       );
       
-      await Promise.all(promises);
+      const responses = await Promise.all(promises);
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse) {
+        const error = await failedResponse.json().catch(() => null);
+        throw new Error(error?.error || 'Erro ao atualizar alguns SKUs');
+      }
+
       await loadSKUs(); // Recarregar lista após atualização
       await loadSKUStats();
       setSelectedSKUs([]);
@@ -465,7 +471,7 @@ export default function GestaoSKU() {
       toast({
         variant: "error",
         title: "Erro ao atualizar status",
-        description: "Não foi possível atualizar o status dos SKUs",
+        description: error instanceof Error ? error.message : "Não foi possível atualizar o status dos SKUs",
       });
     }
   };
@@ -480,7 +486,13 @@ export default function GestaoSKU() {
         })
       );
       
-      await Promise.all(promises);
+      const responses = await Promise.all(promises);
+      const failedResponse = responses.find((response) => !response.ok);
+      if (failedResponse) {
+        const error = await failedResponse.json().catch(() => null);
+        throw new Error(error?.error || 'Erro ao atualizar estoque de alguns SKUs');
+      }
+
       await loadSKUs();
       await loadSKUStats();
       setSelectedSKUs([]);
@@ -489,7 +501,7 @@ export default function GestaoSKU() {
       toast({
         variant: "error",
         title: "Erro ao atualizar estoque",
-        description: "Não foi possível atualizar o status de estoque dos SKUs",
+        description: error instanceof Error ? error.message : "Não foi possível atualizar o status de estoque dos SKUs",
       });
     }
   };
