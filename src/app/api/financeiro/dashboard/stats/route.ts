@@ -220,6 +220,7 @@ export async function GET(req: NextRequest) {
           frete: true,
           quantidade: true,
           sku: true,
+          conta: true,
           plataforma: true,
           dataVenda: true,
         },
@@ -237,6 +238,7 @@ export async function GET(req: NextRequest) {
           frete: true,
           quantidade: true,
           sku: true,
+          conta: true,
           plataforma: true,
           dataVenda: true,
         },
@@ -384,6 +386,7 @@ export async function GET(req: NextRequest) {
             userId: session.sub,
             ativo: true,
           },
+          orderBy: { updatedAt: "desc" },
         });
       }
     } catch (error) {
@@ -394,49 +397,66 @@ export async function GET(req: NextRequest) {
 
     // Se não houver alíquotas, pular o cálculo
     if (aliquotas.length > 0 && useRange) {
-      // Agrupar vendas por mês/ano para aplicar alíquota específica de cada mês
-      const faturamentoPorMes = new Map<string, number>();
+      // A alíquota pertence a uma conta e a um período. Agrupar somente por mês
+      // misturaria contas com percentuais diferentes.
+      const faturamentoPorContaMes = new Map<
+        string,
+        { mesAno: string; conta: string; faturamento: number }
+      >();
       
       for (const v of vendas) {
         if (!v.dataVenda) continue; // Pular vendas sem data
         
         const dataVenda = new Date(v.dataVenda);
         // Chave no formato YYYY-MM
-        const mesAno = `${dataVenda.getFullYear()}-${String(dataVenda.getMonth() + 1).padStart(2, '0')}`;
+        const mesAno = `${dataVenda.getUTCFullYear()}-${String(dataVenda.getUTCMonth() + 1).padStart(2, '0')}`;
+        const conta = v.conta.trim();
+        if (!conta) continue;
         const valorTotal = toNumber(v.valorTotal);
-        
-        faturamentoPorMes.set(mesAno, (faturamentoPorMes.get(mesAno) || 0) + valorTotal);
+
+        const key = `${mesAno}\u0000${conta.toLocaleLowerCase("pt-BR")}`;
+        const current = faturamentoPorContaMes.get(key);
+        faturamentoPorContaMes.set(key, {
+          mesAno,
+          conta,
+          faturamento: (current?.faturamento || 0) + valorTotal,
+        });
       }
 
-      console.log('Faturamento agrupado por mês:', Object.fromEntries(faturamentoPorMes));
+      console.log(
+        "Faturamento agrupado por conta e mês:",
+        Array.from(faturamentoPorContaMes.values()),
+      );
 
-      // Para cada mês com faturamento, aplicar a alíquota correspondente
-      for (const [mesAno, faturamentoMes] of faturamentoPorMes.entries()) {
+      for (const { mesAno, conta, faturamento } of faturamentoPorContaMes.values()) {
         const [year, month] = mesAno.split('-').map(Number);
-        const primeiroDiaMes = new Date(year, month - 1, 1);
-        const ultimoDiaMes = new Date(year, month, 0, 23, 59, 59, 999);
+        const primeiroDiaMes = new Date(Date.UTC(year, month - 1, 1));
+        const ultimoDiaMes = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+        const contaNormalizada = conta.toLocaleLowerCase("pt-BR");
         
-        // Buscar alíquota para este mês específico
         const aliquotaMes = aliquotas.find((aliq: any) => {
           const aliqInicio = new Date(aliq.dataInicio);
           const aliqFim = new Date(aliq.dataFim);
-          
-          // Verificar se a alíquota se aplica a este mês
-          return (primeiroDiaMes <= aliqFim && ultimoDiaMes >= aliqInicio);
+
+          return (
+            String(aliq.conta).trim().toLocaleLowerCase("pt-BR") === contaNormalizada &&
+            primeiroDiaMes <= aliqFim &&
+            ultimoDiaMes >= aliqInicio
+          );
         });
 
         if (aliquotaMes) {
           const aliquotaDecimal = toNumber(aliquotaMes.aliquota) / 100;
-          const impostoMes = faturamentoMes * aliquotaDecimal;
+          const impostoMes = faturamento * aliquotaDecimal;
           impostosTotal += impostoMes;
           
-          console.log(`Imposto de ${mesAno}:`, {
-            faturamento: faturamentoMes,
+          console.log(`Imposto de ${conta} em ${mesAno}:`, {
+            faturamento,
             aliquota: aliquotaMes.aliquota,
             imposto: impostoMes
           });
         } else {
-          console.log(`Sem alíquota cadastrada para ${mesAno}`);
+          console.log(`Sem alíquota cadastrada para ${conta} em ${mesAno}`);
         }
       }
 

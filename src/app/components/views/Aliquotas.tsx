@@ -104,10 +104,11 @@ export default function Aliquotas() {
         credentials: "include",
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setAliquotas(data.data || []);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Não foi possível carregar as alíquotas");
       }
+      setAliquotas(data.data || []);
     } catch (error) {
       console.error("Erro ao carregar alíquotas:", error);
       toast({
@@ -126,12 +127,21 @@ export default function Aliquotas() {
         credentials: "include",
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setContas(data.data || []);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Não foi possível carregar as contas");
       }
+      setContas(data.data || []);
     } catch (error) {
       console.error("Erro ao carregar contas:", error);
+      toast({
+        variant: "error",
+        title: "Erro ao carregar contas",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar as contas autenticadas.",
+      });
     }
   };
 
@@ -168,8 +178,8 @@ export default function Aliquotas() {
     try {
       // Converter mesAno para dataInicio e dataFim (primeiro e último dia do mês)
       const [year, month] = formData.mesAno.split('-').map(Number);
-      const dataInicio = new Date(year, month - 1, 1); // Primeiro dia do mês
-      const dataFim = new Date(year, month, 0); // Último dia do mês
+      const dataInicio = new Date(Date.UTC(year, month - 1, 1));
+      const dataFim = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
       
       const dataToSend = {
         conta: formData.conta,
@@ -230,8 +240,8 @@ export default function Aliquotas() {
       const dataToSend = { ...data };
       if (data.mesAno && data.mesAno.match(/^\d{4}-\d{2}$/)) {
         const [year, month] = data.mesAno.split('-').map(Number);
-        dataToSend.dataInicio = new Date(year, month - 1, 1).toISOString();
-        dataToSend.dataFim = new Date(year, month, 0).toISOString();
+        dataToSend.dataInicio = new Date(Date.UTC(year, month - 1, 1)).toISOString();
+        dataToSend.dataFim = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)).toISOString();
         delete dataToSend.mesAno;
       }
 
