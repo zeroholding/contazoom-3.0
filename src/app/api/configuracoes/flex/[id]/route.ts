@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -38,6 +39,9 @@ export async function PUT(
       },
     });
 
+    // Limpar o cache de vendas do Mercado Livre
+    cache.delete(createCacheKey("vendas-meli", session.sub));
+
     return NextResponse.json({ success: true, config: updated });
   } catch (error) {
     console.error("[FLEX_CONFIG] Erro ao atualizar:", error);
@@ -71,6 +75,9 @@ export async function DELETE(
     }
 
     await prisma.flexShippingConfig.delete({ where: { id } });
+
+    // Limpar o cache de vendas do Mercado Livre
+    cache.delete(createCacheKey("vendas-meli", session.sub));
 
     return NextResponse.json({ success: true });
   } catch (error) {

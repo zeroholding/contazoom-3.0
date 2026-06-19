@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -64,6 +65,9 @@ export async function POST(req: NextRequest) {
         ativo: true,
       },
     });
+
+    // Limpar o cache de vendas do Mercado Livre para forçar o recálculo do frete Flex
+    cache.delete(createCacheKey("vendas-meli", session.sub));
 
     return NextResponse.json({ success: true, config });
   } catch (error) {
