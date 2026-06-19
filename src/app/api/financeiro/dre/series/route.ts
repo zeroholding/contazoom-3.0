@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
     const [vendasMeli, vendasShopee] = await Promise.all([
       prisma.meliVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: minDate, lte: maxDate }, ...paidOnly },
-        select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, dataVenda: true },
+        select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, logisticType: true, dataVenda: true },
         distinct: ['orderId'],
       }),
       prisma.shopeeVenda.findMany({
@@ -104,6 +104,14 @@ export async function GET(req: NextRequest) {
     // Calcular custos
     const skusUnicos = Array.from(new Set([...vendasMeli, ...vendasShopee].map(v => v.sku).filter(Boolean))) as string[];
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
+
+    // Buscar configuração de frete Flex ativa
+    const flexConfig = await prisma.flexShippingConfig.findFirst({
+      where: { userId: session.sub, ativo: true },
+      orderBy: { createdAt: "desc" },
+    });
+    const flexCustoPorPacote = flexConfig ? Number(flexConfig.custoPorPacote) : 0;
+    const flexUnidadesPorCobranca = flexConfig ? flexConfig.unidadesPorCobranca : 1;
 
     // Inicializar objetos de resposta
     const receitaBrutaMeliPorMes: Record<string, number> = {};
@@ -151,8 +159,18 @@ export async function GET(req: NextRequest) {
 
         const vt = toNumber(v.valorTotal);
         const taxa = Math.abs(toNumber(v.taxaPlataforma)); // Taxa sempre como despesa (valor absoluto)
-      let fr = toNumber(v.frete) || 0;
-        const cmv = (v.sku ? costMap.getCostAtDate(v.sku, d) : 0) * toNumber(v.quantidade);
+        let fr = toNumber(v.frete) || 0;
+        const qtd = toNumber(v.quantidade);
+        const cmv = (v.sku ? costMap.getCostAtDate(v.sku, d) : 0) * qtd;
+
+        // Deduzir custo Flex se aplicável (somente para Meli)
+        if (plataforma === "meli") {
+          const isFlex = (v as any).logisticType?.toLowerCase() === "flex" || (v as any).logisticType === "self_service";
+          if (isFlex && flexCustoPorPacote > 0) {
+            const custoFlex = Math.ceil(qtd / flexUnidadesPorCobranca) * flexCustoPorPacote;
+            fr = fr - custoFlex;
+          }
+        }
 
         if (plataforma === "meli") {
           receitaBrutaMeliPorMes[mKey] += vt;

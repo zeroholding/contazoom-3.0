@@ -223,6 +223,7 @@ export async function GET(req: NextRequest) {
           sku: true,
           conta: true,
           plataforma: true,
+          logisticType: true,
           dataVenda: true,
         },
         distinct: ['orderId'],
@@ -314,6 +315,14 @@ export async function GET(req: NextRequest) {
     const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
+    // Buscar configuração de frete Flex ativa
+    const flexConfig = await prisma.flexShippingConfig.findFirst({
+      where: { userId: session.sub, ativo: true },
+      orderBy: { createdAt: "desc" },
+    });
+    const flexCustoPorPacote = flexConfig ? Number(flexConfig.custoPorPacote) : 0;
+    const flexUnidadesPorCobranca = flexConfig ? flexConfig.unidadesPorCobranca : 1;
+
     // Aggregate current period
     let faturamentoTotal = 0;
     let receitaLiquida = 0; // valorTotal + taxas + frete
@@ -330,10 +339,17 @@ export async function GET(req: NextRequest) {
     for (const v of vendas) {
       const vt = toNumber(v.valorTotal);
       const tp = toNumber(v.taxaPlataforma);
-      const fr = toNumber(v.frete) || 0;
+      let fr = toNumber(v.frete) || 0;
       const qtd = toNumber(v.quantidade);
       const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;
+
+      // Deduzir custo Flex se aplicável
+      const isFlex = (v as any).logisticType?.toLowerCase() === "flex" || (v as any).logisticType === "self_service";
+      if (isFlex && flexCustoPorPacote > 0) {
+        const custoFlex = Math.ceil(qtd / flexUnidadesPorCobranca) * flexCustoPorPacote;
+        fr = fr - custoFlex;
+      }
 
       faturamentoTotal += vt;
       receitaLiquida += vt + tp + fr; // taxa/frete podem ser negativos no banco

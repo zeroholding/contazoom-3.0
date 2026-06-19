@@ -95,6 +95,15 @@ export async function GET(req: NextRequest) {
     const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
+    // Buscar configuração de frete Flex ativa do usuário
+    const flexConfig = await prisma.flexShippingConfig.findFirst({
+      where: { userId: session.sub, ativo: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const flexCustoPorPacote = flexConfig ? Number(flexConfig.custoPorPacote) : 0;
+    const flexUnidadesPorCobranca = flexConfig ? flexConfig.unidadesPorCobranca : 1;
+
     const vendasFormatted = vendas.map((venda) => {
       let cmv: number | null = null;
       if (venda.sku) {
@@ -111,15 +120,27 @@ export async function GET(req: NextRequest) {
 
       const frete = Number(venda.frete) || 0;
 
+      // Calcular custo Flex (se aplicável)
+      const isFlex = venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service";
+      let custoFlex = 0;
+      let freteLiquidoFlex = frete;
+      if (isFlex && flexCustoPorPacote > 0) {
+        custoFlex = Math.ceil(venda.quantidade / flexUnidadesPorCobranca) * flexCustoPorPacote;
+        freteLiquidoFlex = roundCurrency(frete - custoFlex);
+      }
+
+      // Usar freteLiquidoFlex na margem quando há config de Flex
+      const freteParaMargem = isFlex && flexCustoPorPacote > 0 ? freteLiquidoFlex : frete;
+
       let margemContribuicao: number;
       let isMargemReal: boolean;
       if (cmv !== null && cmv > 0) {
         margemContribuicao = roundCurrency(
-          valorTotal + taxaPlataforma + frete - cmv,
+          valorTotal + taxaPlataforma + freteParaMargem - cmv,
         );
         isMargemReal = true;
       } else {
-        margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + frete);
+        margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + freteParaMargem);
         isMargemReal = false;
       }
 
@@ -181,6 +202,8 @@ export async function GET(req: NextRequest) {
           : null,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
+        custoFlex: isFlex ? custoFlex : null,
+        freteLiquidoFlex: isFlex ? freteLiquidoFlex : null,
         cmv,
         margemContribuicao,
         isMargemReal,
@@ -223,6 +246,11 @@ export async function GET(req: NextRequest) {
       total: vendas.length,
       lastSync:
         vendas.length > 0 ? vendas[0].sincronizadoEm.toISOString() : null,
+      flexConfig: flexConfig ? {
+        custoPorPacote: flexCustoPorPacote,
+        unidadesPorCobranca: flexUnidadesPorCobranca,
+        descricao: flexConfig.descricao,
+      } : null,
     };
 
     // Armazenar no cache

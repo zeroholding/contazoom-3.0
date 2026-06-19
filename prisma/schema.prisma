@@ -36,6 +36,7 @@ model User {
   documents         Document[]
   documentFolders   DocumentFolder[]
   documentLogs      DocumentLog[]
+  flexShippingConfigs FlexShippingConfig[]
 
   @@index([createdAt])
   @@map("usuario")
@@ -503,4 +504,19 @@ model DocumentLog {
   @@index([documentId])
   @@index([userId])
   @@map("document_log")
+}
+
+model FlexShippingConfig {
+  id                   String   @id @default(cuid())
+  userId               String   @map("user_id")
+  custoPorPacote       Decimal  @db.Decimal(10, 2) @map("custo_por_pacote")
+  unidadesPorCobranca  Int      @default(1) @map("unidades_por_cobranca")
+  descricao            String?
+  ativo                Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("flex_shipping_config")
 }

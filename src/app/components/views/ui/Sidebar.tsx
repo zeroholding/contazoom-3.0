@@ -179,6 +179,7 @@ const NAV_ITEMS: Item[] = [
       { href: "/financeiro/dashboard", label: "Dashboard Financeiro" },
       { href: "/financeiro/dre", label: "DRE" },
       { href: "/financeiro/aliquotas", label: "Alíquotas de Impostos" },
+      { href: "/financeiro/configuracoes-frete", label: "Configuração de Frete" },
     ],
   },
 ];

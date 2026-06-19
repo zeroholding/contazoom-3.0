@@ -223,6 +223,7 @@ export async function GET(req: NextRequest) {
           sku: true,
           conta: true,
           plataforma: true,
+          logisticType: true,
           dataVenda: true,
         },
         distinct: ['orderId'],
@@ -315,9 +316,17 @@ export async function GET(req: NextRequest) {
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
     const pendingSkuSummary = await buildPendingSkuSummary(session.sub);
 
+    // Buscar configuração de frete Flex ativa
+    const flexConfig = await prisma.flexShippingConfig.findFirst({
+      where: { userId: session.sub, ativo: true },
+      orderBy: { createdAt: "desc" },
+    });
+    const flexCustoPorPacote = flexConfig ? Number(flexConfig.custoPorPacote) : 0;
+    const flexUnidadesPorCobranca = flexConfig ? flexConfig.unidadesPorCobranca : 1;
+
     // Aggregate current period
     let faturamentoTotal = 0;
-    let receitaLiquida = 0; // valorTotal + taxas + frete
+    let receitaLiquida = 0;
     let cmvTotal = 0;
     let vendasRealizadas = 0;
     let unidadesVendidas = 0;
@@ -331,13 +340,20 @@ export async function GET(req: NextRequest) {
     for (const v of vendas) {
       const vt = toNumber(v.valorTotal);
       const tp = toNumber(v.taxaPlataforma);
-      const fr = toNumber(v.frete) || 0;
+      let fr = toNumber(v.frete) || 0;
       const qtd = toNumber(v.quantidade);
       const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;
 
+      // Deduzir custo Flex se aplicável
+      const isFlex = (v as any).logisticType?.toLowerCase() === "flex" || (v as any).logisticType === "self_service";
+      if (isFlex && flexCustoPorPacote > 0) {
+        const custoFlex = Math.ceil(qtd / flexUnidadesPorCobranca) * flexCustoPorPacote;
+        fr = fr - custoFlex;
+      }
+
       faturamentoTotal += vt;
-      receitaLiquida += vt + tp + fr; // taxa/frete podem ser negativos no banco
+      receitaLiquida += vt + tp + fr;
       cmvTotal += cmv;
       vendasRealizadas += 1;
       unidadesVendidas += qtd;
@@ -357,6 +373,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Aggregate current period
     // 🔍 LOG DETALHADO: Resultado do cálculo
     console.log('[Dashboard Stats] 💰 Valores calculados:', {
       vendasProcessadas: vendas.length,

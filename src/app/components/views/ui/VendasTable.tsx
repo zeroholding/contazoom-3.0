@@ -576,10 +576,10 @@ export default function VendasTable({
                           {venda.frete !== undefined && (
                             <div className="flex items-center gap-1">
                               <span className="text-gray-400">Frete:</span>
-                              {isShopee ? (
-                                <FreteDetailsDropdown venda={venda}>
-                                  <span className={`font-semibold cursor-pointer hover:underline ${venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}`}>
-                                    {formatCurrency(venda.frete)}
+                              {isShopee || (venda.plataforma === "Mercado Livre" && (venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service") && (venda as any).custoFlex !== undefined && (venda as any).custoFlex !== null) ? (
+                                <FreteDetailsDropdown venda={venda as any}>
+                                  <span className={`font-semibold cursor-pointer hover:underline ${(venda as any).freteLiquidoFlex !== undefined ? ((venda as any).freteLiquidoFlex >= 0 ? "frete-positivo" : "frete-negativo") : (venda.frete >= 0 ? "frete-positivo" : "frete-negativo")}`}>
+                                    {formatCurrency((venda as any).freteLiquidoFlex !== undefined ? (venda as any).freteLiquidoFlex : venda.frete)}
                                   </span>
                                 </FreteDetailsDropdown>
                               ) : (
