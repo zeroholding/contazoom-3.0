@@ -251,7 +251,7 @@ export default function ModalSyncVendas({
       // const newOrders = result.newOrders || [];
 
       const newCount = 0;
-      const newOrdersByAccount = {};
+      const newOrdersByAccount: Record<string, number> = {};
       const newOrders: any[] = [];
 
       // 3. Extrair IDs das vendas novas por conta

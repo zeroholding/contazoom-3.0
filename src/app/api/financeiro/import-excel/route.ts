@@ -627,10 +627,14 @@ async function applyFinanceImport(
       }
       seenRows.add(parsed.key);
     } catch (error) {
+      console.error(
+        `Erro ao gravar importação financeira da linha ${row.rowNumber}:`,
+        error,
+      );
       results.errorRows += 1;
       results.errorDetails.push({
         row: row.rowNumber,
-        message: error instanceof Error ? error.message : "Erro ao gravar a linha.",
+        message: "Erro ao gravar o registro.",
       });
     }
   }
@@ -644,7 +648,15 @@ export async function POST(request: NextRequest) {
     if (!sessionCookie) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
-    const session = await verifySessionToken(sessionCookie);
+    let session: Awaited<ReturnType<typeof verifySessionToken>>;
+    try {
+      session = await verifySessionToken(sessionCookie);
+    } catch {
+      return NextResponse.json(
+        { error: "Sessão inválida ou expirada." },
+        { status: 401 },
+      );
+    }
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -675,6 +687,18 @@ export async function POST(request: NextRequest) {
     }
 
     const selectedRows = parseSelectedRows(selectedRowsPayload);
+    const hasApplicableSelection = analysis.internalRows.some(
+      (row) => row.selectable && selectedRows.has(row.id),
+    );
+    if (!hasApplicableSelection) {
+      return NextResponse.json(
+        {
+          error:
+            "Nenhuma linha selecionada continua disponível para aplicação. Analise a planilha novamente.",
+        },
+        { status: 409 },
+      );
+    }
     const results = await applyFinanceImport(
       session.sub,
       rawType,

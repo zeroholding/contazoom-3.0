@@ -20,6 +20,8 @@ const useIsoLayout =
 interface Aliquota {
   id: string;
   conta: string;
+  accountId?: string | null;
+  plataforma?: "meli" | "shopee" | null;
   aliquota: number;
   dataInicio: string;
   dataFim: string;
@@ -59,7 +61,7 @@ export default function Aliquotas() {
   const [deletingItem, setDeletingItem] = useState<Aliquota | null>(null);
 
   const [formData, setFormData] = useState({
-    conta: "",
+    accountId: "",
     aliquota: "",
     mesAno: new Date().toISOString().slice(0, 7), // formato: YYYY-MM
     descricao: "",
@@ -152,7 +154,7 @@ export default function Aliquotas() {
 
   const handleOpenModal = () => {
     setFormData({
-      conta: "",
+      accountId: "",
       aliquota: "",
       mesAno: new Date().toISOString().slice(0, 7),
       descricao: "",
@@ -176,13 +178,22 @@ export default function Aliquotas() {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const selectedAccount = contas.find(
+        (conta) => conta.id === formData.accountId,
+      );
+      if (!selectedAccount) {
+        throw new Error("Selecione uma conta autenticada válida");
+      }
+
       // Converter mesAno para dataInicio e dataFim (primeiro e último dia do mês)
       const [year, month] = formData.mesAno.split('-').map(Number);
       const dataInicio = new Date(Date.UTC(year, month - 1, 1));
       const dataFim = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
       
       const dataToSend = {
-        conta: formData.conta,
+        conta: selectedAccount.nome,
+        accountId: selectedAccount.id,
+        plataforma: selectedAccount.tipo,
         aliquota: formData.aliquota,
         dataInicio: dataInicio.toISOString(),
         dataFim: dataFim.toISOString(),
@@ -236,8 +247,20 @@ export default function Aliquotas() {
 
   const handleEditSave = async (data: any) => {
     try {
+      const selectedAccount = contas.find(
+        (conta) => conta.id === data.accountId,
+      );
+      if (!selectedAccount) {
+        throw new Error("Selecione uma conta autenticada válida");
+      }
+
       // Converter mesAno para dataInicio e dataFim se fornecido
-      const dataToSend = { ...data };
+      const dataToSend = {
+        ...data,
+        conta: selectedAccount.nome,
+        accountId: selectedAccount.id,
+        plataforma: selectedAccount.tipo,
+      };
       if (data.mesAno && data.mesAno.match(/^\d{4}-\d{2}$/)) {
         const [year, month] = data.mesAno.split('-').map(Number);
         dataToSend.dataInicio = new Date(Date.UTC(year, month - 1, 1)).toISOString();
@@ -325,20 +348,20 @@ export default function Aliquotas() {
   const renderModalContent = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="conta" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="accountId" className="block text-sm font-medium text-gray-700 mb-1">
           Conta / Plataforma
         </label>
         <select
-          id="conta"
-          name="conta"
-          value={formData.conta}
+          id="accountId"
+          name="accountId"
+          value={formData.accountId}
           onChange={handleInputChange}
           required
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
         >
           <option value="">Selecione uma conta</option>
           {contas.map((conta) => (
-            <option key={conta.id} value={conta.nome}>
+            <option key={conta.id} value={conta.id}>
               {conta.nome} ({conta.plataforma})
             </option>
           ))}
@@ -425,12 +448,12 @@ export default function Aliquotas() {
 
   const getEditFields = () => [
     { 
-      name: "conta", 
+      name: "accountId",
       label: "Conta / Plataforma", 
       type: "select" as const, 
       required: true,
       options: contas.map(conta => ({ 
-        value: conta.nome, 
+        value: conta.id,
         label: `${conta.nome} (${conta.plataforma})` 
       }))
     },
@@ -644,7 +667,15 @@ export default function Aliquotas() {
           title="Editar Alíquota"
           fields={getEditFields()}
           data={{
-            conta: editingItem.conta,
+            accountId:
+              editingItem.accountId ||
+              contas.find(
+                (conta) =>
+                  conta.nome === editingItem.conta &&
+                  (!editingItem.plataforma ||
+                    conta.tipo === editingItem.plataforma),
+              )?.id ||
+              "",
             aliquota: Number(editingItem.aliquota).toString(),
             mesAno: new Date(editingItem.dataInicio).toISOString().slice(0, 7),
             descricao: editingItem.descricao || "",

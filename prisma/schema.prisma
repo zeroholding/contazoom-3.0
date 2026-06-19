@@ -423,6 +423,8 @@ model AliquotaImposto {
   id             String   @id @default(cuid())
   userId         String   @map("user_id")
   conta          String   // Conta/CNPJ (ex: "Mercado Livre - Moscou", "Shopee Principal")
+  accountId      String?  @map("account_id")
+  plataforma     String?
   aliquota       Decimal  @db.Decimal(5, 2) // Percentual (ex: 5.00 para 5%)
   dataInicio     DateTime @map("data_inicio")
   dataFim        DateTime @map("data_fim")
@@ -434,6 +436,7 @@ model AliquotaImposto {
 
   @@index([userId])
   @@index([conta])
+  @@index([userId, plataforma, accountId])
   @@index([dataInicio, dataFim])
   @@index([ativo])
   @@map("aliquota_imposto")

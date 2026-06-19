@@ -54,13 +54,16 @@ export default function DriveLayoutWrapper() {
   return (
     <div ref={containerRef} className="flex h-screen bg-[#F3F3F3] font-sans">
       <Sidebar 
-        isCollapsed={isSidebarCollapsed} 
-        onToggle={handleToggleSidebar} 
-        isMobileOpen={isSidebarMobileOpen} 
+        collapsed={isSidebarCollapsed} 
+        mobileOpen={isSidebarMobileOpen} 
         onMobileClose={() => setIsSidebarMobileOpen(false)} 
       />
       <div className="flex-1 flex flex-col h-screen overflow-hidden lg:ml-[var(--sidebar-w)] transition-all duration-200">
-        <Topbar onMobileOpen={() => setIsSidebarMobileOpen(true)} />
+        <Topbar 
+          collapsed={isSidebarCollapsed}
+          onToggleCollapse={handleToggleSidebar}
+          onMobileMenu={() => setIsSidebarMobileOpen(true)} 
+        />
         <main className="flex-1 overflow-auto pt-16">
           <DriveDocumentos />
         </main>

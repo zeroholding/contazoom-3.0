@@ -164,6 +164,7 @@ export function ImportSKUExcelModal({
     }
 
     setIsAnalyzing(true);
+    setSelectedFile(null);
     setPreview(null);
     setImportResults(null);
     setSelectedRows(new Set());
@@ -236,9 +237,12 @@ export function ImportSKUExcelModal({
       toast({
         variant: results.errors > 0 || results.warnings > 0 ? 'warning' : 'success',
         title: 'Aplicação concluída',
-        description: `${results.created} criado(s), ${results.updated} atualizado(s), ${results.skipped} ignorado(s) e ${results.errors} erro(s).`,
+        description: `${results.created} criado(s), ${results.updated} atualizado(s), ${results.skipped} ignorado(s), ${results.errors} erro(s) e ${results.warnings} aviso(s).`,
         duration: 8000,
       });
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (error) {
       toast({
         variant: 'error',

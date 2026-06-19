@@ -496,7 +496,7 @@ export default function VendasShopee() {
 
     let matchModalidade = true;
     if (filtroModalidadeEnvio !== "todos") {
-      const shipmentDetails = (venda as any).shipmentDetails || venda.raw?.shipmentDetails || {};
+      const shipmentDetails = (venda as any).shipmentDetails || (venda.raw as any)?.shipmentDetails || {};
       const carrier = (shipmentDetails.shipping_carrier || venda.shippingStatus || "").toLowerCase();
       
       if (filtroModalidadeEnvio === "me") {

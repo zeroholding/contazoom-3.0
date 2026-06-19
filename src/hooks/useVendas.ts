@@ -43,8 +43,8 @@ export interface Venda {
   ads?: string;
   plataforma: string;
   canal: string;
-  tags?: string[];
-  internalTags?: string[];
+  tags: string[];
+  internalTags: string[];
   raw?: {
     listing_type_id?: string | null;
     tags?: string[];
@@ -52,7 +52,7 @@ export interface Venda {
   } | null;
   paymentDetails?: any;
   shipmentDetails?: any;
-  preco?: number;
+  preco: number;
   shipping?: any;
   rawData?: any;
   atualizadoEm: string;

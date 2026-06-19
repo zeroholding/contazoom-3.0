@@ -155,7 +155,7 @@ export async function GET(req: NextRequest) {
     });
 
     const categoriesSet = new Set<string>();
-    const groupedData = new Map<string, Record<string, number>>();
+    const groupedData = new Map<string, Record<string, any>>();
 
     // Determine granularity
     const diffDays = useRange ? (end.getTime() - start.getTime()) / (1000 * 3600 * 24) : 999;

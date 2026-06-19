@@ -58,7 +58,7 @@ export default function FreteDetailsDropdown({
 
   // Usar a nova lógica inteligente de detecção de subsídio
   const freteFormatado = formatarFreteShopee(freteData);
-  const { isSubsidized, tipoSubsidio } = detectarSubsidioFrete(freteData);
+  const { temSubsidio } = detectarSubsidioFrete(freteData);
 
   const custoVendedorFinal = freteFormatado.freteOriginal - freteFormatado.subsidioShopee - freteFormatado.freteComprador;
   const isCustoZero = custoVendedorFinal <= 0.005;

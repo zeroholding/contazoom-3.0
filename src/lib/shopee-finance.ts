@@ -76,7 +76,7 @@ function firstPositive(...values: unknown[]): number | null {
 }
 
 function sumPositive(...values: unknown[]): number {
-  return roundCurrency(values.reduce((acc, value) => acc + positive(value), 0));
+  return roundCurrency(values.reduce((acc: number, value) => acc + positive(value), 0));
 }
 
 function feeFromNetOrRebate(

@@ -122,7 +122,7 @@ export function useApiCache<T>(
 
   const mutate = useCallback(
     (newData: T | ((prevData: T | null) => T)) => {
-      const updatedData = typeof newData === "function" ? newData(data) : newData;
+      const updatedData = typeof newData === "function" ? (newData as Function)(data) : newData;
       cache.set(key, { data: updatedData, timestamp: Date.now() });
       setData(updatedData);
     },

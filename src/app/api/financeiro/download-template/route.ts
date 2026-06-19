@@ -33,6 +33,7 @@ const TEMPLATES: Record<
       ["Data de Pagamento", "Não", "Preenchida define o status como Pago", "08/06/2026"],
       ["Categoria", "Não", "Se não existir, será criada como DESPESA", "Custos operacionais"],
       ["Forma de Pagamento", "Não", "Se não existir, será criada automaticamente", "PIX"],
+      ["Duplicados", "-", "Registros equivalentes já existentes são ignorados", "-"],
     ],
   },
   contas_receber: {
@@ -54,6 +55,7 @@ const TEMPLATES: Record<
       ["Data de Recebimento", "Não", "Preenchida define o status como Recebido", "14/06/2026"],
       ["Categoria", "Não", "Se não existir, será criada como RECEITA", "Vendas diretas"],
       ["Forma de Pagamento", "Não", "Se não existir, será criada automaticamente", "PIX"],
+      ["Duplicados", "-", "Registros equivalentes já existentes são ignorados", "-"],
     ],
   },
   categorias: {
@@ -64,6 +66,7 @@ const TEMPLATES: Record<
       ["Campo", "Obrigatório", "Regra", "Exemplo"],
       ["Descrição", "Sim", "Nome da categoria", "Marketing"],
       ["Tipo", "Sim", "RECEITA ou DESPESA", "DESPESA"],
+      ["Duplicados", "-", "Categorias equivalentes já existentes são ignoradas", "-"],
     ],
   },
   formas_pagamento: {
@@ -73,6 +76,7 @@ const TEMPLATES: Record<
     instructions: [
       ["Campo", "Obrigatório", "Regra", "Exemplo"],
       ["Nome", "Sim", "Nome único da forma de pagamento", "Cartão empresarial"],
+      ["Duplicados", "-", "Formas equivalentes já existentes são ignoradas", "-"],
     ],
   },
 };
@@ -83,7 +87,14 @@ export async function GET(request: NextRequest) {
     if (!sessionCookie) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
-    await verifySessionToken(sessionCookie);
+    try {
+      await verifySessionToken(sessionCookie);
+    } catch {
+      return NextResponse.json(
+        { error: "Sessão inválida ou expirada." },
+        { status: 401 },
+      );
+    }
 
     const type = new URL(request.url).searchParams.get("type") as FinanceImportType | null;
     const template = type ? TEMPLATES[type] : null;

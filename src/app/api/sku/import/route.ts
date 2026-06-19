@@ -988,7 +988,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const session = await verifySessionToken(sessionCookie);
+    let session: Awaited<ReturnType<typeof verifySessionToken>>;
+    try {
+      session = await verifySessionToken(sessionCookie);
+    } catch {
+      return NextResponse.json(
+        { error: "Sessão inválida ou expirada." },
+        { status: 401 },
+      );
+    }
     const formData = await request.formData();
     const file = formData.get("file");
     const mode = String(formData.get("mode") ?? "preview");
@@ -1014,6 +1022,18 @@ export async function POST(request: NextRequest) {
     }
 
     const selectedRows = parseSelectedRows(selectedRowsPayload);
+    const hasApplicableSelection = analysis.internalRows.some(
+      (row) => row.selectable && selectedRows.has(row.id),
+    );
+    if (!hasApplicableSelection) {
+      return NextResponse.json(
+        {
+          error:
+            "Nenhuma linha selecionada continua disponível para aplicação. Analise a planilha novamente.",
+        },
+        { status: 409 },
+      );
+    }
     const results = await applySkuImport(
       session.sub,
       analysis.internalRows,

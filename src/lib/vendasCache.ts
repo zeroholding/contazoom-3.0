@@ -11,11 +11,11 @@ export function clearVendasCache() {
   // No-op for frontend only
 }
 
-export function loadVendasFromCache() {
+export function loadVendasFromCache(platform: string): { vendas: any[] } | null {
   return null;
 }
 
-export function saveVendasToCache(vendas: any[]) {
+export function saveVendasToCache(platform: string, vendas: any[]) {
   // No-op for frontend only
 }
 

@@ -11,7 +11,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    await verifySessionToken(sessionCookie);
+    try {
+      await verifySessionToken(sessionCookie);
+    } catch {
+      return NextResponse.json(
+        { error: "Sessão inválida ou expirada." },
+        { status: 401 },
+      );
+    }
 
     const headers = [
       "SKU",
@@ -51,7 +58,7 @@ export async function GET(request: NextRequest) {
           ["SKUs Filhos", "Kit", "Códigos separados por vírgula ou ponto e vírgula", "SKU-1, SKU-2"],
           ["Tags", "Não", "Valores separados por vírgula ou ponto e vírgula", "calçados, verão"],
           ["Observações", "Não", "Texto livre", "Custo revisado em junho"],
-          ["Duplicados", "-", "SKUs já cadastrados são ignorados e informados no resultado", "-"],
+          ["SKUs existentes", "-", "Diferenças são exibidas na prévia e atualizadas somente após seleção", "-"],
         ],
         columnWidths: [22, 16, 72, 34],
         autoFilter: "A1:D13",

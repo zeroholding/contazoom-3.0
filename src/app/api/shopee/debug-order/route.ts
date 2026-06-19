@@ -208,7 +208,7 @@ export async function GET(req: NextRequest) {
 
   for (const rawAccount of accounts) {
     const account = await ensureFreshToken(rawAccount, partnerId, partnerKey);
-    const attempt = {
+    const attempt: any = {
       accountId: account.id,
       shopId: account.shop_id,
       shopName: account.shop_name,

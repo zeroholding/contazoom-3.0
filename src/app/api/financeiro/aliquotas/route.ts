@@ -1,61 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
+import {
+  parseTaxPeriod,
+  parseTaxRate,
+  resolveTaxAccount,
+} from "@/lib/aliquota-imposto";
 
 export const runtime = "nodejs";
 
 type AliquotaPayload = {
   conta?: unknown;
+  accountId?: unknown;
+  plataforma?: unknown;
   aliquota?: unknown;
   dataInicio?: unknown;
   dataFim?: unknown;
   descricao?: unknown;
 };
-
-function parseAliquota(value: unknown): number | null {
-  const normalized =
-    typeof value === "string" ? value.trim().replace(",", ".") : value;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100
-    ? parsed
-    : null;
-}
-
-function parsePeriod(dataInicio: unknown, dataFim: unknown) {
-  if (typeof dataInicio !== "string" || typeof dataFim !== "string") {
-    return null;
-  }
-
-  const inicioInformado = new Date(dataInicio);
-  const fimInformado = new Date(dataFim);
-  if (
-    Number.isNaN(inicioInformado.getTime()) ||
-    Number.isNaN(fimInformado.getTime())
-  ) {
-    return null;
-  }
-
-  const inicio = new Date(
-    Date.UTC(
-      inicioInformado.getUTCFullYear(),
-      inicioInformado.getUTCMonth(),
-      1,
-    ),
-  );
-  const fim = new Date(
-    Date.UTC(
-      fimInformado.getUTCFullYear(),
-      fimInformado.getUTCMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    ),
-  );
-
-  return inicio <= fim ? { inicio, fim } : null;
-}
 
 async function getUserId(request: NextRequest): Promise<string | null> {
   const sessionCookie = request.cookies.get("session")?.value;
@@ -67,33 +29,6 @@ async function getUserId(request: NextRequest): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-async function accountBelongsToUser(userId: string, conta: string) {
-  const [meliAccounts, shopeeAccounts] = await Promise.all([
-    prisma.meliAccount.findMany({
-      where: { userId },
-      select: { nickname: true, ml_user_id: true },
-    }),
-    prisma.shopeeAccount.findMany({
-      where: { userId },
-      select: { shop_name: true, shop_id: true },
-    }),
-  ]);
-
-  const normalizedConta = conta.toLocaleLowerCase("pt-BR");
-  return (
-    meliAccounts.some(
-      (account) =>
-        (account.nickname?.trim() || account.ml_user_id.toString())
-          .toLocaleLowerCase("pt-BR") === normalizedConta,
-    ) ||
-    shopeeAccounts.some(
-      (account) =>
-        (account.shop_name?.trim() || account.shop_id)
-          .toLocaleLowerCase("pt-BR") === normalizedConta,
-    )
-  );
 }
 
 export async function GET(request: NextRequest) {
@@ -131,13 +66,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as AliquotaPayload;
-    const conta = typeof body.conta === "string" ? body.conta.trim() : "";
-    const aliquota = parseAliquota(body.aliquota);
-    const periodo = parsePeriod(body.dataInicio, body.dataFim);
+    const account = await resolveTaxAccount(userId, body);
+    const aliquota = parseTaxRate(body.aliquota);
+    const periodo = parseTaxPeriod(body.dataInicio, body.dataFim);
 
-    if (!conta) {
+    if (!account) {
       return NextResponse.json(
-        { error: "Selecione uma conta" },
+        { error: "Selecione uma conta autenticada válida" },
         { status: 400 },
       );
     }
@@ -153,17 +88,16 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (!(await accountBelongsToUser(userId, conta))) {
-      return NextResponse.json(
-        { error: "Conta não encontrada entre as contas autenticadas" },
-        { status: 400 },
-      );
-    }
-
     const overlapping = await prisma.aliquotaImposto.findFirst({
       where: {
         userId,
-        conta: { equals: conta, mode: "insensitive" },
+        OR: [
+          { accountId: account.id, plataforma: account.tipo },
+          {
+            accountId: null,
+            conta: { equals: account.nome, mode: "insensitive" },
+          },
+        ],
         ativo: true,
         dataInicio: { lte: periodo.fim },
         dataFim: { gte: periodo.inicio },
@@ -181,7 +115,9 @@ export async function POST(request: NextRequest) {
     const created = await prisma.aliquotaImposto.create({
       data: {
         userId,
-        conta,
+        conta: account.nome,
+        accountId: account.id,
+        plataforma: account.tipo,
         aliquota,
         dataInicio: periodo.inicio,
         dataFim: periodo.fim,

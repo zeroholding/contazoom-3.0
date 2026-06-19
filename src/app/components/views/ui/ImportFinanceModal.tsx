@@ -120,6 +120,7 @@ export function ImportFinanceModal({
     setSelectedRows(new Set());
     setSelectedFile(null);
     setImportResults(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [activeTab]);
 
   const getTitle = () => {
@@ -170,6 +171,7 @@ export function ImportFinanceModal({
     }
 
     setIsAnalyzing(true);
+    setSelectedFile(null);
     setPreview(null);
     setImportResults(null);
     setSelectedRows(new Set());
@@ -246,6 +248,9 @@ export function ImportFinanceModal({
         description: `${results.importedRows} importado(s), ${results.skippedRows} ignorado(s) e ${results.errorRows} erro(s).`,
         duration: 8000,
       });
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (error) {
       toast({
         variant: 'error',

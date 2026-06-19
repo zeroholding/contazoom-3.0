@@ -54,7 +54,7 @@ export async function enqueueSales(
 
     const queueKey = getQueueKey(userId, accountId);
 
-    return executeRedisCommand(
+    return executeRedisCommand<{ success: boolean; key: string | null; count: number }>(
         async (client: Redis) => {
             // Store sales as JSON array
             const data = JSON.stringify(sales);

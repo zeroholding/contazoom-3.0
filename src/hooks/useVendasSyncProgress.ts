@@ -276,7 +276,7 @@ export function useVendasSyncProgress(): UseVendasSyncProgressReturn {
 
           console.log('[SSE] Download fase completa');
 
-        } else if (progressData.type === "sync_save_start") {
+        } else if (progressData.type === "sync_save_started") {
           // FASE 2: Salvando Redis → PostgreSQL
           if (toastRef.current) {
             try {

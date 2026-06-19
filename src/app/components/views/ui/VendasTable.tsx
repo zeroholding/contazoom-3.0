@@ -59,10 +59,8 @@ export interface Venda {
   shippingStatus?: string;
   shippingId?: string;
   margemContribuicao?: number | null;
-  isMargemReal?: boolean; // true = margem real (com CMV), false = receita líquida
-  
-  // Dados de frete detalhados
-  shipping: {
+  isMargemReal?: boolean;
+  shipping?: {
     mode?: string;
     cost?: number;
     totalAmount?: number;

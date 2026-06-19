@@ -161,7 +161,7 @@ export default function TabelaSKUEditavel({
     });
   };
 
-  const handleInputChange = (field: string, value: string | number) => {
+  const handleInputChange = (field: string, value: string | number | string[]) => {
     setNovoItem(prev => ({ ...prev, [field]: value }));
   };
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
+import { listTaxAccounts } from "@/lib/aliquota-imposto";
 
 export const runtime = "nodejs";
 
@@ -19,38 +19,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [meliAccounts, shopeeAccounts] = await Promise.all([
-      prisma.meliAccount.findMany({
-        where: { userId },
-        select: { id: true, nickname: true, ml_user_id: true },
-        orderBy: { created_at: "desc" },
-      }),
-      prisma.shopeeAccount.findMany({
-        where: { userId },
-        select: { id: true, shop_name: true, shop_id: true },
-        orderBy: { created_at: "desc" },
-      }),
-    ]);
-
-    const contas = [
-      ...meliAccounts.map((account) => ({
-        id: account.id,
-        nome: account.nickname?.trim() || account.ml_user_id.toString(),
-        plataforma: "Mercado Livre",
-        tipo: "meli",
-      })),
-      ...shopeeAccounts.map((account) => ({
-        id: account.id,
-        nome: account.shop_name?.trim() || account.shop_id,
-        plataforma: "Shopee",
-        tipo: "shopee",
-      })),
-    ].sort((a, b) =>
-      `${a.plataforma} ${a.nome}`.localeCompare(
-        `${b.plataforma} ${b.nome}`,
-        "pt-BR",
-      ),
-    );
+    const contas = await listTaxAccounts(userId);
 
     return NextResponse.json({ data: contas });
   } catch (error) {

@@ -336,6 +336,8 @@ export default function VendasMercadolivreV2() {
     frete: true,
     cmv: true,
     margem: true,
+    comprador: true,
+    envioMode: true,
   });
 
   const containerRef = useRef<HTMLDivElement | null>(null);

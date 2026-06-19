@@ -215,6 +215,7 @@ export async function GET(req: NextRequest) {
           : { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli },
         select: {
           orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
+          meliAccountId: true,
           valorTotal: true,
           taxaPlataforma: true,
           frete: true,
@@ -233,6 +234,7 @@ export async function GET(req: NextRequest) {
           : { userId: session.sub, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee },
         select: {
           orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
+          shopeeAccountId: true,
           valorTotal: true,
           taxaPlataforma: true,
           frete: true,
@@ -396,12 +398,18 @@ export async function GET(req: NextRequest) {
     }
 
     // Se não houver alíquotas, pular o cálculo
-    if (aliquotas.length > 0 && useRange) {
+    if (aliquotas.length > 0) {
       // A alíquota pertence a uma conta e a um período. Agrupar somente por mês
       // misturaria contas com percentuais diferentes.
       const faturamentoPorContaMes = new Map<
         string,
-        { mesAno: string; conta: string; faturamento: number }
+        {
+          mesAno: string;
+          conta: string;
+          accountId: string;
+          plataforma: "meli" | "shopee";
+          faturamento: number;
+        }
       >();
       
       for (const v of vendas) {
@@ -412,13 +420,18 @@ export async function GET(req: NextRequest) {
         const mesAno = `${dataVenda.getUTCFullYear()}-${String(dataVenda.getUTCMonth() + 1).padStart(2, '0')}`;
         const conta = v.conta.trim();
         if (!conta) continue;
+        const isMeli = "meliAccountId" in v;
+        const accountId = isMeli ? v.meliAccountId : v.shopeeAccountId;
+        const plataforma = isMeli ? "meli" : "shopee";
         const valorTotal = toNumber(v.valorTotal);
 
-        const key = `${mesAno}\u0000${conta.toLocaleLowerCase("pt-BR")}`;
+        const key = `${mesAno}\u0000${plataforma}\u0000${accountId}`;
         const current = faturamentoPorContaMes.get(key);
         faturamentoPorContaMes.set(key, {
           mesAno,
           conta,
+          accountId,
+          plataforma,
           faturamento: (current?.faturamento || 0) + valorTotal,
         });
       }
@@ -428,7 +441,13 @@ export async function GET(req: NextRequest) {
         Array.from(faturamentoPorContaMes.values()),
       );
 
-      for (const { mesAno, conta, faturamento } of faturamentoPorContaMes.values()) {
+      for (const {
+        mesAno,
+        conta,
+        accountId,
+        plataforma,
+        faturamento,
+      } of faturamentoPorContaMes.values()) {
         const [year, month] = mesAno.split('-').map(Number);
         const primeiroDiaMes = new Date(Date.UTC(year, month - 1, 1));
         const ultimoDiaMes = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
@@ -437,9 +456,14 @@ export async function GET(req: NextRequest) {
         const aliquotaMes = aliquotas.find((aliq: any) => {
           const aliqInicio = new Date(aliq.dataInicio);
           const aliqFim = new Date(aliq.dataFim);
+          const matchesStableAccount =
+            aliq.accountId === accountId && aliq.plataforma === plataforma;
+          const matchesLegacyAccount =
+            !aliq.accountId &&
+            String(aliq.conta).trim().toLocaleLowerCase("pt-BR") === contaNormalizada;
 
           return (
-            String(aliq.conta).trim().toLocaleLowerCase("pt-BR") === contaNormalizada &&
+            (matchesStableAccount || matchesLegacyAccount) &&
             primeiroDiaMes <= aliqFim &&
             ultimoDiaMes >= aliqInicio
           );
@@ -468,8 +492,6 @@ export async function GET(req: NextRequest) {
           aliquotaMediaEfetiva: aliquotaMediaEfetiva.toFixed(2) + '%'
         });
       }
-    } else if (aliquotas.length > 0 && !useRange) {
-      console.log('Alíquotas encontradas mas período não filtrado (todos). Selecione um período específico no dashboard.');
     }
 
     // Trend: faturamento do último mês vs penúltimo mês (TODAS AS QUERIES EM PARALELO)

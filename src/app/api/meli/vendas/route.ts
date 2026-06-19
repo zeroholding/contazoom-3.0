@@ -212,7 +212,7 @@ export async function GET(req: NextRequest) {
           internal_tags: venda.internalTags,
         },
         preco: valorTotal,
-        shipping: freightData,
+        shipping: shipmentData,
         shipment: shipmentData,
         receiverAddress,
       };

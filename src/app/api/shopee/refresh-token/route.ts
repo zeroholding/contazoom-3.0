@@ -45,14 +45,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Usar renovação
-    const updated = await refreshShopeeAccountToken(account);
+    const updated = await refreshShopeeAccountToken(
+      account,
+      process.env.SHOPEE_PARTNER_ID as string,
+      process.env.SHOPEE_PARTNER_KEY as string
+    );
 
     return NextResponse.json({
       success: true,
       message: "Token renovado com sucesso",
       account: {
-        id: updated.id,
-        shop_id: updated.shop_id.toString(),
+        id: account.id,
+        shop_id: account.shop_id.toString(),
         expires_at: updated.expires_at,
       },
     });
