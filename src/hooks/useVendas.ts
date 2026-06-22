@@ -26,6 +26,11 @@ export interface Venda {
   unitario: number;
   taxaPlataforma?: number;
   frete: number;
+  receitaFlex?: number | null;
+  custoFlex?: number | null;
+  freteLiquidoFlex?: number | null;
+  cobrancasFlex?: number | null;
+  flexConfigApplied?: boolean;
   cmv?: number;
   margemContribuicao: number;
   isMargemReal: boolean;
