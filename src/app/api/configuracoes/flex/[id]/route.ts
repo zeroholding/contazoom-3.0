@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
+import { parseFlexConfigValues } from "@/lib/flex-shipping";
 
 export const runtime = "nodejs";
 
@@ -30,12 +31,32 @@ export async function PUT(
       );
     }
 
+    const values = parseFlexConfigValues({
+      custoPorPacote: custoPorPacote ?? existing.custoPorPacote,
+      unidadesPorCobranca:
+        unidadesPorCobranca ?? existing.unidadesPorCobranca,
+    });
+    if (!values) {
+      return NextResponse.json(
+        {
+          error:
+            "Informe um custo maior que zero e unidades por cobrança como inteiro maior ou igual a 1",
+        },
+        { status: 400 },
+      );
+    }
+
     const updated = await prisma.flexShippingConfig.update({
       where: { id },
       data: {
-        ...(custoPorPacote !== undefined && { custoPorPacote }),
-        ...(unidadesPorCobranca !== undefined && { unidadesPorCobranca }),
-        ...(descricao !== undefined && { descricao: descricao || null }),
+        custoPorPacote: values.custoPorPacote,
+        unidadesPorCobranca: values.unidadesPorCobranca,
+        ...(descricao !== undefined && {
+          descricao:
+            typeof descricao === "string" && descricao.trim()
+              ? descricao.trim()
+              : null,
+        }),
       },
     });
 

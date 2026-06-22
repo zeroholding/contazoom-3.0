@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
+import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,13 +107,7 @@ export async function GET(req: NextRequest) {
     const skusUnicos = Array.from(new Set([...vendasMeli, ...vendasShopee].map(v => v.sku).filter(Boolean))) as string[];
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
-    // Buscar configuração de frete Flex ativa
-    const flexConfig = await prisma.flexShippingConfig.findFirst({
-      where: { userId: session.sub, ativo: true },
-      orderBy: { createdAt: "desc" },
-    });
-    const flexCustoPorPacote = flexConfig ? Number(flexConfig.custoPorPacote) : 0;
-    const flexUnidadesPorCobranca = flexConfig ? flexConfig.unidadesPorCobranca : 1;
+    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
 
     // Inicializar objetos de resposta
     const receitaBrutaMeliPorMes: Record<string, number> = {};
@@ -159,18 +155,19 @@ export async function GET(req: NextRequest) {
 
         const vt = toNumber(v.valorTotal);
         const taxa = Math.abs(toNumber(v.taxaPlataforma)); // Taxa sempre como despesa (valor absoluto)
-        let fr = toNumber(v.frete) || 0;
+        const freteOriginal = toNumber(v.frete) || 0;
         const qtd = toNumber(v.quantidade);
         const cmv = (v.sku ? costMap.getCostAtDate(v.sku, d) : 0) * qtd;
 
-        // Deduzir custo Flex se aplicável (somente para Meli)
-        if (plataforma === "meli") {
-          const isFlex = (v as any).logisticType?.toLowerCase() === "flex" || (v as any).logisticType === "self_service";
-          if (isFlex && flexCustoPorPacote > 0) {
-            const custoFlex = Math.ceil(qtd / flexUnidadesPorCobranca) * flexCustoPorPacote;
-            fr = fr - custoFlex;
-          }
-        }
+        const fr =
+          plataforma === "meli"
+            ? calculateMeliFlexShipping({
+                frete: freteOriginal,
+                quantidade: qtd,
+                logisticType: (v as any).logisticType,
+                config: flexConfig,
+              }).freteLiquidoFlex
+            : freteOriginal;
 
         if (plataforma === "meli") {
           receitaBrutaMeliPorMes[mKey] += vt;

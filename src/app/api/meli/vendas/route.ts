@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
+import {
+  calculateMeliFlexShipping,
+  flexConfigVersion,
+} from "@/lib/flex-shipping";
+import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 
 export const runtime = "nodejs";
 
@@ -37,8 +42,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Verificar cache primeiro (TTL de 5 minutos)
-    const cacheKey = createCacheKey("vendas-meli", session.sub);
+    // A versao da configuracao faz parte da chave. Uma alteracao de custo nunca
+    // pode reutilizar uma resposta calculada com a configuracao anterior.
+    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
+    const cacheKey = createCacheKey(
+      "vendas-meli",
+      session.sub,
+      flexConfigVersion(flexConfig),
+    );
     const cachedData = cache.get<any>(cacheKey, 300000);
     
     if (cachedData) {
@@ -95,15 +106,6 @@ export async function GET(req: NextRequest) {
     const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
-    // Buscar configuração de frete Flex ativa do usuário
-    const flexConfig = await prisma.flexShippingConfig.findFirst({
-      where: { userId: session.sub, ativo: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const flexCustoPorPacote = flexConfig ? Number(flexConfig.custoPorPacote) : 0;
-    const flexUnidadesPorCobranca = flexConfig ? flexConfig.unidadesPorCobranca : 1;
-
     const vendasFormatted = vendas.map((venda) => {
       let cmv: number | null = null;
       if (venda.sku) {
@@ -120,17 +122,13 @@ export async function GET(req: NextRequest) {
 
       const frete = Number(venda.frete) || 0;
 
-      // Calcular custo Flex (se aplicável)
-      const isFlex = venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service";
-      let custoFlex = 0;
-      let freteLiquidoFlex = frete;
-      if (isFlex && flexCustoPorPacote > 0) {
-        custoFlex = Math.ceil(venda.quantidade / flexUnidadesPorCobranca) * flexCustoPorPacote;
-        freteLiquidoFlex = roundCurrency(frete - custoFlex);
-      }
-
-      // Usar freteLiquidoFlex na margem quando há config de Flex
-      const freteParaMargem = isFlex && flexCustoPorPacote > 0 ? freteLiquidoFlex : frete;
+      const flex = calculateMeliFlexShipping({
+        frete,
+        quantidade: venda.quantidade,
+        logisticType: venda.logisticType,
+        config: flexConfig,
+      });
+      const freteParaMargem = flex.freteLiquidoFlex;
 
       let margemContribuicao: number;
       let isMargemReal: boolean;
@@ -202,8 +200,11 @@ export async function GET(req: NextRequest) {
           : null,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
-        custoFlex: isFlex ? custoFlex : null,
-        freteLiquidoFlex: isFlex ? freteLiquidoFlex : null,
+        receitaFlex: flex.isFlex ? flex.receitaFlex : null,
+        custoFlex: flex.isFlex ? flex.custoFlex : null,
+        freteLiquidoFlex: flex.isFlex ? flex.freteLiquidoFlex : null,
+        cobrancasFlex: flex.isFlex ? flex.cobrancasFlex : null,
+        flexConfigApplied: flex.configApplied,
         cmv,
         margemContribuicao,
         isMargemReal,
@@ -247,8 +248,8 @@ export async function GET(req: NextRequest) {
       lastSync:
         vendas.length > 0 ? vendas[0].sincronizadoEm.toISOString() : null,
       flexConfig: flexConfig ? {
-        custoPorPacote: flexCustoPorPacote,
-        unidadesPorCobranca: flexUnidadesPorCobranca,
+        custoPorPacote: flexConfig.custoPorPacote,
+        unidadesPorCobranca: flexConfig.unidadesPorCobranca,
         descricao: flexConfig.descricao,
       } : null,
     };

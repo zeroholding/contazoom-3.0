@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
+import { parseFlexConfigValues } from "@/lib/flex-shipping";
 
 export const runtime = "nodejs";
 
@@ -34,36 +35,39 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const { custoPorPacote, unidadesPorCobranca = 1, descricao } = body;
-
-    if (!custoPorPacote || custoPorPacote <= 0) {
-      return NextResponse.json(
-        { error: "Custo por pacote é obrigatório e deve ser maior que zero" },
-        { status: 400 }
-      );
-    }
-
-    if (unidadesPorCobranca < 1) {
-      return NextResponse.json(
-        { error: "Unidades por cobrança deve ser pelo menos 1" },
-        { status: 400 }
-      );
-    }
-
-    // Desativar configs anteriores (global - só 1 ativa por vez)
-    await prisma.flexShippingConfig.updateMany({
-      where: { userId: session.sub, ativo: true },
-      data: { ativo: false },
+    const values = parseFlexConfigValues({
+      custoPorPacote,
+      unidadesPorCobranca,
     });
 
-    // Criar nova config
-    const config = await prisma.flexShippingConfig.create({
-      data: {
-        userId: session.sub,
-        custoPorPacote,
-        unidadesPorCobranca,
-        descricao: descricao || null,
-        ativo: true,
-      },
+    if (!values) {
+      return NextResponse.json(
+        {
+          error:
+            "Informe um custo maior que zero e unidades por cobrança como inteiro maior ou igual a 1",
+        },
+        { status: 400 }
+      );
+    }
+
+    const config = await prisma.$transaction(async (tx) => {
+      await tx.flexShippingConfig.updateMany({
+        where: { userId: session.sub, ativo: true },
+        data: { ativo: false },
+      });
+
+      return tx.flexShippingConfig.create({
+        data: {
+          userId: session.sub,
+          custoPorPacote: values.custoPorPacote,
+          unidadesPorCobranca: values.unidadesPorCobranca,
+          descricao:
+            typeof descricao === "string" && descricao.trim()
+              ? descricao.trim()
+              : null,
+          ativo: true,
+        },
+      });
     });
 
     // Limpar o cache de vendas do Mercado Livre para forçar o recálculo do frete Flex

@@ -8,6 +8,7 @@
     "start": "next start",
     "start:prod": "node server.js",
     "lint": "eslint",
+    "test:flex-shipping": "node --experimental-strip-types scripts/test-flex-shipping.mjs",
     "test:spreadsheet": "node --experimental-strip-types scripts/test-spreadsheet.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy"

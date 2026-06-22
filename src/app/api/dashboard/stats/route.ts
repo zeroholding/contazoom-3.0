@@ -3,6 +3,8 @@ import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere, getStatusWhere } from "@/lib/dashboard-filters";
 import { buildPendingSkuSummary } from "@/lib/sku-pending";
+import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
+import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -316,13 +318,7 @@ export async function GET(req: NextRequest) {
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
     const pendingSkuSummary = await buildPendingSkuSummary(session.sub);
 
-    // Buscar configuração de frete Flex ativa
-    const flexConfig = await prisma.flexShippingConfig.findFirst({
-      where: { userId: session.sub, ativo: true },
-      orderBy: { createdAt: "desc" },
-    });
-    const flexCustoPorPacote = flexConfig ? Number(flexConfig.custoPorPacote) : 0;
-    const flexUnidadesPorCobranca = flexConfig ? flexConfig.unidadesPorCobranca : 1;
+    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
 
     // Aggregate current period
     let faturamentoTotal = 0;
@@ -340,17 +336,20 @@ export async function GET(req: NextRequest) {
     for (const v of vendas) {
       const vt = toNumber(v.valorTotal);
       const tp = toNumber(v.taxaPlataforma);
-      let fr = toNumber(v.frete) || 0;
+      const freteOriginal = toNumber(v.frete) || 0;
       const qtd = toNumber(v.quantidade);
       const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;
 
-      // Deduzir custo Flex se aplicável
-      const isFlex = (v as any).logisticType?.toLowerCase() === "flex" || (v as any).logisticType === "self_service";
-      if (isFlex && flexCustoPorPacote > 0) {
-        const custoFlex = Math.ceil(qtd / flexUnidadesPorCobranca) * flexCustoPorPacote;
-        fr = fr - custoFlex;
-      }
+      const fr =
+        v.plataforma === "Shopee"
+          ? freteOriginal
+          : calculateMeliFlexShipping({
+              frete: freteOriginal,
+              quantidade: qtd,
+              logisticType: (v as any).logisticType,
+              config: flexConfig,
+            }).freteLiquidoFlex;
 
       faturamentoTotal += vt;
       receitaLiquida += vt + tp + fr;

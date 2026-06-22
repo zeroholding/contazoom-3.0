@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
+import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 
 export const runtime = "nodejs";
 
@@ -157,6 +159,7 @@ export async function GET(req: NextRequest) {
     const modalidadeParam = url.searchParams.get("modalidade");
     const accountPlatformParam = url.searchParams.get("accountPlatform"); // 'meli' | 'shopee'
     const accountIdParam = url.searchParams.get("accountId");
+    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
 
     let start: Date;
     let end: Date;
@@ -241,6 +244,7 @@ export async function GET(req: NextRequest) {
         frete: true,
         quantidade: true,
         sku: true,
+        logisticType: true,
       },
       distinct: ['orderId'],
       orderBy: { dataVenda: "asc" },
@@ -262,14 +266,26 @@ export async function GET(req: NextRequest) {
     });
 
     // Consolidar vendas baseado no filtro de canal
-    let vendas;
+    const vendasMeliNormalizadas = vendasMeli.map((venda) => ({
+      ...venda,
+      marketplace: "meli" as const,
+    }));
+    const vendasShopeeNormalizadas = vendasShopee.map((venda) => ({
+      ...venda,
+      logisticType: null,
+      marketplace: "shopee" as const,
+    }));
+    let vendas: Array<
+      | (typeof vendasMeliNormalizadas)[number]
+      | (typeof vendasShopeeNormalizadas)[number]
+    >;
     if (canalParam === 'mercado_livre') {
-      vendas = vendasMeli;
+      vendas = vendasMeliNormalizadas;
     } else if (canalParam === 'shopee') {
-      vendas = vendasShopee;
+      vendas = vendasShopeeNormalizadas;
     } else {
       // Se 'todos' ou não especificado, combinar ambas
-      vendas = [...vendasMeli, ...vendasShopee];
+      vendas = [...vendasMeliNormalizadas, ...vendasShopeeNormalizadas];
     }
 
     // Se não há vendas, retornar array vazio
@@ -324,13 +340,21 @@ export async function GET(req: NextRequest) {
       for (const venda of vendasPeriodo) {
         const vt = toNumber(venda.valorTotal);
         const tp = Math.abs(toNumber(venda.taxaPlataforma));
-        const fr = Math.abs(toNumber(venda.frete));
         const qtd = toNumber(venda.quantidade);
+        const freteLiquido = venda.marketplace === "meli"
+          ? calculateMeliFlexShipping({
+              frete: venda.frete,
+              quantidade: venda.quantidade,
+              logisticType: venda.logisticType,
+              config: flexConfig,
+            }).freteLiquidoFlex
+          : toNumber(venda.frete);
+        const despesaFrete = -freteLiquido;
         const custoUnit = venda.sku ? costMap.getCostAtDate(venda.sku, venda.dataVenda) : 0;
 
         faturamento += vt;
         taxaPlataforma += tp;
-        frete += fr;
+        frete += despesaFrete;
         cmv += custoUnit * qtd;
       }
 

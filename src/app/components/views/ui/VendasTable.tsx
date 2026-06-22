@@ -24,6 +24,11 @@ export interface Venda {
   taxaPlataforma?: number | null; // taxas - Taxa da plataforma ML
   frete: number; // frete - Valor do frete
   freteAjuste?: number | null; // frete_ajuste - Ajuste de frete calculado pelo banco
+  receitaFlex?: number | null; // Repasse bruto recebido do Mercado Livre
+  custoFlex?: number | null; // Custo calculado da transportadora Flex
+  freteLiquidoFlex?: number | null; // Repasse ML menos custo da transportadora
+  cobrancasFlex?: number | null; // Quantidade de cobranças/pacotes calculados
+  flexConfigApplied?: boolean; // Indica que havia configuração ativa no cálculo
   cmv?: number | null; // cmv - Custo da Mercadoria Vendida
   
   // 3. Dados do Produto
@@ -400,6 +405,12 @@ export default function VendasTable({
               
                 const dateParts = formatDateTime(venda.dataVenda);
                 const isShopee = venda.plataforma === "Shopee" || venda.canal === "SP" || venda.canal === "Shopee";
+                const hasFlexDetails = !isShopee
+                  && (venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service")
+                  && venda.flexConfigApplied === true
+                  && venda.freteLiquidoFlex !== undefined
+                  && venda.freteLiquidoFlex !== null;
+                const freteExibido = hasFlexDetails ? venda.freteLiquidoFlex! : venda.frete;
                 
                 return (
                   <tr key={venda.id} className="premium-row">
@@ -576,10 +587,10 @@ export default function VendasTable({
                           {venda.frete !== undefined && (
                             <div className="flex items-center gap-1">
                               <span className="text-gray-400">Frete:</span>
-                              {isShopee || (venda.plataforma === "Mercado Livre" && (venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service") && (venda as any).custoFlex !== undefined && (venda as any).custoFlex !== null) ? (
-                                <FreteDetailsDropdown venda={venda as any}>
-                                  <span className={`font-semibold cursor-pointer hover:underline ${(venda as any).freteLiquidoFlex !== undefined ? ((venda as any).freteLiquidoFlex >= 0 ? "frete-positivo" : "frete-negativo") : (venda.frete >= 0 ? "frete-positivo" : "frete-negativo")}`}>
-                                    {formatCurrency((venda as any).freteLiquidoFlex !== undefined ? (venda as any).freteLiquidoFlex : venda.frete)}
+                              {isShopee || hasFlexDetails ? (
+                                <FreteDetailsDropdown venda={venda}>
+                                  <span className={`font-semibold cursor-pointer hover:underline ${freteExibido >= 0 ? "frete-positivo" : "frete-negativo"}`}>
+                                    {formatCurrency(freteExibido)}
                                   </span>
                                 </FreteDetailsDropdown>
                               ) : (

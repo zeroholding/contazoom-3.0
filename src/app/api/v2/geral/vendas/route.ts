@@ -4,6 +4,8 @@ import "@/lib/metadata";
 import { assertSessionToken } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 import { calculateShopeeFinancials } from "@/lib/shopee-finance";
+import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
+import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 
 export const runtime = "nodejs";
 
@@ -49,6 +51,7 @@ export async function GET(req: NextRequest) {
     : Prisma.empty;
 
   try {
+    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
     // Busca paginada unindo as duas tabelas
     const vendas: any[] = await prisma.$queryRaw`
       SELECT 
@@ -189,14 +192,28 @@ export async function GET(req: NextRequest) {
       const frete = shopeeFinancials
         ? shopeeFinancials.freight
         : Number(venda.frete);
+      const flex =
+        venda.plataforma === "Mercado Livre"
+          ? calculateMeliFlexShipping({
+              frete,
+              quantidade: venda.quantidade,
+              logisticType: venda.logisticType,
+              config: flexConfig,
+            })
+          : null;
+      const freteParaMargem = flex?.freteLiquidoFlex ?? frete;
 
       let margemContribuicao: number;
       let isMargemReal: boolean;
       if (cmv !== null && cmv > 0) {
-        margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + frete - cmv);
+        margemContribuicao = roundCurrency(
+          valorTotal + taxaPlataforma + freteParaMargem - cmv,
+        );
         isMargemReal = true;
       } else {
-        margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + frete);
+        margemContribuicao = roundCurrency(
+          valorTotal + taxaPlataforma + freteParaMargem,
+        );
         isMargemReal = false;
       }
 
@@ -219,6 +236,11 @@ export async function GET(req: NextRequest) {
             : null,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
+        receitaFlex: flex?.isFlex ? flex.receitaFlex : null,
+        custoFlex: flex?.isFlex ? flex.custoFlex : null,
+        freteLiquidoFlex: flex?.isFlex ? flex.freteLiquidoFlex : null,
+        cobrancasFlex: flex?.isFlex ? flex.cobrancasFlex : null,
+        flexConfigApplied: flex?.configApplied ?? false,
         cmv,
         margemContribuicao,
         isMargemReal,

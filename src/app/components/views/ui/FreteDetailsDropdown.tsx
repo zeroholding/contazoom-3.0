@@ -13,9 +13,12 @@ interface FreteDetailsDropdownProps {
   venda: {
     frete: number;
     plataforma: string;
-    logisticType?: string;
-    custoFlex?: number;
-    freteLiquidoFlex?: number;
+    logisticType?: string | null;
+    receitaFlex?: number | null;
+    custoFlex?: number | null;
+    freteLiquidoFlex?: number | null;
+    cobrancasFlex?: number | null;
+    flexConfigApplied?: boolean;
     shipmentDetails?: any;
     paymentDetails?: any;
   };
@@ -38,7 +41,9 @@ export default function FreteDetailsDropdown({
   });
 
   const isShopee = venda.plataforma === "Shopee";
-  const isMeliFlex = venda.plataforma === "Mercado Livre" && (venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service") && venda.custoFlex !== undefined && venda.custoFlex !== null;
+  const isMeliFlex = venda.plataforma === "Mercado Livre"
+    && (venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service")
+    && venda.flexConfigApplied === true;
 
   if (!isShopee && !isMeliFlex) {
     return <>{children}</>;
@@ -190,10 +195,11 @@ function ShopeeFreteDetails({ venda }: { venda: any }) {
   );
 }
 
-function MeliFlexFreteDetails({ venda }: { venda: any }) {
-  const receitaML = venda.frete || 0;
-  const custoFlex = venda.custoFlex || 0;
-  const freteLiquidoFlex = venda.freteLiquidoFlex || 0;
+function MeliFlexFreteDetails({ venda }: { venda: FreteDetailsDropdownProps["venda"] }) {
+  const receitaML = venda.receitaFlex ?? venda.frete ?? 0;
+  const custoFlex = venda.custoFlex ?? 0;
+  const freteLiquidoFlex = venda.freteLiquidoFlex ?? receitaML;
+  const cobrancasFlex = venda.cobrancasFlex ?? 0;
   const freteNegativo = freteLiquidoFlex < 0;
 
   return (
@@ -217,6 +223,11 @@ function MeliFlexFreteDetails({ venda }: { venda: any }) {
           <div className="text-sm font-semibold text-orange-600">
             -{formatCurrency(custoFlex)}
           </div>
+          {cobrancasFlex > 0 && (
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              {cobrancasFlex} {cobrancasFlex === 1 ? "cobrança" : "cobranças"} da transportadora
+            </div>
+          )}
         </div>
       )}
 

@@ -6,6 +6,11 @@ import {
   calculateShopeeFinancials,
   SHOPEE_FINANCIAL_RULE_VERSION,
 } from "@/lib/shopee-finance";
+import {
+  calculateMeliFlexShipping,
+  flexConfigVersion,
+} from "@/lib/flex-shipping";
+import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 
 export const runtime = "nodejs";
 
@@ -38,11 +43,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Verificar cache primeiro (TTL de 5 minutos)
+    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
     const cacheKey = createCacheKey(
       "vendas-geral",
       session.sub,
       SHOPEE_FINANCIAL_RULE_VERSION,
+      flexConfigVersion(flexConfig),
     );
     const cachedData = cache.get<any>(cacheKey, 300000);
     
@@ -178,16 +184,24 @@ export async function GET(req: NextRequest) {
         ? Number(venda.taxaPlataforma)
         : 0;
       const frete = Number(venda.frete);
+      const flex = calculateMeliFlexShipping({
+        frete,
+        quantidade: venda.quantidade,
+        logisticType: venda.logisticType,
+        config: flexConfig,
+      });
 
       let margemContribuicao: number;
       let isMargemReal: boolean;
       if (cmv !== null && cmv > 0) {
         margemContribuicao = roundCurrency(
-          valorTotal + taxaPlataforma + frete - cmv,
+          valorTotal + taxaPlataforma + flex.freteLiquidoFlex - cmv,
         );
         isMargemReal = true;
       } else {
-        margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + frete);
+        margemContribuicao = roundCurrency(
+          valorTotal + taxaPlataforma + flex.freteLiquidoFlex,
+        );
         isMargemReal = false;
       }
 
@@ -335,6 +349,11 @@ export async function GET(req: NextRequest) {
         taxaPlataforma: financials.platformFee,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
+        receitaFlex: null,
+        custoFlex: null,
+        freteLiquidoFlex: null,
+        cobrancasFlex: null,
+        flexConfigApplied: false,
         cmv,
         margemContribuicao,
         isMargemReal,
@@ -445,6 +464,7 @@ export async function GET(req: NextRequest) {
       total: vendasDeduplicadas.length,
       lastSync: ultimaSyncGeral?.toISOString() || null,
       financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
+      flexConfigVersion: flexConfigVersion(flexConfig),
     };
 
     // Armazenar no cache
