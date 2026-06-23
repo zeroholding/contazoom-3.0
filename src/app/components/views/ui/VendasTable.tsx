@@ -569,7 +569,8 @@ export default function VendasTable({
                             </div>
                           </FinanceiroDetailsDropdown>
                         ) : (
-                          <div className="font-bold text-emerald-600" title="Receita Líquida (Venda - Taxas - Frete)">
+                          <div className="font-bold text-emerald-600 flex items-center gap-1" title="Receita Líquida (Venda - Taxas - Frete)">
+                            <span className="text-[10px] text-emerald-700/80 uppercase font-bold tracking-tight">Rec. Líq:</span>
                             {formatCurrency(venda.valorTotal + (venda.taxaPlataforma || 0) + (freteExibido || 0))}
                           </div>
                         )}
