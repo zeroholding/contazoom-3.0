@@ -569,10 +569,12 @@ export default function VendasTable({
                             </div>
                           </FinanceiroDetailsDropdown>
                         ) : (
-                          <div className="font-bold text-emerald-600 flex items-center gap-1" title="Receita Líquida (Venda - Taxas - Frete)">
-                            <span className="text-[10px] text-emerald-700/80 uppercase font-bold tracking-tight">Rec. Líq:</span>
-                            {formatCurrency(venda.valorTotal + (venda.taxaPlataforma || 0) + (freteExibido || 0))}
-                          </div>
+                          <ReceitaLiquidaDetailsDropdown venda={venda} freteExibido={freteExibido}>
+                            <div className="font-bold text-emerald-600 flex items-center gap-1" title="Clique para ver detalhamento de valores">
+                              <span className="text-[10px] text-emerald-700/80 uppercase font-bold tracking-tight">Rec. Líq:</span>
+                              {formatCurrency(venda.valorTotal + (venda.taxaPlataforma || 0) + (freteExibido || 0))}
+                            </div>
+                          </ReceitaLiquidaDetailsDropdown>
                         )}
                         <div className="text-[11px] text-gray-500 font-medium mt-0.5 flex flex-col gap-0.5 leading-tight">
                           {!isShopee && (
