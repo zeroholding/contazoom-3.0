@@ -6,6 +6,7 @@ import { classifyFrete, formatCurrency, formatarFreteShopee } from "@/lib/frete"
 import FreteDetailsDropdown from "./FreteDetailsDropdown";
 import TaxaDetailsDropdown from "./TaxaDetailsDropdown";
 import FinanceiroDetailsDropdown from "./FinanceiroDetailsDropdown";
+import ReceitaLiquidaDetailsDropdown from "./ReceitaLiquidaDetailsDropdown";
 import { PlataformaBadge } from "@/components/ui/PlataformaBadge";
 
 // Tipos para as vendas conforme especificação da API ML
@@ -569,47 +570,43 @@ export default function VendasTable({
                             </div>
                           </FinanceiroDetailsDropdown>
                         ) : (
-                          <div className="font-bold text-emerald-600 flex items-center gap-1" title="Receita Líquida (Venda - Taxas - Frete)">
-                            <span className="text-[10px] text-emerald-700/80 uppercase font-bold tracking-tight">Rec. Líq:</span>
-                            {formatCurrency(venda.valorTotal + (venda.taxaPlataforma || 0) + (freteExibido || 0))}
+                          <ReceitaLiquidaDetailsDropdown venda={venda} freteExibido={freteExibido}>
+                            <div className="font-bold text-emerald-600 flex items-center gap-1" title="Clique para ver detalhamento de valores">
+                              <span className="text-[10px] text-emerald-700/80 uppercase font-bold tracking-tight">Rec. Líq:</span>
+                              {formatCurrency(venda.valorTotal + (venda.taxaPlataforma || 0) + (freteExibido || 0))}
+                            </div>
+                          </ReceitaLiquidaDetailsDropdown>
+                        )}
+                        {isShopee && (
+                          <div className="text-[11px] text-gray-500 font-medium mt-0.5 flex flex-col gap-0.5 leading-tight">
+                            {venda.taxaPlataforma ? (
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-400">Taxa:</span>
+                                <TaxaDetailsDropdown venda={venda}>
+                                  <span className="negative-value font-semibold cursor-pointer hover:underline">
+                                    {formatCurrency(venda.taxaPlataforma)}
+                                  </span>
+                                </TaxaDetailsDropdown>
+                              </div>
+                            ) : null}
+                            {venda.frete !== undefined && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-gray-400">Frete:</span>
+                                {isShopee || hasFlexDetails ? (
+                                  <FreteDetailsDropdown venda={venda}>
+                                    <span className={`font-semibold cursor-pointer hover:underline ${freteExibido >= 0 ? "frete-positivo" : "frete-negativo"}`}>
+                                      {formatCurrency(freteExibido)}
+                                    </span>
+                                  </FreteDetailsDropdown>
+                                ) : (
+                                  <span className={`font-semibold ${venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}`}>
+                                    {formatCurrency(venda.frete)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
-                        <div className="text-[11px] text-gray-500 font-medium mt-0.5 flex flex-col gap-0.5 leading-tight">
-                          {!isShopee && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-400">Bruto:</span>
-                              <span className="font-semibold text-gray-700">
-                                {formatCurrency(venda.valorTotal)}
-                              </span>
-                            </div>
-                          )}
-                          {venda.taxaPlataforma ? (
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-400">Taxa:</span>
-                              <TaxaDetailsDropdown venda={venda}>
-                                <span className="negative-value font-semibold cursor-pointer hover:underline">
-                                  {formatCurrency(venda.taxaPlataforma)}
-                                </span>
-                              </TaxaDetailsDropdown>
-                            </div>
-                          ) : null}
-                          {venda.frete !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-400">Frete:</span>
-                              {isShopee || hasFlexDetails ? (
-                                <FreteDetailsDropdown venda={venda}>
-                                  <span className={`font-semibold cursor-pointer hover:underline ${freteExibido >= 0 ? "frete-positivo" : "frete-negativo"}`}>
-                                    {formatCurrency(freteExibido)}
-                                  </span>
-                                </FreteDetailsDropdown>
-                              ) : (
-                                <span className={`font-semibold ${venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}`}>
-                                  {formatCurrency(venda.frete)}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
                       </div>
                     </td>
 
