@@ -6,6 +6,7 @@ import { classifyFrete, formatCurrency, formatarFreteShopee } from "@/lib/frete"
 import FreteDetailsDropdown from "./FreteDetailsDropdown";
 import TaxaDetailsDropdown from "./TaxaDetailsDropdown";
 import FinanceiroDetailsDropdown from "./FinanceiroDetailsDropdown";
+import ReceitaLiquidaDetailsDropdown from "./ReceitaLiquidaDetailsDropdown";
 import { PlataformaBadge } from "@/components/ui/PlataformaBadge";
 
 // Tipos para as vendas conforme especificação da API ML
