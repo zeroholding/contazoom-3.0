@@ -51,7 +51,7 @@ const HeaderVendasShopee = ({
   const [showInfoDropdown, setShowInfoDropdown] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
 
-  // Estados para sincronizaÃ§Ã£o automÃ¡tica
+  // Estados para sincronização automática
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(false);
   const [newOrdersCount, setNewOrdersCount] = useState<number>(0);
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
@@ -84,7 +84,7 @@ const HeaderVendasShopee = ({
     }
   };
 
-  // ConfiguraÃ§Ãµes (compartilhada)
+  // Configurações (compartilhada)
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -96,7 +96,7 @@ const HeaderVendasShopee = ({
           setAutoSyncEnabled(data.autoSyncEnabled);
         }
       } catch (error) {
-        console.error("Erro ao carregar configuraÃ§Ãµes:", error);
+        console.error("Erro ao carregar configurações:", error);
       } finally {
         setIsLoadingSettings(false);
       }
@@ -104,7 +104,7 @@ const HeaderVendasShopee = ({
     loadSettings();
   }, []);
 
-  // NotificaÃ§Ãµes
+  // Notificações
   useEffect(() => {
     const loadNotifications = async () => {
       try {
@@ -121,7 +121,7 @@ const HeaderVendasShopee = ({
           }
         }
       } catch (error) {
-        console.error("Erro ao carregar notificaÃ§Ãµes:", error);
+        console.error("Erro ao carregar notificações:", error);
       }
     };
     loadNotifications();
@@ -139,7 +139,7 @@ const HeaderVendasShopee = ({
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(
-          `Erro ao atualizar configuraÃ§Ãµes: ${errorData.error || res.statusText}`,
+          `Erro ao atualizar configurações: ${errorData.error || res.statusText}`,
         );
       }
       await res.json();
@@ -153,8 +153,8 @@ const HeaderVendasShopee = ({
       console.error("Erro ao alternar auto-sync:", error);
       toast({
         variant: "error",
-        title: "Erro ao atualizar configuraÃ§Ãµes",
-        description: `Erro ao atualizar configuraÃ§Ãµes: ${
+        title: "Erro ao atualizar configurações",
+        description: `Erro ao atualizar configurações: ${
           error instanceof Error ? error.message : "Erro desconhecido"
         }. Tente novamente.`,
       });
@@ -166,7 +166,7 @@ const HeaderVendasShopee = ({
     fetch("/api/notifications", {
       method: "DELETE",
       credentials: "include",
-    }).catch(err => console.error("Erro ao marcar notificaÃ§Ãµes:", err));
+    }).catch(err => console.error("Erro ao marcar notificações:", err));
     setNewOrdersCount(0);
   };
 
@@ -212,7 +212,7 @@ const HeaderVendasShopee = ({
           <h1 className="text-2xl font-semibold text-gray-900">
             Vendas Shopee
           </h1>
-          {/* BotÃ£o para Dashboard */}
+          {/* Botão para Dashboard */}
           <button
             onClick={() => router.push('/dashboard')}
             className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
@@ -231,7 +231,7 @@ const HeaderVendasShopee = ({
                   ? "bg-gray-200 ring-2 ring-gray-300 scale-105"
                   : "bg-gray-100 hover:bg-gray-200"
               }`}
-              title="InformaÃ§Ãµes da sincronizaÃ§Ã£o"
+              title="Informações da sincronização"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -270,7 +270,7 @@ const HeaderVendasShopee = ({
 
                     {lastSyncedAt && (
                       <div className="pt-2 border-t border-gray-100/80">
-                        <p className="text-xs text-gray-600 mb-1">Ãšltima sincronizaÃ§Ã£o:</p>
+                        <p className="text-xs text-gray-600 mb-1">Última sincronização:</p>
                         <p className="text-xs font-medium text-gray-800">
                           {formatDate(lastSyncedAt)} Ã s {new Date(lastSyncedAt).toLocaleTimeString("pt-BR")}
                         </p>
@@ -287,7 +287,7 @@ const HeaderVendasShopee = ({
         </p>
       </div>
 
-      {/* BotÃ£o de SincronizaÃ§Ã£o */}
+      {/* Botão de Sincronização */}
       <button
         onClick={handleOpenSyncModal}
         className="inline-flex items-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
@@ -346,7 +346,7 @@ const HeaderVendasShopee = ({
           )}
       </button>
 
-      {/* Modal de SincronizaÃ§Ã£o */}
+      {/* Modal de Sincronização */}
       <ModalSyncVendas
         isOpen={showSyncModal}
         onClose={() => setShowSyncModal(false)}

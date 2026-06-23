@@ -45,7 +45,7 @@ export function resolveMeliCookieSettings(req: NextRequest) {
 }
 
 export async function refreshMeliAccountToken(account: MeliAccount): Promise<MeliAccount> {
-  // Se o token ainda Ã© vÃ¡lido por pelo menos 1 hora, nÃ£o precisa renovar
+  // Se o token ainda é válido por pelo menos 1 hora, não precisa renovar
   const now = new Date();
   const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
   
