@@ -3,6 +3,8 @@ import prisma from "@/lib/prisma";
 import "@/lib/metadata";
 import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
+import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
+import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import {
   DataVendaDTO,
   VendaSearcherValidationDTO,
@@ -157,6 +159,8 @@ async function processVendas(
 
   const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
   const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
+  
+  const flexConfig = await loadActiveFlexShippingConfig(session.sub);
 
   const vendasFormatted = vendas.map((venda) => {
     let cmv: number | null = null;
@@ -171,9 +175,14 @@ async function processVendas(
     const taxaPlataforma = venda.taxaPlataforma
       ? Number(venda.taxaPlataforma)
       : 0;
-    let freteRecalculado = Number(venda.frete);
-
-    const frete = freteRecalculado;
+      
+    const frete = Number(venda.frete);
+    const flex = calculateMeliFlexShipping({
+      frete,
+      quantidade: venda.quantidade,
+      logisticType: venda.logisticType,
+      config: flexConfig,
+    });
 
     const rawData =
       venda.rawData && typeof venda.rawData === "object"
@@ -189,11 +198,11 @@ async function processVendas(
     let isMargemReal: boolean;
     if (cmv !== null && cmv > 0) {
       margemContribuicao = roundCurrency(
-        valorTotal + taxaPlataforma + frete - cmv,
+        valorTotal + taxaPlataforma + flex.freteLiquidoFlex - cmv,
       );
       isMargemReal = true;
     } else {
-      margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + frete);
+      margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + flex.freteLiquidoFlex);
       isMargemReal = false;
     }
 
@@ -251,6 +260,11 @@ async function processVendas(
         : null,
       frete,
       freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
+      receitaFlex: flex.isFlex ? flex.receitaFlex : null,
+      custoFlex: flex.isFlex ? flex.custoFlex : null,
+      freteLiquidoFlex: flex.isFlex ? flex.freteLiquidoFlex : null,
+      cobrancasFlex: flex.isFlex ? flex.cobrancasFlex : null,
+      flexConfigApplied: flex.configApplied,
       cmv,
       margemContribuicao,
       isMargemReal,
@@ -290,13 +304,23 @@ async function processVendas(
 
   return {
     items: vendasFormatted,
+    pagination: buildPaginationMeta(
+      options?.take ?? 10,
+      options?.skip ?? 0,
+      totalItemsCount,
+    ),
     count: {
       totalItems: totalItemsCount,
       all: allCount,
       paid: paidCount,
-      cancelled: cancelledCount
+      cancelled: cancelledCount,
     },
     lastSync: vendas.length > 0 ? vendas[0].sincronizadoEm.toISOString() : null,
+    flexConfig: flexConfig ? {
+      custoPorPacote: flexConfig.custoPorPacote,
+      unidadesPorCobranca: flexConfig.unidadesPorCobranca,
+      descricao: flexConfig.descricao,
+    } : null,
   };
 }
 
