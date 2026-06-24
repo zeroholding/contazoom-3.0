@@ -11,6 +11,7 @@ import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 
 interface FreteDetailsDropdownProps {
   venda: {
+    valorTotal: number;
     frete: number;
     plataforma: string;
     logisticType?: string | null;
@@ -146,8 +147,13 @@ function ShopeeFreteDetails({ venda }: { venda: any }) {
           <div className="text-xs font-medium text-gray-700">
             Custo Real Total do Frete
           </div>
-          <div className="text-sm font-semibold text-blue-600">
+          <div className="text-sm font-semibold text-blue-600 flex items-center gap-1">
             {formatCurrency(freteFormatado.freteOriginal)}
+            {venda.valorTotal > 0 && (
+              <span className="text-[10px] text-gray-400 font-normal">
+                ({((Math.abs(freteFormatado.freteOriginal) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+              </span>
+            )}
           </div>
         </div>
 
@@ -158,8 +164,13 @@ function ShopeeFreteDetails({ venda }: { venda: any }) {
               <div className="text-xs font-medium text-gray-700">
                 Taxa de frete paga pelo comprador
               </div>
-              <div className="text-sm font-semibold text-purple-600">
+              <div className="text-sm font-semibold text-purple-600 flex items-center gap-1">
                 {formatCurrency(freteFormatado.freteComprador)}
+                {venda.valorTotal > 0 && (
+                  <span className="text-[10px] text-gray-400 font-normal">
+                    ({((Math.abs(freteFormatado.freteComprador) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -170,8 +181,13 @@ function ShopeeFreteDetails({ venda }: { venda: any }) {
               <div className="text-xs font-medium text-gray-700">
                 Taxa de Frete Paga pela Shopee para Você
               </div>
-              <div className="text-sm font-semibold text-green-600">
+              <div className="text-sm font-semibold text-green-600 flex items-center gap-1">
                 -{formatCurrency(freteFormatado.subsidioShopee)}
+                {venda.valorTotal > 0 && (
+                  <span className="text-[10px] text-gray-400 font-normal">
+                    ({((Math.abs(freteFormatado.subsidioShopee) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -184,9 +200,14 @@ function ShopeeFreteDetails({ venda }: { venda: any }) {
               Custo Líquido para o Vendedor:
             </span>
             <span
-              className={`text-sm font-bold ${isCustoZero ? 'text-green-600' : 'text-red-600'}`}
+              className={`text-sm font-bold flex items-center gap-1 ${isCustoZero ? 'text-green-600' : 'text-red-600'}`}
             >
               {isCustoZero ? formatCurrency(0) : formatCurrency(-custoVendedorFinal)}
+              {venda.valorTotal > 0 && !isCustoZero && (
+                <span className="text-[10px] text-gray-400 font-normal">
+                  ({((Math.abs(custoVendedorFinal) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                </span>
+              )}
             </span>
           </div>
         </div>
@@ -209,8 +230,13 @@ function MeliFlexFreteDetails({ venda }: { venda: FreteDetailsDropdownProps["ven
         <div className="text-xs font-medium text-gray-700">
           Repasse/Receita Mercado Livre
         </div>
-        <div className="text-sm font-semibold text-blue-600">
+        <div className="text-sm font-semibold text-blue-600 flex items-center gap-1">
           +{formatCurrency(receitaML)}
+          {venda.valorTotal > 0 && (
+            <span className="text-[10px] text-gray-400 font-normal">
+              ({((Math.abs(receitaML) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+            </span>
+          )}
         </div>
       </div>
 
@@ -220,8 +246,13 @@ function MeliFlexFreteDetails({ venda }: { venda: FreteDetailsDropdownProps["ven
           <div className="text-xs font-medium text-gray-700">
             Custo Transportadora Flex
           </div>
-          <div className="text-sm font-semibold text-orange-600">
+          <div className="text-sm font-semibold text-orange-600 flex items-center gap-1">
             -{formatCurrency(custoFlex)}
+            {venda.valorTotal > 0 && (
+              <span className="text-[10px] text-gray-400 font-normal">
+                ({((Math.abs(custoFlex) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+              </span>
+            )}
           </div>
           {cobrancasFlex > 0 && (
             <div className="text-[11px] text-gray-500 mt-0.5">
@@ -238,9 +269,14 @@ function MeliFlexFreteDetails({ venda }: { venda: FreteDetailsDropdownProps["ven
             Resultado Líquido do Frete:
           </span>
           <span
-            className={`text-sm font-bold ${freteNegativo ? 'text-red-600' : 'text-green-600'}`}
+            className={`text-sm font-bold flex items-center gap-1 ${freteNegativo ? 'text-red-600' : 'text-green-600'}`}
           >
             {formatCurrency(freteLiquidoFlex)}
+            {venda.valorTotal > 0 && (
+              <span className="text-[10px] text-gray-400 font-normal">
+                ({((Math.abs(freteLiquidoFlex) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+              </span>
+            )}
           </span>
         </div>
       </div>

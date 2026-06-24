@@ -76,8 +76,9 @@ export default function ReceitaLiquidaDetailsDropdown({
                 <div className="text-xs font-medium text-gray-700">
                   Valor Bruto
                 </div>
-                <div className="text-sm font-semibold text-emerald-600">
+                <div className="text-sm font-semibold text-emerald-600 flex items-center gap-1">
                   {formatCurrency(venda.valorTotal)}
+                  <span className="text-[10px] text-gray-400 font-normal">(100,0%)</span>
                 </div>
               </div>
 
@@ -86,8 +87,13 @@ export default function ReceitaLiquidaDetailsDropdown({
                 <div className="text-xs font-medium text-gray-700">
                   Taxa Plataforma
                 </div>
-                <div className="text-sm font-semibold text-orange-600">
+                <div className="text-sm font-semibold text-orange-600 flex items-center gap-1">
                   {formatCurrency(venda.taxaPlataforma || 0)}
+                  {venda.valorTotal > 0 && (
+                    <span className="text-[10px] text-gray-400 font-normal">
+                      ({((Math.abs(venda.taxaPlataforma || 0) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -96,8 +102,13 @@ export default function ReceitaLiquidaDetailsDropdown({
                 <div className="text-xs font-medium text-gray-700">
                   Frete
                 </div>
-                <div className="text-sm font-semibold text-blue-600">
+                <div className="text-sm font-semibold text-blue-600 flex items-center gap-1">
                   {formatCurrency(freteExibido || 0)}
+                  {venda.valorTotal > 0 && (
+                    <span className="text-[10px] text-gray-400 font-normal">
+                      ({((Math.abs(freteExibido || 0) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -107,8 +118,13 @@ export default function ReceitaLiquidaDetailsDropdown({
                   <div className="text-xs font-bold text-gray-900">
                     Receita Líquida
                   </div>
-                  <div className="text-sm font-bold text-emerald-600">
+                  <div className="text-sm font-bold text-emerald-600 flex items-center gap-1">
                     {formatCurrency(receitaLiquida)}
+                    {venda.valorTotal > 0 && (
+                      <span className="text-[10px] text-gray-400 font-normal">
+                        ({((receitaLiquida / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

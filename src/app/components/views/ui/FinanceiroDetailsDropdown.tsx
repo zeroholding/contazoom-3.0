@@ -175,8 +175,13 @@ export default function FinanceiroDetailsDropdown({
                   <div className="text-xs font-medium text-gray-700">
                     Valor bruto dos produtos
                   </div>
-                  <div className="text-sm font-semibold text-gray-900">
+                  <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
                     {formatCurrency(details.grossSubtotal)}
+                    {venda.valorTotal > 0 && (
+                      <span className="text-[10px] text-gray-400 font-normal">
+                        ({((Math.abs(details.grossSubtotal) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -185,8 +190,13 @@ export default function FinanceiroDetailsDropdown({
                     <div className="text-xs font-medium text-gray-700">
                       Ajuste por pagamento via PIX
                     </div>
-                    <div className="text-sm font-semibold negative-value">
+                    <div className="text-sm font-semibold negative-value flex items-center gap-1">
                       {formatCurrency(-details.pixAdjustment)}
+                      {venda.valorTotal > 0 && (
+                        <span className="text-[10px] text-gray-400 font-normal">
+                          ({((Math.abs(details.pixAdjustment) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -196,8 +206,13 @@ export default function FinanceiroDetailsDropdown({
                     <div className="text-xs font-medium text-gray-700">
                       Cupom usado pelo comprador
                     </div>
-                    <div className="text-sm font-semibold negative-value">
+                    <div className="text-sm font-semibold negative-value flex items-center gap-1">
                       {formatCurrency(-details.shopeeVoucher)}
+                      {venda.valorTotal > 0 && (
+                        <span className="text-[10px] text-gray-400 font-normal">
+                          ({((Math.abs(details.shopeeVoucher) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -207,8 +222,13 @@ export default function FinanceiroDetailsDropdown({
                     <div className="text-xs font-medium text-gray-700">
                       Cupom do vendedor
                     </div>
-                    <div className="text-sm font-semibold negative-value">
+                    <div className="text-sm font-semibold negative-value flex items-center gap-1">
                       {formatCurrency(-details.sellerVoucher)}
+                      {venda.valorTotal > 0 && (
+                        <span className="text-[10px] text-gray-400 font-normal">
+                          ({((Math.abs(details.sellerVoucher) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -218,8 +238,13 @@ export default function FinanceiroDetailsDropdown({
                     <div className="text-xs font-medium text-gray-700">
                       Outros abatimentos
                     </div>
-                    <div className="text-sm font-semibold negative-value">
+                    <div className="text-sm font-semibold negative-value flex items-center gap-1">
                       {formatCurrency(-details.otherDiscount)}
+                      {venda.valorTotal > 0 && (
+                        <span className="text-[10px] text-gray-400 font-normal">
+                          ({((Math.abs(details.otherDiscount) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -229,16 +254,26 @@ export default function FinanceiroDetailsDropdown({
                     <span className="text-xs font-medium text-gray-700">
                       Total abatido:
                     </span>
-                    <span className="text-sm font-bold negative-value">
+                    <span className="text-sm font-bold negative-value flex items-center gap-1">
                       {formatCurrency(-details.totalDiscount)}
+                      {venda.valorTotal > 0 && (
+                        <span className="text-[10px] text-gray-400 font-normal">
+                          ({((Math.abs(details.totalDiscount) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                        </span>
+                      )}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-700">
                       Faturamento / NF:
                     </span>
-                    <span className="text-sm font-bold text-gray-900">
+                    <span className="text-sm font-bold text-gray-900 flex items-center gap-1">
                       {formatCurrency(details.effectiveSubtotal)}
+                      {venda.valorTotal > 0 && (
+                        <span className="text-[10px] text-gray-400 font-normal">
+                          ({((Math.abs(details.effectiveSubtotal) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>

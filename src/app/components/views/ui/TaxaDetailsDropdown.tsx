@@ -7,6 +7,7 @@ import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 
 interface TaxaDetailsDropdownProps {
   venda: {
+    valorTotal: number;
     taxaPlataforma?: number | null;
     plataforma: string;
     paymentDetails?: any;
@@ -83,8 +84,13 @@ export default function TaxaDetailsDropdown({
                 <div className="text-xs font-medium text-gray-700">
                   Comissão Líquida
                 </div>
-                <div className="text-sm font-semibold text-blue-600">
+                <div className="text-sm font-semibold text-blue-600 flex items-center gap-1">
                   {formatCurrency(-breakdown.commission_fee)}
+                  {venda.valorTotal > 0 && (
+                    <span className="text-[10px] text-gray-400 font-normal">
+                      ({((Math.abs(breakdown.commission_fee) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -93,8 +99,13 @@ export default function TaxaDetailsDropdown({
                 <div className="text-xs font-medium text-gray-700">
                   Taxa de Serviço
                 </div>
-                <div className="text-sm font-semibold text-purple-600">
+                <div className="text-sm font-semibold text-purple-600 flex items-center gap-1">
                   {formatCurrency(-breakdown.service_fee)}
+                  {venda.valorTotal > 0 && (
+                    <span className="text-[10px] text-gray-400 font-normal">
+                      ({((Math.abs(breakdown.service_fee) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -104,8 +115,13 @@ export default function TaxaDetailsDropdown({
                   <div className="text-xs font-medium text-gray-700">
                     Taxa Devolução Fácil / Transação
                   </div>
-                  <div className="text-sm font-semibold text-orange-600">
+                  <div className="text-sm font-semibold text-orange-600 flex items-center gap-1">
                     {formatCurrency(-breakdown.outros_encargos)}
+                    {venda.valorTotal > 0 && (
+                      <span className="text-[10px] text-gray-400 font-normal">
+                        ({((Math.abs(breakdown.outros_encargos) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -116,8 +132,13 @@ export default function TaxaDetailsDropdown({
                   <span className="text-xs font-medium text-gray-700">
                     Total Retido:
                   </span>
-                  <span className="text-sm font-bold negative-value">
+                  <span className="text-sm font-bold negative-value flex items-center gap-1">
                     {formatCurrency(taxaPlataforma)}
+                    {venda.valorTotal > 0 && (
+                      <span className="text-[10px] text-gray-400 font-normal">
+                        ({((Math.abs(taxaPlataforma) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

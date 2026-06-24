@@ -568,8 +568,9 @@ export default function VendasTable({
                       <div className="text-sm">
                         {isShopee ? (
                           <FinanceiroDetailsDropdown venda={venda}>
-                            <div className="font-bold text-gray-900 cursor-pointer hover:underline">
+                            <div className="font-bold text-gray-900 cursor-pointer hover:underline flex items-center gap-1">
                               {formatCurrency(venda.valorTotal)}
+                              <span className="text-[10px] text-gray-400 font-normal">(100,0%)</span>
                             </div>
                           </FinanceiroDetailsDropdown>
                         ) : (
@@ -577,6 +578,11 @@ export default function VendasTable({
                             <div className="font-bold text-emerald-600 flex items-center gap-1" title="Clique para ver detalhamento de valores">
                               <span className="text-[10px] text-emerald-700/80 uppercase font-bold tracking-tight">Rec. Líq:</span>
                               {formatCurrency(venda.valorTotal + (venda.taxaPlataforma || 0) + (freteExibido || 0))}
+                              {venda.valorTotal > 0 && (
+                                <span className="text-[10px] text-gray-400 font-normal">
+                                  ({(((venda.valorTotal + (venda.taxaPlataforma || 0) + (freteExibido || 0)) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                </span>
+                              )}
                             </div>
                           </ReceitaLiquidaDetailsDropdown>
                         )}
@@ -584,8 +590,9 @@ export default function VendasTable({
                           {!isShopee && (
                             <div className="flex items-center gap-1">
                               <span className="text-gray-400">Bruto:</span>
-                              <span className="font-semibold text-gray-700">
+                              <span className="font-semibold text-gray-700 flex items-center gap-1">
                                 {formatCurrency(venda.valorTotal)}
+                                <span className="text-[10px] text-gray-400 font-normal">(100,0%)</span>
                               </span>
                             </div>
                           )}
@@ -593,8 +600,13 @@ export default function VendasTable({
                             <div className="flex items-center gap-1">
                               <span className="text-gray-400">Taxa:</span>
                               <TaxaDetailsDropdown venda={venda}>
-                                <span className="negative-value font-semibold cursor-pointer hover:underline">
+                                <span className="negative-value font-semibold cursor-pointer hover:underline flex items-center gap-1">
                                   {formatCurrency(venda.taxaPlataforma)}
+                                  {venda.valorTotal > 0 && (
+                                    <span className="text-[10px] text-gray-400 font-normal">
+                                      ({((Math.abs(venda.taxaPlataforma) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                    </span>
+                                  )}
                                 </span>
                               </TaxaDetailsDropdown>
                             </div>
@@ -604,13 +616,23 @@ export default function VendasTable({
                               <span className="text-gray-400">Frete:</span>
                               {isShopee || hasFlexDetails ? (
                                 <FreteDetailsDropdown venda={venda}>
-                                  <span className={`font-semibold cursor-pointer hover:underline ${freteExibido >= 0 ? "frete-positivo" : "frete-negativo"}`}>
+                                  <span className={`font-semibold cursor-pointer hover:underline flex items-center gap-1 ${freteExibido >= 0 ? "frete-positivo" : "frete-negativo"}`}>
                                     {formatCurrency(freteExibido)}
+                                    {venda.valorTotal > 0 && (
+                                      <span className="text-[10px] text-gray-400 font-normal">
+                                        ({((Math.abs(freteExibido) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                      </span>
+                                    )}
                                   </span>
                                 </FreteDetailsDropdown>
                               ) : (
-                                <span className={`font-semibold ${venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}`}>
+                                <span className={`font-semibold flex items-center gap-1 ${venda.frete >= 0 ? "frete-positivo" : "frete-negativo"}`}>
                                   {formatCurrency(venda.frete)}
+                                  {venda.valorTotal > 0 && (
+                                    <span className="text-[10px] text-gray-400 font-normal">
+                                      ({((Math.abs(venda.frete) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                    </span>
+                                  )}
                                 </span>
                               )}
                             </div>
