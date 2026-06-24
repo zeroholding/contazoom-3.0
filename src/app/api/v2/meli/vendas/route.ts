@@ -162,6 +162,18 @@ async function processVendas(
   
   const flexConfig = await loadActiveFlexShippingConfig(session.sub);
 
+  let aliquotas: any[] = [];
+  try {
+    if (prisma.aliquotaImposto) {
+      aliquotas = await prisma.aliquotaImposto.findMany({
+        where: { userId: session.sub, ativo: true },
+        orderBy: { updatedAt: "desc" },
+      });
+    }
+  } catch (error) {
+    console.log('[API_MELI_VENDAS] Modelo AliquotaImposto não disponível');
+  }
+
   const vendasFormatted = vendas.map((venda) => {
     let cmv: number | null = null;
     if (venda.sku) {
@@ -184,6 +196,30 @@ async function processVendas(
       config: flexConfig,
     });
 
+    const dataVenda = new Date(venda.dataVenda);
+    const contaNormalizada = (venda.conta || "").trim().toLocaleLowerCase("pt-BR");
+    const accountId = venda.meliAccountId || "";
+    
+    const aliquotaMes = aliquotas.find((aliq: any) => {
+      const aliqInicio = new Date(aliq.dataInicio);
+      const aliqFim = new Date(aliq.dataFim);
+      const matchesStableAccount = aliq.accountId === accountId && aliq.plataforma === "meli";
+      const matchesLegacyAccount = !aliq.accountId && String(aliq.conta).trim().toLocaleLowerCase("pt-BR") === contaNormalizada;
+
+      return (
+        (matchesStableAccount || matchesLegacyAccount) &&
+        dataVenda <= aliqFim &&
+        dataVenda >= aliqInicio
+      );
+    });
+
+    let imposto: number | null = null;
+    let aliquotaImposto: number | null = null;
+    if (aliquotaMes) {
+      aliquotaImposto = Number(aliquotaMes.aliquota);
+      imposto = roundCurrency(valorTotal * (aliquotaImposto / 100));
+    }
+
     const rawData =
       venda.rawData && typeof venda.rawData === "object"
         ? (venda.rawData as RawDataWithOrder)
@@ -198,11 +234,11 @@ async function processVendas(
     let isMargemReal: boolean;
     if (cmv !== null && cmv > 0) {
       margemContribuicao = roundCurrency(
-        valorTotal + taxaPlataforma + flex.freteLiquidoFlex - cmv,
+        valorTotal + taxaPlataforma + flex.freteLiquidoFlex - cmv - (imposto || 0),
       );
       isMargemReal = true;
     } else {
-      margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + flex.freteLiquidoFlex);
+      margemContribuicao = roundCurrency(valorTotal + taxaPlataforma + flex.freteLiquidoFlex - (imposto || 0));
       isMargemReal = false;
     }
 
@@ -255,6 +291,8 @@ async function processVendas(
       valorTotal,
       quantidade: venda.quantidade,
       unitario: Number(venda.unitario),
+      imposto,
+      aliquotaImposto,
       taxaPlataforma: venda.taxaPlataforma
         ? Number(venda.taxaPlataforma)
         : null,

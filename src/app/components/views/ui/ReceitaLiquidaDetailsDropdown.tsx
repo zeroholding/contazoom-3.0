@@ -113,6 +113,19 @@ export default function ReceitaLiquidaDetailsDropdown({
                 </div>
               </div>
 
+              {/* Imposto (Se Existir) */}
+              {venda.imposto !== null && venda.imposto !== undefined && (
+                <div className="border-l-3 border-red-500 pl-2 flex justify-between items-center mt-2 opacity-80" title="Imposto deduzido da Margem de Contribuição">
+                  <div className="text-[11px] font-medium text-gray-600 flex flex-col">
+                    <span>Imposto ({venda.aliquotaImposto}%)</span>
+                    <span className="text-[9px] text-gray-400">Deduzido da Margem</span>
+                  </div>
+                  <div className="text-xs font-semibold text-red-600">
+                    -{formatCurrency(venda.imposto)}
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         </div>,

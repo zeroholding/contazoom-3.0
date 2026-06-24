@@ -158,6 +158,20 @@ export async function GET(req: NextRequest) {
     const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
+
+
+    let aliquotas: any[] = [];
+    try {
+      if (prisma.aliquotaImposto) {
+        aliquotas = await prisma.aliquotaImposto.findMany({
+          where: { userId: session.sub, ativo: true },
+          orderBy: { updatedAt: "desc" },
+        });
+      }
+    } catch (error) {
+      console.log('[API_GERAL_VENDAS] Modelo AliquotaImposto não disponível');
+    }
+
     const items = vendas.map((venda) => {
       let cmv: number | null = null;
       if (venda.sku) {
@@ -203,16 +217,41 @@ export async function GET(req: NextRequest) {
           : null;
       const freteParaMargem = flex?.freteLiquidoFlex ?? frete;
 
+      const dataVenda = new Date(venda.dataVenda);
+      const contaNormalizada = (venda.conta || "").trim().toLocaleLowerCase("pt-BR");
+      const accountId = venda.accountId || "";
+      const plataformaMatch = venda.plataforma === "Mercado Livre" ? "meli" : "shopee";
+      
+      const aliquotaMes = aliquotas.find((aliq: any) => {
+        const aliqInicio = new Date(aliq.dataInicio);
+        const aliqFim = new Date(aliq.dataFim);
+        const matchesStableAccount = aliq.accountId === accountId && aliq.plataforma === plataformaMatch;
+        const matchesLegacyAccount = !aliq.accountId && String(aliq.conta).trim().toLocaleLowerCase("pt-BR") === contaNormalizada;
+
+        return (
+          (matchesStableAccount || matchesLegacyAccount) &&
+          dataVenda <= aliqFim &&
+          dataVenda >= aliqInicio
+        );
+      });
+
+      let imposto: number | null = null;
+      let aliquotaImposto: number | null = null;
+      if (aliquotaMes) {
+        aliquotaImposto = Number(aliquotaMes.aliquota);
+        imposto = roundCurrency(valorTotal * (aliquotaImposto / 100));
+      }
+
       let margemContribuicao: number;
       let isMargemReal: boolean;
       if (cmv !== null && cmv > 0) {
         margemContribuicao = roundCurrency(
-          valorTotal + taxaPlataforma + freteParaMargem - cmv,
+          valorTotal + taxaPlataforma + freteParaMargem - cmv - (imposto || 0),
         );
         isMargemReal = true;
       } else {
         margemContribuicao = roundCurrency(
-          valorTotal + taxaPlataforma + freteParaMargem,
+          valorTotal + taxaPlataforma + freteParaMargem - (imposto || 0),
         );
         isMargemReal = false;
       }
@@ -229,6 +268,8 @@ export async function GET(req: NextRequest) {
         unitario: shopeeFinancials
           ? shopeeFinancials.unitPrice
           : Number(venda.unitario),
+        imposto,
+        aliquotaImposto,
         taxaPlataforma: shopeeFinancials
           ? shopeeFinancials.platformFee
           : venda.taxaPlataforma

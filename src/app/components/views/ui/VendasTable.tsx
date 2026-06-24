@@ -31,6 +31,9 @@ export interface Venda {
   cobrancasFlex?: number | null; // Quantidade de cobranças/pacotes calculados
   flexConfigApplied?: boolean; // Indica que havia configuração ativa no cálculo
   cmv?: number | null; // cmv - Custo da Mercadoria Vendida
+  imposto?: number | null; // Valor do imposto descontado na venda
+  aliquotaImposto?: number | null; // Porcentagem da alíquota cadastrada que foi usada
+  
   
   // 3. Dados do Produto
   titulo: string; // items[].title - Título do produto
@@ -636,6 +639,11 @@ export default function VendasTable({
                               {venda.cmv ? (
                                 <div className="text-red-700 font-semibold">
                                   CMV: {formatCurrency(venda.cmv)}
+                                </div>
+                              ) : null}
+                              {venda.imposto !== null && venda.imposto !== undefined ? (
+                                <div className="text-red-700 font-semibold" title={`Imposto de ${venda.aliquotaImposto}% aplicado sobre a Venda Bruta`}>
+                                  Imp: -{formatCurrency(venda.imposto)}
                                 </div>
                               ) : null}
                             </div>
