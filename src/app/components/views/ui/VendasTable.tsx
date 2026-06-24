@@ -561,19 +561,17 @@ export default function VendasTable({
                           <div>
                             {venda.quantidade}x {formatCurrency(venda.unitario)}
                           </div>
-                          {venda.imposto !== null && venda.imposto !== undefined ? (
-                            <div className="flex items-center gap-1 mt-0.5" title={`Imposto de ${venda.aliquotaImposto}% aplicado sobre a Venda Bruta`}>
-                              <span className="text-gray-400">Imp:</span>
-                              <span className="text-red-700 font-semibold flex items-center gap-1">
-                                -{formatCurrency(venda.imposto)}
-                                {venda.valorTotal > 0 && (
-                                  <span className="text-[10px] text-gray-400 font-normal">
-                                    ({((venda.imposto / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          ) : null}
+                          <div className="flex items-center gap-1 mt-0.5" title={venda.imposto ? `Imposto de ${venda.aliquotaImposto}% aplicado sobre a Venda Bruta` : "Nenhum imposto configurado"}>
+                            <span className="text-gray-400">Imp:</span>
+                            <span className="text-red-700 font-semibold flex items-center gap-1">
+                              -{formatCurrency(venda.imposto || 0)}
+                              {venda.valorTotal > 0 && (
+                                <span className="text-[10px] text-gray-400 font-normal">
+                                  ({(((venda.imposto || 0) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                </span>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>
