@@ -76,9 +76,8 @@ export default function ReceitaLiquidaDetailsDropdown({
                 <div className="text-xs font-medium text-gray-700">
                   Valor Bruto
                 </div>
-                <div className="text-sm font-semibold text-emerald-600 flex items-center gap-1">
+                <div className="text-sm font-semibold text-emerald-600">
                   {formatCurrency(venda.valorTotal)}
-                  <span className="text-[10px] text-gray-400 font-normal">(100,0%)</span>
                 </div>
               </div>
 

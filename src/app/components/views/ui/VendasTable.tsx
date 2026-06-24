@@ -557,8 +557,23 @@ export default function VendasTable({
                         <div className="font-bold text-gray-900">
                           {formatCurrency(venda.quantidade * venda.unitario)}
                         </div>
-                        <div className="text-xs text-gray-500 font-medium mt-0.5">
-                          {venda.quantidade}x {formatCurrency(venda.unitario)}
+                        <div className="text-[11px] text-gray-500 font-medium mt-0.5 flex flex-col gap-0.5 leading-tight">
+                          <div>
+                            {venda.quantidade}x {formatCurrency(venda.unitario)}
+                          </div>
+                          {venda.imposto !== null && venda.imposto !== undefined ? (
+                            <div className="flex items-center gap-1 mt-0.5" title={`Imposto de ${venda.aliquotaImposto}% aplicado sobre a Venda Bruta`}>
+                              <span className="text-gray-400">Imp:</span>
+                              <span className="text-red-700 font-semibold flex items-center gap-1">
+                                -{formatCurrency(venda.imposto)}
+                                {venda.valorTotal > 0 && (
+                                  <span className="text-[10px] text-gray-400 font-normal">
+                                    ({((venda.imposto / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </td>
@@ -570,7 +585,6 @@ export default function VendasTable({
                           <FinanceiroDetailsDropdown venda={venda}>
                             <div className="font-bold text-gray-900 cursor-pointer hover:underline flex items-center gap-1">
                               {formatCurrency(venda.valorTotal)}
-                              <span className="text-[10px] text-gray-400 font-normal">(100,0%)</span>
                             </div>
                           </FinanceiroDetailsDropdown>
                         ) : (
@@ -592,7 +606,6 @@ export default function VendasTable({
                               <span className="text-gray-400">Bruto:</span>
                               <span className="font-semibold text-gray-700 flex items-center gap-1">
                                 {formatCurrency(venda.valorTotal)}
-                                <span className="text-[10px] text-gray-400 font-normal">(100,0%)</span>
                               </span>
                             </div>
                           )}
@@ -659,13 +672,13 @@ export default function VendasTable({
                                 {venda.isMargemReal ? "Margem Real" : "Receita Líq."}
                               </span>
                               {venda.cmv ? (
-                                <div className="text-red-700 font-semibold">
+                                <div className="text-red-700 font-semibold flex items-center gap-1">
                                   CMV: {formatCurrency(venda.cmv)}
-                                </div>
-                              ) : null}
-                              {venda.imposto !== null && venda.imposto !== undefined ? (
-                                <div className="text-red-700 font-semibold" title={`Imposto de ${venda.aliquotaImposto}% aplicado sobre a Venda Bruta`}>
-                                  Imp: -{formatCurrency(venda.imposto)}
+                                  {venda.valorTotal > 0 && (
+                                    <span className="text-[10px] text-gray-400 font-normal">
+                                      ({((Math.abs(venda.cmv) / venda.valorTotal) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
+                                    </span>
+                                  )}
                                 </div>
                               ) : null}
                             </div>
