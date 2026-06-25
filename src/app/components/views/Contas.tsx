@@ -261,7 +261,7 @@ export default function Contas() {
       <Topbar
         collapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
-        onMobileMenu={() => setIsSidebarMobileOpen((v) => !v)}
+        onMobileMenu={() => setIsSidebarMobileOpen(true)}
       />
 
       {/* Plano de fundo da área de conteúdo */}

@@ -70,13 +70,14 @@ export default function Topbar({
           <div className="flex items-center gap-2">
             {/* Botão mobile (hambúrguer) */}
             <button
+              type="button"
               className="md:hidden inline-flex items-center justify-center rounded-md px-3 py-2 text-sm text-gray-900"
               onClick={onMobileMenu}
               aria-label="Abrir menu"
             >
               <svg
                 viewBox="0 0 24 24"
-                className="h-5 w-5"
+                className="h-5 w-5 pointer-events-none"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"

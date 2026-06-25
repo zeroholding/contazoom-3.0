@@ -136,7 +136,7 @@ export default function DashboardFinanceiro() {
       <Topbar
         collapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
-        onMobileMenu={() => setIsSidebarMobileOpen((v) => !v)}
+        onMobileMenu={() => setIsSidebarMobileOpen(true)}
       />
 
       <div className={`fixed top-16 bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[#F3F3F3]`}>

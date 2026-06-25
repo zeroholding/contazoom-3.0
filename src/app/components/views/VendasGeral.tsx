@@ -285,7 +285,7 @@ function VendasGeralContent() {
       <Topbar
         collapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
-        onMobileMenu={() => setIsSidebarMobileOpen((v) => !v)}
+        onMobileMenu={() => setIsSidebarMobileOpen(true)}
       />
 
       <div

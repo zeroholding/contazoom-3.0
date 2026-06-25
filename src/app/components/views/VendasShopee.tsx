@@ -559,7 +559,7 @@ export default function VendasShopee() {
   }, []);
 
   const handleMobileMenu = useCallback(() => {
-    setIsSidebarMobileOpen((v) => !v);
+    setIsSidebarMobileOpen(true);
   }, []);
 
   const mdLeftVar = "md:left-[var(--sidebar-w,16rem)]";

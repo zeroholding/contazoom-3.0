@@ -478,7 +478,7 @@ export default function VendasMercadolivreSocket() {
   }, []);
 
   const handleMobileMenu = useCallback(() => {
-    setIsSidebarMobileOpen((v) => !v);
+    setIsSidebarMobileOpen(true);
   }, []);
 
   const handleSyncOrders = (accountIds?: string[]) => {

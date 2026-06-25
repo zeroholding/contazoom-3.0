@@ -461,7 +461,7 @@ export default function VendasMercadolivre() {
   }, []);
 
   const handleMobileMenu = useCallback(() => {
-    setIsSidebarMobileOpen((v) => !v);
+    setIsSidebarMobileOpen(true);
   }, []);
 
   // Fallbacks de var + evita scroll horizontal
