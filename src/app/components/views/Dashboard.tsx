@@ -198,8 +198,8 @@ export default function Dashboard() {
       </div>
 
       {/* Conteúdo */}
-      <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
-        <section className="p-6">
+      <main className={`relative z-20 pt-16 p-3 sm:p-6 ${mdMlVar}`}>
+        <section className="w-full">
           {/* Sistema de orientação do usuário */}
           {!isLoading && showConnectAccounts && (
             <UserGuidanceNotification

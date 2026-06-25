@@ -110,17 +110,17 @@ export default function HeaderDashboard({
 
   return (
     <div className="mb-6">
-      <div className="flex items-start justify-between gap-6">
-        <div className="text-left flex-1">
-          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="mt-1 text-sm text-gray-600">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
+        <div className="text-left w-full sm:flex-1">
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <p className="mt-1 text-xs sm:text-sm text-gray-600">
             Visão geral das estatísticas e métricas do negócio.
           </p>
         </div>
         
         {/* Botão de Sincronizar em Destaque */}
-        <div className="flex-shrink-0">
-          <div className="relative">
+        <div className="flex-shrink-0 w-full sm:w-auto">
+          <div className="relative w-full">
             <button
               ref={syncDropdown.triggerRef}
               onClick={() => {
@@ -129,7 +129,7 @@ export default function HeaderDashboard({
                   setShowSyncModal(false);
                 }
               }}
-              className={`inline-flex items-center gap-3 rounded-md border px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm ${
+              className={`w-full sm:w-auto justify-center inline-flex items-center gap-3 rounded-md border px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm ${
                 showSyncDropdown 
                   ? "bg-orange-600 border-orange-600 text-white ring-2 ring-orange-200" 
                   : "bg-orange-500 border-orange-500 text-white hover:bg-orange-600 hover:border-orange-600"
@@ -226,8 +226,8 @@ export default function HeaderDashboard({
       </div>
 
       {/* Filtros e Contas */}
-      <div className="mt-6 flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4 flex-wrap">
+      <div className="mt-4 sm:mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-wrap w-full">
           {/* Filtro de Agrupamento por SKU */}
           <FiltroSKU
             agrupamentoAtivo={agrupamentoSKUAtivo}
@@ -252,12 +252,12 @@ export default function HeaderDashboard({
         </div>
 
         {/* Contas Dropdown */}
-        <div className="flex-shrink-0">
-          <div className="relative">
+        <div className="flex-shrink-0 w-full sm:w-auto">
+          <div className="relative w-full">
             <button
               ref={contasDropdown.triggerRef}
               onClick={() => setShowContasDropdown(!showContasDropdown)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
+              className={`w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
                 showContasDropdown 
                   ? "border-gray-400 bg-gray-50 text-gray-900" 
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
