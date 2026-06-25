@@ -377,15 +377,27 @@ export default function Sidebar({
   const flyoutWrapperRef = useRef<HTMLDivElement | null>(null);
   const flyoutCardRef = useRef<RailFlyoutHandle | null>(null);
 
-  // fecha ao navegar + fecha menu mobile
-  const closeMobile = useCallback(() => {
-    onMobileClose?.();
+  // Ref estável para onMobileClose (evita re-trigger de useEffect)
+  const onMobileCloseRef = useRef(onMobileClose);
+  useEffect(() => {
+    onMobileCloseRef.current = onMobileClose;
   }, [onMobileClose]);
 
+  // Guarda anti-ghost-click: impede fechar o menu nos primeiros 400ms
+  const canCloseRef = useRef(true);
+  useEffect(() => {
+    if (mobileOpen) {
+      canCloseRef.current = false;
+      const t = setTimeout(() => { canCloseRef.current = true; }, 400);
+      return () => clearTimeout(t);
+    }
+  }, [mobileOpen]);
+
+  // fecha ao navegar (usa ref estável, não recria quando onMobileClose muda)
   useEffect(() => {
     setFlyout((s) => ({ ...s, slug: null }));
-    closeMobile();
-  }, [pathname, closeMobile]);
+    onMobileCloseRef.current?.();
+  }, [pathname]);
 
   // abre branch correspondente ao path (modo expandido)
   useEffect(() => {
@@ -525,12 +537,18 @@ export default function Sidebar({
     });
   }
 
+  const handleBackdropClick = useCallback(() => {
+    if (canCloseRef.current) {
+      onMobileCloseRef.current?.();
+    }
+  }, []);
+
   return (
     <>
       {mobileOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/25 md:hidden"
-          onClick={onMobileClose}
+          onClick={handleBackdropClick}
         />
       )}
 
