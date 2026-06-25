@@ -199,10 +199,10 @@ export default function MapaCalorBrasil({
   return (
     <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-orange-100 rounded-lg flex items-center justify-center">
-            <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="bg-white border-b border-gray-200 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start md:items-center gap-3">
+          <div className="w-8 h-8 md:w-7 md:h-7 shrink-0 bg-orange-100 rounded-lg flex items-center justify-center mt-0.5 md:mt-0">
+            <svg className="w-5 h-5 md:w-4 md:h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
           </div>
@@ -211,12 +211,12 @@ export default function MapaCalorBrasil({
             <p className="text-xs text-gray-500">Concentração geográfica de faturamento no Brasil</p>
           </div>
         </div>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 shrink-0 self-start md:self-auto w-full md:w-auto overflow-x-auto">
           {(["vendas","valor"] as const).map(m => (
             <button
               key={m}
               onClick={() => setMetricMode(m)}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 md:flex-none px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
                 metricMode === m ? "bg-orange-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
               }`}
             >{m === "vendas" ? "Qtd. Vendas" : "Faturamento"}</button>
@@ -225,25 +225,25 @@ export default function MapaCalorBrasil({
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3 px-5 py-3 bg-white border-b border-gray-100">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-5 py-4 bg-white border-b border-gray-100">
         {[
           { label: "Total de Vendas", value: totals.vendas.toLocaleString("pt-BR"), color: "text-orange-600", bg: "bg-orange-50" },
           { label: "Faturamento Total", value: fmt(totals.valor), color: "text-green-600", bg: "bg-green-50" },
           { label: "Estados com Vendas", value: `${estados.length} / 27`, color: "text-blue-600", bg: "bg-blue-50" },
         ].map(item => (
-          <div key={item.label} className={`${item.bg} rounded-xl px-4 py-2.5 flex items-center gap-3`}>
+          <div key={item.label} className={`${item.bg} rounded-xl px-4 py-3 flex items-center gap-3`}>
             <div>
               <div className="text-xs text-gray-500">{item.label}</div>
-              <div className={`text-lg font-bold ${item.color}`}>{item.value}</div>
+              <div className={`text-lg md:text-xl font-bold ${item.color}`}>{item.value}</div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Corpo: mapa + sidebar */}
-      <div className="flex gap-0">
+      <div className="flex flex-col lg:flex-row gap-0">
         {/* Mapa */}
-        <div className="relative flex-1 bg-white p-4" style={{ minHeight: 500 }}>
+        <div className="relative flex-1 bg-white p-4 min-h-[350px] md:min-h-[500px]">
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/90 z-10">
               <div className="flex flex-col items-center gap-3">
@@ -257,7 +257,7 @@ export default function MapaCalorBrasil({
           )}
           <svg
             viewBox={`0 0 ${VB_W} ${VB_H}`}
-            style={{ width: "100%", maxWidth: 700, height: "auto", display: "block", margin: "0 auto" }}
+            className="w-full h-auto max-w-full md:max-w-[700px] mx-auto block"
           >
             <defs>
               <filter id="state-shadow" x="-10%" y="-10%" width="120%" height="120%">
@@ -331,30 +331,30 @@ export default function MapaCalorBrasil({
           )}
 
           {/* Legenda gradiente no canto */}
-          <div className="absolute bottom-5 left-5 bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          <div className="absolute bottom-2 left-2 md:bottom-5 md:left-5 bg-white border border-gray-200 rounded-xl p-2 md:p-3 shadow-sm max-w-[120px] md:max-w-none scale-90 md:scale-100 origin-bottom-left">
+            <div className="text-[10px] md:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 hidden md:block">
               {metricMode === "vendas" ? "Intensidade de Vendas" : "Intensidade de Faturamento"}
             </div>
             <div className="flex items-center gap-2">
-              <div className="rounded-md overflow-hidden" style={{
-                width: 16, height: 100,
+              <div className="rounded-md overflow-hidden shrink-0" style={{
+                width: 12, height: 80,
                 background: "linear-gradient(to bottom, rgb(153,27,27), rgb(239,68,68), rgb(253,155,50), rgb(254,220,100), rgb(196,220,255), #e8eaf0)"
               }}/>
-              <div className="flex flex-col justify-between h-[100px] text-xs text-gray-500">
-                <span className="font-semibold text-red-700">Muito alto</span>
-                <span>Alto</span>
-                <span>Médio</span>
-                <span>Baixo</span>
-                <span className="text-gray-400">Sem dados</span>
+              <div className="flex flex-col justify-between h-[80px] text-[10px] text-gray-500">
+                <span className="font-semibold text-red-700 leading-none">Muito alto</span>
+                <span className="leading-none">Alto</span>
+                <span className="leading-none">Médio</span>
+                <span className="leading-none">Baixo</span>
+                <span className="text-gray-400 leading-none">Sem dados</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Sidebar */}
-        <div className="w-56 border-l border-gray-200 bg-white flex flex-col">
+        <div className="w-full lg:w-64 lg:border-l border-t lg:border-t-0 border-gray-200 bg-white flex flex-col sm:flex-row lg:flex-col">
           {/* Por Região */}
-          <div className="p-4 border-b border-gray-100">
+          <div className="p-4 border-b sm:border-b-0 sm:border-r lg:border-r-0 lg:border-b border-gray-100 flex-1">
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Por Região</h4>
             <div className="space-y-3">
               {REGIOES_ORDER.map(nome => {
@@ -367,8 +367,8 @@ export default function MapaCalorBrasil({
                 return (
                   <div key={nome}>
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs text-gray-600 font-medium">{nome}</span>
-                      <span className="text-xs font-bold text-gray-800">{pct.toFixed(1)}%</span>
+                      <span className="text-[11px] md:text-xs text-gray-600 font-medium">{nome}</span>
+                      <span className="text-[11px] md:text-xs font-bold text-gray-800">{pct.toFixed(1)}%</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div
@@ -377,7 +377,7 @@ export default function MapaCalorBrasil({
                       />
                     </div>
                     {r && (
-                      <div className="text-xs text-gray-400 mt-0.5">{r.quantidade} vendas · {fmt(r.valor)}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{r.quantidade} vendas · {fmt(r.valor)}</div>
                     )}
                   </div>
                 );
