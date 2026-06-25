@@ -70,6 +70,19 @@ export default function FiltroSKU({
         </svg>
       </button>
 
+      {/* Native select overlay for mobile */}
+      <select
+        className="sm:hidden absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        value={agrupamentoAtivo}
+        onChange={(e) => onAgrupamentoChange(e.target.value as FiltroAgrupamentoSKU)}
+      >
+        <option value="mlb">MLB (Padrão)</option>
+        <option value="sku">SKU</option>
+        <option value="hierarquia1">Hierarquia 1</option>
+        <option value="hierarquia2">Hierarquia 2</option>
+        <option value="kit">Kit</option>
+      </select>
+
       {agrupamentoDropdown.isVisible && (
         <div 
           ref={agrupamentoDropdown.dropdownRef}

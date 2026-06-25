@@ -281,7 +281,27 @@ export default function MapaCalorBrasil({
                     style={{ cursor: "pointer", transition: "all 0.12s ease" }}
                     onMouseMove={e => {
                       setHoveredUF(uf);
-                      setTooltipPos({ x: e.clientX, y: e.clientY });
+                      const x = e.clientX;
+                      const y = e.clientY;
+                      const screenW = typeof window !== 'undefined' ? window.innerWidth : 500;
+                      const tooltipW = 220; // approximate width
+                      
+                      setTooltipPos({ 
+                        x: x + tooltipW + 20 > screenW ? x - tooltipW - 10 : x + 16, 
+                        y: Math.max(10, y - 20)
+                      });
+                    }}
+                    onClick={e => {
+                      // Support mobile tapping
+                      setHoveredUF(uf);
+                      const x = e.clientX;
+                      const y = e.clientY;
+                      const screenW = typeof window !== 'undefined' ? window.innerWidth : 500;
+                      const tooltipW = 220;
+                      setTooltipPos({ 
+                        x: x + tooltipW + 20 > screenW ? x - tooltipW - 10 : x + 16, 
+                        y: Math.max(10, y - 20)
+                      });
                     }}
                     onMouseLeave={() => setHoveredUF(null)}
                   />
@@ -304,7 +324,7 @@ export default function MapaCalorBrasil({
           {/* Tooltip */}
           {hoveredUF && hoveredData && (
             <div
-              className="fixed z-50 pointer-events-none"
+              className="fixed z-[60] pointer-events-none"
               style={{ left: tooltipPos.x + 16, top: tooltipPos.y - 20 }}
             >
               <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-3" style={{ minWidth: 200 }}>
