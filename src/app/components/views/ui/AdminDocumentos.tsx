@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search, Trash2, AlertTriangle, X } from "lucide-react";
+import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search, Trash2, AlertTriangle, X, ArrowLeft } from "lucide-react";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 
@@ -282,10 +282,10 @@ export default function AdminDocumentos() {
 
   return (
     <>
-      <div className="flex h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
+      <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
       
       {/* ═══ COL 1 — CLIENT LIST ═══ */}
-      <aside className="w-72 xl:w-80 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <aside className={`w-full lg:w-72 xl:w-80 bg-white border-r border-gray-200 flex flex-col shrink-0 ${selectedUser ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-5 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-gray-900 flex items-center">
@@ -348,17 +348,27 @@ export default function AdminDocumentos() {
       </aside>
 
       {/* ═══ COL 2 — DOCUMENTS ═══ */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className={`flex-1 flex flex-col min-w-0 overflow-hidden ${!selectedUser ? 'hidden lg:flex' : 'flex'}`}>
         {/* Header */}
-        <header className="px-8 py-4 bg-white border-b border-gray-200 shrink-0">
+        <header className="px-6 py-4 bg-white border-b border-gray-200 shrink-0">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-                {activeUser ? `Documentos de ${activeUser.name.split(' ')[0]}` : "Centro de Documentos"}
-              </h1>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {activeUser ? "Gerencie arquivos, envie relatórios e acompanhe acessos." : "Selecione um cliente à esquerda."}
-              </p>
+            <div className="flex items-center gap-3">
+              {selectedUser && (
+                <button
+                  onClick={() => setSelectedUser("")}
+                  className="lg:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                  {activeUser ? `Documentos de ${activeUser.name.split(' ')[0]}` : "Centro de Documentos"}
+                </h1>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {activeUser ? "Gerencie arquivos, envie relatórios e acompanhe acessos." : "Selecione um cliente à esquerda."}
+                </p>
+              </div>
             </div>
             {loadingDocs && <Loader2 className="w-5 h-5 animate-spin text-orange-500" />}
           </div>

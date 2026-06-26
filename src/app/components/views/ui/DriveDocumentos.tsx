@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Folder, FileText, Upload, Trash2, Download, ChevronRight, ChevronDown, Loader2, File, Image as ImageIcon, Store } from "lucide-react";
+import { Folder, FileText, Upload, Trash2, Download, ChevronRight, ChevronDown, Loader2, File, Image as ImageIcon, Store, ArrowLeft } from "lucide-react";
 
 type Document = {
   id: string;
@@ -204,10 +204,10 @@ export default function DriveDocumentos() {
   };
 
   return (
-    <div className="flex h-full w-full bg-white">
+    <div className="flex flex-col lg:flex-row h-full w-full bg-white">
       
       {/* SIDEBAR ESQUERDA - Árvore de Pastas */}
-      <div className="w-72 border-r bg-gray-50/50 flex flex-col h-full overflow-y-auto">
+      <div className={`w-full lg:w-72 border-r bg-gray-50/50 flex flex-col shrink-0 lg:h-full overflow-y-auto ${currentFolderId && (currentYear || currentMonth || visibleFiles.length > 0) ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-10 shadow-sm">
           <h2 className="font-bold text-gray-800">Pastas</h2>
         </div>
@@ -322,18 +322,32 @@ export default function DriveDocumentos() {
       </div>
 
       {/* ÁREA PRINCIPAL - Lista de Arquivos */}
-      <div className="flex-1 flex flex-col bg-white overflow-hidden">
+      <div className={`flex-1 flex flex-col bg-white overflow-hidden ${!currentFolderId || (!currentYear && !currentMonth && visibleFiles.length === 0) ? 'hidden lg:flex' : 'flex'}`}>
         {/* Header da Área Principal */}
-        <div className="p-6 border-b flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
-          <div>
-            <div className="flex items-center text-sm text-gray-500 mb-1 space-x-2">
-              <span className="font-medium text-gray-700">{userFolders.find(c => c.id === currentFolderId)?.name || "Documentos"}</span>
-              {currentYear && <><ChevronRight className="w-4 h-4" /><span>{currentYear}</span></>}
-              {currentMonth && <><ChevronRight className="w-4 h-4" /><span>{currentMonth}</span></>}
+        <div className="p-4 sm:p-6 border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white">
+          <div className="flex items-center gap-3">
+            {currentFolderId && (
+              <button
+                onClick={() => {
+                  setCurrentFolderId("");
+                  setCurrentYear(null);
+                  setCurrentMonth(null);
+                }}
+                className="lg:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+            <div>
+              <div className="flex items-center text-xs sm:text-sm text-gray-500 mb-1 space-x-2">
+                <span className="font-medium text-gray-700">{userFolders.find(c => c.id === currentFolderId)?.name || "Documentos"}</span>
+                {currentYear && <><ChevronRight className="w-4 h-4" /><span>{currentYear}</span></>}
+                {currentMonth && <><ChevronRight className="w-4 h-4" /><span>{currentMonth}</span></>}
+              </div>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900">
+                {userFolders.find(c => c.id === currentFolderId)?.name || "Todos os Documentos"}
+              </h1>
             </div>
-            <h1 className="text-xl font-bold text-gray-900">
-              {userFolders.find(c => c.id === currentFolderId)?.name || "Todos os Documentos"}
-            </h1>
           </div>
         </div>
 
