@@ -224,22 +224,6 @@ export default function FiltrosDashboard({
           </svg>
         </button>
 
-        {/* Select nativo para mobile */}
-        <select
-          className="sm:hidden absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          value={periodoAtivo}
-          onChange={(e) => handlePeriodoClick(e.target.value as FiltroPeriodo)}
-        >
-          <option value="todos">Todos</option>
-          <option value="hoje">Hoje</option>
-          <option value="ontem">Ontem</option>
-          <option value="ultimos_7d">Últimos 7d</option>
-          <option value="ultimos_30d">Últimos 30d</option>
-          <option value="ultimos_12m">Últimos 12m</option>
-          <option value="mes_passado">Mês passado</option>
-          <option value="este_mes">Este mês</option>
-          <option value="personalizado">Personalizado</option>
-        </select>
 
         {/* Dropdown de Período */}
         {periodoDropdown.isVisible && (

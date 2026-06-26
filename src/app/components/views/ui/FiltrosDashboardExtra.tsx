@@ -201,20 +201,6 @@ export default function FiltrosDashboardExtra({
         </svg>
       </button>
 
-      {/* Select nativo para mobile */}
-      <select
-        className="sm:hidden absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-        value={parseValue(value).length > 0 ? parseValue(value) : ["todos"]}
-        multiple
-        onChange={(e) => {
-          const selected = Array.from(e.target.selectedOptions).map(o => o.value);
-          onChange(normalizeValue(selected, options));
-        }}
-      >
-        {options.map(opt => (
-          <option key={opt.id} value={opt.id}>{opt.label}</option>
-        ))}
-      </select>
 
       {dropdown.isVisible && (
         <div
