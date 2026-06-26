@@ -471,7 +471,7 @@ export default function Aliquotas() {
   ];
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-gray-50 relative">
+    <div ref={containerRef} className="min-h-screen bg-gray-50 relative overflow-x-hidden">
       <Sidebar
         collapsed={isSidebarCollapsed}
         mobileOpen={isSidebarMobileOpen}
@@ -488,9 +488,9 @@ export default function Aliquotas() {
         <section className="p-3 sm:p-6">
           {/* Header */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
               <div className="text-left">
-                <h1 className="text-2xl font-semibold text-gray-900">
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
                   Alíquotas de Impostos
                 </h1>
                 <p className="mt-1 text-sm text-gray-600 text-left">
@@ -572,22 +572,22 @@ export default function Aliquotas() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Conta
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Alíquota
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Mês/Ano
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Descrição
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 sm:px-6 sm:py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Ações
                       </th>
                     </tr>
@@ -595,23 +595,23 @@ export default function Aliquotas() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {aliquotas.map((aliquota) => (
                       <tr key={aliquota.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                           <div className="text-sm font-medium text-gray-900">{aliquota.conta}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                           <div className="text-sm text-gray-900">{formatPercent(aliquota.aliquota)}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                           <div className="text-sm text-gray-900 capitalize">
                             {formatMesAno(aliquota.dataInicio)}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 py-2 sm:px-6 sm:py-4">
                           <div className="text-sm text-gray-600 max-w-xs truncate">
                             {aliquota.descricao || "-"}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                           <span className={`inline-flex px-2 text-xs font-semibold leading-5 rounded-full ${
                             aliquota.ativo 
                               ? "bg-green-100 text-green-800" 
@@ -620,7 +620,7 @@ export default function Aliquotas() {
                             {aliquota.ativo ? "Ativo" : "Inativo"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-3 py-2 sm:px-6 sm:py-4  text-right text-sm font-medium">
                           <button
                             onClick={() => handleEdit(aliquota)}
                             className="text-orange-600 hover:text-orange-900 mr-3"

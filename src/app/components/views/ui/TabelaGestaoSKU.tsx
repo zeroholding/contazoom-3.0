@@ -626,14 +626,14 @@ export default function TabelaGestaoSKU({
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* Barra de ações em lote */}
       {isMultiSelect && selectedSKUs.length > 0 && (
-        <div className="bg-blue-50 border-b border-blue-200 px-6 py-3">
+        <div className="bg-blue-50 border-b border-blue-200 px-3 py-2 sm:px-6 sm:py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <span className="text-sm font-medium text-blue-800">
                 {selectedSKUs.length} SKU(s) selecionado(s)
               </span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => handleBulkToggleStatus(true)}
                 className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-md hover:bg-green-200 transition-colors"
@@ -670,7 +670,7 @@ export default function TabelaGestaoSKU({
       )}
 
       <div className="overflow-x-auto scrollbar-hidden">
-        <table ref={tableRef} className="min-w-[1680px] w-full divide-y divide-gray-200 table-fixed">
+        <table ref={tableRef} className="min-w-[800px] sm:min-w-[1680px] w-full divide-y divide-gray-200 table-fixed">
           <thead className="bg-gray-50">
             <tr>
               {/* Checkbox para seleção múltipla */}
@@ -1029,7 +1029,7 @@ export default function TabelaGestaoSKU({
                 >
                   {/* Checkbox de seleção */}
                   {isMultiSelect && (
-                    <td className={`px-6 py-4 ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                    <td className={`px-3 py-2 sm:px-6 sm:py-4 ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                       <input
                         type="checkbox"
                         checked={isSelected}
@@ -1040,7 +1040,7 @@ export default function TabelaGestaoSKU({
                   )}
 
                   {/* SKU */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     <div className="flex items-center">
                       {/* Hierarquia Visual */}
                       {sku.tipo === 'pai' ? (
@@ -1132,19 +1132,19 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Tipo */}
-                  <td className={`px-6 py-4 whitespace-nowrap ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     <div className="flex items-center gap-2">
                       {getTipoBadge(sku)}
                     </div>
                   </td>
 
                   {/* Status */}
-                  <td className={`px-6 py-4 whitespace-nowrap ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {getStatusBadge(sku)}
                   </td>
 
                   {/* Custo Unitário */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     <div 
                       className="cursor-pointer group"
                       onClick={() => {
@@ -1163,7 +1163,7 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Quantidade */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {sku.tipo === 'pai' ? (
                       <span className="text-gray-400" title="Kits não possuem quantidade própria">-</span>
                     ) : (
@@ -1177,7 +1177,7 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Proporção */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {sku.tipo === 'filho' ? (
                       <span className="text-gray-900 font-medium">100%</span>
                     ) : (
@@ -1186,7 +1186,7 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Vendas */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {sku.statusVendas ? (
                       <div className="space-y-1">
                         <div className="text-xs">
@@ -1207,7 +1207,7 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Hierarquia */}
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm text-gray-500 ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-500 ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {sku.hierarquia1 && sku.hierarquia2
                       ? `${sku.hierarquia1} > ${sku.hierarquia2}`
                       : sku.hierarquia1 || '-'
@@ -1216,7 +1216,7 @@ export default function TabelaGestaoSKU({
 
                   {/* Ações */}
                   <td className={`px-4 py-4 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => {
                           setSelectedSKU(sku);

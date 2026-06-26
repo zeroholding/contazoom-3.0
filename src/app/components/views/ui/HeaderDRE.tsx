@@ -94,8 +94,8 @@ export default function HeaderDRE({
     <div className="mb-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="text-left">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">DRE</h1>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">DRE</h1>
             <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
               {getPeriodoTexto()}
             </span>
@@ -105,9 +105,9 @@ export default function HeaderDRE({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Switch Caixa/Competência */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className={`text-xs font-medium transition-colors duration-200 ${
               tipoVisualizacao === 'competencia' ? 'text-gray-900' : 'text-gray-500'
             }`}>

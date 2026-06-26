@@ -917,7 +917,7 @@ export default function TabelaVendas({
       )}
 
       {isTableLoading ? (
-        <div className="flex min-height-[320px] items-center justify-center bg-white">
+        <div className="flex min-h-[320px] items-center justify-center bg-white">
           <div className="text-center">
             <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-orange-500" />
             <p className="text-sm font-medium text-gray-600">
@@ -963,7 +963,7 @@ export default function TabelaVendas({
           />
         </div>
       ) : (
-        <div className="flex h-[600px] flex-col">
+        <div className="flex h-[400px] sm:h-[600px] flex-col">
           <div className="min-h-0 flex-1">
             <VendasTable
               vendas={vendasFiltradas}

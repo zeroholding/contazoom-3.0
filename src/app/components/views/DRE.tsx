@@ -358,7 +358,7 @@ export default function DRE() {
 
           {/* Demonstrativo */}
           <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h3 className="text-sm font-semibold text-gray-900">
                 Demonstrativo de Resultado do Exercicio
               </h3>
@@ -801,7 +801,7 @@ export default function DRE() {
 
           {/* Categorias listadas por meses */}
           <div className="mt-6 bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center">
                 <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
                   <svg

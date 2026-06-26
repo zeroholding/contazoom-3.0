@@ -7,8 +7,8 @@ export default function HeaderContas({ selectedPlatform, onBackClick }: HeaderCo
   if (selectedPlatform) {
     return (
       <div className="mb-6 text-left">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-semibold text-gray-900">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
             Contas {selectedPlatform}
           </h1>
           <button
@@ -43,7 +43,7 @@ export default function HeaderContas({ selectedPlatform, onBackClick }: HeaderCo
 
   return (
     <div className="mb-6 text-left">
-      <h1 className="text-2xl font-semibold text-gray-900 text-left">Contas de Plataforma</h1>
+      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 text-left">Contas de Plataforma</h1>
       <p className="mt-1 text-sm text-gray-600 text-left">
         Gerencie suas contas de plataformas de e-commerce.
       </p>

@@ -38,7 +38,7 @@ export default function VendasPagination({
             {resumoPorConta.map((item) => (
               <span
                 key={item.conta || "sem-conta"}
-                className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700"
+                className="inline-flex flex-wrap items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-700"
                 title={`${item.conta || "Sem conta"} - ${formatNumber(item.total)} vendas`}
               >
                 <span className="font-medium">{item.conta || "Sem conta"}</span>
@@ -46,7 +46,7 @@ export default function VendasPagination({
                 <span>{formatNumber(item.total)} vendas</span>
               </span>
             ))}
-            <span className="inline-flex items-center gap-1 rounded-full bg-gray-200 px-2.5 py-1 text-xs text-gray-800">
+            <span className="inline-flex flex-wrap items-center gap-1 rounded-full bg-gray-200 px-2.5 py-1 text-xs text-gray-800">
               <span className="font-semibold">Total</span>
               <span>-</span>
               <span>{formatNumber(totalItems)} vendas</span>
@@ -63,9 +63,9 @@ export default function VendasPagination({
         >
           Anterior
         </button>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {(() => {
-            const maxVisiblePages = 10;
+            const maxVisiblePages = typeof window !== 'undefined' && window.innerWidth < 640 ? 5 : 10;
             const currentGroup = Math.ceil(currentPage / maxVisiblePages);
             const startPage = (currentGroup - 1) * maxVisiblePages + 1;
             const endPage = Math.min(startPage + maxVisiblePages - 1, totalPages);

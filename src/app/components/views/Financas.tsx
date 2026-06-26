@@ -75,16 +75,16 @@ const HeaderFinancas = ({
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div className="text-left">
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
             Finanças
           </h1>
           <p className="mt-1 text-sm text-gray-600 text-left">
             Gerencie suas finanças, contas a pagar e receber.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Botão de Atualização Incremental - só aparece após primeira sincronização */}
           {hasSyncedBefore && onIncrementalSync && (
             <button
@@ -104,7 +104,7 @@ const HeaderFinancas = ({
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  Atualizar
+                  <span className="hidden sm:inline">Atualizar</span>
                 </>
               )}
             </button>
@@ -118,7 +118,7 @@ const HeaderFinancas = ({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
             </svg>
-            Importar Excel
+            <span className="hidden sm:inline">Importar Excel</span>
           </button>
 
           {onSyncClick && (
@@ -130,7 +130,7 @@ const HeaderFinancas = ({
               {isSyncing ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-gray-700"></div>
-                  <span>{syncProgress || "Sincronizando..."}</span>
+                  <span className="hidden sm:inline">{syncProgress || "Sincronizando..."}</span>
                 </>
               ) : (
                 <>
@@ -147,7 +147,7 @@ const HeaderFinancas = ({
                   >
                     <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
                   </svg>
-                  <span>Trazer dados do Bling</span>
+                  <span className="hidden sm:inline">Trazer dados do Bling</span>
                 </>
               )}
             </button>
@@ -171,35 +171,37 @@ const HeaderFinancas = ({
           >
             <path d="M12 5v14M5 12h14" />
           </svg>
-          {getButtonLabel()}
+          <span className="hidden sm:inline">{getButtonLabel()}</span>
           </button>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                className={[
-                  activeTab === tab.id
-                    ? "border-orange-500 text-orange-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
-                  "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors",
-                ].join(" ")}
-                aria-current={activeTab === tab.id ? "page" : undefined}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="overflow-x-auto scrollbar-hidden">
+            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => onTabChange(tab.id)}
+                  className={[
+                    activeTab === tab.id
+                      ? "border-orange-500 text-orange-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
+                    "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors",
+                  ].join(" ")}
+                  aria-current={activeTab === tab.id ? "page" : undefined}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
           
-          {/* Filtros na mesma linha das tabs */}
+          {/* Filtros na mesma linha das tabs no desktop */}
           {filtrosComponent && (
-            <div className="flex items-center gap-2 pb-px">
+            <div className="flex items-center gap-2 pb-px overflow-x-auto scrollbar-hidden">
               {filtrosComponent}
             </div>
           )}
@@ -1441,7 +1443,7 @@ export default function Financas() {
       {isSyncing ? (
         <>
           <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-gray-700"></div>
-          <span>{syncProgress || "Sincronizando..."}</span>
+          <span className="hidden sm:inline">{syncProgress || "Sincronizando..."}</span>
         </>
       ) : (
         <>
@@ -1458,7 +1460,7 @@ export default function Financas() {
           >
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
           </svg>
-          <span>Trazer dados do Bling</span>
+          <span className="hidden sm:inline">Trazer dados do Bling</span>
         </>
       )}
     </button>
@@ -1819,19 +1821,19 @@ export default function Financas() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Nome
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Tipo
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Sincronizado
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Ações
                         </th>
                       </tr>
@@ -1839,7 +1841,7 @@ export default function Financas() {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {paginatedFormasPagamento.map((forma) => (
                         <tr key={forma.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">
                               {forma.nome}
                             </div>
@@ -1849,10 +1851,10 @@ export default function Financas() {
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">
                             {forma.tipo || "-"}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               forma.ativo 
                                 ? "bg-green-100 text-green-800" 
@@ -1861,10 +1863,10 @@ export default function Financas() {
                               {forma.ativo ? "Ativo" : "Inativo"}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-500">
                             {formatDateBR(forma.sincronizadoEm)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleEdit(forma)}
@@ -1923,16 +1925,16 @@ export default function Financas() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {paginatedCategorias.map((cat) => (
                         <tr key={cat.id} className={cat.categoriaPaiId ? "bg-blue-50" : ""}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">
                             {cat.categoriaPaiId ? (
                               <span className="flex items-center pl-8">
                                 <svg className="w-4 h-4 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1944,13 +1946,13 @@ export default function Financas() {
                               <span className="font-semibold">{cat.descricao || cat.nome}</span>
                             )}
                           </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{cat.tipo}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{cat.tipo}</td>
+                            <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${cat.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                                 {cat.ativo ? "Ativo" : "Inativo"}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex items-center space-x-2">
                                 <button
                                   onClick={() => handleEdit(cat)}
@@ -2009,73 +2011,73 @@ export default function Financas() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th onClick={() => handleSort('descricao', 'pagar')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('descricao', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Descrição</span>
                             <SortIcon field="descricao" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Histórico</th>
-                        <th onClick={() => handleSort('valor', 'pagar')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Histórico</th>
+                        <th onClick={() => handleSort('valor', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Valor</span>
                             <SortIcon field="valor" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('dataPagamento', 'pagar')} className="group px-6 py-3 w-24 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('dataPagamento', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 w-24 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span className="block leading-tight">DATA<br/>PAGAMENTO</span>
                             <SortIcon field="dataPagamento" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('dataCompetencia', 'pagar')} className="group px-6 py-3 w-24 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('dataCompetencia', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 w-24 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span className="block leading-tight">DATA<br/>COMPETENCIA</span>
                             <SortIcon field="dataCompetencia" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('categoria', 'pagar')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('categoria', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Categoria</span>
                             <SortIcon field="categoria" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('formaPagamento', 'pagar')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('formaPagamento', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Forma</span>
                             <SortIcon field="formaPagamento" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('status', 'pagar')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('status', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Status</span>
                             <SortIcon field="status" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('origem', 'pagar')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('origem', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Origem</span>
                             <SortIcon field="origem" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {paginatedContasPagar.map((c) => (
                         <tr key={c.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{c.descricao}</td>
-                          <td className="px-6 py-4 text-sm text-gray-900 whitespace-pre-line" title={c.historico || ''}>{c.historico || '-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-24">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.descricao}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 text-sm text-gray-900 whitespace-pre-line" title={c.historico || ''}>{c.historico || '-'}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900 w-24">
                             <div className="flex flex-col leading-tight">
                               <span>{formatDateBR(c.dataVencimento)}</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 w-24">{formatDateBR(c.dataCompetencia)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{c.formaPagamento?.nome || "-"}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900 w-24">{formatDateBR(c.dataCompetencia)}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.formaPagamento?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               String(c.status).toLowerCase() === "pago"
                                 ? "bg-green-100 text-green-800"
@@ -2084,8 +2086,8 @@ export default function Financas() {
                               {c.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${c.origem === 'SINCRONIZACAO' ? 'bg-blue-100 text-blue-800' : c.origem === 'EXCEL' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${c.origem === 'SINCRONIZACAO' ? 'bg-blue-100 text-blue-800' : c.origem === 'EXCEL' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleEdit(c)}
@@ -2153,60 +2155,60 @@ export default function Financas() {
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th onClick={() => handleSort('descricao', 'receber')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('descricao', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Descrição</span>
                             <SortIcon field="descricao" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('valor', 'receber')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('valor', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Valor</span>
                             <SortIcon field="valor" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('dataRecebimento', 'receber')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('dataRecebimento', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Data de Recebimento</span>
                             <SortIcon field="dataRecebimento" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('categoria', 'receber')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('categoria', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Categoria</span>
                             <SortIcon field="categoria" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('formaPagamento', 'receber')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('formaPagamento', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Forma</span>
                             <SortIcon field="formaPagamento" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('status', 'receber')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('status', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Status</span>
                             <SortIcon field="status" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('origem', 'receber')} className="group px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('origem', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Origem</span>
                             <SortIcon field="origem" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {paginatedContasReceber.map((c) => (
                         <tr key={c.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{c.descricao}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDateBR(c.dataRecebimento || c.dataVencimento)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{c.formaPagamento?.nome || "-"}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.descricao}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{formatDateBR(c.dataRecebimento || c.dataVencimento)}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.formaPagamento?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               String(c.status).toLowerCase() === "recebido"
                                 ? "bg-green-100 text-green-800"
@@ -2215,8 +2217,8 @@ export default function Financas() {
                               {c.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${c.origem === 'SINCRONIZACAO' ? 'bg-blue-100 text-blue-800' : c.origem === 'EXCEL' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${c.origem === 'SINCRONIZACAO' ? 'bg-blue-100 text-blue-800' : c.origem === 'EXCEL' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleEdit(c)}

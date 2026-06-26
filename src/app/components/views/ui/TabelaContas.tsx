@@ -127,10 +127,10 @@ function TabelaContasSkeleton() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Conta
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-2 sm:px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -139,7 +139,7 @@ function TabelaContasSkeleton() {
               <th className="px-2 sm:px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Refresh Token
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Ações
               </th>
             </tr>
@@ -147,19 +147,19 @@ function TabelaContasSkeleton() {
           <tbody className="bg-white divide-y divide-gray-200">
             {[...Array(3)].map((_, index) => (
               <tr key={index} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                   <div className="h-4 bg-gray-200 rounded animate-pulse w-24" />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                   <div className="h-6 bg-gray-200 rounded-full animate-pulse w-16" />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                   <div className="h-4 bg-gray-200 rounded animate-pulse w-20" />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                   <div className="h-4 bg-gray-200 rounded animate-pulse w-20" />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <td className="px-3 py-2 sm:px-6 sm:py-4  text-sm font-medium">
                   <div className="flex space-x-2">
                     <div className="h-6 bg-gray-200 rounded animate-pulse w-12" />
                     <div className="h-6 bg-gray-200 rounded animate-pulse w-16" />
@@ -696,10 +696,10 @@ export default function TabelaContas({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Conta
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th className="px-2 sm:px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -708,7 +708,7 @@ export default function TabelaContas({
               <th className="px-2 sm:px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Refresh Token
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Ações
               </th>
             </tr>
@@ -719,12 +719,12 @@ export default function TabelaContas({
                 key={item.id}
                 className="table-row hover:bg-gray-50 transition-colors"
               >
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                   <div className="text-element text-sm font-medium text-gray-900">
                     {item.conta}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-3 py-2 sm:px-6 sm:py-4 ">
                   <span
                     className={`text-element inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
                       item.status,
@@ -733,16 +733,16 @@ export default function TabelaContas({
                     {item.status}
                   </span>
                 </td>
-                <td className="px-2 sm:px-3 py-4 whitespace-nowrap">
+                <td className="px-2 sm:px-3 py-4 ">
                   <TokenReveal token={item.accessToken} label="Access Token" />
                 </td>
-                <td className="px-2 sm:px-3 py-4 whitespace-nowrap">
+                <td className="px-2 sm:px-3 py-4 ">
                   <TokenReveal
                     token={item.refreshToken}
                     label="Refresh Token"
                   />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <td className="px-3 py-2 sm:px-6 sm:py-4  text-sm font-medium">
                   <div className="flex items-center gap-3">
                     {item.status === "Inativa" && (
                       <button
@@ -839,7 +839,7 @@ export default function TabelaContas({
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="px-3 py-2 sm:px-6 sm:py-4 border-t border-gray-200 bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={handleConnectAccount}

@@ -209,28 +209,28 @@ export default function TabelaSKUEditavel({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 SKU
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Produto
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Tipo
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Custo Unitário
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Quantidade
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Hierarquia
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 SKUs Filhos
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Ações
               </th>
             </tr>
@@ -384,7 +384,7 @@ export default function TabelaSKUEditavel({
                 
                 return skusOrdenados.map((sku) => (
                 <tr key={sku.id} className={`hover:bg-gray-50 ${sku.sku_pai ? 'bg-gray-50' : ''}`}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-6 py-4  text-sm font-medium text-gray-900">
                     <div className={`flex items-center ${sku.sku_pai ? 'ml-4' : ''}`}>
                       {sku.sku_pai && (
                         <span className="text-gray-400 mr-2">└─</span>
@@ -392,7 +392,7 @@ export default function TabelaSKUEditavel({
                       {sku.sku}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4  text-sm text-gray-900">
                     <div className={`flex items-center ${sku.sku_pai ? 'ml-4' : ''}`}>
                       {sku.sku_pai && (
                         <span className="text-gray-400 mr-2">└─</span>
@@ -400,7 +400,7 @@ export default function TabelaSKUEditavel({
                       {sku.produto}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 ">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       sku.tipo === 'pai' 
                         ? 'bg-blue-100 text-blue-800' 
@@ -409,19 +409,19 @@ export default function TabelaSKUEditavel({
                       {sku.tipo === 'pai' ? 'Kit' : 'Individual'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4  text-sm text-gray-900">
                     R$ {sku.custo_unitario.toFixed(2)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4  text-sm text-gray-900">
                     {sku.quantidade}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4  text-sm text-gray-500">
                     {sku.hierarquia_1 && sku.hierarquia_2
                       ? `${sku.hierarquia_1} > ${sku.hierarquia_2}`
                       : sku.hierarquia_1 || '-'
                     }
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4  text-sm text-gray-500">
                     {sku.tipo === 'pai' ? (
                       <div className="flex flex-wrap gap-1">
                         {sku.skus_filhos && sku.skus_filhos.length > 0 ? (
@@ -449,7 +449,7 @@ export default function TabelaSKUEditavel({
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td className="px-6 py-4  text-sm font-medium">
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleEditSKU(sku)}
@@ -490,7 +490,7 @@ export default function TabelaSKUEditavel({
       )}
       
       {/* Mensagem informativa */}
-      <div className="bg-blue-50 border-t border-blue-200 px-6 py-3 relative z-10 transform translate-y-0 transition-all duration-500 ease-out animate-slide-down">
+      <div className="bg-blue-50 border-t border-blue-200 px-3 py-2 sm:px-6 sm:py-3 relative z-10 transform translate-y-0 transition-all duration-500 ease-out animate-slide-down">
         <div className="flex items-center">
           <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

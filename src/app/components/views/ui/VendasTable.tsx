@@ -118,11 +118,11 @@ function TabelaVendasSkeleton() {
         __html: `
           .table-scroll-container {
             overflow: auto;
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none; /* IE and Edge */
+            /* scrollbar-width: none; */
+            /* -ms-overflow-style: none; */
           }
           .table-scroll-container::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, Opera */
+            /* display: none; Removed to allow scrolling on mobile */
           }
         `
       }} />
@@ -133,7 +133,7 @@ function TabelaVendasSkeleton() {
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               {[...Array(16)].map((_, index) => (
-                <th key={index} className="px-6 py-3 bg-gray-50">
+                <th key={index} className="px-3 py-2 sm:px-6 sm:py-3 bg-gray-50">
                   <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
                 </th>
               ))}
@@ -143,7 +143,7 @@ function TabelaVendasSkeleton() {
             {[...Array(10)].map((_, index) => (
               <tr key={index}>
                 {[...Array(16)].map((_, cellIndex) => (
-                  <td key={cellIndex} className="px-6 py-4 whitespace-nowrap">
+                  <td key={cellIndex} className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                     <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
                   </td>
                 ))}
@@ -295,11 +295,11 @@ export default function VendasTable({
         __html: `
           .table-scroll-container {
             overflow: auto;
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none; /* IE and Edge */
+            /* scrollbar-width: none; */
+            /* -ms-overflow-style: none; */
           }
           .table-scroll-container::-webkit-scrollbar {
-            display: none; /* Chrome, Safari, Opera */
+            /* display: none; Removed to allow scrolling on mobile */
           }
           /* Garantir que dropdowns não sejam cortados */
           .table-scroll-container .smart-dropdown {
@@ -377,25 +377,25 @@ export default function VendasTable({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
+                <th className="px-3 py-2 sm:px-6 sm:py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] sm:min-w-[100px] sm:min-w-[130px] premium-th">
                   Data / Canal
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[140px] premium-th">
+                <th className="px-3 py-2 sm:px-6 sm:py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[110px] sm:min-w-[140px] premium-th">
                   Venda / Conta
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[180px] premium-th">
+                <th className="px-3 py-2 sm:px-6 sm:py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] sm:min-w-[180px] premium-th">
                   Produto / SKU
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[150px] premium-th">
+                <th className="px-3 py-2 sm:px-6 sm:py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[110px] sm:min-w-[150px] premium-th">
                   Cliente / Envio
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[100px] premium-th">
+                <th className="px-3 py-2 sm:px-6 sm:py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] sm:min-w-[100px] premium-th">
                   Qtd / Unitário
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[160px] premium-th">
+                <th className="px-3 py-2 sm:px-6 sm:py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[120px] sm:min-w-[160px] premium-th">
                   Financeiro Detalhado
                 </th>
-                <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[130px] premium-th">
+                <th className="px-3 py-2 sm:px-6 sm:py-3.5 text-left text-xs font-semibold uppercase tracking-wider min-w-[80px] sm:min-w-[100px] sm:min-w-[130px] premium-th">
                   CMV / Margem
                 </th>
               </tr>
@@ -419,7 +419,7 @@ export default function VendasTable({
                 return (
                   <tr key={venda.id} className="premium-row">
                     {/* 1. Data / Canal */}
-                    <td className="px-6 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <div className="flex-shrink-0">
                           <PlataformaBadge plataforma={venda.canal || venda.plataforma} size={26} />
@@ -432,7 +432,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 2. Venda / Conta */}
-                    <td className="px-6 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div 
                           className="font-semibold text-gray-800 cursor-pointer hover:text-orange-600 hover:underline transition-colors"
@@ -448,7 +448,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 3. Produto / SKU */}
-                    <td className="px-6 py-3">
+                    <td className="px-3 py-2 sm:px-6 sm:py-3">
                       <div className="max-w-[240px] text-sm">
                         <div className="font-medium text-gray-900 line-clamp-1 hover:line-clamp-none transition-all" title={venda.titulo}>
                           {venda.titulo}
@@ -500,7 +500,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 4. Cliente / Envio */}
-                    <td className="px-6 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div className="font-semibold text-gray-900 max-w-[140px] truncate" title={venda.comprador || "-"}>
                           {venda.comprador || <span className="text-xs text-gray-400 font-normal">-</span>}
@@ -552,7 +552,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 5. Qtd / Unitário */}
-                    <td className="px-6 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
                       <div className="text-sm">
                         <div className="font-bold text-gray-900">
                           {formatCurrency(venda.quantidade * venda.unitario)}
@@ -577,7 +577,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 6. Financeiro Detalhado */}
-                    <td className="px-6 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
                       <div className="text-sm">
                         {isShopee ? (
                           <FinanceiroDetailsDropdown venda={venda}>
@@ -653,7 +653,7 @@ export default function VendasTable({
                     </td>
 
                     {/* 7. CMV / Margem */}
-                    <td className="px-6 py-3 whitespace-nowrap">
+                    <td className="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
                       <div className="text-sm">
                         {venda.margemContribuicao !== null && venda.margemContribuicao !== undefined ? (
                           <div>
