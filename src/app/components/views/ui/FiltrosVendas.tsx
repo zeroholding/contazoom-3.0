@@ -410,35 +410,38 @@ export default function FiltrosVendas({
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Filtros de Status */}
-        <div className="inline-flex items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-200">
-          {filtros.map((filtro) => {
-            const isActive = filtro.id === filtroAtivo;
-            
-            return (
-              <button
-                key={filtro.id}
-                onClick={() => handleFiltroClick(filtro.id)}
-                className={getFiltroClasses(filtro, isActive)}
-                disabled={isAnimating}
-              >
-                {/* Label do filtro */}
-                <span className="font-medium">{filtro.label}</span>
-                
-                {/* Badge com contagem */}
-                {filtro.count > 0 && (
-                  <span className={getBadgeClasses(filtro, isActive)}>
-                    {filtro.count > 99 ? "99+" : filtro.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div className="overflow-x-auto flex-nowrap hide-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
+          <div className="inline-flex items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-200 min-w-max">
+            {filtros.map((filtro) => {
+              const isActive = filtro.id === filtroAtivo;
+              
+              return (
+                <button
+                  key={filtro.id}
+                  onClick={() => handleFiltroClick(filtro.id)}
+                  className={getFiltroClasses(filtro, isActive)}
+                  disabled={isAnimating}
+                >
+                  {/* Label do filtro */}
+                  <span className="font-medium">{filtro.label}</span>
+                  
+                  {/* Badge com contagem */}
+                  {filtro.count > 0 && (
+                    <span className={getBadgeClasses(filtro, isActive)}>
+                      {filtro.count > 99 ? "99+" : filtro.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Botões de Ação */}
-        <div className="flex items-center gap-2">
+        <div className="overflow-x-auto flex-nowrap hide-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
+          <div className="flex items-center gap-2 pb-1 min-w-max">
           {/* Botão de Filtro ADS - Apenas para Mercado Livre */}
           {platform !== "Shopee" && <div className="relative">
             <button
@@ -1192,6 +1195,7 @@ export default function FiltrosVendas({
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }

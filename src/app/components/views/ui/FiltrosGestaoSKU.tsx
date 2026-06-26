@@ -216,9 +216,9 @@ export default function FiltrosGestaoSKU({
         )}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Filtros de Status */}
-        <div className="inline-flex items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-200">
+        <div className="flex flex-wrap items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-200">
           {filtrosStatus.map((filtro) => {
             const isActive = filtro.id === filtroAtivo;
             
@@ -236,7 +236,7 @@ export default function FiltrosGestaoSKU({
         </div>
 
         {/* Botões de Ação */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Botão de Tipo */}
           <div className="relative">
             <button

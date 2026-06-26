@@ -92,7 +92,7 @@ export default function HeaderDRE({
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="text-left">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold text-gray-900">DRE</h1>

@@ -281,7 +281,7 @@ export default function HeaderDashboard({
                 style={contasDropdown.position}
               >
                 <div className="p-3 space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <h3 className="text-xs font-semibold text-gray-900">Selecionar conta</h3>
                     <button
                       className="text-[11px] text-gray-600 hover:text-gray-900 underline"

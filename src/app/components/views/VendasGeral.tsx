@@ -40,7 +40,7 @@ const HeaderVendasGeral = ({
   });
 
   return (
-    <div className="mb-6 flex items-center justify-between">
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div className="text-left">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -119,7 +119,7 @@ const HeaderVendasGeral = ({
       </div>
 
       {contasConectadas.length > 0 && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
           <span className="text-sm text-gray-600">Contas conectadas:</span>
           <div className="flex items-center -space-x-1">
             {contasConectadas.slice(0, 3).map((conta) => {
@@ -294,8 +294,8 @@ function VendasGeralContent() {
         <div className="h-full w-full rounded-tl-none md:rounded-tl-2xl border border-gray-200 bg-white" />
       </div>
 
-      <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
-        <section className="p-6">
+      <main className={`relative z-20 pt-16 p-3 sm:p-6 ${mdMlVar}`}>
+        <section className="p-3 sm:p-6">
           <HeaderVendasGeral
             totalItems={pagination.totalItems}
             contasConectadas={contasConectadas || []}

@@ -143,8 +143,8 @@ export default function DashboardFinanceiro() {
         <div className="h-full w-full rounded-tl-none md:rounded-tl-2xl border border-gray-200 bg-white" />
       </div>
 
-      <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
-        <section className="p-6">
+      <main className={`relative z-20 pt-16 p-3 sm:p-6 ${mdMlVar}`}>
+        <section className="p-3 sm:p-6">
           {pendingSkusCount > 0 && (
             <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
               <div className="flex items-start gap-4">

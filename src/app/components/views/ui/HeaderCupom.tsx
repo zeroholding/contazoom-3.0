@@ -5,7 +5,7 @@ interface HeaderCupomProps {
 export default function HeaderCupom({ onNew }: HeaderCupomProps) {
   return (
     <div className="mb-6 text-left">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
         <h1 className="text-2xl font-semibold text-gray-900">Cupons</h1>
         <button
           onClick={onNew}

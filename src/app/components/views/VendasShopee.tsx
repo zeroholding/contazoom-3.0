@@ -206,7 +206,7 @@ const HeaderVendasShopee = ({
   };
 
   return (
-    <div className="mb-6 flex items-center justify-between">
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div className="text-left">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -290,7 +290,7 @@ const HeaderVendasShopee = ({
       {/* Botão de Sincronização */}
       <button
         onClick={handleOpenSyncModal}
-        className="inline-flex items-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
+        className="inline-flex items-center justify-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 w-full sm:w-auto"
         disabled={isSyncing}
       >
           <div className="flex items-center relative">
@@ -579,8 +579,8 @@ export default function VendasShopee() {
         onMobileMenu={handleMobileMenu}
       />
 
-      <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
-        <section className="p-6">
+      <main className={`relative z-20 pt-16 p-3 sm:p-6 ${mdMlVar}`}>
+        <section className="p-3 sm:p-6">
           <HeaderVendasShopee
             vendas={vendas || []}
             lastSyncedAt={lastSyncedAt || null}

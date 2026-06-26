@@ -532,8 +532,8 @@ export default function GestaoSKU() {
       </div>
 
       {/* Conteúdo */}
-      <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
-        <section className="p-6">
+      <main className={`relative z-20 pt-16 p-3 sm:p-6 ${mdMlVar}`}>
+        <section className="p-3 sm:p-6">
           <HeaderGestaoSKU 
             selectedCategory={selectedCategory || undefined}
             onBackClick={() => setSelectedCategory(null)}

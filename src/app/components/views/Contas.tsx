@@ -272,8 +272,8 @@ export default function Contas() {
       </div>
 
       {/* Conteúdo */}
-      <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
-        <section className="p-6">
+      <main className={`relative z-20 pt-16 p-3 sm:p-6 ${mdMlVar}`}>
+        <section className="p-3 sm:p-6">
           <HeaderContas
             selectedPlatform={selectedPlatform || undefined}
             onBackClick={() => setSelectedPlatform(null)}
