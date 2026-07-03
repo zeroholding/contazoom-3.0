@@ -156,14 +156,9 @@ export default function TopProdutosFaturamento({
             <p className="font-bold text-gray-900 text-sm truncate flex-1">{label}</p>
             <button
               onClick={() => setSelectedProduct(selectedProduct === data.sku ? null : data.sku)}
-              className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors flex-shrink-0 ml-2"
+              className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors flex-shrink-0 ml-2"
             >
-              {selectedProduct === data.sku && (
-                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-              )}
-              {selectedProduct === data.sku ? 'Fixado' : 'Fixar'}
+              {selectedProduct === data.sku ? '✓ Fixado' : 'Fixar'}
             </button>
           </div>
           
@@ -273,30 +268,15 @@ export default function TopProdutosFaturamento({
               <button
                 key={mode}
                 onClick={() => setSortMode(mode)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
                   sortMode === mode 
                     ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md' 
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                {mode === 'faturamento' && (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                {mode === 'quantidade' && (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                )}
-                {mode === 'ticketMedio' && (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3v-6m-3 6v-9m12 0v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h14a2 2 0 012 2z" />
-                  </svg>
-                )}
-                {mode === 'faturamento' && 'Faturamento'}
-                {mode === 'quantidade' && 'Quantidade'}
-                {mode === 'ticketMedio' && 'Ticket Médio'}
+                {mode === 'faturamento' && '💰 Faturamento'}
+                {mode === 'quantidade' && '📦 Quantidade'}
+                {mode === 'ticketMedio' && '🎯 Ticket Médio'}
               </button>
             ))}
           </div>
@@ -420,12 +400,9 @@ export default function TopProdutosFaturamento({
               </div>
               <button
                 onClick={() => setSelectedProduct(null)}
-                className="flex items-center gap-1 text-xs px-2 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                className="text-xs px-2 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Fechar
+                ✕ Fechar
               </button>
             </div>
             
@@ -443,11 +420,8 @@ export default function TopProdutosFaturamento({
               <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
                 <div className="text-xs text-gray-500 mb-1">Ticket Médio</div>
                 <div className="text-lg font-bold text-purple-600">{formatCurrency(produto.ticketMedio)}</div>
-                <div className={`flex items-center gap-0.5 text-xs mt-0.5 font-semibold ${difTicket >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  <svg className={`w-3 h-3 ${difTicket >= 0 ? '' : 'rotate-180'}`} fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l5 5a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L5.707 9.707a1 1 0 01-1.414-1.414l5-5A1 1 0 0110 3z" clipRule="evenodd" />
-                  </svg>
-                  {Math.abs(difTicket).toFixed(1)}% vs geral
+                <div className={`text-xs mt-0.5 font-semibold ${difTicket >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {difTicket >= 0 ? '↑' : '↓'} {Math.abs(difTicket).toFixed(1)}% vs geral
                 </div>
               </div>
               <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
