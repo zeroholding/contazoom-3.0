@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useEffect, useState, useMemo } from "react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 import NumberLoader from "../../../../components/NumberLoader";
 import { FiltroPeriodo } from "./FiltrosDashboard";
 import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "./FiltrosDashboardExtra";
@@ -28,6 +28,8 @@ type ProdutoFaturamento = {
   ticketMedio: number;
 };
 
+type SortMode = 'faturamento' | 'quantidade' | 'ticketMedio';
+
 export default function TopProdutosFaturamento({
   periodoAtivo = "todos",
   dataInicioPersonalizada = null,
@@ -42,8 +44,23 @@ export default function TopProdutosFaturamento({
 }: TopProdutosFaturamentoProps) {
   const [dados, setDados] = useState<ProdutoFaturamento[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [sortMode, setSortMode] = useState<SortMode>('faturamento');
+  const [hoveredProduct, setHoveredProduct] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
+  
   const totalFaturamento = dados.reduce((acc, it) => acc + (it.faturamento || 0), 0);
   const totalQuantidade = dados.reduce((acc, it) => acc + (it.quantidade || 0), 0);
+
+  // Dados ordenados dinamicamente
+  const dadosOrdenados = useMemo(() => {
+    return [...dados].sort((a, b) => {
+      switch (sortMode) {
+        case 'quantidade': return b.quantidade - a.quantidade;
+        case 'ticketMedio': return b.ticketMedio - a.ticketMedio;
+        default: return b.faturamento - a.faturamento;
+      }
+    });
+  }, [dados, sortMode]);
 
   useEffect(() => {
     let isMounted = true;
@@ -111,23 +128,68 @@ export default function TopProdutosFaturamento({
       maximumFractionDigits: 0,
     }).format(value || 0);
 
+  const getBarColor = (index: number) => {
+    // Gradiente de azul (top) para cinza (bottom)
+    const colors = [
+      '#1e40af', // azul escuro
+      '#2563eb', // azul
+      '#3b82f6', // azul médio
+      '#60a5fa', // azul claro
+      '#93c5fd', // azul muito claro
+      '#bfdbfe', // azul pastel
+      '#dbeafe', // azul super claro
+      '#e0e7ff', // indigo claro
+      '#c7d2fe', // indigo pastel
+      '#a5b4fc', // indigo
+    ];
+    return colors[index] || '#e5e7eb';
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       const percFat = totalFaturamento > 0 ? (data.faturamento / totalFaturamento) * 100 : 0;
       const percQtd = totalQuantidade > 0 ? (data.quantidade / totalQuantidade) * 100 : 0;
       return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-medium text-gray-900 mb-2">{`${label}`}</p>
-          <p className="text-sm text-blue-600">
-            {`Faturamento: ${formatCurrency(data.faturamento)} (${percFat.toFixed(1)}%)`}
-          </p>
-          <p className="text-sm text-gray-600">
-            {`Quantidade: ${data.quantidade} (${percQtd.toFixed(1)}%)`}
-          </p>
-          <p className="text-sm text-gray-600">
-            {`Ticket Médio: ${formatCurrency(data.ticketMedio)}`}
-          </p>
+        <div className="bg-white/95 backdrop-blur-sm p-4 border border-gray-200 rounded-xl shadow-2xl min-w-[280px] animate-in fade-in slide-in-from-right-2 duration-200">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+            <p className="font-bold text-gray-900 text-sm truncate flex-1">{label}</p>
+            <button
+              onClick={() => setSelectedProduct(selectedProduct === data.sku ? null : data.sku)}
+              className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors flex-shrink-0 ml-2"
+            >
+              {selectedProduct === data.sku ? '✓ Fixado' : 'Fixar'}
+            </button>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-blue-50 rounded-lg p-2">
+                <div className="text-[10px] text-blue-600 font-medium uppercase tracking-wide">Faturamento</div>
+                <div className="text-base font-bold text-blue-700">{formatCurrency(data.faturamento)}</div>
+                <div className="text-[10px] text-blue-500 mt-0.5">{percFat.toFixed(1)}% do total</div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-2">
+                <div className="text-[10px] text-green-600 font-medium uppercase tracking-wide">Quantidade</div>
+                <div className="text-base font-bold text-green-700">{data.quantidade.toLocaleString('pt-BR')}</div>
+                <div className="text-[10px] text-green-500 mt-0.5">{percQtd.toFixed(1)}% do total</div>
+              </div>
+            </div>
+            
+            <div className="bg-purple-50 rounded-lg p-2">
+              <div className="text-[10px] text-purple-600 font-medium uppercase tracking-wide">Ticket Médio</div>
+              <div className="text-base font-bold text-purple-700">{formatCurrency(data.ticketMedio)}</div>
+              <div className="text-[10px] text-purple-500 mt-0.5">Por unidade vendida</div>
+            </div>
+            
+            {totalFaturamento > 0 && (
+              <div className="flex items-center gap-2 text-xs text-gray-500 pt-2 border-t border-gray-100">
+                <span>SKU: {data.sku}</span>
+                <span>•</span>
+                <span className="font-semibold text-gray-700">Rank #{dadosOrdenados.findIndex(p => p.sku === data.sku) + 1}</span>
+              </div>
+            )}
+          </div>
         </div>
       );
     }
@@ -184,72 +246,198 @@ export default function TopProdutosFaturamento({
   }
 
   return (
-    <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center">
-          <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
-            <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
+    <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden flex flex-col h-full">
+      {/* Header com controles */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 px-5 py-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Top 10 Produtos</h3>
+              <p className="text-xs text-gray-600">Clique para fixar detalhes • Ordene por diferentes métricas</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-600">Top Produtos Faturamento</h3>
-            <p className="text-xs text-gray-500">Top 10 produtos por faturamento</p>
+          
+          {/* Seletor de ordenação */}
+          <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+            {(['faturamento', 'quantidade', 'ticketMedio'] as SortMode[]).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setSortMode(mode)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+                  sortMode === mode 
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                {mode === 'faturamento' && '💰 Faturamento'}
+                {mode === 'quantidade' && '📦 Quantidade'}
+                {mode === 'ticketMedio' && '🎯 Ticket Médio'}
+              </button>
+            ))}
           </div>
         </div>
-
-        {/* Informações do gráfico */}
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            Mostrando top 10 produtos por faturamento
+        
+        {/* KPIs resumidos */}
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="bg-white/70 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/50">
+            <div className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Total Faturado</div>
+            <div className="text-sm font-bold text-blue-600">{formatCurrency(totalFaturamento)}</div>
+          </div>
+          <div className="bg-white/70 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/50">
+            <div className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Unidades</div>
+            <div className="text-sm font-bold text-green-600">{totalQuantidade.toLocaleString('pt-BR')}</div>
+          </div>
+          <div className="bg-white/70 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/50">
+            <div className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">Ticket Médio Geral</div>
+            <div className="text-sm font-bold text-purple-600">
+              {totalQuantidade > 0 ? formatCurrency(totalFaturamento / totalQuantidade) : '—'}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-[400px] -mb-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            layout="vertical"
-            data={dados}
-            margin={{
-              top: 5,
-              right: 30,
-              left: 5,
-              bottom: 5,
-            }}
-            barCategoryGap="15%"
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis
-              type="number"
-              stroke="#6b7280"
-              fontSize={10}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(value) => formatCurrency(value)}
-              angle={0}
-              height={40}
-            />
-            <YAxis
-              type="category"
-              dataKey="produto"
-              stroke="#6b7280"
-              fontSize={10}
-              tickLine={false}
-              axisLine={false}
-              width={150}
-              interval={0}
-            />
-            <Tooltip content={<CustomTooltip />} />
+      {/* Gráfico */}
+      <div className="flex-1 p-5">
+        <div className="h-full min-h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              layout="vertical"
+              data={dadosOrdenados}
+              margin={{ top: 5, right: 30, left: 5, bottom: 5 }}
+              barCategoryGap="12%"
+              onMouseMove={(e: any) => {
+                if (e && e.activeLabel) {
+                  setHoveredProduct(e.activeLabel);
+                }
+              }}
+              onMouseLeave={() => setHoveredProduct(null)}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+              <XAxis
+                type="number"
+                stroke="#6b7280"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => {
+                  if (sortMode === 'quantidade') return value.toLocaleString('pt-BR');
+                  return formatCurrency(value);
+                }}
+                angle={0}
+                height={40}
+              />
+              <YAxis
+                type="category"
+                dataKey="produto"
+                stroke="#6b7280"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                width={150}
+                interval={0}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59, 130, 246, 0.05)' }} />
 
-            <Bar
-              dataKey="faturamento"
-              fill="#3b82f6"
-              radius={[0, 4, 4, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
+              <Bar
+                dataKey={sortMode}
+                radius={[0, 8, 8, 0]}
+                onClick={(data: any) => {
+                  setSelectedProduct(selectedProduct === data.sku ? null : data.sku);
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                {dadosOrdenados.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={getBarColor(index)}
+                    opacity={hoveredProduct === entry.produto || selectedProduct === entry.sku ? 1 : 0.85}
+                    className="transition-opacity duration-200"
+                  />
+                ))}
+                <LabelList
+                  dataKey={sortMode}
+                  position="right"
+                  fontSize={11}
+                  fontWeight="bold"
+                  fill="#374151"
+                  formatter={(value: number) => {
+                    if (sortMode === 'quantidade') return value.toLocaleString('pt-BR');
+                    return formatCurrency(value);
+                  }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
+
+      {/* Painel de detalhes do produto selecionado */}
+      {selectedProduct && (() => {
+        const produto = dadosOrdenados.find(p => p.sku === selectedProduct);
+        if (!produto) return null;
+        
+        const rank = dadosOrdenados.indexOf(produto) + 1;
+        const percFat = totalFaturamento > 0 ? (produto.faturamento / totalFaturamento) * 100 : 0;
+        const ticketMedioGeral = totalQuantidade > 0 ? totalFaturamento / totalQuantidade : 0;
+        const difTicket = ((produto.ticketMedio - ticketMedioGeral) / ticketMedioGeral) * 100;
+        
+        return (
+          <div className="px-5 py-4 bg-gradient-to-r from-indigo-50 to-blue-50 border-t border-gray-200 animate-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-bold flex items-center justify-center shadow-md">
+                  #{rank}
+                </span>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-800">{produto.produto}</h4>
+                  <p className="text-xs text-gray-500">SKU: {produto.sku}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedProduct(null)}
+                className="text-xs px-2 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                ✕ Fechar
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">Faturamento</div>
+                <div className="text-lg font-bold text-blue-600">{formatCurrency(produto.faturamento)}</div>
+                <div className="text-xs text-blue-500 mt-0.5">{percFat.toFixed(1)}% do total</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">Quantidade</div>
+                <div className="text-lg font-bold text-green-600">{produto.quantidade.toLocaleString('pt-BR')}</div>
+                <div className="text-xs text-green-500 mt-0.5">unidades</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">Ticket Médio</div>
+                <div className="text-lg font-bold text-purple-600">{formatCurrency(produto.ticketMedio)}</div>
+                <div className={`text-xs mt-0.5 font-semibold ${difTicket >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {difTicket >= 0 ? '↑' : '↓'} {Math.abs(difTicket).toFixed(1)}% vs geral
+                </div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">Participação</div>
+                <div className="text-lg font-bold text-orange-600">{percFat.toFixed(1)}%</div>
+                <div className="text-xs text-gray-400 mt-0.5">do faturamento</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">Posição</div>
+                <div className="text-lg font-bold text-indigo-600">#{rank}</div>
+                <div className="text-xs text-gray-400 mt-0.5">no ranking</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
