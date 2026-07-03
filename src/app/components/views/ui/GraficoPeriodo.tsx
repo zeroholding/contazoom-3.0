@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart, Brush, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, Brush, ReferenceLine } from "recharts";
 import NumberLoader from "../../../../components/NumberLoader";
 import { FiltroPeriodo } from "./FiltrosDashboard";
 import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "./FiltrosDashboardExtra";
@@ -63,7 +63,6 @@ export default function GraficoPeriodo({
   const [activeMetrics, setActiveMetrics] = useState<Set<MetricKey>>(
     new Set(['faturamento', 'lucroBruto', 'margemContribuicao'])
   );
-  const [hoveredPeriod, setHoveredPeriod] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null);
 
   useEffect(() => {
@@ -182,7 +181,6 @@ export default function GraficoPeriodo({
               .sort((a: any, b: any) => Math.abs(b.value) - Math.abs(a.value))
               .map((entry: any, index: number) => {
                 const config = METRICS_CONFIG[entry.dataKey as MetricKey];
-                const isPositive = entry.value >= 0;
                 return (
                   <div key={index} className="flex items-center justify-between gap-4 py-1">
                     <div className="flex items-center gap-2 flex-1">
@@ -223,30 +221,6 @@ export default function GraficoPeriodo({
               </div>
             </div>
           )}
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("pt-BR", { 
-      style: "currency", 
-      currency: "BRL",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value || 0);
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-          <p className="font-medium text-gray-900 mb-2">{`Período: ${label}`}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {`${entry.name}: ${formatCurrency(entry.value)}`}
-            </p>
-          ))}
         </div>
       );
     }
@@ -325,15 +299,30 @@ export default function GraficoPeriodo({
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                   viewMode === mode 
                     ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md' 
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                {mode === 'lines' && '📈 Linhas'}
-                {mode === 'areas' && '📊 Áreas'}
-                {mode === 'comparison' && '🔄 Comparar'}
+                {mode === 'lines' && (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 14l4-4 4 4 5-6" />
+                  </svg>
+                )}
+                {mode === 'areas' && (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18M7 16l3-4 3 2 5-7v9H7z" />
+                  </svg>
+                )}
+                {mode === 'comparison' && (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                )}
+                {mode === 'lines' && 'Linhas'}
+                {mode === 'areas' && 'Áreas'}
+                {mode === 'comparison' && 'Comparar'}
               </button>
             ))}
           </div>
@@ -349,8 +338,11 @@ export default function GraficoPeriodo({
                 <div key={key} className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500 font-medium">{config.name}</span>
-                    <span className={`text-lg font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                      {isPositive ? '↑' : '↓'} {Math.abs(value).toFixed(1)}%
+                    <span className={`flex items-center gap-1 text-lg font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                      <svg className={`w-4 h-4 ${isPositive ? '' : 'rotate-180'}`} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l5 5a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L5.707 9.707a1 1 0 01-1.414-1.414l5-5A1 1 0 0110 3z" clipRule="evenodd" />
+                      </svg>
+                      {Math.abs(value).toFixed(1)}%
                     </span>
                   </div>
                 </div>
@@ -374,9 +366,7 @@ export default function GraficoPeriodo({
                     ? 'bg-white shadow-md ring-2 scale-105'
                     : 'bg-white/50 hover:bg-white hover:shadow-sm opacity-50 hover:opacity-100'
                 }`}
-                style={{
-                  ringColor: isActive ? config.color : 'transparent',
-                }}
+                style={isActive ? ({ '--tw-ring-color': config.color } as React.CSSProperties) : undefined}
               >
                 <div 
                   className="w-3 h-3 rounded-full transition-transform group-hover:scale-110" 
@@ -404,12 +394,6 @@ export default function GraficoPeriodo({
               <AreaChart
                 data={dados}
                 margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                onMouseMove={(e: any) => {
-                  if (e && e.activeLabel) {
-                    setHoveredPeriod(e.activeLabel);
-                  }
-                }}
-                onMouseLeave={() => setHoveredPeriod(null)}
               >
                 <defs>
                   {Array.from(activeMetrics).map(metric => (
@@ -473,12 +457,6 @@ export default function GraficoPeriodo({
               <LineChart
                 data={dados}
                 margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                onMouseMove={(e: any) => {
-                  if (e && e.activeLabel) {
-                    setHoveredPeriod(e.activeLabel);
-                  }
-                }}
-                onMouseLeave={() => setHoveredPeriod(null)}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis 
@@ -519,15 +497,20 @@ export default function GraficoPeriodo({
                       strokeDasharray={isRevenue ? '0' : '5 5'}
                       name={config.name}
                       dot={{ fill: config.color, strokeWidth: 2, r: isRevenue ? 4 : 3 }}
-                      activeDot={{ 
-                        r: 7, 
-                        stroke: config.color, 
-                        strokeWidth: 2, 
-                        fill: '#fff',
-                        onClick: (e: any, payload: any) => {
-                          setSelectedPeriod(selectedPeriod === payload.periodo ? null : payload.periodo);
-                        },
-                        style: { cursor: 'pointer' }
+                      activeDot={(dotProps: any) => {
+                        const { cx, cy, payload } = dotProps;
+                        return (
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={7}
+                            stroke={config.color}
+                            strokeWidth={2}
+                            fill="#fff"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setSelectedPeriod(selectedPeriod === payload.periodo ? null : payload.periodo)}
+                          />
+                        );
                       }}
                     />
                   );
@@ -552,12 +535,20 @@ export default function GraficoPeriodo({
       {selectedPeriodData && (
         <div className="px-5 py-4 bg-gradient-to-r from-purple-50 to-blue-50 border-t border-gray-200 animate-in slide-in-from-bottom-4 duration-300">
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-bold text-gray-800">📊 Detalhes: {selectedPeriod}</h4>
+            <h4 className="flex items-center gap-1.5 text-sm font-bold text-gray-800">
+              <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Detalhes: {selectedPeriod}
+            </h4>
             <button
               onClick={() => setSelectedPeriod(null)}
-              className="text-xs px-2 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1 text-xs px-2 py-1 bg-white border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
             >
-              ✕ Fechar
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Fechar
             </button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
