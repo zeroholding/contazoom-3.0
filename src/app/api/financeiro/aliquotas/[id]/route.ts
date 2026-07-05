@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
+import { invalidateVendasCache } from "@/lib/cache";
 import {
   parseTaxPeriod,
   parseTaxRate,
@@ -92,6 +93,8 @@ export async function PUT(
       },
     });
 
+    invalidateVendasCache(userId);
+
     return NextResponse.json({
       data: { ...updated, aliquota: Number(updated.aliquota) },
     });
@@ -128,6 +131,8 @@ export async function DELETE(
         { status: 404 },
       );
     }
+
+    invalidateVendasCache(userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

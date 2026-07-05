@@ -8,7 +8,7 @@ import { cache, createCacheKey } from "@/lib/cache";
 // SKU, um TTL curto elimina o reprocessamento repetido dentro da mesma
 // sessão (ex: dashboard chama via /api/dashboard/stats e /api/sku/stats ao
 // mesmo tempo) sem entregar dado velho por muito tempo.
-const PENDING_SKU_CACHE_TTL = 60_000; // 60s
+const PENDING_SKU_CACHE_TTL = 300_000; // 5 min (invalidado em sync/SKU)
 
 type Plataforma = "Mercado Livre" | "Shopee";
 

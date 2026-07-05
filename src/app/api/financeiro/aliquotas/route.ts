@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
+import { invalidateVendasCache } from "@/lib/cache";
 import {
   parseTaxPeriod,
   parseTaxRate,
@@ -128,6 +129,9 @@ export async function POST(request: NextRequest) {
         ativo: true,
       },
     });
+
+    // Alíquota mudou o imposto usado no dashboard/DRE → limpar caches derivados.
+    invalidateVendasCache(userId);
 
     return NextResponse.json(
       { data: { ...created, aliquota: Number(created.aliquota) } },

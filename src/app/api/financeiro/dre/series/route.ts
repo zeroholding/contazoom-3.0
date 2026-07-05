@@ -5,7 +5,7 @@ import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 import { cache, createCacheKey } from "@/lib/cache";
 
-const CACHE_TTL_MS = 60000; // 60 segundos
+const CACHE_TTL_MS = 300000; // 5 min (invalidado em sync/SKU/alíquota/flex)
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

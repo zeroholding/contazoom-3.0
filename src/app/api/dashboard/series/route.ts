@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
       accountPlatformParam ?? "",
       accountIdParam ?? "",
     );
-    const cached = cache.get(cacheKey, 60000);
+    const cached = cache.get(cacheKey, 300000);
     if (cached) {
       return NextResponse.json(cached);
     }

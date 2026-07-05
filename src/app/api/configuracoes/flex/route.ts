@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
-import { cache, createCacheKey } from "@/lib/cache";
+import { invalidateVendasCache } from "@/lib/cache";
+import { invalidateFlexConfigCache } from "@/lib/flex-shipping-config";
 import { parseFlexConfigValues } from "@/lib/flex-shipping";
 
 export const runtime = "nodejs";
@@ -70,8 +71,11 @@ export async function POST(req: NextRequest) {
       });
     });
 
-    // Limpar o cache de vendas do Mercado Livre para forçar o recálculo do frete Flex
-    cache.delete(createCacheKey("vendas-meli", session.sub));
+    // Config de Flex mudou: limpar o cache do config E todos os caches
+    // derivados de venda do usuário (dashboard, financeiro, vendas), pois o
+    // frete Flex entra nesses cálculos. Assim o TTL maior nunca serve dado velho.
+    invalidateFlexConfigCache(session.sub);
+    invalidateVendasCache(session.sub);
 
     return NextResponse.json({ success: true, config });
   } catch (error) {
