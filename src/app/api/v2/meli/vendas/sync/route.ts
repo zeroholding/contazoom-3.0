@@ -1,3 +1,4 @@
+import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
 import { invalidateVendasCache } from "@/lib/cache";
 import { acquireSyncLock } from "@/lib/sync-lock";
@@ -170,30 +171,42 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    try {
-      const catalogCandidates = await fetchMeliCatalogSkuCandidates(
-        downloadOrderbuilder.ctx.current.accountData,
-        userId,
-      );
-      const catalogResult = await registerDiscoveredSkus(
-        userId,
-        catalogCandidates,
-      );
+    // O scan do catálogo inteiro (fetchMeliCatalogSkuCandidates) é CARO
+    // (~3 min numa conta grande) e só é útil na PRIMEIRA sincronização, para
+    // pré-descobrir SKUs. Em syncs incrementais ele re-varria o catálogo todo
+    // sem criar nada novo (found 407 / created 0) — os SKUs das vendas novas
+    // já são descobertos pelos próprios pedidos logo abaixo
+    // (collectSkuCandidatesFromMeliOrders). Então só rodamos o scan quando a
+    // conta ainda não tem vendas no banco (primeira sync).
+    const jaTemVendasMeli = await prisma.meliVenda.count({
+      where: { meliAccountId: account.id },
+    });
+    if (jaTemVendasMeli === 0) {
+      try {
+        const catalogCandidates = await fetchMeliCatalogSkuCandidates(
+          downloadOrderbuilder.ctx.current.accountData,
+          userId,
+        );
+        const catalogResult = await registerDiscoveredSkus(
+          userId,
+          catalogCandidates,
+        );
 
-      if (catalogResult.found > 0) {
-        console.log("[SKU Discovery][ML] Catalogo processado", {
+        if (catalogResult.found > 0) {
+          console.log("[SKU Discovery][ML] Catalogo processado (primeira sync)", {
+            accountId: account.id,
+            found: catalogResult.found,
+            created: catalogResult.created,
+            existing: catalogResult.existing,
+            skipped: catalogResult.skipped,
+          });
+        }
+      } catch (skuError) {
+        console.warn("[SKU Discovery][ML] Falha ao ler catalogo da conta", {
           accountId: account.id,
-          found: catalogResult.found,
-          created: catalogResult.created,
-          existing: catalogResult.existing,
-          skipped: catalogResult.skipped,
+          error: skuError instanceof Error ? skuError.message : String(skuError),
         });
       }
-    } catch (skuError) {
-      console.warn("[SKU Discovery][ML] Falha ao ler catalogo da conta", {
-        accountId: account.id,
-        error: skuError instanceof Error ? skuError.message : String(skuError),
-      });
     }
 
     try {

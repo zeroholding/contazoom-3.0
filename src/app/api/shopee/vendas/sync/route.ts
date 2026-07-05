@@ -487,38 +487,47 @@ export async function POST(req: NextRequest) {
       });
 
       try {
-        try {
-          const catalogCandidates = await fetchShopeeCatalogSkuCandidates(
-            {
-              id: conta.id,
-              shop_id: conta.shop_id,
-              shop_name: conta.shop_name,
-              access_token: conta.access_token,
-            },
-            { partnerId, partnerKey },
-          );
-          const catalogResult = await registerDiscoveredSkus(
-            userId,
-            catalogCandidates,
-          );
+        // Scan de catálogo Shopee só na PRIMEIRA sync desta conta. Em
+        // incrementais ele re-varria o catálogo inteiro sem criar SKU novo
+        // (found 803 / created 0) — os SKUs das vendas novas já são
+        // descobertos pelos próprios pedidos (collectSkuCandidatesFromShopeeOrders).
+        const jaTemVendasShopee = await prisma.shopeeVenda.count({
+          where: { shopeeAccountId: conta.id, valorTotal: { gt: 0 } },
+        });
+        if (jaTemVendasShopee === 0) {
+          try {
+            const catalogCandidates = await fetchShopeeCatalogSkuCandidates(
+              {
+                id: conta.id,
+                shop_id: conta.shop_id,
+                shop_name: conta.shop_name,
+                access_token: conta.access_token,
+              },
+              { partnerId, partnerKey },
+            );
+            const catalogResult = await registerDiscoveredSkus(
+              userId,
+              catalogCandidates,
+            );
 
-          if (catalogResult.found > 0) {
-            console.log("[SKU Discovery][Shopee] Catalogo processado", {
+            if (catalogResult.found > 0) {
+              console.log("[SKU Discovery][Shopee] Catalogo processado (primeira sync)", {
+                accountId: conta.id,
+                shopId: conta.shop_id,
+                found: catalogResult.found,
+                created: catalogResult.created,
+                existing: catalogResult.existing,
+                skipped: catalogResult.skipped,
+              });
+            }
+          } catch (skuError) {
+            console.warn("[SKU Discovery][Shopee] Falha ao ler catalogo", {
               accountId: conta.id,
               shopId: conta.shop_id,
-              found: catalogResult.found,
-              created: catalogResult.created,
-              existing: catalogResult.existing,
-              skipped: catalogResult.skipped,
+              error:
+                skuError instanceof Error ? skuError.message : String(skuError),
             });
           }
-        } catch (skuError) {
-          console.warn("[SKU Discovery][Shopee] Falha ao ler catalogo", {
-            accountId: conta.id,
-            shopId: conta.shop_id,
-            error:
-              skuError instanceof Error ? skuError.message : String(skuError),
-          });
         }
 
         // Buscar IDs existentes de forma otimizada (só consideramos como válidas as vendas com valor > 0)
