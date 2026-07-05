@@ -188,6 +188,13 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+// Cache do resultado de /api/admin/check no nível do módulo. O Sidebar
+// re-monta a cada navegação (cada página renderiza o seu), o que antes
+// disparava essa chamada (que bate no banco) em TODA troca de página.
+// Guardar o resultado enquanto a aba estiver aberta evita o refetch repetido.
+// Reseta naturalmente num full reload / novo login.
+let adminCheckCache: boolean | null = null;
+
 /** Handle exposto para animar fechamento */
 type RailFlyoutHandle = { close: () => Promise<void> };
 
@@ -349,11 +356,22 @@ export default function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
 
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(adminCheckCache ?? false);
   useEffect(() => {
-    fetch('/api/admin/check').then(r => r.json()).then(d => {
-      if (d.isAdmin) setIsAdmin(true);
-    }).catch(() => {});
+    // Já sabemos o resultado nesta sessão → não refazer a cada navegação.
+    if (adminCheckCache !== null) {
+      setIsAdmin(adminCheckCache);
+      return;
+    }
+    let aborted = false;
+    fetch('/api/admin/check')
+      .then(r => r.json())
+      .then(d => {
+        adminCheckCache = !!d.isAdmin;
+        if (!aborted) setIsAdmin(adminCheckCache);
+      })
+      .catch(() => {});
+    return () => { aborted = true; };
   }, []);
 
   const visibleItems = [...NAV_ITEMS];
