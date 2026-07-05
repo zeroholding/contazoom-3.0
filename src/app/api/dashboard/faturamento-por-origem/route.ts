@@ -164,39 +164,27 @@ export async function GET(req: NextRequest) {
       ? { userId: session.sub, ...dashboardWhereShopee }
       : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereShopee };
 
-    // Buscar vendas do Mercado Livre
-    const vendasMeli = await prisma.meliVenda.findMany({
-      where: whereClauseMeli,
-      select: {
-        valorTotal: true,
-        ads: true,
-        dataVenda: true,
-      },
-      distinct: ['orderId'],
-      orderBy: { dataVenda: "desc" },
-    });
-
-    // Buscar vendas do Shopee
-    const vendasShopee = await prisma.shopeeVenda.findMany({
-      where: whereClauseShopee,
-      select: {
-        valorTotal: true,
-        dataVenda: true,
-      },
-      distinct: ['orderId'],
-      orderBy: { dataVenda: "desc" },
-    });
-
-    // Consolidar vendas baseado no filtro de canal
-    let vendas;
-    if (canalParam === 'mercado_livre') {
-      vendas = vendasMeli;
-    } else if (canalParam === 'shopee') {
-      vendas = vendasShopee.map(v => ({ ...v, ads: null })); // Shopee não tem ads
-    } else {
-      // Se 'todos' ou não especificado, combinar ambas
-      vendas = [...vendasMeli, ...vendasShopee.map(v => ({ ...v, ads: null }))];
-    }
+    // Agregação no banco. Mercado Livre: groupBy por `ads` (bucketizado em JS).
+    // Shopee: sempre "Sem ADS", então basta um aggregate (soma + contagem).
+    // orderId é @unique em cada tabela, então não há duplicatas a deduplicar.
+    // Respeita o filtro de canal para evitar queries desnecessárias.
+    const [gruposMeliAds, aggShopee] = await Promise.all([
+      canalParam === 'shopee'
+        ? []
+        : prisma.meliVenda.groupBy({
+            by: ['ads'],
+            where: whereClauseMeli,
+            _sum: { valorTotal: true },
+            _count: { _all: true },
+          }),
+      canalParam === 'mercado_livre'
+        ? null
+        : prisma.shopeeVenda.aggregate({
+            where: whereClauseShopee,
+            _sum: { valorTotal: true },
+            _count: { _all: true },
+          }),
+    ]);
 
     // Agrupar por origem (Com ADS vs Sem ADS)
     let faturamentoComAds = 0;
@@ -204,23 +192,29 @@ export async function GET(req: NextRequest) {
     let quantidadeComAds = 0;
     let quantidadeSemAds = 0;
 
-    for (const venda of vendas) {
-      const valor = toNumber(venda.valorTotal);
-      
-      // Verificar se a venda tem ADS (apenas para Mercado Livre)
-      // Para vendas do Shopee, sempre considerar como "Sem ADS"
-      const temAds = 'ads' in venda && venda.ads && 
-                    venda.ads !== null && 
-                    venda.ads.toString().toLowerCase() !== 'null' && 
-                    venda.ads.toString().trim() !== '';
+    // Bucketizar grupos do Mercado Livre pela mesma regra de ADS de antes
+    for (const grupo of gruposMeliAds) {
+      const valor = toNumber(grupo._sum.valorTotal);
+      const qtd = grupo._count._all;
+
+      const temAds = grupo.ads &&
+                    grupo.ads !== null &&
+                    grupo.ads.toString().toLowerCase() !== 'null' &&
+                    grupo.ads.toString().trim() !== '';
 
       if (temAds) {
         faturamentoComAds += valor;
-        quantidadeComAds += 1;
+        quantidadeComAds += qtd;
       } else {
         faturamentoSemAds += valor;
-        quantidadeSemAds += 1;
+        quantidadeSemAds += qtd;
       }
+    }
+
+    // Shopee sempre entra como "Sem ADS"
+    if (aggShopee) {
+      faturamentoSemAds += toNumber(aggShopee._sum.valorTotal);
+      quantidadeSemAds += aggShopee._count._all;
     }
 
     const faturamentoTotal = faturamentoComAds + faturamentoSemAds;

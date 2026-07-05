@@ -156,22 +156,14 @@ export async function GET(req: NextRequest) {
       ? { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli }
       : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli };
 
-    // Buscar vendas do Mercado Livre
-    const vendas = await prisma.meliVenda.findMany({
+    // Agregação no banco via groupBy por exposicao (substitui findMany + loop).
+    // orderId é @unique, então não há duplicatas a deduplicar.
+    const gruposExposicao = await prisma.meliVenda.groupBy({
+      by: ['exposicao'],
       where: whereClauseMeli,
-      select: {
-        orderId: true,
-        valorTotal: true,
-        exposicao: true,
-        dataVenda: true,
-      },
-      orderBy: { dataVenda: "desc" },
+      _sum: { valorTotal: true },
+      _count: { _all: true },
     });
-    
-    // Remover duplicatas manualmente para evitar problemas com distinct
-    const vendasUnicas = Array.from(
-      new Map(vendas.map(v => [v.orderId, v])).values()
-    );
 
     // Agrupar por tipo de exposição (Premium vs Clássico) - apenas Mercado Livre
     let faturamentoPremium = 0;
@@ -179,18 +171,19 @@ export async function GET(req: NextRequest) {
     let quantidadePremium = 0;
     let quantidadeClassico = 0;
 
-    // Processar vendas do Mercado Livre (com exposição)
-    for (const venda of vendasUnicas) {
-      const valor = toNumber(venda.valorTotal);
-      const isPremium = venda.exposicao &&
-                       venda.exposicao.toString().toLowerCase().includes('premium');
+    // Bucketizar os grupos do Mercado Livre (com exposição)
+    for (const grupo of gruposExposicao) {
+      const valor = toNumber(grupo._sum.valorTotal);
+      const qtd = grupo._count._all;
+      const isPremium = grupo.exposicao &&
+                       grupo.exposicao.toString().toLowerCase().includes('premium');
 
       if (isPremium) {
         faturamentoPremium += valor;
-        quantidadePremium += 1;
+        quantidadePremium += qtd;
       } else {
         faturamentoClassico += valor;
-        quantidadeClassico += 1;
+        quantidadeClassico += qtd;
       }
     }
 

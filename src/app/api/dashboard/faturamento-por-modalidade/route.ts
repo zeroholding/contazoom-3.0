@@ -95,22 +95,26 @@ export async function GET(req: NextRequest) {
       ...dashboardWhereMeli,
     };
 
-    // Para Meli, agrupar por logisticType
-    const vendasMeli = canalParam === "shopee" ? [] : await prisma.meliVenda.findMany({
+    // Para Meli, agrupar por logisticType no banco (groupBy).
+    // orderId é @unique, então não há duplicatas a deduplicar.
+    const gruposMeli = canalParam === "shopee" ? [] : await prisma.meliVenda.groupBy({
+      by: ["logisticType"],
       where: whereMeli,
-      select: { orderId: true, logisticType: true, valorTotal: true, quantidade: true },
-      distinct: ["orderId"],
+      _sum: { valorTotal: true, quantidade: true },
+      _count: { _all: true },
     });
 
     const mapa = new Map<string, { faturamento: number; quantidade: number }>();
+    let totalVendas = 0;
 
-    for (const v of vendasMeli) {
-      const modalidade = v.logisticType?.trim() || "Outros";
+    for (const g of gruposMeli) {
+      const modalidade = g.logisticType?.trim() || "Outros";
       const atual = mapa.get(modalidade) ?? { faturamento: 0, quantidade: 0 };
       mapa.set(modalidade, {
-        faturamento: atual.faturamento + toNumber(v.valorTotal),
-        quantidade: atual.quantidade + (v.quantidade ?? 1),
+        faturamento: atual.faturamento + toNumber(g._sum.valorTotal),
+        quantidade: atual.quantidade + (g._sum.quantidade ?? 0),
       });
+      totalVendas += g._count._all;
     }
 
     const totalFaturamento = Array.from(mapa.values()).reduce((acc, v) => acc + v.faturamento, 0);
@@ -127,7 +131,7 @@ export async function GET(req: NextRequest) {
     const response = {
       modalidades,
       totalFaturamento: Math.round(totalFaturamento * 100) / 100,
-      totalVendas: vendasMeli.length,
+      totalVendas,
     };
 
     cache.set(cacheKey, response);

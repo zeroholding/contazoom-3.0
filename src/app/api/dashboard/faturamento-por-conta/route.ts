@@ -106,29 +106,35 @@ export async function GET(req: NextRequest) {
       ...dashboardWhereShopee,
     };
 
-    const [vendasMeli, vendasShopee] = await Promise.all([
-      canalParam === "shopee" ? [] : prisma.meliVenda.findMany({
+    // Agregação no banco via groupBy (substitui findMany + loop em JS).
+    // orderId é @unique em cada tabela, então não há duplicatas para deduplicar.
+    const [gruposMeli, gruposShopee] = await Promise.all([
+      canalParam === "shopee" ? [] : prisma.meliVenda.groupBy({
+        by: ["conta"],
         where: whereMeli,
-        select: { orderId: true, conta: true, valorTotal: true, quantidade: true },
-        distinct: ["orderId"],
+        _sum: { valorTotal: true, quantidade: true },
+        _count: { _all: true },
       }),
-      canalParam === "mercado_livre" ? [] : prisma.shopeeVenda.findMany({
+      canalParam === "mercado_livre" ? [] : prisma.shopeeVenda.groupBy({
+        by: ["conta"],
         where: whereShopee,
-        select: { orderId: true, conta: true, valorTotal: true, quantidade: true },
-        distinct: ["orderId"],
+        _sum: { valorTotal: true, quantidade: true },
+        _count: { _all: true },
       }),
     ]);
 
-    // Agrupar por conta
+    // Agrupar por conta (mescla meli + shopee por nome de conta)
     const mapa = new Map<string, { faturamento: number; quantidade: number }>();
+    let totalVendas = 0;
 
-    for (const v of [...vendasMeli, ...vendasShopee]) {
-      const conta = v.conta?.trim() || "Sem conta";
+    for (const g of [...gruposMeli, ...gruposShopee]) {
+      const conta = g.conta?.trim() || "Sem conta";
       const atual = mapa.get(conta) ?? { faturamento: 0, quantidade: 0 };
       mapa.set(conta, {
-        faturamento: atual.faturamento + toNumber(v.valorTotal),
-        quantidade: atual.quantidade + (v.quantidade ?? 1),
+        faturamento: atual.faturamento + toNumber(g._sum.valorTotal),
+        quantidade: atual.quantidade + (g._sum.quantidade ?? 0),
       });
+      totalVendas += g._count._all;
     }
 
     const totalFaturamento = Array.from(mapa.values()).reduce((acc, v) => acc + v.faturamento, 0);
@@ -145,7 +151,7 @@ export async function GET(req: NextRequest) {
     const response = {
       contas,
       totalFaturamento: Math.round(totalFaturamento * 100) / 100,
-      totalVendas: [...vendasMeli, ...vendasShopee].length,
+      totalVendas,
     };
 
     cache.set(cacheKey, response);

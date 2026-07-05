@@ -155,16 +155,13 @@ export async function GET(req: NextRequest) {
       ? { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli }
       : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli };
 
-    // Buscar vendas do Mercado Livre
-    const vendas = await prisma.meliVenda.findMany({
+    // Agregação no banco via groupBy por tipoAnuncio (substitui findMany + loop).
+    // orderId é @unique, então não há duplicatas a deduplicar.
+    const gruposTipoAnuncio = await prisma.meliVenda.groupBy({
+      by: ['tipoAnuncio'],
       where: whereClauseMeli,
-      select: {
-        valorTotal: true,
-        tipoAnuncio: true,
-        dataVenda: true,
-      },
-      distinct: ['orderId'],
-      orderBy: { dataVenda: "desc" },
+      _sum: { valorTotal: true },
+      _count: { _all: true },
     });
 
     // Agrupar por tipo de anúncio (Catálogo vs Próprio) - apenas Mercado Livre
@@ -173,18 +170,19 @@ export async function GET(req: NextRequest) {
     let quantidadeCatalogo = 0;
     let quantidadeProprio = 0;
 
-    // Processar vendas do Mercado Livre (com tipoAnuncio)
-    for (const venda of vendas) {
-      const valor = toNumber(venda.valorTotal);
-      const isCatalogo = venda.tipoAnuncio &&
-                        venda.tipoAnuncio.toString().toLowerCase().includes('catalogo');
+    // Bucketizar os grupos do Mercado Livre (com tipoAnuncio)
+    for (const grupo of gruposTipoAnuncio) {
+      const valor = toNumber(grupo._sum.valorTotal);
+      const qtd = grupo._count._all;
+      const isCatalogo = grupo.tipoAnuncio &&
+                        grupo.tipoAnuncio.toString().toLowerCase().includes('catalogo');
 
       if (isCatalogo) {
         faturamentoCatalogo += valor;
-        quantidadeCatalogo += 1;
+        quantidadeCatalogo += qtd;
       } else {
         faturamentoProprio += valor;
-        quantidadeProprio += 1;
+        quantidadeProprio += qtd;
       }
     }
 
