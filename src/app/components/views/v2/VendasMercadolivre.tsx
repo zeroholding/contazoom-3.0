@@ -442,7 +442,7 @@ export default function VendasMercadolivreV2() {
       </div>
 
       {/* Conteúdo */}
-      <main className={`relative z-20 pt-16 p-6 ${mdMlVar}`}>
+      <main className={`relative z-20 pt-16 px-6 pb-6 ${mdMlVar}`}>
         <section className="p-6">
           <HeaderVendasMercadolivre
             totalItems={pagination.totalItems}
