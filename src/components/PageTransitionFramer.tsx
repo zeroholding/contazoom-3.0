@@ -11,16 +11,19 @@ export default function PageTransitionFramer({
 }) {
   const pathname = usePathname();
 
+  // Transição leve e SEM `mode="wait"`: a página nova monta imediatamente
+  // (sem esperar a antiga fazer fade-out), com um fade-in curto. Antes o
+  // `mode="wait"` serializava saída (150ms) + entrada (150ms) = ~300ms de
+  // tela "morta" a cada navegação, mesmo antes de carregar dados.
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence initial={false}>
       <motion.div
         key={pathname}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
         transition={{
-          duration: 0.15,
-          ease: "easeInOut",
+          duration: 0.1,
+          ease: "easeOut",
         }}
         style={{
           width: "100%",

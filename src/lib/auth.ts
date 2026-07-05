@@ -64,18 +64,14 @@ export async function tryVerifySessionToken(
 ): Promise<SessionPayload | null> {
   if (!token) return null;
   try {
-    // Debug log enabled
-    console.log(`[Auth] Verifying token: ${token.substring(0, 10)}... (len: ${token.length})`);
     const secret = new TextEncoder().encode(getAuthSecret());
     const { payload } = await jwtVerify(token, secret);
 
     if (!payload || typeof payload === "string" || !payload.sub) return null;
     return payload as SessionPayload;
   } catch (error) {
-    console.error(
-      "Erro ao verificar token de sessão:",
-      error instanceof Error ? error.message : String(error)
-    );
+    // Token inválido/expirado é fluxo normal (usuário deslogado) — não poluir
+    // o log a cada request. Só reporta o caso crítico de config ausente.
     if (error instanceof Error && error.message.includes("JWT_SECRET")) {
       console.error("CRÍTICO: JWT_SECRET não está configurado corretamente!");
     }
