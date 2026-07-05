@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   useVendasSyncProgress,
   VendasSyncProgress,
@@ -759,9 +759,20 @@ export function useVendasV2(
     }
   };
 
-  const loadVendasFromDatabase = async (
+  // Chave da carga em andamento — usada para deduplicar chamadas idênticas
+  // simultâneas (o effect do hook e o effect da view disparavam a MESMA
+  // busca no mount). Liberada ao terminar, então reloads legítimos depois
+  // continuam funcionando.
+  const inFlightLoadKeyRef = useRef<string | null>(null);
+
+  const loadVendasFromDatabase = useCallback(async (
     filters: VendaFilters = DEFAULT_FILTERS,
   ) => {
+    const loadKey = `${platform}::${JSON.stringify(filters)}`;
+    if (inFlightLoadKeyRef.current === loadKey) {
+      return; // já há uma carga idêntica em andamento
+    }
+    inFlightLoadKeyRef.current = loadKey;
     try {
       console.log(
         `[useVendas] Iniciando carregamento de vendas para plataforma: ${platform}`,
@@ -793,7 +804,7 @@ export function useVendasV2(
         const lastSync = data.lastSync ?? null;
 
         console.log(
-          `[useVendas] ✅ Carregamento instantâneo da página ${paginationResult.page} com limite de ${pagination.limit}: ${countResult.all} vendas`,
+          `[useVendas] ✅ Carregamento da página ${paginationResult?.page} (limite ${paginationResult?.limit}): ${countResult?.all} vendas`,
         );
 
         setVendas(allVendas);
@@ -840,8 +851,10 @@ export function useVendasV2(
       );
     } finally {
       setIsTableLoading(false);
+      inFlightLoadKeyRef.current = null;
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform]);
 
   // Carrega dados quando a plataforma mudar
   useEffect(() => {

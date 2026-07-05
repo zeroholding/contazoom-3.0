@@ -102,52 +102,83 @@ async function processVendas(
 ) {
   const where = { userId: session.sub, ...options.where };
 
-  const [vendas, totalItemsCount, allCount, paidCount, cancelledCount] = await prisma.$transaction([
-    prisma.meliVenda.findMany({
-      where,
-      skip: options?.skip ?? 0,
-      take: options?.take ?? 10,
-      select: {
-        orderId: true,
-        dataVenda: true,
-        status: true,
-        conta: true,
-        meliAccountId: true,
-        valorTotal: true,
-        quantidade: true,
-        unitario: true,
-        taxaPlataforma: true,
-        frete: true,
-        freteAjuste: true,
-        titulo: true,
-        sku: true,
-        comprador: true,
-        logisticType: true,
-        envioMode: true,
-        shippingStatus: true,
-        shippingId: true,
-        exposicao: true,
-        tipoAnuncio: true,
-        ads: true,
-        plataforma: true,
-        canal: true,
-        tags: true,
-        internalTags: true,
-        latitude: true,
-        longitude: true,
-        rawData: true,
-        sincronizadoEm: true,
-        meliAccount: {
-          select: { nickname: true, ml_user_id: true },
-        },
+  // A listagem (findMany) muda por página (skip/take). Já os CONTADORES
+  // (total + abas Todas/Pagas/Canceladas) são os MESMOS entre páginas com os
+  // mesmos filtros — antes eram 4 counts recalculados a cada troca de página,
+  // cada um varrendo todas as vendas do usuário. Agora os counts são cacheados
+  // por usuário+filtros (TTL 5min, invalidado no sync via invalidateVendasCache).
+  const vendas = await prisma.meliVenda.findMany({
+    where,
+    skip: options?.skip ?? 0,
+    take: options?.take ?? 10,
+    select: {
+      orderId: true,
+      dataVenda: true,
+      status: true,
+      conta: true,
+      meliAccountId: true,
+      valorTotal: true,
+      quantidade: true,
+      unitario: true,
+      taxaPlataforma: true,
+      frete: true,
+      freteAjuste: true,
+      titulo: true,
+      sku: true,
+      comprador: true,
+      logisticType: true,
+      envioMode: true,
+      shippingStatus: true,
+      shippingId: true,
+      exposicao: true,
+      tipoAnuncio: true,
+      ads: true,
+      plataforma: true,
+      canal: true,
+      tags: true,
+      internalTags: true,
+      latitude: true,
+      longitude: true,
+      rawData: true,
+      sincronizadoEm: true,
+      meliAccount: {
+        select: { nickname: true, ml_user_id: true },
       },
-      orderBy: { dataVenda: "desc" },
-    }),
-    prisma.meliVenda.count({ where }),
-    prisma.meliVenda.count({ where: { ...where, status: undefined } }),
-    prisma.meliVenda.count({ where: { ...where, status: "paid" } }),
-    prisma.meliVenda.count({ where: { ...where, status: "cancelled" } }),
-  ]);
+    },
+    orderBy: { dataVenda: "desc" },
+  });
+
+  const countsCacheKey = createCacheKey(
+    "meli-vendas-counts",
+    session.sub,
+    JSON.stringify(options.where ?? {}),
+  );
+  let counts = cache.get<{
+    total: number;
+    all: number;
+    paid: number;
+    cancelled: number;
+  }>(countsCacheKey, 300000);
+  if (!counts) {
+    const [totalCount, allCountRaw, paidCountRaw, cancelledCountRaw] =
+      await prisma.$transaction([
+        prisma.meliVenda.count({ where }),
+        prisma.meliVenda.count({ where: { ...where, status: undefined } }),
+        prisma.meliVenda.count({ where: { ...where, status: "paid" } }),
+        prisma.meliVenda.count({ where: { ...where, status: "cancelled" } }),
+      ]);
+    counts = {
+      total: totalCount,
+      all: allCountRaw,
+      paid: paidCountRaw,
+      cancelled: cancelledCountRaw,
+    };
+    cache.set(countsCacheKey, counts);
+  }
+  const totalItemsCount = counts.total;
+  const allCount = counts.all;
+  const paidCount = counts.paid;
+  const cancelledCount = counts.cancelled;
 
   console.log(
     `[API_MELI_VENDAS] Encontradas ${vendas.length} vendas no banco.`,
