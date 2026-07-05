@@ -32,11 +32,33 @@ export async function GET(req: NextRequest) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
+    // Referências compartilhadas entre start()/cancel()/abort para garantir
+    // que o heartbeat SEMPRE seja encerrado quando a conexão fechar. Antes o
+    // interval só era limpo no listener de 'abort'; quando o stream era
+    // cancelado (cliente desconecta) o timer continuava rodando e tentava
+    // escrever num controller já fechado -> "Controller is already closed".
+    let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+    let cleanup: (() => void) | null = null;
+    let closed = false;
+
+    const teardown = () => {
+      if (closed) return;
+      closed = true;
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      if (cleanup) {
+        cleanup();
+        cleanup = null;
+      }
+    };
+
     // Criar ReadableStream para SSE
     const stream = new ReadableStream({
       start(controller) {
         // Adicionar conexão ao mapa global
-        const cleanup = addUserConnection(userId, controller);
+        cleanup = addUserConnection(userId, controller);
 
         // Enviar evento de conexão estabelecida
         const encoder = new TextEncoder();
@@ -48,7 +70,8 @@ export async function GET(req: NextRequest) {
         controller.enqueue(encoder.encode(connectMessage));
 
         // Configurar heartbeat a cada 30 segundos para manter conexão viva
-        const heartbeatInterval = setInterval(() => {
+        heartbeatInterval = setInterval(() => {
+          if (closed) return;
           try {
             const heartbeatMessage = `data: ${JSON.stringify({
               type: "heartbeat",
@@ -57,19 +80,18 @@ export async function GET(req: NextRequest) {
             controller.enqueue(encoder.encode(heartbeatMessage));
           } catch (error) {
             console.warn("[SSE Local] Erro ao enviar heartbeat:", error);
-            clearInterval(heartbeatInterval);
-            cleanup();
+            teardown();
           }
         }, 30000);
 
         // Limpar intervalo quando conexão fechar
         req.signal.addEventListener('abort', () => {
-          clearInterval(heartbeatInterval);
-          cleanup();
+          teardown();
         });
       },
       cancel() {
         console.log(`[SSE Local] Conexão SSE cancelada para usuário`);
+        teardown();
       }
     });
 

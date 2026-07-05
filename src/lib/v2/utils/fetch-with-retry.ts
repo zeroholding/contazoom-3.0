@@ -22,13 +22,36 @@ export async function fetchWithRetry(
   options: RequestInit,
   maxRetries: number = 3,
   userId?: string,
+  timeoutMs: number = 30000,
 ): Promise<Response> {
   let lastError: Error | null = null;
   let lastResponse: Response | null = null;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // Timeout por tentativa: sem isto, um request pendurado (ML/Shopee lenta)
+    // travava o sync indefinidamente — cauda de latência. Combinamos o timeout
+    // com o signal que o chamador já tenha passado, se houver.
+    let timeoutSignal: AbortSignal;
     try {
-      const response = await fetch(url, options);
+      timeoutSignal = AbortSignal.timeout(timeoutMs);
+    } catch {
+      // Ambiente sem AbortSignal.timeout: fallback com controller manual
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), timeoutMs);
+      timeoutSignal = controller.signal;
+    }
+
+    let signal: AbortSignal = timeoutSignal;
+    if (options.signal) {
+      try {
+        signal = AbortSignal.any([options.signal, timeoutSignal]);
+      } catch {
+        signal = options.signal; // ambiente sem AbortSignal.any
+      }
+    }
+
+    try {
+      const response = await fetch(url, { ...options, signal });
       lastResponse = response;
 
       // Se sucesso, retorna imediatamente
