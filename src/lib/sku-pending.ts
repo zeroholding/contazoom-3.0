@@ -120,159 +120,6 @@ function ensureEntry(
   return created;
 }
 
-function addSaleToEntry(
-  entry: MutablePendingSkuEntry,
-  sale: {
-    plataforma: Plataforma;
-    dataVenda: Date | null;
-    quantidade: number;
-    valor: number;
-  },
-) {
-  entry.estatisticas.totalVendas += 1;
-  entry.estatisticas.totalQuantidadeVendida += sale.quantidade;
-  entry.estatisticas.totalValorVendido += sale.valor;
-
-  const status =
-    entry.estatisticas.statusPorPlataforma[sale.plataforma] || {
-      vendas: 0,
-      quantidade: 0,
-      valor: 0,
-    };
-  status.vendas += 1;
-  status.quantidade += sale.quantidade;
-  status.valor += sale.valor;
-  entry.estatisticas.statusPorPlataforma[sale.plataforma] = status;
-
-  if (sale.dataVenda) {
-    if (!entry.primeiraVenda || sale.dataVenda < entry.primeiraVenda) {
-      entry.primeiraVenda = sale.dataVenda;
-    }
-    if (!entry.ultimaVenda || sale.dataVenda > entry.ultimaVenda) {
-      entry.ultimaVenda = sale.dataVenda;
-    }
-  }
-}
-
-function addSaleCandidate(
-  map: Map<string, MutablePendingSkuEntry>,
-  registeredSkus: Map<
-    string,
-    { id: string; produto: string; custoUnitario: unknown; ativo: boolean }
-  >,
-  input: {
-    sku: unknown;
-    produto?: string | null;
-    plataforma: Plataforma;
-    dataVenda: Date | null;
-    quantidade: number;
-    valor: number;
-  },
-) {
-  const sku = normalizeDiscoveredSku(input.sku);
-  if (!sku) return;
-
-  const registered = registeredSkus.get(skuLookupKey(sku));
-  const custoUnitario = registered ? toNumber(registered.custoUnitario) : 0;
-
-  if (registered && (!registered.ativo || custoUnitario > 0)) {
-    return;
-  }
-
-  const entry = ensureEntry(map, {
-    sku,
-    produto: registered?.produto || input.produto,
-    plataforma: input.plataforma,
-    cadastrado: Boolean(registered),
-    skuId: registered?.id,
-    custoUnitario,
-    situacao: registered ? "Sem custo" : "Nao cadastrado",
-  });
-
-  addSaleToEntry(entry, input);
-}
-
-function extractMeliSaleCandidates(venda: any) {
-  const candidates: Array<{
-    sku: unknown;
-    produto?: string | null;
-    quantidade: number;
-    valor: number;
-  }> = [];
-
-  const rawOrder = venda?.rawData?.order;
-  const orderItems = Array.isArray(rawOrder?.order_items)
-    ? rawOrder.order_items
-    : [];
-
-  for (const orderItem of orderItems) {
-    const item = orderItem?.item || {};
-    const quantidade = toNumber(orderItem?.quantity) || 1;
-    const unitario = toNumber(orderItem?.unit_price);
-
-    candidates.push({
-      sku:
-        item?.seller_sku ??
-        item?.sku ??
-        orderItem?.seller_sku ??
-        orderItem?.sku,
-      produto: item?.title || venda?.titulo,
-      quantidade,
-      valor: unitario > 0 ? unitario * quantidade : toNumber(venda?.valorTotal),
-    });
-  }
-
-  if (candidates.length === 0) {
-    candidates.push({
-      sku: venda?.sku,
-      produto: venda?.titulo,
-      quantidade: toNumber(venda?.quantidade) || 1,
-      valor: toNumber(venda?.valorTotal),
-    });
-  }
-
-  return candidates;
-}
-
-function extractShopeeSaleCandidates(venda: any) {
-  const candidates: Array<{
-    sku: unknown;
-    produto?: string | null;
-    quantidade: number;
-    valor: number;
-  }> = [];
-
-  const itemList = Array.isArray(venda?.rawData?.item_list)
-    ? venda.rawData.item_list
-    : [];
-
-  for (const item of itemList) {
-    const quantidade = toNumber(item?.model_quantity_purchased) || 1;
-    const unitario =
-      toNumber(item?.model_discounted_price) ||
-      toNumber(item?.model_original_price) ||
-      toNumber(item?.item_price);
-
-    candidates.push({
-      sku: item?.item_sku ?? item?.model_sku ?? item?.variation_sku,
-      produto: item?.item_name || venda?.titulo,
-      quantidade,
-      valor: unitario > 0 ? unitario * quantidade : toNumber(venda?.valorTotal),
-    });
-  }
-
-  if (candidates.length === 0) {
-    candidates.push({
-      sku: venda?.sku,
-      produto: venda?.titulo,
-      quantidade: toNumber(venda?.quantidade) || 1,
-      valor: toNumber(venda?.valorTotal),
-    });
-  }
-
-  return candidates;
-}
-
 function serializeEntry(entry: MutablePendingSkuEntry): PendingSkuEntry {
   return {
     ...entry,
@@ -320,10 +167,23 @@ export function invalidatePendingSkuSummary(userId: string): void {
   cache.delete(createCacheKey("sku-pending-summary", userId));
 }
 
+type SaleSkuGroup = {
+  sku: string | null;
+  _count: { _all: number };
+  _sum: { quantidade: number | null; valorTotal: unknown };
+  _min: { dataVenda: Date | null };
+  _max: { dataVenda: Date | null };
+};
+
 async function computePendingSkuSummary(
   userId: string,
 ): Promise<PendingSkuSummary> {
-  const [registeredSkusRows, meliVendas, shopeeVendas] = await Promise.all([
+  // Agregação feita no BANCO (groupBy pela coluna `sku`), em vez de trazer
+  // todas as vendas com `rawData` e iterar em JS. O resultado é ~1 linha por
+  // SKU distinto (centenas), não dezenas de milhares de linhas com JSON.
+  // Usa a coluna `sku` — a mesma que o restante do sistema (CMV, tabela de
+  // vendas) trata como o SKU da venda —, mantendo consistência total.
+  const [registeredSkusRows, meliGroups, shopeeGroups] = await Promise.all([
     prisma.sKU.findMany({
       where: { userId },
       select: {
@@ -336,27 +196,21 @@ async function computePendingSkuSummary(
         tags: true,
       },
     }),
-    prisma.meliVenda.findMany({
-      where: { userId },
-      select: {
-        sku: true,
-        titulo: true,
-        dataVenda: true,
-        quantidade: true,
-        valorTotal: true,
-        rawData: true,
-      },
+    prisma.meliVenda.groupBy({
+      by: ["sku"],
+      where: { userId, sku: { not: null } },
+      _count: { _all: true },
+      _sum: { quantidade: true, valorTotal: true },
+      _min: { dataVenda: true },
+      _max: { dataVenda: true },
     }),
-    prisma.shopeeVenda.findMany({
-      where: { userId },
-      select: {
-        sku: true,
-        titulo: true,
-        dataVenda: true,
-        quantidade: true,
-        valorTotal: true,
-        rawData: true,
-      },
+    prisma.shopeeVenda.groupBy({
+      by: ["sku"],
+      where: { userId, sku: { not: null } },
+      _count: { _all: true },
+      _sum: { quantidade: true, valorTotal: true },
+      _min: { dataVenda: true },
+      _max: { dataVenda: true },
     }),
   ]);
 
@@ -365,6 +219,7 @@ async function computePendingSkuSummary(
   );
   const pending = new Map<string, MutablePendingSkuEntry>();
 
+  // 1) SKUs cadastrados como "filho", ativos e sem custo → pendentes "Sem custo"
   for (const sku of registeredSkusRows) {
     const custoUnitario = toNumber(sku.custoUnitario);
     if (sku.tipo !== "filho" || !sku.ativo || custoUnitario > 0) continue;
@@ -380,37 +235,88 @@ async function computePendingSkuSummary(
     });
   }
 
-  for (const venda of meliVendas) {
-    const seenInSale = new Set<string>();
-    for (const candidate of extractMeliSaleCandidates(venda)) {
-      const sku = normalizeDiscoveredSku(candidate.sku);
-      const key = skuLookupKey(sku);
-      if (!sku || seenInSale.has(key)) continue;
-      seenInSale.add(key);
+  // 2) SKUs que aparecem em vendas: pendentes se não cadastrados, ou
+  //    cadastrados sem custo. SKUs com custo/ inativos são ignorados.
+  const addGroup = (group: SaleSkuGroup, plataforma: Plataforma) => {
+    const sku = normalizeDiscoveredSku(group.sku);
+    if (!sku) return;
 
-      addSaleCandidate(pending, registeredSkus, {
-        ...candidate,
-        sku,
-        plataforma: "Mercado Livre",
-        dataVenda: toDate(venda.dataVenda),
-      });
+    const registered = registeredSkus.get(skuLookupKey(sku));
+    const custoUnitario = registered ? toNumber(registered.custoUnitario) : 0;
+
+    // Cadastrado com custo (>0) ou inativo → não é pendente.
+    if (registered && (!registered.ativo || custoUnitario > 0)) return;
+
+    const entry = ensureEntry(pending, {
+      sku,
+      produto: registered?.produto,
+      plataforma,
+      cadastrado: Boolean(registered),
+      skuId: registered?.id,
+      custoUnitario,
+      situacao: registered ? "Sem custo" : "Nao cadastrado",
+    });
+
+    const vendas = group._count._all;
+    const quantidade = toNumber(group._sum.quantidade);
+    const valor = toNumber(group._sum.valorTotal);
+
+    entry.estatisticas.totalVendas += vendas;
+    entry.estatisticas.totalQuantidadeVendida += quantidade;
+    entry.estatisticas.totalValorVendido += valor;
+
+    const st = entry.estatisticas.statusPorPlataforma[plataforma] || {
+      vendas: 0,
+      quantidade: 0,
+      valor: 0,
+    };
+    st.vendas += vendas;
+    st.quantidade += quantidade;
+    st.valor += valor;
+    entry.estatisticas.statusPorPlataforma[plataforma] = st;
+
+    const min = toDate(group._min.dataVenda);
+    const max = toDate(group._max.dataVenda);
+    if (min && (!entry.primeiraVenda || min < entry.primeiraVenda)) {
+      entry.primeiraVenda = min;
     }
-  }
+    if (max && (!entry.ultimaVenda || max > entry.ultimaVenda)) {
+      entry.ultimaVenda = max;
+    }
+  };
 
-  for (const venda of shopeeVendas) {
-    const seenInSale = new Set<string>();
-    for (const candidate of extractShopeeSaleCandidates(venda)) {
-      const sku = normalizeDiscoveredSku(candidate.sku);
-      const key = skuLookupKey(sku);
-      if (!sku || seenInSale.has(key)) continue;
-      seenInSale.add(key);
+  for (const group of meliGroups) addGroup(group as SaleSkuGroup, "Mercado Livre");
+  for (const group of shopeeGroups) addGroup(group as SaleSkuGroup, "Shopee");
 
-      addSaleCandidate(pending, registeredSkus, {
-        ...candidate,
-        sku,
-        plataforma: "Shopee",
-        dataVenda: toDate(venda.dataVenda),
-      });
+  // 3) Nome do produto para SKUs pendentes NÃO cadastrados (que ficaram com o
+  //    placeholder "SKU x"). Busca um título representativo apenas para esse
+  //    conjunto pequeno (SKUs pendentes), não para todas as vendas.
+  const semTitulo = Array.from(pending.values()).filter(
+    (e) => !e.cadastrado && e.produto === `SKU ${e.sku}`,
+  );
+  if (semTitulo.length > 0) {
+    const skuCodes = semTitulo.map((e) => e.sku);
+    const [meliTitles, shopeeTitles] = await Promise.all([
+      prisma.meliVenda.findMany({
+        where: { userId, sku: { in: skuCodes } },
+        select: { sku: true, titulo: true },
+        distinct: ["sku"],
+      }),
+      prisma.shopeeVenda.findMany({
+        where: { userId, sku: { in: skuCodes } },
+        select: { sku: true, titulo: true },
+        distinct: ["sku"],
+      }),
+    ]);
+    const titleBySku = new Map<string, string>();
+    for (const row of [...meliTitles, ...shopeeTitles]) {
+      if (row.sku && row.titulo && !titleBySku.has(skuLookupKey(row.sku))) {
+        titleBySku.set(skuLookupKey(row.sku), row.titulo);
+      }
+    }
+    for (const entry of semTitulo) {
+      const titulo = titleBySku.get(skuLookupKey(entry.sku));
+      if (titulo) entry.produto = titulo;
     }
   }
 
