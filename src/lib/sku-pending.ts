@@ -1,5 +1,14 @@
 import prisma from "@/lib/prisma";
 import { normalizeDiscoveredSku } from "@/lib/sku-discovery";
+import { cache, createCacheKey } from "@/lib/cache";
+
+// TTL do cache do resumo de SKUs pendentes.
+// Essa função varre TODAS as vendas do usuário (operação cara). Como o
+// resultado só muda quando há novo sync de vendas ou alteração de custo de
+// SKU, um TTL curto elimina o reprocessamento repetido dentro da mesma
+// sessão (ex: dashboard chama via /api/dashboard/stats e /api/sku/stats ao
+// mesmo tempo) sem entregar dado velho por muito tempo.
+const PENDING_SKU_CACHE_TTL = 60_000; // 60s
 
 type Plataforma = "Mercado Livre" | "Shopee";
 
@@ -278,7 +287,40 @@ function serializeEntry(entry: MutablePendingSkuEntry): PendingSkuEntry {
   };
 }
 
+/**
+ * Resumo de SKUs pendentes (sem custo / não cadastrados) do usuário.
+ *
+ * Usa cache em memória com TTL curto porque a computação é cara (varre
+ * todas as vendas). Passe `forceRefresh: true` logo após um sync ou edição
+ * de custo de SKU para invalidar e recalcular.
+ */
 export async function buildPendingSkuSummary(
+  userId: string,
+  options?: { forceRefresh?: boolean },
+): Promise<PendingSkuSummary> {
+  const cacheKey = createCacheKey("sku-pending-summary", userId);
+
+  if (!options?.forceRefresh) {
+    const cached = cache.get<PendingSkuSummary>(cacheKey, PENDING_SKU_CACHE_TTL);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const summary = await computePendingSkuSummary(userId);
+  cache.set(cacheKey, summary);
+  return summary;
+}
+
+/**
+ * Invalida o cache do resumo de SKUs pendentes de um usuário.
+ * Chamar após sync de vendas ou alteração de custo/cadastro de SKU.
+ */
+export function invalidatePendingSkuSummary(userId: string): void {
+  cache.delete(createCacheKey("sku-pending-summary", userId));
+}
+
+async function computePendingSkuSummary(
   userId: string,
 ): Promise<PendingSkuSummary> {
   const [registeredSkusRows, meliVendas, shopeeVendas] = await Promise.all([

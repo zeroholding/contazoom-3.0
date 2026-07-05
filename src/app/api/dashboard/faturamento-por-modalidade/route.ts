@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,6 +52,25 @@ export async function GET(req: NextRequest) {
     const modalidadeParam = url.searchParams.get("modalidade");
     const accountPlatformParam = url.searchParams.get("accountPlatform");
     const accountIdParam = url.searchParams.get("accountId");
+
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-faturamento-por-modalidade",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
     let start: Date, end: Date, useRange: boolean;
     if (dataInicioParam && dataFimParam) {
@@ -104,11 +124,14 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.faturamento - a.faturamento);
 
-    return NextResponse.json({
+    const response = {
       modalidades,
       totalFaturamento: Math.round(totalFaturamento * 100) / 100,
       totalVendas: vendasMeli.length,
-    });
+    };
+
+    cache.set(cacheKey, response);
+    return NextResponse.json(response);
   } catch (err) {
     console.error("[faturamento-por-modalidade] Erro:", err);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -101,6 +102,25 @@ export async function GET(req: NextRequest) {
     const accountPlatformParam = url.searchParams.get("accountPlatform");
     const accountIdParam = url.searchParams.get("accountId");
 
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-faturamento-por-tipo-anuncio",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     let start: Date;
     let end: Date;
     let usarTodasVendas = false;
@@ -146,17 +166,6 @@ export async function GET(req: NextRequest) {
       distinct: ['orderId'],
       orderBy: { dataVenda: "desc" },
     });
-
-    console.log(`[FaturamentoPorTipoAnuncio] Encontradas ${vendas.length} vendas Meli no período`);
-    console.log(`[FaturamentoPorTipoAnuncio] Período: ${usarTodasVendas ? 'todos' : `${start.toISOString()} - ${end.toISOString()}`}`);
-
-    if (vendas.length > 0) {
-      const catalogo = vendas.filter(v => v.tipoAnuncio && v.tipoAnuncio.toLowerCase().includes('catalogo'));
-      const proprio = vendas.filter(v => v.tipoAnuncio && v.tipoAnuncio.toLowerCase().includes('proprio'));
-      const outros = vendas.filter(v => !v.tipoAnuncio || (!v.tipoAnuncio.toLowerCase().includes('catalogo') && !v.tipoAnuncio.toLowerCase().includes('proprio')));
-      console.log(`[FaturamentoPorTipoAnuncio] Catálogo: ${catalogo.length}, Próprio: ${proprio.length}, Outros/Null: ${outros.length}`);
-      console.log(`[FaturamentoPorTipoAnuncio] Exemplos tipo anúncio:`, vendas.slice(0, 5).map(v => ({ tipoAnuncio: v.tipoAnuncio, valor: v.valorTotal })));
-    }
 
     // Agrupar por tipo de anúncio (Catálogo vs Próprio) - apenas Mercado Livre
     let faturamentoCatalogo = 0;
@@ -215,8 +224,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log(`[FaturamentoPorTipoAnuncio] Resultado final:`, resultado);
-
+    cache.set(cacheKey, resultado);
     return NextResponse.json(resultado);
   } catch (err) {
     console.error("Erro ao calcular faturamento por tipo de anúncio:", err);

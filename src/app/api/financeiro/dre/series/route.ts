@@ -3,6 +3,9 @@ import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
+import { cache, createCacheKey } from "@/lib/cache";
+
+const CACHE_TTL_MS = 60000; // 60 segundos
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +39,19 @@ export async function GET(req: NextRequest) {
 
     if (!mesesParam) {
       return NextResponse.json({ error: "Meses não informados" }, { status: 400 });
+    }
+
+    // 🔑 Cache em memória por usuário + combinação de filtros (meses/tipo/categorias)
+    const cacheKey = createCacheKey(
+      "financeiro-dre-series",
+      session.sub,
+      mesesParam,
+      tipoData,
+      catsParam || "all"
+    );
+    const cached = cache.get<Record<string, unknown>>(cacheKey, CACHE_TTL_MS);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const mesesStr = mesesParam.split(","); // Ex: ["2024-01", "2024-02"]
@@ -265,7 +281,7 @@ export async function GET(req: NextRequest) {
     totals.taxasTotal = totals.taxasMeli + totals.taxasShopee;
     totals.freteTotal = totals.freteMeli + totals.freteShopee;
 
-    return NextResponse.json({
+    const responsePayload = {
       months,
       categorias,
       valoresPorCategoriaMes,
@@ -280,7 +296,11 @@ export async function GET(req: NextRequest) {
       despesasPorMes,
       cmvPorMes,
       totals
-    });
+    };
+
+    cache.set(cacheKey, responsePayload);
+
+    return NextResponse.json(responsePayload);
   } catch (err) {
     console.error("❌ [DRE Series] Erro:", err);
     return NextResponse.json({ error: "Erro ao calcular DRE" }, { status: 500 });

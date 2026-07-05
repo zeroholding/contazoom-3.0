@@ -77,34 +77,70 @@ export async function GET(request: NextRequest) {
       prisma.sKU.count({ where }),
     ]);
 
-    // Para cada SKU, verificar se tem vendas associadas
-    const skusWithSalesStatus = await Promise.all(
-      skus.map(async (sku) => {
-        // Verificar se o SKU tem vendas no Mercado Livre
-        const meliSalesCount = await prisma.meliVenda.count({
-          where: {
-            userId: session.sub,
-            sku: sku.sku,
-          },
-        });
-
-        // Verificar se o SKU tem vendas na Shopee
-        const shopeeSalesCount = await prisma.shopeeVenda.count({
-          where: {
-            userId: session.sub,
-            sku: sku.sku,
-          },
-        });
-
-        const totalSales = meliSalesCount + shopeeSalesCount;
-
-        return {
-          ...sku,
-          hasSales: totalSales > 0,
-          salesCount: totalSales,
-        };
-      })
+    // Coletar os códigos de SKU válidos (não nulos/vazios) da página atual
+    const skuCodes = Array.from(
+      new Set(
+        skus
+          .map((sku) => sku.sku)
+          .filter((code): code is string => typeof code === 'string' && code.length > 0)
+      )
     );
+
+    // Agregar as contagens de vendas em lote (evita o padrão N+1):
+    // uma query groupBy por plataforma em vez de duas queries por SKU.
+    const [meliSalesGrouped, shopeeSalesGrouped] =
+      skuCodes.length > 0
+        ? await Promise.all([
+            prisma.meliVenda.groupBy({
+              by: ['sku'],
+              where: {
+                userId: session.sub,
+                sku: { in: skuCodes },
+              },
+              _count: { _all: true },
+            }),
+            prisma.shopeeVenda.groupBy({
+              by: ['sku'],
+              where: {
+                userId: session.sub,
+                sku: { in: skuCodes },
+              },
+              _count: { _all: true },
+            }),
+          ])
+        : [[], []];
+
+    // Montar um Map<sku, count> somando as duas plataformas
+    const salesCountBySku = new Map<string, number>();
+
+    for (const group of meliSalesGrouped) {
+      if (group.sku) {
+        salesCountBySku.set(
+          group.sku,
+          (salesCountBySku.get(group.sku) || 0) + group._count._all
+        );
+      }
+    }
+
+    for (const group of shopeeSalesGrouped) {
+      if (group.sku) {
+        salesCountBySku.set(
+          group.sku,
+          (salesCountBySku.get(group.sku) || 0) + group._count._all
+        );
+      }
+    }
+
+    // Enriquecer cada SKU com hasSales/salesCount a partir do Map agregado
+    const skusWithSalesStatus = skus.map((sku) => {
+      const totalSales = (sku.sku && salesCountBySku.get(sku.sku)) || 0;
+
+      return {
+        ...sku,
+        hasSales: totalSales > 0,
+        salesCount: totalSales,
+      };
+    });
 
     return NextResponse.json({
       skus: skusWithSalesStatus,

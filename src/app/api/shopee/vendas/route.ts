@@ -19,11 +19,36 @@ export async function GET(req: NextRequest) {
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
   try {
+    // === Paginação OPT-IN ===
+    // Se `page` ou `limit` vierem na query string, ativamos paginação server-side
+    // (skip/take + count). Caso contrário, mantemos o comportamento atual de
+    // retornar TODAS as vendas do usuário — necessário porque o front faz
+    // filtros/ordenação/contagens client-side com a lista completa.
+    const url = new URL(req.url);
+    const pageParam = url.searchParams.get("page");
+    const limitParam = url.searchParams.get("limit");
+    const isPaginated = pageParam !== null || limitParam !== null;
+
+    let page = 1;
+    let limit = 50;
+    if (isPaginated) {
+      const parsedPage = Number.parseInt(pageParam ?? "1", 10);
+      const parsedLimit = Number.parseInt(limitParam ?? "50", 10);
+      page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+      // Limitar `limit` entre 1 e 200 para proteger o servidor
+      limit =
+        Number.isFinite(parsedLimit) && parsedLimit > 0
+          ? Math.min(parsedLimit, 200)
+          : 50;
+    }
+
     // Verificar cache primeiro (TTL de 5 minutos)
+    // A chave inclui page/limit para não misturar resposta paginada com a completa.
     const cacheKey = createCacheKey(
       "vendas-shopee",
       session.sub,
       SHOPEE_FINANCIAL_RULE_VERSION,
+      isPaginated ? `p${page}-l${limit}` : "all",
     );
     const cachedData = cache.get<any>(cacheKey, 300000);
     
@@ -34,9 +59,20 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Buscar TODAS as vendas Shopee do usuário (sem filtro de 6 meses, igual ML)
+    const where = { userId: session.sub };
+
+    // Contagem total (mesmo where). Só é necessária no modo paginado para montar
+    // a metadata de paginação; no modo completo usamos vendas.length.
+    const totalCount = isPaginated
+      ? await prisma.shopeeVenda.count({ where })
+      : 0;
+
+    // Buscar vendas Shopee do usuário.
+    // - Modo completo (default): TODAS as vendas (sem filtro de 6 meses, igual ML).
+    // - Modo paginado (opt-in): apenas a página solicitada via skip/take.
     const vendas = await prisma.shopeeVenda.findMany({
-      where: { userId: session.sub },
+      where,
+      ...(isPaginated ? { skip: (page - 1) * limit, take: limit } : {}),
       select: {
         id: true,
         orderId: true,
@@ -196,15 +232,45 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    console.log(`[Shopee API] ✅ Retornando ${vendasFormatted.length} vendas (total no banco: ${vendas.length})`);
+    // No modo paginado, `total` reflete a contagem completa no banco (mesmo where);
+    // no modo completo, é o tamanho da lista retornada (comportamento original).
+    const total = isPaginated ? totalCount : vendas.length;
 
-    const response = {
+    console.log(`[Shopee API] ✅ Retornando ${vendasFormatted.length} vendas (total no banco: ${total})`);
+
+    const response: {
+      vendas: typeof vendasFormatted;
+      total: number;
+      lastSync: string | null;
+      financialRuleVersion: string;
+      pagination?: {
+        page: number;
+        limit: number;
+        totalItems: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+      };
+    } = {
       vendas: vendasFormatted,
-      total: vendas.length,
+      total,
       lastSync:
         vendas.length > 0 ? vendas[0].sincronizadoEm.toISOString() : null,
       financialRuleVersion: SHOPEE_FINANCIAL_RULE_VERSION,
     };
+
+    // Metadata de paginação apenas quando o modo paginado está ativo.
+    if (isPaginated) {
+      const totalPages = Math.max(1, Math.ceil(total / limit));
+      response.pagination = {
+        page,
+        limit,
+        totalItems: total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      };
+    }
 
     // Armazenar no cache
     cache.set(cacheKey, response);

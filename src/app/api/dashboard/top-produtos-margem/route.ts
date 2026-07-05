@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -101,7 +102,29 @@ export async function GET(req: NextRequest) {
     const tipoAnuncioParam = url.searchParams.get("tipoAnuncio");
     const modalidadeParam = url.searchParams.get("modalidade");
     const agrupamentoSKUParam = url.searchParams.get("agrupamentoSKU") || "mlb";
+    const accountPlatformParam = url.searchParams.get("accountPlatform");
     const accountIdParam = url.searchParams.get("accountId");
+
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-top-produtos-margem",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      agrupamentoSKUParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const flexConfig = await loadActiveFlexShippingConfig(session.sub);
 
     let start: Date;
@@ -208,12 +231,6 @@ export async function GET(req: NextRequest) {
     } else {
       // Se 'todos' ou não especificado, combinar ambas
       vendas = [...vendasMeliNormalizadas, ...vendasShopeeNormalizadas];
-    }
-
-    console.log(`[TopProdutosMargem] Encontradas ${vendas.length} vendas no período`);
-    console.log(`[TopProdutosMargem] Filtro de conta: ${accountIdParam || 'todas'}`);
-    if (vendas.length > 0) {
-      console.log(`[TopProdutosMargem] Primeira venda: ${vendas[0].titulo} - Faturamento: ${vendas[0].valorTotal}`);
     }
 
     // Buscar custos dos SKUs
@@ -355,13 +372,7 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.margemContribuicao - a.margemContribuicao)
       .slice(0, 10);
 
-    console.log(`[TopProdutosMargem] Produtos processados: ${produtos.length}`);
-    console.log(`[TopProdutosMargem] Top 3 produtos:`, topProdutos.slice(0, 3).map(p => ({
-      produto: p.produto,
-      margem: p.margemContribuicao,
-      faturamento: p.faturamento
-    })));
-
+    cache.set(cacheKey, topProdutos);
     return NextResponse.json(topProdutos);
   } catch (err) {
     console.error("Erro ao calcular top produtos margem:", err);

@@ -107,13 +107,24 @@ export function invalidateUserCache(userId: string): void {
 }
 
 /**
- * Helper para invalidar cache de vendas
+ * Helper para invalidar cache de vendas E de tudo que deriva de vendas.
+ *
+ * IMPORTANTE (tempo real): esta função é chamada ao final de TODO sync de
+ * vendas (ML, Shopee, v2, cron) e também em edições de custo/cadastro de SKU.
+ * Como o dashboard, os relatórios financeiros e o resumo de SKUs pendentes
+ * são todos derivados das vendas, uma venda nova precisa invalidar TODOS
+ * esses caches — senão a tela mostraria número velho até o TTL expirar.
+ *
+ * Todas as chaves de cache do sistema incluem o `userId` como segmento
+ * (createCacheKey junta com ":"), então limpar por padrão de `userId`
+ * garante que nenhuma tela do usuário fique com dado obsoleto após um sync.
+ * O `userId` é um UUID único, sem risco de colidir com outro usuário.
  */
 export function invalidateVendasCache(userId: string): void {
-  cache.deletePattern(`vendas:${userId}`);
-  cache.deletePattern(`vendas-meli:${userId}`);
-  cache.deletePattern(`vendas-shopee:${userId}`);
-  cache.deletePattern(`vendas-geral:${userId}`);
+  // Cobre TODAS as chaves derivadas de vendas do usuário de uma vez:
+  // vendas-geral, vendas-meli, vendas-shopee, dashboard-*, financeiro-*,
+  // top-produtos-*, faturamento-por-*, vendas-por-estado, sku-pending-summary.
+  cache.deletePattern(userId);
 }
 
 /**

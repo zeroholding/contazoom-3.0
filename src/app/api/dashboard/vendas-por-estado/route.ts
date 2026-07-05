@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -156,6 +157,25 @@ export async function GET(req: NextRequest) {
     const accountPlatformParam = url.searchParams.get("accountPlatform");
     const accountIdParam = url.searchParams.get("accountId");
 
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-vendas-por-estado",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const { start, end, useRange } = getPeriodRange(periodoParam, dataInicioParam, dataFimParam);
     const dashboardWhereMeli = getDashboardFiltersWhere({
       status: statusParam,
@@ -244,7 +264,7 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.quantidade - a.quantidade);
 
-    return NextResponse.json({
+    const response = {
       estados,
       regioes,
       totals: {
@@ -253,7 +273,10 @@ export async function GET(req: NextRequest) {
         semCoordenadas,
         totalProcessadas: todas.length,
       },
-    });
+    };
+
+    cache.set(cacheKey, response);
+    return NextResponse.json(response);
   } catch (err) {
     console.error("[vendas-por-estado] Erro:", err);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

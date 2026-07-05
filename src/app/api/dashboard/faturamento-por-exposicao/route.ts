@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -91,7 +92,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    console.log('[FaturamentoPorExposicao] Iniciando requisição');
     const url = new URL(req.url);
     const periodoParam = url.searchParams.get("periodo") || "todos";
     const dataInicioParam = url.searchParams.get("dataInicio");
@@ -102,6 +102,25 @@ export async function GET(req: NextRequest) {
     const modalidadeParam = url.searchParams.get("modalidade");
     const accountPlatformParam = url.searchParams.get("accountPlatform");
     const accountIdParam = url.searchParams.get("accountId");
+
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-faturamento-por-exposicao",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
     let start: Date;
     let end: Date;
@@ -138,13 +157,6 @@ export async function GET(req: NextRequest) {
       : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli };
 
     // Buscar vendas do Mercado Livre
-    console.log('[FaturamentoPorExposicao] Buscando vendas com filtros:', {
-      usarTodasVendas,
-      periodo: periodoParam,
-      accountPlatform: accountPlatformParam,
-      accountId: accountIdParam
-    });
-    
     const vendas = await prisma.meliVenda.findMany({
       where: whereClauseMeli,
       select: {
@@ -160,16 +172,6 @@ export async function GET(req: NextRequest) {
     const vendasUnicas = Array.from(
       new Map(vendas.map(v => [v.orderId, v])).values()
     );
-
-    console.log(`[FaturamentoPorExposicao] Encontradas ${vendas.length} vendas totais, ${vendasUnicas.length} únicas no período`);
-    console.log(`[FaturamentoPorExposicao] Período: ${usarTodasVendas ? 'todos' : `${start.toISOString()} - ${end.toISOString()}`}`);
-
-    if (vendasUnicas.length > 0) {
-      const premium = vendasUnicas.filter(v => v.exposicao && v.exposicao.toLowerCase().includes('premium'));
-      const classico = vendasUnicas.filter(v => !v.exposicao || v.exposicao.toLowerCase().includes('clássico') || v.exposicao.toLowerCase().includes('classico'));
-      console.log(`[FaturamentoPorExposicao] Premium: ${premium.length}, Clássico: ${classico.length}`);
-      console.log(`[FaturamentoPorExposicao] Exemplos exposição:`, vendasUnicas.slice(0, 5).map(v => ({ exposicao: v.exposicao, valor: v.valorTotal })));
-    }
 
     // Agrupar por tipo de exposição (Premium vs Clássico) - apenas Mercado Livre
     let faturamentoPremium = 0;
@@ -228,8 +230,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log(`[FaturamentoPorExposicao] Resultado final:`, resultado);
-
+    cache.set(cacheKey, resultado);
     return NextResponse.json(resultado);
   } catch (err) {
     console.error("[FaturamentoPorExposicao] Erro ao calcular faturamento por exposição:", err);

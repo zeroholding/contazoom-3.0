@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -99,7 +100,28 @@ export async function GET(req: NextRequest) {
     const tipoAnuncioParam = url.searchParams.get("tipoAnuncio");
     const modalidadeParam = url.searchParams.get("modalidade");
     const agrupamentoSKUParam = url.searchParams.get("agrupamentoSKU") || "mlb";
+    const accountPlatformParam = url.searchParams.get("accountPlatform");
     const accountIdParam = url.searchParams.get("accountId");
+
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-top-produtos-faturamento",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      agrupamentoSKUParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
     let start: Date;
     let end: Date;
@@ -187,19 +209,6 @@ export async function GET(req: NextRequest) {
     } else {
       // Se 'todos' ou não especificado, combinar ambas
       vendas = [...vendasMeli, ...vendasShopee];
-    }
-
-    console.log(`[TopProdutosFaturamento] Encontradas ${vendas.length} vendas no período`);
-    console.log(`[TopProdutosFaturamento] Período: ${usarTodasVendas ? 'todos' : `${start.toISOString()} - ${end.toISOString()}`}`);
-    console.log(`[TopProdutosFaturamento] Filtro de conta: ${accountIdParam || 'todas'}`);
-    if (vendas.length > 0) {
-      console.log(`[TopProdutosFaturamento] Primeira venda: ${vendas[0].titulo} - R$ ${vendas[0].valorTotal} - Plataforma: ${vendas[0].plataforma}`);
-      console.log(`[TopProdutosFaturamento] Últimas 3 vendas:`, vendas.slice(0, 3).map(v => ({
-        titulo: v.titulo.substring(0, 50),
-        valor: v.valorTotal,
-        plataforma: v.plataforma,
-        data: v.dataVenda
-      })));
     }
 
     // Buscar dados de SKU para agrupamento inteligente
@@ -302,13 +311,7 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.faturamento - a.faturamento)
       .slice(0, 10);
 
-    console.log(`[TopProdutosFaturamento] Produtos processados: ${produtos.length}`);
-    console.log(`[TopProdutosFaturamento] Top 3 produtos:`, topProdutos.slice(0, 3).map(p => ({
-      produto: p.produto,
-      faturamento: p.faturamento,
-      quantidade: p.quantidade
-    })));
-
+    cache.set(cacheKey, topProdutos);
     return NextResponse.json(topProdutos);
   } catch (err) {
     console.error("Erro ao calcular top produtos faturamento:", err);

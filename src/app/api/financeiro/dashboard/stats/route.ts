@@ -4,6 +4,9 @@ import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere, getStatusWhere } from "@/lib/dashboard-filters";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
+import { cache, createCacheKey } from "@/lib/cache";
+
+const CACHE_TTL_MS = 60000; // 60 segundos
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,13 +41,10 @@ function getNowInBrazil(): { year: number; month: number; day: number } {
 }
 
 export async function GET(req: NextRequest) {
-  console.log('[Dashboard Stats] 📊 Requisição recebida');
-  
   const sessionCookie = req.cookies.get("session")?.value;
   let session;
   try {
     session = await assertSessionToken(sessionCookie);
-    console.log('[Dashboard Stats] ✅ Sessão validada:', session.sub);
   } catch (error) {
     console.error('[Dashboard Stats] ❌ Erro de autenticação:', error);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -65,6 +65,28 @@ export async function GET(req: NextRequest) {
     const now = new Date();
     const accountPlatformParam = url.searchParams.get("accountPlatform"); // 'meli' | 'shopee'
     const accountIdParam = url.searchParams.get("accountId");
+
+    // 🔑 Cache em memória por usuário + combinação de filtros (período/canal/status/conta)
+    const cacheKey = createCacheKey(
+      "financeiro-dashboard-stats",
+      session.sub,
+      startParam || "",
+      endParam || "",
+      periodoParam || "",
+      dataInicioParam || "",
+      dataFimParam || "",
+      canalParam || "",
+      statusParam || "",
+      tipoAnuncioParam || "",
+      modalidadeParam || "",
+      tipoVisualizacao,
+      accountPlatformParam || "",
+      accountIdParam || ""
+    );
+    const cachedStats = cache.get<Record<string, unknown>>(cacheKey, CACHE_TTL_MS);
+    if (cachedStats) {
+      return NextResponse.json(cachedStats);
+    }
 
     // Determinar período baseado nos parâmetros
     let start: Date;
@@ -207,8 +229,6 @@ export async function GET(req: NextRequest) {
     // Helper for trend calculations (apenas vendas pagas/completas)
     const paidOnly = getStatusWhere('pagos');
 
-    console.log('[Dashboard Stats] 🔍 Buscando vendas do banco de dados...');
-    
     // Buscar vendas do Mercado Livre e Shopee em PARALELO para melhor performance
     const [vendasMeli, vendasShopee] = await Promise.all([
       prisma.meliVenda.findMany({
@@ -252,17 +272,6 @@ export async function GET(req: NextRequest) {
       })
     ]);
 
-    console.log('[Dashboard Stats] ✅ Vendas carregadas:', {
-      mercadoLivre: vendasMeli.length,
-      shopee: vendasShopee.length,
-      filtros: {
-        periodo: periodoParam || 'não especificado',
-        canal: canalParam || 'todos',
-        status: statusParam || 'pagos (padrão)',
-        accountId: accountIdParam || 'todas',
-      },
-    });
-
     // Consolidar vendas baseado no filtro de canal
     let vendas;
     if (canalParam === 'mercado_livre') {
@@ -285,29 +294,16 @@ export async function GET(req: NextRequest) {
       if (!orderId) {
         // Se não tiver orderId, incluir sempre (caso raro)
         vendasDeduplicadas.push(venda);
-        console.warn('[Dashboard Stats] ⚠️ Venda sem orderId detectada');
         continue;
       }
       
       if (!orderIdsVistos.has(orderId)) {
         orderIdsVistos.add(orderId);
         vendasDeduplicadas.push(venda);
-      } else {
-        console.warn('[Dashboard Stats] ⚠️ Venda duplicada detectada e removida:', {
-          orderId,
-          valorTotal: venda.valorTotal,
-          dataVenda: venda.dataVenda,
-        });
       }
     }
 
-    const vendasRemovidas = vendas.length - vendasDeduplicadas.length;
-    if (vendasRemovidas > 0) {
-      console.warn(`[Dashboard Stats] 🚨 ${vendasRemovidas} venda(s) duplicada(s) removida(s) manualmente`);
-    }
-
     vendas = vendasDeduplicadas;
-    console.log('[Dashboard Stats] 📊 Processando', vendas.length, 'vendas (após deduplicação)');
 
     // Unique SKUs for CMV calculation
     const skusUnicos = Array.from(
@@ -371,24 +367,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 🔍 LOG DETALHADO: Resultado do cálculo
-    console.log('[Dashboard Stats] 💰 Valores calculados:', {
-      vendasProcessadas: vendas.length,
-      faturamentoTotal: faturamentoTotal.toFixed(2),
-      receitaLiquida: receitaLiquida.toFixed(2),
-      vendasRealizadas,
-      ambiente: {
-        isVercel: process.env.VERCEL === '1',
-        nodeEnv: process.env.NODE_ENV,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      amostraVendas: vendas.slice(0, 3).map((v: any) => ({
-        orderId: v.orderId,
-        valorTotal: v.valorTotal,
-        dataVenda: v.dataVenda,
-      })),
-    });
-
     const lucroBruto = receitaLiquida - cmvTotal;
 
     // Calcular impostos baseado nas alíquotas cadastradas
@@ -406,9 +384,8 @@ export async function GET(req: NextRequest) {
           orderBy: { updatedAt: "desc" },
         });
       }
-    } catch (error) {
+    } catch {
       // Modelo AliquotaImposto não existe no schema - ignorar silenciosamente
-      console.log('[Dashboard Stats] Modelo AliquotaImposto não disponível, impostos não serão calculados');
       aliquotas = [];
     }
 
@@ -451,11 +428,6 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      console.log(
-        "Faturamento agrupado por conta e mês:",
-        Array.from(faturamentoPorContaMes.values()),
-      );
-
       for (const {
         mesAno,
         conta,
@@ -488,24 +460,7 @@ export async function GET(req: NextRequest) {
           const aliquotaDecimal = toNumber(aliquotaMes.aliquota) / 100;
           const impostoMes = faturamento * aliquotaDecimal;
           impostosTotal += impostoMes;
-          
-          console.log(`Imposto de ${conta} em ${mesAno}:`, {
-            faturamento,
-            aliquota: aliquotaMes.aliquota,
-            imposto: impostoMes
-          });
-        } else {
-          console.log(`Sem alíquota cadastrada para ${conta} em ${mesAno}`);
         }
-      }
-
-      if (impostosTotal > 0) {
-        const aliquotaMediaEfetiva = (impostosTotal / faturamentoTotal) * 100;
-        console.log('Imposto total calculado:', {
-          impostosTotal,
-          faturamentoTotal,
-          aliquotaMediaEfetiva: aliquotaMediaEfetiva.toFixed(2) + '%'
-        });
       }
     }
 
@@ -600,10 +555,7 @@ export async function GET(req: NextRequest) {
       periodo: useRange ? { start: start.toISOString(), end: end.toISOString() } : null,
     };
 
-    console.log('[Dashboard Stats] ✅ Resposta calculada com sucesso:', {
-      vendas: response.vendasRealizadas,
-      faturamento: response.faturamentoBruto,
-    });
+    cache.set(cacheKey, response);
 
     return NextResponse.json(response);
   } catch (err) {

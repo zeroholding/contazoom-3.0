@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -101,6 +102,25 @@ export async function GET(req: NextRequest) {
     const accountPlatformParam = url.searchParams.get("accountPlatform");
     const accountIdParam = url.searchParams.get("accountId");
 
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-faturamento-por-origem",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     let start: Date;
     let end: Date;
     let usarTodasVendas = false;
@@ -178,16 +198,6 @@ export async function GET(req: NextRequest) {
       vendas = [...vendasMeli, ...vendasShopee.map(v => ({ ...v, ads: null }))];
     }
 
-    console.log(`[FaturamentoPorOrigem] Encontradas ${vendas.length} vendas no período (Meli: ${vendasMeli.length}, Shopee: ${vendasShopee.length})`);
-    console.log(`[FaturamentoPorOrigem] Período: ${usarTodasVendas ? 'todos' : `${start.toISOString()} - ${end.toISOString()}`}`);
-
-    if (vendas.length > 0) {
-      const comAds = vendas.filter(v => v.ads && v.ads !== null && v.ads.toString().toLowerCase() !== 'null');
-      const semAds = vendas.filter(v => !v.ads || v.ads === null || v.ads.toString().toLowerCase() === 'null');
-      console.log(`[FaturamentoPorOrigem] Com ADS: ${comAds.length}, Sem ADS: ${semAds.length}`);
-      console.log(`[FaturamentoPorOrigem] Exemplos ADS:`, vendas.slice(0, 5).map(v => ({ ads: v.ads, valor: v.valorTotal })));
-    }
-
     // Agrupar por origem (Com ADS vs Sem ADS)
     let faturamentoComAds = 0;
     let faturamentoSemAds = 0;
@@ -249,8 +259,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.log(`[FaturamentoPorOrigem] Resultado final:`, resultado);
-
+    cache.set(cacheKey, resultado);
     return NextResponse.json(resultado);
   } catch (err) {
     console.error("Erro ao calcular faturamento por origem:", err);

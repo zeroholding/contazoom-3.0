@@ -132,24 +132,50 @@ export async function GET(req: NextRequest) {
       LIMIT ${limit} OFFSET ${offset}
     `;
 
-    // Buscar as contagens com UNION
+    // Contadores das ABAS (Todos / Pagos / Cancelados): NÃO aplicam o filtro de
+    // status, pois cada aba precisa mostrar o total do seu próprio status dentro
+    // do período/conta selecionados. A deduplicação é feita por tabela via
+    // SELECT DISTINCT sobre "order_id" (order_id é @unique dentro de cada tabela);
+    // a coluna "src" mantém separados eventuais order_ids iguais entre meli e
+    // shopee, que representam vendas distintas em plataformas diferentes.
     const counts: any[] = await prisma.$queryRaw`
       SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN status IN ('paid', 'pago', 'payment_approved') THEN 1 ELSE 0 END) as paid,
         SUM(CASE WHEN status IN ('cancelled', 'cancelado') THEN 1 ELSE 0 END) as cancelled
       FROM (
-        SELECT "status" FROM meli_venda 
+        SELECT DISTINCT 'meli' AS src, "order_id", "status" FROM meli_venda 
         WHERE "user_id" = ${session.sub} ${dateCondition} ${contaMeliCondition}
         UNION ALL
-        SELECT "status" FROM shopee_venda 
+        SELECT DISTINCT 'shopee' AS src, "order_id", "status" FROM shopee_venda 
         WHERE "user_id" = ${session.sub} ${dateCondition} ${contaShopeeCondition}
       ) AS t
     `;
 
-    const totalItemsCount = Number(counts[0]?.total || 0);
+    const allCount = Number(counts[0]?.total || 0);
     const paidCount = Number(counts[0]?.paid || 0);
     const cancelledCount = Number(counts[0]?.cancelled || 0);
+
+    // Contagem para a PAGINAÇÃO: precisa refletir EXATAMENTE o conjunto que a
+    // listagem paginada retorna, portanto aplica o mesmo statusCondition (além de
+    // data/conta). Sem filtro de status, statusCondition é vazio e o resultado
+    // coincide com allCount. Também deduplica por "order_id" dentro de cada tabela
+    // para bater linha a linha com a listagem (UNION ALL, order_id @unique por tabela).
+    const paginationCounts: any[] = statusFilter
+      ? await prisma.$queryRaw`
+          SELECT COUNT(*) as total
+          FROM (
+            SELECT DISTINCT 'meli' AS src, "order_id" FROM meli_venda 
+            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaMeliCondition}
+            UNION ALL
+            SELECT DISTINCT 'shopee' AS src, "order_id" FROM shopee_venda 
+            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaShopeeCondition}
+          ) AS t
+        `
+      : counts;
+
+    // totalItemsCount alimenta a paginação e deve seguir o filtro de status ativo.
+    const totalItemsCount = Number(paginationCounts[0]?.total || 0);
 
     const skusUnicos = Array.from(
       new Set(vendas.map((v) => v.sku).filter(Boolean) as string[]),
@@ -318,7 +344,7 @@ export async function GET(req: NextRequest) {
       },
       count: {
         totalItems: totalItemsCount,
-        all: totalItemsCount,
+        all: allCount,
         paid: paidCount,
         cancelled: cancelledCount,
       },

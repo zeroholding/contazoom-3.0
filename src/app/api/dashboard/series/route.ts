@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
+import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
 
@@ -159,6 +160,26 @@ export async function GET(req: NextRequest) {
     const modalidadeParam = url.searchParams.get("modalidade");
     const accountPlatformParam = url.searchParams.get("accountPlatform"); // 'meli' | 'shopee'
     const accountIdParam = url.searchParams.get("accountId");
+
+    // Cache em memória por usuário + combinação de filtros (TTL 60s)
+    const cacheKey = createCacheKey(
+      "dashboard-series",
+      session.sub,
+      periodoParam ?? "",
+      dataInicioParam ?? "",
+      dataFimParam ?? "",
+      canalParam ?? "",
+      statusParam ?? "",
+      tipoAnuncioParam ?? "",
+      modalidadeParam ?? "",
+      accountPlatformParam ?? "",
+      accountIdParam ?? "",
+    );
+    const cached = cache.get(cacheKey, 60000);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
     const flexConfig = await loadActiveFlexShippingConfig(session.sub);
 
     let start: Date;
@@ -290,6 +311,7 @@ export async function GET(req: NextRequest) {
 
     // Se não há vendas, retornar array vazio
     if (vendas.length === 0) {
+      cache.set(cacheKey, []);
       return NextResponse.json([]);
     }
 
@@ -383,9 +405,11 @@ export async function GET(req: NextRequest) {
 
     // Se não há dados, retornar array vazio
     if (dadosGrafico.length === 0) {
+      cache.set(cacheKey, []);
       return NextResponse.json([]);
     }
 
+    cache.set(cacheKey, dadosGrafico);
     return NextResponse.json(dadosGrafico);
   } catch (err) {
     console.error("Erro ao calcular dados da série temporal:", err);
