@@ -49,6 +49,12 @@ export default function ModalSyncVendasDashboard({
   const [contas, setContas] = useState<ContaInfo[]>([]);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [syncSteps, setSyncSteps] = useState<SyncStep[]>([]);
+  // Progresso ao vivo (via SSE) durante a sincronização
+  const [liveProgress, setLiveProgress] = useState<{
+    message: string;
+    fetched: number;
+    expected: number;
+  } | null>(null);
 
   // Animações de abertura/fechamento
   useEffect(() => {
@@ -212,7 +218,8 @@ export default function ModalSyncVendasDashboard({
 
     setStep("syncing");
     setIsSyncing(true);
-    
+    setLiveProgress(null);
+
     // Inicializar steps
     const steps: SyncStep[] = contas
       .filter(c => selectedAccountIds.includes(c.id))
@@ -223,55 +230,90 @@ export default function ModalSyncVendasDashboard({
         status: 'pending' as const,
         progress: 0
       }));
-    
+
     setSyncSteps(steps);
 
-    // Sincronizar cada conta
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
-      const conta = contas.find(c => c.id === step.accountId);
-      if (!conta) continue;
-
-      // Atualizar status para syncing
-      setSyncSteps(prev => prev.map((s, idx) => 
-        idx === i ? { ...s, status: 'syncing', progress: 10 } : s
-      ));
-
-      try {
-        const apiUrl = conta.platform === 'meli' ? '/api/v2/meli/sync-trigger' : '/api/shopee/vendas/sync';
-        const body = { accountIds: [conta.id] };
-
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          cache: 'no-store',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const count = (Array.isArray((data as any)?.results) ? (data as any).results.find((r: any) => r.accountId === conta.id)?.vendas : undefined)
-            || (data as any)?.totals?.saved
-            || (data as any)?.totals?.fetched
-            || 0;
-          
-          // Completado com sucesso
-          setSyncSteps(prev => prev.map((s, idx) =>
-            idx === i ? { ...s, status: 'completed', progress: 100, count } : s
-          ));
-        } else {
-          throw new Error(`Erro ${res.status}`);
-        }
-      } catch (err) {
-        setSyncSteps(prev => prev.map((s, idx) =>
-          idx === i ? { ...s, status: 'error', progress: 100, error: 'Erro na sincronização' } : s
-        ));
+    // === Progresso ao vivo via SSE (mostra "quanto falta" de verdade) ===
+    // EventSource leve, sem os toasts do hook global, só pra alimentar a barra.
+    let eventSource: EventSource | null = null;
+    try {
+      let token = "";
+      if (typeof document !== "undefined") {
+        const match = document.cookie.match(/(?:^|; )\s*session=([^;]+)/);
+        if (match && match[1]) token = match[1];
       }
-
-      // Pequeno delay entre contas
-      await new Promise(resolve => setTimeout(resolve, 300));
+      const baseUrl = API_CONFIG.getApiUrl('/api/meli/vendas/sync-progress');
+      const url = token ? `${baseUrl}?token=${token}` : baseUrl;
+      eventSource = new EventSource(url, { withCredentials: true });
+      eventSource.onmessage = (event) => {
+        try {
+          const p = JSON.parse(event.data);
+          if (p?.type === "heartbeat" || p?.type === "connected") return;
+          if (typeof p?.fetched === "number" || typeof p?.expected === "number" || p?.message) {
+            setLiveProgress({
+              message: p.message || "Sincronizando...",
+              fetched: Number(p.fetched ?? p.current ?? 0),
+              expected: Number(p.expected ?? p.total ?? 0),
+            });
+          }
+        } catch {
+          // ignorar linha malformada
+        }
+      };
+    } catch {
+      eventSource = null;
     }
+
+    // Sincroniza TODAS as contas selecionadas EM PARALELO (antes era uma por
+    // vez, o que somava o tempo de cada conta). Cada conta atualiza seu
+    // próprio card de status.
+    await Promise.all(
+      steps.map(async (step, i) => {
+        const conta = contas.find(c => c.id === step.accountId);
+        if (!conta) return;
+
+        setSyncSteps(prev => prev.map((s, idx) =>
+          idx === i ? { ...s, status: 'syncing', progress: 10 } : s
+        ));
+
+        try {
+          const apiUrl = conta.platform === 'meli' ? '/api/v2/meli/sync-trigger' : '/api/shopee/vendas/sync';
+          const body = { accountIds: [conta.id] };
+
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const count = (Array.isArray((data as any)?.results) ? (data as any).results.find((r: any) => r.accountId === conta.id)?.vendas : undefined)
+              || (data as any)?.totals?.saved
+              || (data as any)?.totals?.fetched
+              || 0;
+
+            setSyncSteps(prev => prev.map((s, idx) =>
+              idx === i ? { ...s, status: 'completed', progress: 100, count } : s
+            ));
+          } else {
+            throw new Error(`Erro ${res.status}`);
+          }
+        } catch (err) {
+          setSyncSteps(prev => prev.map((s, idx) =>
+            idx === i ? { ...s, status: 'error', progress: 100, error: 'Erro na sincronização' } : s
+          ));
+        }
+      })
+    );
+
+    // Fechar SSE
+    if (eventSource) {
+      try { eventSource.close(); } catch { /* noop */ }
+    }
+    setLiveProgress(null);
 
     setIsSyncing(false);
     onSyncComplete?.();
@@ -608,6 +650,38 @@ export default function ModalSyncVendasDashboard({
               {/* Step 3: Sincronizando */}
               {step === "syncing" && (
                 <div className="space-y-4">
+                  {/* Barra de progresso AO VIVO (via SSE) — mostra quanto falta */}
+                  {isSyncing && liveProgress && (
+                    <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-800 truncate">
+                          {liveProgress.message}
+                        </span>
+                        {liveProgress.expected > 0 && (
+                          <span className="text-xs font-semibold text-orange-700 tabular-nums flex-shrink-0 ml-2">
+                            {liveProgress.fetched}/{liveProgress.expected}
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-2 bg-orange-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-orange-500 transition-all duration-300"
+                          style={{
+                            width:
+                              liveProgress.expected > 0
+                                ? `${Math.min(100, Math.round((liveProgress.fetched / liveProgress.expected) * 100))}%`
+                                : "40%",
+                          }}
+                        />
+                      </div>
+                      {liveProgress.expected > 0 && (
+                        <div className="mt-1.5 text-right text-[11px] text-orange-600 tabular-nums">
+                          {Math.min(100, Math.round((liveProgress.fetched / liveProgress.expected) * 100))}%
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-3">
                     {syncSteps.map((syncStep, index) => (
                       <div

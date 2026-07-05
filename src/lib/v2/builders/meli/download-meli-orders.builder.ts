@@ -51,9 +51,12 @@ const defaultCtx: Omit<DownloadMeliOrderBuilderCtx, "current" | "userId"> = {
   forcedStop: false,
 };
 const PAGE_LIMIT = 50;
+// Páginas de pedidos buscadas em paralelo. Aumentado de 2 -> 5 para acelerar
+// (cada página dispara ainda os fetches de shipment em lotes internos). O teto
+// de 6 mantém a concorrência sob o rate limit do ML.
 const PAGE_FETCH_CONCURRENCY = Math.min(
-  5,
-  Math.max(1, Number(process.env.MELI_PAGE_FETCH_CONCURRENCY ?? "2") || 2),
+  6,
+  Math.max(1, Number(process.env.MELI_PAGE_FETCH_CONCURRENCY ?? "5") || 5),
 );
 
 export class DownloadMeliOrdersBuilder {
@@ -192,24 +195,37 @@ export class DownloadMeliOrdersBuilder {
       `[Sync] ?? Iniciando busca de vendas para conta ${account.ml_user_id} (${account.nickname})`,
     );
 
-    // Verificar a venda mais recente já sincronizada para fazer Sincronização Incremental (Delta Sync)
-    const latestSyncedOrder = await prisma.meliVenda.findFirst({
-      where: { meliAccountId: account.id },
-      orderBy: { dataVenda: "desc" },
-      select: { dataVenda: true },
-    });
+    // Sincronização Incremental (Delta Sync) — REAL, baseada no último sync.
+    // Antes: janela FIXA de 15 dias a cada sync => re-baixava centenas de
+    // pedidos + 2 chamadas de shipment cada, mesmo quando só havia 1 venda
+    // nova (era a causa de "1 venda demora 30-60s").
+    // Agora: a janela começa no ÚLTIMO sync desta conta (max atualizadoEm)
+    // com um pequeno buffer de folga. Como usamos date_last_updated.from,
+    // atualizações de pedidos ANTIGOS continuam sendo capturadas — o ML
+    // atualiza o date_last_updated quando o pedido muda (ex: cancelamento),
+    // então ele cai na janela naturalmente. O buffer cobre skew de relógio
+    // e syncs que falharam no meio.
+    const [latestSyncedOrder, lastWriteAgg] = await Promise.all([
+      prisma.meliVenda.findFirst({
+        where: { meliAccountId: account.id },
+        orderBy: { dataVenda: "desc" },
+        select: { dataVenda: true },
+      }),
+      prisma.meliVenda.aggregate({
+        where: { meliAccountId: account.id },
+        _max: { atualizadoEm: true },
+      }),
+    ]);
 
     let lastUpdatedFrom: Date | undefined;
 
     const latestDate = latestSyncedOrder?.dataVenda;
     if (latestDate) {
-      // Define a data de início da busca como 15 dias atrás para capturar atualizações recentes
-      lastUpdatedFrom = new Date();
-      lastUpdatedFrom.setDate(lastUpdatedFrom.getDate() - 15);
+      const lastWrite = lastWriteAgg._max.atualizadoEm ?? new Date();
+      const SYNC_BUFFER_MS = 2 * 24 * 60 * 60 * 1000; // 2 dias de folga
+      lastUpdatedFrom = new Date(lastWrite.getTime() - SYNC_BUFFER_MS);
       console.log(
-        `[Sync] 🚀 Modo Incremental: Buscando atualizações desde ${
-          lastUpdatedFrom.toISOString().split("T")[0]
-        }`,
+        `[Sync] 🚀 Modo Incremental REAL: atualizações desde ${lastUpdatedFrom.toISOString()} (base: último sync ${lastWrite.toISOString()})`,
       );
     } else {
       console.log(`[Sync] 📅 Primeira sincronização - buscando histórico (limitado aos 50k mais recentes)`);

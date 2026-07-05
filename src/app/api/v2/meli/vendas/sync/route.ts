@@ -49,8 +49,6 @@ export async function POST(req: NextRequest) {
     hasOrderIds: !!requestBody.orderIdsByAccount,
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
   sendProgressToUser(userId, {
     type: "sync_start",
     message: "Conectando ao Mercado Livre...",
