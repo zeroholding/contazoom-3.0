@@ -266,14 +266,20 @@ export default function GestaoSKU() {
   };
 
   const handleNovoSKU = () => {
-    // Scroll suave até a tabela e foca no campo SKU da linha de criação
-    const skuInput = document.querySelector('input[placeholder="Ex: SKU-123"]') as HTMLInputElement;
-    if (skuInput) {
-      skuInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => {
-        skuInput.focus();
-      }, 300); // Aguarda o scroll terminar
-    }
+    // Abre o modal de criação com o formulário limpo
+    setPrefillNovoSku({
+      sku: '',
+      produto: '',
+      tipo: 'filho',
+      custoUnitario: 0,
+      quantidade: 1,
+      skuPai: '',
+      hierarquia1: '',
+      hierarquia2: '',
+      ativo: true,
+      temEstoque: true,
+      skusFilhos: [],
+    });
   };
 
   const handleToggleEditMode = () => {

@@ -148,6 +148,7 @@ export default function TabelaGestaoSKU({
   onPrefillConsumed,
 }: TabelaGestaoSKUProps) {
   const { toast } = useToast();
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showEstoqueModal, setShowEstoqueModal] = useState(false);
@@ -285,6 +286,7 @@ export default function TabelaGestaoSKU({
 
   useEffect(() => {
     if (!prefillNovoSku) return;
+    setShowCreateModal(true);
     setNovoSku((prev) => ({
       ...prev,
       ...prefillNovoSku,
@@ -554,6 +556,7 @@ export default function TabelaGestaoSKU({
       });
 
       resetForm();
+      setShowCreateModal(false);
     } catch (error) {
       console.error('Erro ao criar SKU:', error);
       toast({
@@ -669,13 +672,33 @@ export default function TabelaGestaoSKU({
         </div>
       )}
 
-      <div className="overflow-x-auto scrollbar-hidden">
-        <table ref={tableRef} className="min-w-[800px] sm:min-w-[1680px] w-full divide-y divide-gray-200 table-fixed">
-          <thead className="bg-gray-50">
+      {/* Toolbar da tabela */}
+      <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-6 border-b border-gray-100">
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+          <span><span className="font-semibold text-gray-700">{skus.length}</span> {skus.length === 1 ? 'item' : 'itens'}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => { resetForm(); setShowCreateModal(true); }}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-orange-600 rounded-lg shadow-sm hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1 transition-all active:scale-95"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Adicionar SKU
+        </button>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table ref={tableRef} className="w-full min-w-[720px] divide-y divide-gray-200">
+          <thead className="bg-gray-50/80">
             <tr>
               {/* Checkbox para seleção múltipla */}
               {isMultiSelect && (
-                <th className="w-12 px-4 py-3 text-left">
+                <th className="w-10 px-3 py-3 text-left">
                   <input
                     type="checkbox"
                     checked={selectedSKUs.length === skus.length && skus.length > 0}
@@ -684,332 +707,26 @@ export default function TabelaGestaoSKU({
                   />
                 </th>
               )}
-              
-              <th className="w-56 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                 SKU
               </th>
-              <th className="w-72 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="w-full px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Produto
               </th>
-              <th className="w-36 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Tipo
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                Custo
               </th>
-              <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                Qtd
               </th>
-              <th className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Custo Unitário
-              </th>
-              <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Quantidade
-              </th>
-              <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Proporção
-              </th>
-              <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                 Vendas
               </th>
-              <th className="w-96 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Hierarquia
-              </th>
-              <th className="w-96 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
                 Ações
               </th>
             </tr>
-            {true && (
-              <tr className="bg-white">
-                {isMultiSelect && <th className="px-4 py-3" />}
-
-                {/* SKU */}
-                <th className="px-4 py-3">
-                  <div>
-                    <input
-                      type="text"
-                      value={novoSku.sku}
-                      onChange={(e) => handleFormChange("sku", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                      className={`w-full px-3 py-2 border rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                        formErrors.sku ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="Ex: SKU-123"
-                      disabled={isSaving}
-                      ref={skuInputRef}
-                    />
-                    {formErrors.sku && (
-                      <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.sku}</p>
-                    )}
-                  </div>
-                </th>
-
-                {/* Produto */}
-                <th className="px-4 py-3">
-                  <div>
-                    <input
-                      type="text"
-                      value={novoSku.produto}
-                      onChange={(e) => handleFormChange("produto", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                      className={`w-full px-3 py-2 border rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                        formErrors.produto ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="Nome do produto"
-                      disabled={isSaving}
-                      ref={produtoInputRef}
-                    />
-                    {formErrors.produto && (
-                      <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.produto}</p>
-                    )}
-                  </div>
-                </th>
-
-                {/* Tipo */}
-                <th className="px-4 py-3">
-                  <select
-                    value={novoSku.tipo}
-                    onChange={(e) => handleFormChange("tipo", e.target.value as "pai" | "filho")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    disabled={isSaving}
-                  >
-                    <option value="filho">Individual</option>
-                    <option value="pai">Kit</option>
-                  </select>
-                </th>
-
-                {/* Status - Removido checkbox, sempre criar ativo */}
-                <th className="px-4 py-3">
-                  <span className="text-xs text-gray-500 font-normal">Ativo</span>
-                </th>
-
-                {/* Custo unitário */}
-                <th className="px-4 py-3">
-                  <div>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={custoUnitarioInput}
-                      onChange={(e) => handleCustoUnitarioChange(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                      className={`w-full px-3 py-2 border rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                        formErrors.custoUnitario ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="0,00"
-                      disabled={isSaving}
-                    />
-                    {formErrors.custoUnitario && (
-                      <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.custoUnitario}</p>
-                    )}
-                  </div>
-                </th>
-
-                {/* Quantidade */}
-                <th className="px-4 py-3">
-                  {novoSku.tipo === 'pai' ? (
-                    <div className="text-sm text-gray-400 text-center">-</div>
-                  ) : (
-                    <div>
-                      <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={novoSku.quantidade > 0 ? novoSku.quantidade : ""}
-                        onChange={(e) => {
-                          const value = Number.parseInt(e.target.value, 10);
-                          handleFormChange("quantidade", Number.isFinite(value) ? value : 0);
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                        className={`w-full px-3 py-2 border rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                          formErrors.quantidade ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="1"
-                        disabled={isSaving}
-                        title="Informe a quantidade do SKU"
-                      />
-                      {formErrors.quantidade && (
-                        <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.quantidade}</p>
-                      )}
-                    </div>
-                  )}
-                </th>
-                
-                {/* Proporção */}
-                <th className="px-4 py-3 text-sm text-gray-400 font-normal">100%</th>
-
-                {/* Vendas - não editável ao criar */}
-                <th className="px-4 py-3 text-sm text-gray-400 font-normal">-</th>
-
-                {/* Hierarquia (categoria/subcategoria) */}
-                <th className="px-4 py-3">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={novoSku.hierarquia1}
-                      onChange={(e) => handleFormChange("hierarquia1", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      placeholder="Hierarquia 1"
-                      disabled={isSaving}
-                    />
-                    <input
-                      type="text"
-                      value={novoSku.hierarquia2}
-                      onChange={(e) => handleFormChange("hierarquia2", e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded text-sm bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      placeholder="Hierarquia 2"
-                      disabled={isSaving}
-                    />
-                  </div>
-                </th>
-
-                {/* Ações: vínculo de kit/individual + salvar */}
-                <th className="px-4 py-3">
-                  <div className="flex items-start gap-3">
-                    {novoSku.tipo === 'filho' ? (
-                      <div className="min-w-[230px] flex-1">
-                        <select
-                          value={ novoSku.skuPai }
-                          onChange={(e) => handleFormChange('skuPai', e.target.value)}
-                          className={`w-full px-3 py-2 border rounded text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
-                            formErrors.skuPai ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'
-                          }`}
-                          disabled={isSaving}
-                        >
-                          <option value="">SKU Pai (opcional)</option>
-                          {skus
-                            .filter((s) => s.tipo === 'pai')
-                            .map((s) => (
-                              <option key={s.id} value={s.sku}>
-                                {s.sku} - {s.produto}
-                              </option>
-                            ))}
-                        </select>
-                        {formErrors.skuPai && (
-                          <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.skuPai}</p>
-                        )}
-                      </div>
-                    ) : (
-                      <div ref={filhosDropdownRef} className={`relative min-w-[230px] flex-1 ${isSaving || filhosDisponiveis.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
-                        {/* Campo compacto com tags dentro */}
-                        <div
-                          className={`flex items-center flex-wrap gap-1 px-3 py-2 border rounded text-xs bg-white text-gray-900 min-h-[38px] max-h-[60px] overflow-y-auto cursor-pointer ${
-                            formErrors.skusFilhos ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'
-                          }`}
-                          onClick={() => setIsOpenFilhos((v) => !v)}
-                        >
-                          {novoSku.skusFilhos.length === 0 ? (
-                            <span className="text-gray-500">Adicionar SKU(s)</span>
-                          ) : (
-                            novoSku.skusFilhos.map((filho) => (
-                              <span key={filho} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
-                                {filho}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleFormChange('skusFilhos', novoSku.skusFilhos.filter((i) => i !== filho));
-                                  }}
-                                  className="text-blue-600 hover:text-blue-800"
-                                  disabled={isSaving}
-                                  aria-label={`Remover ${filho}`}
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))
-                          )}
-                          <svg className="ml-auto w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/></svg>
-                        </div>
-
-                        {/* Dropdown de opções */}
-                        {isOpenFilhos && (
-                          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded shadow-lg">
-                            <div className="p-1 border-b sticky top-0 bg-white">
-                              <input
-                                type="text"
-                                value={filhosFilter}
-                                onChange={(e) => setFilhosFilter(e.target.value)}
-                                placeholder="Pesquisar..."
-                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                onKeyDown={(e) => { if (e.key === 'Escape') setIsOpenFilhos(false); }}
-                              />
-                            </div>
-                            <ul className="max-h-48 overflow-auto py-1">
-                              {filhosDisponiveis
-                                .filter((f) => !novoSku.skusFilhos.includes(f.sku))
-                                .filter((f) => {
-                                  const q = filhosFilter.trim().toLowerCase();
-                                  if (!q) return true;
-                                  return (
-                                    f.sku.toLowerCase().includes(q) ||
-                                    f.produto.toLowerCase().includes(q)
-                                  );
-                                })
-                                .map((f) => (
-                                  <li
-                                    key={f.id}
-                                    className="px-2 py-1 text-sm hover:bg-gray-100 cursor-pointer"
-                                    onClick={() => {
-                                      if (!novoSku.skusFilhos.includes(f.sku)) {
-                                        handleFormChange('skusFilhos', [...novoSku.skusFilhos, f.sku]);
-                                      }
-                                    }}
-                                  >
-                                    <span className="font-mono mr-2">{f.sku}</span>
-                                    <span className="text-gray-600">- {f.produto}</span>
-                                  </li>
-                                ))}
-                              {filhosDisponiveis.filter((f) => !novoSku.skusFilhos.includes(f.sku)).length === 0 && (
-                                <li className="px-2 py-2 text-xs text-gray-500">Sem opções disponíveis</li>
-                              )}
-                            </ul>
-                            <div className="flex items-center justify-between px-2 py-1 border-t bg-gray-50">
-                              <button
-                                type="button"
-                                onClick={() => handleFormChange('skusFilhos', [])}
-                                className="text-xs text-gray-600 hover:text-gray-800"
-                                disabled={isSaving || novoSku.skusFilhos.length === 0}
-                              >
-                                Limpar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setIsOpenFilhos(false)}
-                                className="text-xs text-orange-600 hover:text-orange-700"
-                              >
-                                OK
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        {formErrors.skusFilhos && (
-                          <p className="text-xs text-red-600 mt-1 font-medium absolute z-10 bg-white px-1 rounded">{formErrors.skusFilhos}</p>
-                        )}
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={handleCreateSku}
-                      disabled={isSaving}
-                      className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 transition-all whitespace-nowrap"
-                      title="Salvar SKU"
-                    >
-                      {isSaving ? (
-                        <div className="flex items-center gap-2">
-                          <svg className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Salvando...
-                        </div>
-                      ) : (
-                        'Adicionar'
-                      )}
-                    </button>
-                  </div>
-                </th>
-              </tr>
-            )}
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {skusOrdenadosHier.map((sku) => {
@@ -1108,39 +825,35 @@ export default function TabelaGestaoSKU({
                     </div>
                   </td>
 
-                  {/* Produto */}
-                  <td className={`px-4 py-4 text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className={`flex items-center ${sku.skuPai ? 'pl-14' : ''}`}>
-                      <div className="max-w-[200px]">
-                        <p className={`truncate ${sku.tipo === 'pai' ? 'font-semibold text-gray-900' : 'text-gray-700'}`} title={sku.produto}>
+                  {/* Produto (com tipo, status e hierarquia) */}
+                  <td className={`px-4 py-3 text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                    <div className={sku.skuPai ? 'pl-14' : ''}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`truncate max-w-[280px] ${sku.tipo === 'pai' ? 'font-semibold text-gray-900' : 'text-gray-700'}`} title={sku.produto}>
                           {sku.produto}
                         </p>
-                        {sku.skuPai && (
-                          <p className="text-xs text-blue-600 truncate mt-1 flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-                              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
-                            </svg>
-                            <span>Pertence ao kit: <span className="font-medium">{sku.skuPai}</span></span>
-                          </p>
-                        )}
-                        {sku.observacoes && (
-                          <p className="text-xs text-gray-500 truncate mt-1">{sku.observacoes}</p>
-                        )}
+                        {getTipoBadge(sku)}
+                        {getStatusBadge(sku)}
                       </div>
+                      {(sku.hierarquia1 || sku.hierarquia2) && (
+                        <p className="text-xs text-gray-400 truncate mt-1 flex items-center gap-1" title={sku.hierarquia1 && sku.hierarquia2 ? `${sku.hierarquia1} > ${sku.hierarquia2}` : (sku.hierarquia1 || '')}>
+                          <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                          <span className="truncate">{sku.hierarquia1 && sku.hierarquia2 ? `${sku.hierarquia1} > ${sku.hierarquia2}` : sku.hierarquia1}</span>
+                        </p>
+                      )}
+                      {sku.skuPai && (
+                        <p className="text-xs text-blue-600 truncate mt-1 flex items-center gap-1">
+                          <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
+                          </svg>
+                          <span className="truncate">Pertence ao kit: <span className="font-medium">{sku.skuPai}</span></span>
+                        </p>
+                      )}
+                      {sku.observacoes && (
+                        <p className="text-xs text-gray-500 truncate mt-1">{sku.observacoes}</p>
+                      )}
                     </div>
-                  </td>
-
-                  {/* Tipo */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className="flex items-center gap-2">
-                      {getTipoBadge(sku)}
-                    </div>
-                  </td>
-
-                  {/* Status */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    {getStatusBadge(sku)}
                   </td>
 
                   {/* Custo Unitário */}
@@ -1163,25 +876,11 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Quantidade */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-4 py-3 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {sku.tipo === 'pai' ? (
                       <span className="text-gray-400" title="Kits não possuem quantidade própria">-</span>
                     ) : (
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-900">{sku.quantidade}</span>
-                        {sku.quantidade === 1 && (
-                          <span className="text-xs text-gray-400" title="Itens individuais sempre têm quantidade 1"></span>
-                        )}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Proporção */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    {sku.tipo === 'filho' ? (
-                      <span className="text-gray-900 font-medium">100%</span>
-                    ) : (
-                      <span className="text-gray-400">-</span>
+                      <span className="text-gray-900 font-medium">{sku.quantidade}</span>
                     )}
                   </td>
 
@@ -1206,23 +905,15 @@ export default function TabelaGestaoSKU({
                     )}
                   </td>
 
-                  {/* Hierarquia */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-500 ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    {sku.hierarquia1 && sku.hierarquia2
-                      ? `${sku.hierarquia1} > ${sku.hierarquia2}`
-                      : sku.hierarquia1 || '-'
-                    }
-                  </td>
-
                   {/* Ações */}
-                  <td className={`px-4 py-4 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className="flex flex-wrap items-center gap-2">
+                  <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                    <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => {
                           setSelectedSKU(sku);
                           setShowEditModal(true);
                         }}
-                        className="text-orange-600 hover:text-orange-900 transition-colors"
+                        className="p-1.5 rounded-lg text-orange-600 hover:text-orange-700 hover:bg-orange-50 transition-colors"
                         title="Editar SKU"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1234,7 +925,7 @@ export default function TabelaGestaoSKU({
                           setSelectedSKU(sku);
                           setShowToggleStatusModal(true);
                         }}
-                        className={`${sku.ativo ? 'text-gray-600 hover:text-gray-900' : 'text-green-600 hover:text-green-900'} transition-colors`}
+                        className={`p-1.5 rounded-lg transition-colors ${sku.ativo ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100' : 'text-green-600 hover:text-green-700 hover:bg-green-50'}`}
                         title={sku.ativo ? 'Inativar SKU' : 'Ativar SKU'}
                       >
                         {sku.ativo ? (
@@ -1252,7 +943,7 @@ export default function TabelaGestaoSKU({
                           setSelectedSKU(sku);
                           setShowDeleteSingleModal(true);
                         }}
-                        className="text-red-600 hover:text-red-900 transition-colors"
+                        className="p-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
                         title="Excluir SKU"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1262,7 +953,7 @@ export default function TabelaGestaoSKU({
                       <button
                         onClick={() => handleAplicarRetroativo(sku)}
                         disabled={isApplyingRetroactive === sku.id}
-                        className="text-blue-600 hover:text-blue-900 transition-colors disabled:opacity-50"
+                        className="p-1.5 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50"
                         title="Aplicar custo em vendas passadas sem CMV"
                       >
                         {isApplyingRetroactive === sku.id ? (
@@ -1300,6 +991,286 @@ export default function TabelaGestaoSKU({
           />
         </div>
       )}
+
+      {/* Modal de criação de SKU */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => { setShowCreateModal(false); resetForm(); }}
+        title={novoSku.tipo === 'pai' ? 'Novo Kit' : 'Novo SKU'}
+        size="2xl"
+      >
+        <div className="space-y-5">
+          {/* Seletor de tipo */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => handleFormChange('tipo', 'filho')}
+              className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                novoSku.tipo === 'filho'
+                  ? 'border-orange-500 bg-orange-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+              disabled={isSaving}
+            >
+              <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${novoSku.tipo === 'filho' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-gray-900">Individual</span>
+                <span className="block text-xs text-gray-500">Produto único</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleFormChange('tipo', 'pai')}
+              className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                novoSku.tipo === 'pai'
+                  ? 'border-orange-500 bg-orange-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+              disabled={isSaving}
+            >
+              <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${novoSku.tipo === 'pai' ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-gray-900">Kit</span>
+                <span className="block text-xs text-gray-500">Agrupa vários itens</span>
+              </span>
+            </button>
+          </div>
+
+          {/* Campos principais */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">SKU *</label>
+              <input
+                type="text"
+                value={novoSku.sku}
+                onChange={(e) => handleFormChange("sku", e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
+                className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 ${formErrors.sku ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
+                placeholder="Ex: SKU-123"
+                disabled={isSaving}
+                ref={skuInputRef}
+              />
+              {formErrors.sku && <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.sku}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Produto *</label>
+              <input
+                type="text"
+                value={novoSku.produto}
+                onChange={(e) => handleFormChange("produto", e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
+                className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 ${formErrors.produto ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
+                placeholder="Nome do produto"
+                disabled={isSaving}
+                ref={produtoInputRef}
+              />
+              {formErrors.produto && <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.produto}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Custo Unitário *</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={custoUnitarioInput}
+                onChange={(e) => handleCustoUnitarioChange(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
+                className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 ${formErrors.custoUnitario ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
+                placeholder="0,00"
+                disabled={isSaving}
+              />
+              {formErrors.custoUnitario && <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.custoUnitario}</p>}
+            </div>
+            {novoSku.tipo === 'filho' && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Quantidade *</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={novoSku.quantidade > 0 ? novoSku.quantidade : ""}
+                  onChange={(e) => {
+                    const value = Number.parseInt(e.target.value, 10);
+                    handleFormChange("quantidade", Number.isFinite(value) ? value : 0);
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
+                  className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 ${formErrors.quantidade ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
+                  placeholder="1"
+                  disabled={isSaving}
+                />
+                {formErrors.quantidade && <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.quantidade}</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Hierarquia */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Hierarquia 1</label>
+              <input
+                type="text"
+                value={novoSku.hierarquia1}
+                onChange={(e) => handleFormChange("hierarquia1", e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="Categoria"
+                disabled={isSaving}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Hierarquia 2</label>
+              <input
+                type="text"
+                value={novoSku.hierarquia2}
+                onChange={(e) => handleFormChange("hierarquia2", e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateSku(); }}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                placeholder="Subcategoria"
+                disabled={isSaving}
+              />
+            </div>
+          </div>
+
+          {/* Vínculo de kit / pai */}
+          {novoSku.tipo === 'filho' ? (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">SKU Pai (opcional)</label>
+              <select
+                value={novoSku.skuPai}
+                onChange={(e) => handleFormChange('skuPai', e.target.value)}
+                className={`w-full px-3 py-2.5 border rounded-lg text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500 ${formErrors.skuPai ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
+                disabled={isSaving}
+              >
+                <option value="">Nenhum (item solto)</option>
+                {skus.filter((s) => s.tipo === 'pai').map((s) => (
+                  <option key={s.id} value={s.sku}>{s.sku} - {s.produto}</option>
+                ))}
+              </select>
+              {formErrors.skuPai && <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.skuPai}</p>}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Itens do Kit *</label>
+              <div ref={filhosDropdownRef} className={`relative ${isSaving || filhosDisponiveis.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div
+                  className={`flex items-center flex-wrap gap-1 px-3 py-2 border rounded-lg text-xs bg-white text-gray-900 min-h-[44px] max-h-[96px] overflow-y-auto cursor-pointer ${formErrors.skusFilhos ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300'}`}
+                  onClick={() => setIsOpenFilhos((v) => !v)}
+                >
+                  {novoSku.skusFilhos.length === 0 ? (
+                    <span className="text-gray-400">Selecione os itens que compõem o kit</span>
+                  ) : (
+                    novoSku.skusFilhos.map((filho) => (
+                      <span key={filho} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
+                        {filho}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleFormChange('skusFilhos', novoSku.skusFilhos.filter((i) => i !== filho)); }}
+                          className="text-blue-600 hover:text-blue-800"
+                          disabled={isSaving}
+                          aria-label={`Remover ${filho}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))
+                  )}
+                  <svg className="ml-auto w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/></svg>
+                </div>
+                {isOpenFilhos && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg">
+                    <div className="p-1 border-b sticky top-0 bg-white">
+                      <input
+                        type="text"
+                        value={filhosFilter}
+                        onChange={(e) => setFilhosFilter(e.target.value)}
+                        placeholder="Pesquisar..."
+                        className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        onKeyDown={(e) => { if (e.key === 'Escape') setIsOpenFilhos(false); }}
+                      />
+                    </div>
+                    <ul className="max-h-48 overflow-auto py-1">
+                      {filhosDisponiveis
+                        .filter((f) => !novoSku.skusFilhos.includes(f.sku))
+                        .filter((f) => {
+                          const q = filhosFilter.trim().toLowerCase();
+                          if (!q) return true;
+                          return f.sku.toLowerCase().includes(q) || f.produto.toLowerCase().includes(q);
+                        })
+                        .map((f) => (
+                          <li
+                            key={f.id}
+                            className="px-2 py-1.5 text-sm hover:bg-gray-100 cursor-pointer"
+                            onClick={() => { if (!novoSku.skusFilhos.includes(f.sku)) handleFormChange('skusFilhos', [...novoSku.skusFilhos, f.sku]); }}
+                          >
+                            <span className="font-mono mr-2">{f.sku}</span>
+                            <span className="text-gray-600">- {f.produto}</span>
+                          </li>
+                        ))}
+                      {filhosDisponiveis.filter((f) => !novoSku.skusFilhos.includes(f.sku)).length === 0 && (
+                        <li className="px-2 py-2 text-xs text-gray-500">Sem opções disponíveis</li>
+                      )}
+                    </ul>
+                    <div className="flex items-center justify-between px-2 py-1 border-t bg-gray-50">
+                      <button
+                        type="button"
+                        onClick={() => handleFormChange('skusFilhos', [])}
+                        className="text-xs text-gray-600 hover:text-gray-800"
+                        disabled={isSaving || novoSku.skusFilhos.length === 0}
+                      >
+                        Limpar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsOpenFilhos(false)}
+                        className="text-xs text-orange-600 hover:text-orange-700"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {formErrors.skusFilhos && <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.skusFilhos}</p>}
+            </div>
+          )}
+
+          {/* Rodapé */}
+          <div className="flex gap-3 pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => { setShowCreateModal(false); resetForm(); }}
+              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors mt-4"
+              disabled={isSaving}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateSku}
+              disabled={isSaving}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 transition-all mt-4"
+            >
+              {isSaving ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  {novoSku.tipo === 'pai' ? 'Criar Kit' : 'Adicionar SKU'}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal de confirmação de exclusão em lote */}
       {showDeleteModal && (
