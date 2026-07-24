@@ -336,8 +336,11 @@ export default function Aliquotas() {
   };
 
   const formatMesAno = (dataInicio: string) => {
+    // dataInicio é gravado como o dia 1º à meia-noite UTC (new Date(Date.UTC(...))).
+    // Formatar em horário local (BR, UTC-3) jogava a data pro dia anterior e
+    // exibia o mês anterior (M-1). Formatamos em UTC para mostrar o mês correto.
     const date = new Date(dataInicio);
-    return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    return date.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
   };
 
   const formatPercent = (value: number | any) => {
