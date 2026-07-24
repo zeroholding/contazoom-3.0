@@ -27,6 +27,7 @@ export interface SKU {
   temEstoque: boolean;
   skusFilhos?: string[];
   observacoes?: string;
+  imagemUrl?: string | null;
   tags?: string[];
   createdAt: string;
   updatedAt: string;
@@ -165,6 +166,38 @@ export default function TabelaGestaoSKU({
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const [selectedSKUForHistorico, setSelectedSKUForHistorico] = useState<SKU | null>(null);
   const [isApplyingRetroactive, setIsApplyingRetroactive] = useState<string | null>(null);
+
+  // Miniatura do SKU (busca sob demanda)
+  const [imagemOverrides, setImagemOverrides] = useState<Record<string, string>>({});
+  const [loadingImagem, setLoadingImagem] = useState<string | null>(null);
+
+  const getImagemUrl = (sku: SKU): string | null =>
+    imagemOverrides[sku.id] || sku.imagemUrl || null;
+
+  const handleBuscarImagem = async (sku: SKU) => {
+    setLoadingImagem(sku.id);
+    try {
+      const response = await fetch(`/api/sku/${sku.id}/imagem`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Não foi possível buscar a imagem");
+      }
+      setImagemOverrides((prev) => ({ ...prev, [sku.id]: data.imagemUrl }));
+      toast({
+        variant: "success",
+        title: "Miniatura atualizada",
+        description: `Imagem do SKU ${sku.sku} carregada.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Imagem não encontrada",
+        description: error instanceof Error ? error.message : "Falha ao buscar imagem",
+      });
+    } finally {
+      setLoadingImagem(null);
+    }
+  };
 
   const filhosDisponiveis = useMemo(
     () => skus.filter((sku) => sku.tipo === "filho"),
@@ -758,7 +791,39 @@ export default function TabelaGestaoSKU({
 
                   {/* SKU */}
                   <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className="flex items-center">
+                    <div className="flex items-center gap-3">
+                      {/* Miniatura */}
+                      {(() => {
+                        const img = getImagemUrl(sku);
+                        return img ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={img}
+                            alt={sku.sku}
+                            className="h-10 w-10 shrink-0 rounded-md object-cover border border-gray-200 bg-white"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleBuscarImagem(sku)}
+                            disabled={loadingImagem === sku.id}
+                            className="h-10 w-10 shrink-0 rounded-md border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:border-orange-300 transition-colors disabled:opacity-60"
+                            title="Buscar imagem do anúncio"
+                          >
+                            {loadingImagem === sku.id ? (
+                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            )}
+                          </button>
+                        );
+                      })()}
                       {/* Hierarquia Visual */}
                       {sku.tipo === 'pai' ? (
                         <div className="flex items-center gap-2">
@@ -964,6 +1029,23 @@ export default function TabelaGestaoSKU({
                         ) : (
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleBuscarImagem(sku)}
+                        disabled={loadingImagem === sku.id}
+                        className="p-1.5 rounded-lg text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                        title="Buscar/atualizar imagem do anúncio"
+                      >
+                        {loadingImagem === sku.id ? (
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         )}
                       </button>
