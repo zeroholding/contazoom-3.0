@@ -1433,6 +1433,7 @@ export default function TabelaGestaoSKU({
             quantidade: selectedSKU.quantidade,
             hierarquia1: selectedSKU.hierarquia1 || '',
             hierarquia2: selectedSKU.hierarquia2 || '',
+            imagemUrl: selectedSKU.imagemUrl || '',
           }}
           fields={[
             { name: 'sku', label: 'SKU', type: 'text', required: true },
@@ -1451,6 +1452,7 @@ export default function TabelaGestaoSKU({
             { name: 'quantidade', label: 'Quantidade', type: 'number', required: true, min: '0' },
             { name: 'hierarquia1', label: 'Hierarquia 1', type: 'text' },
             { name: 'hierarquia2', label: 'Hierarquia 2', type: 'text' },
+            { name: 'imagemUrl', label: 'Imagem (URL)', type: 'text' },
           ]}
         />
       )}

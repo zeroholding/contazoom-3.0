@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
-import { resolveSkuImage } from "@/lib/sku-image";
+import { resolveSkuImageForRecord } from "@/lib/sku-image";
 
 // POST /api/sku/[id]/imagem - Busca e salva a miniatura do anúncio deste SKU
 export async function POST(
@@ -22,8 +22,11 @@ export async function POST(
       return NextResponse.json({ error: "SKU não encontrado" }, { status: 404 });
     }
 
-    // Códigos a tentar: o próprio SKU e, se for kit sem imagem, os filhos.
-    const codigos: string[] = [skuObj.sku];
+    // Registros a tentar: o próprio SKU e, se for kit sem imagem, os filhos.
+    const candidatos: Array<{ userId: string; sku: string; observacoes?: string | null }> = [
+      skuObj,
+    ];
+
     if (skuObj.tipo === "pai") {
       const rawFilhos = skuObj.skusFilhos as unknown;
       let listaFilhos: string[] = [];
@@ -37,12 +40,18 @@ export async function POST(
           // ignora
         }
       }
-      codigos.push(...listaFilhos);
+      if (listaFilhos.length > 0) {
+        const filhos = await prisma.sKU.findMany({
+          where: { userId: session.sub, sku: { in: listaFilhos } },
+          select: { userId: true, sku: true, observacoes: true },
+        });
+        candidatos.push(...filhos);
+      }
     }
 
     let imagemUrl: string | null = null;
-    for (const codigo of codigos) {
-      imagemUrl = await resolveSkuImage(session.sub, codigo);
+    for (const candidato of candidatos) {
+      imagemUrl = await resolveSkuImageForRecord(candidato);
       if (imagemUrl) break;
     }
 

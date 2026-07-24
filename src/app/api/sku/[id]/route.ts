@@ -39,6 +39,7 @@ export async function PUT(
       temEstoque,
       skusFilhos,
       observacoes,
+      imagemUrl,
       tags,
     } = body;
 
@@ -61,6 +62,7 @@ export async function PUT(
       if (temEstoque !== undefined) skuDataToUpdate.temEstoque = temEstoque;
       if (skusFilhos !== undefined) skuDataToUpdate.skusFilhos = skusFilhos;
       if (observacoes !== undefined) skuDataToUpdate.observacoes = observacoes;
+      if (imagemUrl !== undefined) skuDataToUpdate.imagemUrl = imagemUrl || null;
       if (tags !== undefined) skuDataToUpdate.tags = tags;
 
       const updated = await tx.sKU.update({

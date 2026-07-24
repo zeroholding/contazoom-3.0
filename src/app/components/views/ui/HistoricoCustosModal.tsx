@@ -62,66 +62,146 @@ export default function HistoricoCustosModal({
     }).format(new Date(dateString));
   };
 
+  const getTipoBadge = (tipo: string) => {
+    const map: Record<string, { label: string; className: string }> = {
+      manual: { label: "Manual", className: "bg-blue-100 text-blue-700" },
+      importacao: { label: "Importação", className: "bg-purple-100 text-purple-700" },
+      importacao_planilha: { label: "Importação", className: "bg-purple-100 text-purple-700" },
+      retroativo: { label: "Retroativo", className: "bg-amber-100 text-amber-700" },
+      automatico: { label: "Automático", className: "bg-emerald-100 text-emerald-700" },
+    };
+    return (
+      map[tipo?.toLowerCase?.()] || {
+        label: tipo || "—",
+        className: "bg-gray-100 text-gray-600",
+      }
+    );
+  };
+
+  // Calcula variação percentual entre custo anterior e novo
+  const getDelta = (anterior: number | null | undefined, novo: number) => {
+    const ant = Number(anterior ?? 0);
+    if (!ant || ant <= 0) {
+      return { tipo: "inicial" as const, pct: null as number | null };
+    }
+    const pct = ((novo - ant) / ant) * 100;
+    if (Math.abs(pct) < 0.01) return { tipo: "igual" as const, pct: 0 };
+    return { tipo: novo > ant ? ("subiu" as const) : ("caiu" as const), pct };
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Histórico de Custos - ${skuName}`} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={`Histórico de Custos · ${skuName}`} size="lg">
       <div className="flex flex-col space-y-4">
         {isLoading ? (
-          <div className="flex justify-center items-center py-8">
+          <div className="flex justify-center items-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
           </div>
         ) : error ? (
-          <div className="bg-red-50 text-red-600 p-4 rounded-md">
-            {error}
+          <div className="flex items-center gap-3 bg-red-50 text-red-700 p-4 rounded-xl border border-red-100">
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z" />
+            </svg>
+            <span className="text-sm">{error}</span>
           </div>
         ) : historico.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            Nenhum histórico de alteração de custo encontrado para este SKU.
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 mb-3">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-gray-700">Nenhuma alteração registrada</p>
+            <p className="text-xs text-gray-400 mt-1">O histórico aparece quando o custo deste SKU muda.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 border rounded-lg overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Data
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Custo Anterior
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Custo Novo
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Motivo
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {historico.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(item.createdAt)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {formatCurrency(item.custoAnterior)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatCurrency(item.custoNovo)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
-                      {item.motivo || "-"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="relative pl-6">
+            {/* Linha da timeline */}
+            <span className="absolute left-[9px] top-2 bottom-2 w-px bg-gray-200" aria-hidden />
+            <ul className="space-y-3">
+              {historico.map((item) => {
+                const tipo = getTipoBadge(item.tipoAlteracao);
+                const delta = getDelta(item.custoAnterior, Number(item.custoNovo));
+                return (
+                  <li key={item.id} className="relative">
+                    {/* Ponto da timeline */}
+                    <span
+                      className={`absolute -left-6 top-3 flex h-[18px] w-[18px] items-center justify-center rounded-full ring-4 ring-white ${
+                        delta.tipo === "subiu"
+                          ? "bg-red-500"
+                          : delta.tipo === "caiu"
+                            ? "bg-emerald-500"
+                            : "bg-orange-400"
+                      }`}
+                    >
+                      <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <circle cx="10" cy="10" r="6" />
+                      </svg>
+                    </span>
+
+                    <div className="rounded-xl border border-gray-200 bg-white p-3 hover:border-gray-300 transition-colors">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {formatDate(item.createdAt)}
+                        </div>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${tipo.className}`}>
+                          {tipo.label}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-gray-400 line-through">
+                          {formatCurrency(item.custoAnterior)}
+                        </span>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                        <span className="text-base font-semibold text-gray-900">
+                          {formatCurrency(item.custoNovo)}
+                        </span>
+
+                        {delta.tipo === "inicial" ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700">
+                            Custo inicial
+                          </span>
+                        ) : delta.pct !== null && delta.tipo !== "igual" ? (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                              delta.tipo === "subiu"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d={delta.tipo === "subiu" ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+                            </svg>
+                            {Math.abs(delta.pct).toFixed(1)}%
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {item.motivo && (
+                        <p className="mt-2 text-xs text-gray-500 flex items-start gap-1.5">
+                          <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h6m-6 4h10M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span>{item.motivo}</span>
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
 
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-end pt-2 border-t border-gray-100">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+            className="mt-3 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
           >
             Fechar
           </button>

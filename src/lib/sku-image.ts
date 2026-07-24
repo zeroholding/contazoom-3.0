@@ -207,7 +207,122 @@ async function resolveShopeeImage(
   }
 }
 
+// ------------------------- Origem da descoberta -------------------------
+
+// Extrai plataforma, conta e id de origem do texto de observação gravado
+// pela descoberta automática: "... - Mercado Livre - conta X - origem MLB123".
+function parseDiscoverySource(observacoes: unknown): {
+  plataforma: "ml" | "shopee" | null;
+  conta: string | null;
+  externalId: string | null;
+} {
+  const text = String(observacoes ?? "");
+  if (!text) return { plataforma: null, conta: null, externalId: null };
+
+  let plataforma: "ml" | "shopee" | null = null;
+  if (/mercado\s*livre/i.test(text)) plataforma = "ml";
+  else if (/shopee/i.test(text)) plataforma = "shopee";
+
+  const origemMatch = text.match(/origem\s+(\S+)/i);
+  const externalId = origemMatch ? origemMatch[1].trim() : null;
+
+  const contaMatch =
+    text.match(/conta\s+(.+?)\s*-\s*origem/i) || text.match(/conta\s+(.+)$/i);
+  const conta = contaMatch ? contaMatch[1].trim() : null;
+
+  return { plataforma, conta, externalId };
+}
+
+async function resolveMeliImageByItemId(
+  userId: string,
+  itemIdRaw: string,
+  contaNome: string | null,
+): Promise<string | null> {
+  const itemId = String(itemIdRaw).split(":")[0].trim();
+  if (!itemId) return null;
+
+  const accounts = await prisma.meliAccount.findMany({ where: { userId } });
+  if (accounts.length === 0) return null;
+
+  const target = normalizeSku(contaNome);
+  const ordered = [...accounts].sort((a, b) => {
+    const am = target && normalizeSku(a.nickname) === target ? 0 : 1;
+    const bm = target && normalizeSku(b.nickname) === target ? 0 : 1;
+    return am - bm;
+  });
+
+  for (const acc of ordered) {
+    try {
+      const refreshed = await refreshMeliAccountToken(acc);
+      const img = await fetchMeliItemImage(refreshed.access_token, itemId);
+      if (img) return img;
+    } catch {
+      // tenta a próxima conta
+    }
+  }
+  return null;
+}
+
+async function resolveShopeeImageByItemId(
+  userId: string,
+  itemIdRaw: string,
+  contaNome: string | null,
+): Promise<string | null> {
+  const itemId = String(itemIdRaw).split(":")[0].trim();
+  if (!itemId) return null;
+
+  const accounts = await prisma.shopeeAccount.findMany({ where: { userId } });
+  if (accounts.length === 0) return null;
+
+  const target = normalizeSku(contaNome);
+  const ordered = [...accounts].sort((a, b) => {
+    const am = target && normalizeSku(a.shop_name) === target ? 0 : 1;
+    const bm = target && normalizeSku(b.shop_name) === target ? 0 : 1;
+    return am - bm;
+  });
+
+  for (const acc of ordered) {
+    try {
+      const img = await fetchShopeeItemImage(acc, itemId);
+      if (img) return img;
+    } catch {
+      // tenta a próxima loja
+    }
+  }
+  return null;
+}
+
 // ------------------------- Público -------------------------
+
+/**
+ * Resolve a miniatura a partir do registro do SKU. Tenta primeiro pela origem
+ * da descoberta (id do anúncio gravado nas observações, sem precisar de venda)
+ * e, se não achar, cai no fallback pela venda mais recente.
+ */
+export async function resolveSkuImageForRecord(sku: {
+  userId: string;
+  sku: string;
+  observacoes?: string | null;
+}): Promise<string | null> {
+  const src = parseDiscoverySource(sku.observacoes);
+  if (src.externalId) {
+    if (src.plataforma === "ml") {
+      const img = await resolveMeliImageByItemId(sku.userId, src.externalId, src.conta);
+      if (img) return img;
+    } else if (src.plataforma === "shopee") {
+      const img = await resolveShopeeImageByItemId(sku.userId, src.externalId, src.conta);
+      if (img) return img;
+    } else {
+      const img =
+        (await resolveMeliImageByItemId(sku.userId, src.externalId, src.conta)) ||
+        (await resolveShopeeImageByItemId(sku.userId, src.externalId, src.conta));
+      if (img) return img;
+    }
+  }
+
+  // Fallback: procura pela venda mais recente
+  return resolveSkuImage(sku.userId, sku.sku);
+}
 
 /**
  * Resolve a miniatura de um SKU buscando o anúncio correspondente na venda
