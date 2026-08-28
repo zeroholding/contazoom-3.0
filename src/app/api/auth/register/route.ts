@@ -8,10 +8,29 @@ const prisma = new PrismaClient();
  * POST /api/auth/register
  * Handles user registration with database
  */
+/**
+ * País para a coluna `country`.
+ *
+ * O formulário exige país e enviava `pais` desde sempre, mas esta rota nunca leu
+ * o campo: a pessoa escolhia, o valor vinha no corpo e era descartado, com a
+ * coluna `country` existindo no banco e ficando nula.
+ *
+ * O cuidado que faz isso funcionar: `country` é `VarChar(2)`, e a lista do
+ * formulário tem "OTHER", de cinco letras. Gravar direto derrubaria o cadastro
+ * de quem escolhe "Outro" com erro de tamanho de coluna. Então só passa o que
+ * couber em dois caracteres; "OTHER" e qualquer valor estranho viram nulo, que é
+ * o que a coluna já guardava antes.
+ */
+function normalizarPais(valor: unknown): string | null {
+    if (typeof valor !== 'string') return null;
+    const limpo = valor.trim().toUpperCase();
+    return /^[A-Z]{2}$/.test(limpo) ? limpo : null;
+}
+
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { email, senha, name } = body;
+        const { email, senha, name, pais } = body;
 
         // Validate input
         if (!email || !senha) {
@@ -70,6 +89,7 @@ export async function POST(request: NextRequest) {
                 email: normalizedEmail,
                 name,
                 passwordHash,
+                country: normalizarPais(pais),
             },
             select: {
                 id: true,
