@@ -737,7 +737,9 @@ function Conteudo() {
             ))}
           </ul>
 
-          <Painel className="!shadow-none">
+          {/* Sufixo `!`, não prefixo: no Tailwind v4 o modificador important
+              mudou de lugar e `!shadow-none` não gera classe nenhuma. */}
+          <Painel className="shadow-none!">
             <Paginacao
               pagina={paginacao.page}
               totalPaginas={paginacao.totalPaginas}

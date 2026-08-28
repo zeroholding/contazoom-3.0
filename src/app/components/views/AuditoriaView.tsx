@@ -987,7 +987,9 @@ function Linha({ log, ehVoce }: { log: LogAuditoria; ehVoce: boolean }) {
         {/* QUEM e QUANDO */}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
           <span className="font-medium text-gray-700">{log.autorNome}</span>
-          <SeloPapel papel={log.autorPapel} className="!px-1.5 !py-0" />
+          {/* Peso fraco: numa linha de auditoria o que salta é a ação, não o
+              papel de quem fez. */}
+          <SeloPapel papel={log.autorPapel} peso="fraco" />
 
           {ehVoce && (
             <span className="rounded-full border border-gray-300 px-1.5 text-[11px] font-medium text-gray-600">

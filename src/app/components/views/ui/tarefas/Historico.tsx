@@ -119,7 +119,9 @@ export default function Historico({
                   <span className="font-medium text-gray-700">
                     {log.autorNome}
                   </span>
-                  <SeloPapel papel={log.autorPapel} className="!px-1.5 !py-0" />
+                  {/* Peso fraco em vez de forçar padding: no histórico o papel é
+                      contexto do autor, não o dado da linha. */}
+                  <SeloPapel papel={log.autorPapel} peso="fraco" />
                   <span>·</span>
                   <span title={dataHora(log.createdAt)}>
                     {dataHora(log.createdAt)}

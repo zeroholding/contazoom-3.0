@@ -330,3 +330,214 @@ select.error {
 .cz-kanban-coluna::-webkit-scrollbar-track {
     background: transparent;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Camada de acabamento do admin                                              */
+/*                                                                            */
+/* Escopada em .cz-admin (casca: sidebar + header) e .cz-tarefas (conteudo     */
+/* das telas). Nenhuma tela fora do admin e afetada.                          */
+/*                                                                            */
+/* O que esta AQUI e o que esta nos componentes segue uma regra: CSS resolve o */
+/* que precisa valer em todo elemento (numeral, foco, selecao); componente     */
+/* resolve o que e decisao de layout. Evita a briga de especificidade com as   */
+/* utilitarias do Tailwind que as telas ja usam.                              */
+/* -------------------------------------------------------------------------- */
+
+.cz-admin,
+.cz-tarefas {
+    /* Escala de elevacao. Sombra de dashboard tem de ser quase invisivel: o que
+       separa cartao do fundo e a borda, a sombra so da o assentamento. */
+    --cz-elev-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+    --cz-elev-2: 0 2px 4px rgba(16, 24, 40, 0.04), 0 4px 8px rgba(16, 24, 40, 0.06);
+    --cz-elev-3: 0 8px 16px rgba(16, 24, 40, 0.06), 0 16px 32px rgba(16, 24, 40, 0.08);
+
+    --cz-hairline: #EAECF0;
+    --cz-hairline-forte: #D0D5DD;
+    --cz-laranja: #EA580C;
+    --cz-laranja-suave: rgba(234, 88, 12, 0.16);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Numerais tabulares                                                         */
+/*                                                                            */
+/* O motivo mais barato de uma tabela parecer amadora: em fonte proporcional o */
+/* "1" e mais estreito que o "8", entao a coluna de valores dança linha a      */
+/* linha e o olho nao consegue comparar dois numeros na vertical. `tabular-    */
+/* nums` da a todo digito a mesma largura. Vale para tabela, KPI e qualquer    */
+/* numero grande.                                                             */
+/* -------------------------------------------------------------------------- */
+
+.cz-tarefas table,
+.cz-tarefas .cz-num,
+.cz-admin .cz-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cromo de tabela                                                            */
+/*                                                                            */
+/* Só o que as telas NAO definem por utilitaria. Padding, cor de cabecalho e   */
+/* hover continuam nas telas: um seletor de elemento aqui venceria a           */
+/* utilitaria de classe unica do Tailwind e eu apagaria a decisao de layout    */
+/* de quem escreveu a tela.                                                   */
+/* -------------------------------------------------------------------------- */
+
+.cz-tarefas table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+/* Célula vazia com travessao nao deve competir com dado real. */
+.cz-tarefas td .cz-vazio {
+    color: #98A2B3;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Foco visivel                                                               */
+/*                                                                            */
+/* Navegacao por teclado no admin hoje nao mostra onde esta. `:focus-visible`  */
+/* só aparece para quem navega por teclado, entao o clique de mouse continua   */
+/* sem anel — que e o comportamento que as pessoas esperam.                    */
+/* -------------------------------------------------------------------------- */
+
+.cz-admin a:focus-visible,
+.cz-admin button:focus-visible,
+.cz-tarefas a:focus-visible,
+.cz-tarefas button:focus-visible,
+.cz-tarefas [role="tab"]:focus-visible,
+.cz-tarefas summary:focus-visible {
+    outline: 2px solid var(--cz-laranja);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+}
+
+/* Na sidebar escura o laranja puro some no fundo preto. */
+.cz-admin aside a:focus-visible,
+.cz-admin aside button:focus-visible {
+    outline-color: #FDBA74;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Selecao de texto                                                           */
+/* -------------------------------------------------------------------------- */
+
+.cz-tarefas ::selection {
+    background-color: rgba(234, 88, 12, 0.18);
+    color: #7C2D12;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Esqueleto de carregamento                                                  */
+/*                                                                            */
+/* Substitui o spinner centralizado. Um spinner num fundo vazio comunica       */
+/* "travou"; um esqueleto com a forma do conteudo comunica "esta vindo, e vai  */
+/* ser assim" — e elimina o salto de layout quando o dado chega.               */
+/* -------------------------------------------------------------------------- */
+
+@keyframes cz-brilho {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.cz-esqueleto {
+    position: relative;
+    overflow: hidden;
+    background-color: #EFF1F4;
+    border-radius: 0.375rem;
+}
+
+.cz-esqueleto::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.65) 50%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    animation: cz-brilho 1.4s infinite;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Entrada de modal                                                           */
+/*                                                                            */
+/* Modal que aparece sem transicao parece falha de renderizacao. 140ms e o     */
+/* suficiente para o olho registrar de onde veio sem atrasar quem esta         */
+/* trabalhando rapido.                                                        */
+/* -------------------------------------------------------------------------- */
+
+@keyframes cz-fundo-entra {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes cz-caixa-entra {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.cz-modal-fundo {
+    animation: cz-fundo-entra 140ms ease-out;
+}
+
+.cz-modal-caixa {
+    animation: cz-caixa-entra 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Barra de rolagem do conteudo                                               */
+/*                                                                            */
+/* A barra padrao do Windows e larga e cinza-escura, e num painel claro ela    */
+/* rouba atencao do dado.                                                     */
+/* -------------------------------------------------------------------------- */
+
+.cz-rolagem {
+    scrollbar-width: thin;
+    scrollbar-color: #D0D5DD transparent;
+}
+
+.cz-rolagem::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.cz-rolagem::-webkit-scrollbar-thumb {
+    background-color: #D0D5DD;
+    border-radius: 9999px;
+}
+
+.cz-rolagem::-webkit-scrollbar-thumb:hover {
+    background-color: #98A2B3;
+}
+
+.cz-rolagem::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Respeito a preferencia de menos movimento                                  */
+/*                                                                            */
+/* Quem liga "reduzir movimento" no sistema costuma fazer isso por enxaqueca   */
+/* ou labirintite. Brilho de esqueleto e escala de modal sao exatamente o tipo */
+/* de animacao que incomoda.                                                  */
+/* -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .cz-esqueleto::after {
+        animation: none;
+    }
+
+    .cz-modal-fundo,
+    .cz-modal-caixa {
+        animation: none;
+    }
+
+    .cz-tarefas *,
+    .cz-admin * {
+        transition-duration: 0.01ms !important;
+    }
+}

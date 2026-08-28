@@ -70,7 +70,6 @@ const ICONE_CIRCULO: Record<string, string> = {
 
 export default function ListaEtapas({
   etapas,
-  etapaAtual,
   permissoes,
   bloqueada,
   encerrada,
@@ -81,7 +80,19 @@ export default function ListaEtapas({
   onDispensar,
 }: {
   etapas: Etapa[];
-  etapaAtual: number;
+  /**
+   * Aceito e não usado, de propósito.
+   *
+   * A posição do fluxo é lida de `etapa.situacao` (a etapa em curso é a única
+   * `EM_ANDAMENTO`), que é a mesma fonte que o servidor usa para decidir o que
+   * pode ser concluído. Derivar de `etapaAtual` daria uma segunda fonte de
+   * verdade para a mesma coisa, e as duas divergiriam justamente no caso que
+   * importa: etapa dispensada no meio do caminho.
+   *
+   * Continua no tipo porque as telas de detalhe passam, e retirar quebraria a
+   * chamada delas sem ganho nenhum.
+   */
+  etapaAtual?: number;
   permissoes: PermissoesEtapa;
   bloqueada: boolean;
   encerrada: boolean;
