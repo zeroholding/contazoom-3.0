@@ -212,7 +212,7 @@ export default function LegalizacaoListaView() {
   return (
     <Suspense
       fallback={
-        <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
           <Carregando texto="Carregando processos de legalização" />
         </div>
       }
@@ -545,18 +545,27 @@ function Conteudo() {
     return partes.join(" · ");
   }, [filtros, usuarios]);
 
-  const descricaoCabecalho = `${plural(
+  /**
+   * Total encontrado + quantos estão em aberto.
+   *
+   * Era a descrição do cabeçalho, que agora é compacto porque o cabeçalho do
+   * admin já escreve "Legalização". Contagem é dado: foi para o cabeçalho do
+   * painel de filtros, ao lado da linha "Filtrando por ..." que já explicava o
+   * recorte — as duas informações passam a ficar no mesmo bloco.
+   */
+  const resumoLista = `${plural(
     paginacao.total,
     "processo encontrado",
     "processos encontrados"
   )} · ${kpis.emAberto} em aberto nesta página`;
 
   return (
-    <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
       <Cabecalho
+        compacto
         titulo="Legalização"
         icone="Landmark"
-        descricao={descricaoCabecalho}
+        descricao={resumoLista}
         acoes={
           permissoes.criarProcesso ? (
             <Botao icone="Plus" onClick={abrirNovo}>
@@ -607,6 +616,7 @@ function Conteudo() {
 
       <Painel
         titulo="Filtros"
+        descricao={resumoLista}
         acoes={
           filtroAtivo ? (
             <Botao variante="secundario" icone="X" onClick={limpar}>

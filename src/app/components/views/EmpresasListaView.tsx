@@ -227,7 +227,7 @@ export default function EmpresasListaView() {
   return (
     <Suspense
       fallback={
-        <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
           <Carregando texto="Carregando empresas" />
         </div>
       }
@@ -541,21 +541,32 @@ function Conteudo() {
 
   const filtroAtivo = temFiltro(filtros);
 
+  /**
+   * Contagem da carteira + resumo do filtro.
+   *
+   * Era a descrição do cabeçalho. Com o cabeçalho compacto o texto sai da tela,
+   * e isto é dado, não enfeite: desceu para o cabeçalho do painel de filtros,
+   * que é justamente o bloco que responde "por que a lista tem esse tamanho".
+   */
+  const resumoLista = `${plural(
+    paginacao.total,
+    "empresa cadastrada",
+    "empresas cadastradas"
+  )} · ${resumoFiltro}`;
+
   const abrirEmpresa = useCallback(
     (id: string) => router.push(`/admin/empresas/${id}`),
     [router]
   );
 
   return (
-    <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      {/* O cabeçalho do admin já traz "Empresas" e o subtítulo da rota. */}
       <Cabecalho
+        compacto
         titulo="Empresas"
         icone="Building2"
-        descricao={`${plural(
-          paginacao.total,
-          "empresa cadastrada",
-          "empresas cadastradas"
-        )} · ${resumoFiltro}`}
+        descricao={resumoLista}
         acoes={
           permissoes.gerenciarEmpresa ? (
             <Botao icone="Plus" onClick={abrirNova}>
@@ -596,6 +607,7 @@ function Conteudo() {
 
       <Painel
         titulo="Filtros"
+        descricao={resumoLista}
         acoes={
           filtroAtivo ? (
             <Botao variante="secundario" icone="X" onClick={limpar}>

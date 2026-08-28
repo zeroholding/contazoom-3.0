@@ -338,9 +338,9 @@ export default function Cadastro() {
           <Image
             src="/logopng.webp"
             alt="ContaZoom"
-            width={150}
-            height={34}
-            className="h-8 w-auto object-contain"
+            width={210}
+            height={48}
+            className="h-11 w-auto object-contain"
             priority
           />
         </div>

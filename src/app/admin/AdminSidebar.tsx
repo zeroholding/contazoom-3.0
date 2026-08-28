@@ -261,16 +261,16 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
       >
         <span
           aria-hidden="true"
-          className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-[var(--cz-laranja)]"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--cz-laranja)]"
         >
-          <Shield className="h-[18px] w-[18px] text-white" />
+          <Shield className="h-[21px] w-[21px] text-white" />
         </span>
         {!collapsed && (
           <span className="min-w-0">
-            <span className="block truncate text-[15px] font-bold leading-tight tracking-[-0.02em] text-[var(--cz-texto)]">
+            <span className="block truncate text-[17px] font-extrabold leading-tight tracking-[-0.03em] text-[var(--cz-texto)]">
               ContaZoom
             </span>
-            <span className="block truncate text-[11px] leading-tight text-[var(--cz-texto-fraco)]">
+            <span className="block truncate text-[11.5px] leading-tight text-[var(--cz-texto-fraco)]">
               Painel do escritório
             </span>
           </span>

@@ -920,7 +920,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
   if (naoEncontrado) {
     return (
-      <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
         <Cabecalho
           titulo="Processo não encontrado"
           icone="Landmark"
@@ -947,7 +947,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
   if (primeiraCarga && carregando) {
     return (
-      <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
         <Carregando texto="Carregando processo" />
       </div>
     );
@@ -955,7 +955,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
   if (!processo) {
     return (
-      <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
         <Cabecalho
           titulo="Legalização"
           icone="Landmark"
@@ -1021,7 +1021,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
   );
 
   return (
-    <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
       <Cabecalho
         titulo={processo.tipoLabel || TIPO_PROCESSO_LABEL[processo.tipo] || processo.tipo}
         descricao={descricao}

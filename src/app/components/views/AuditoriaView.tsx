@@ -334,7 +334,7 @@ export default function AuditoriaView() {
   return (
     <Suspense
       fallback={
-        <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
           <Carregando texto="Carregando auditoria" />
         </div>
       }
@@ -628,8 +628,15 @@ function Conteudo() {
   /* -------------------------------- Render ------------------------------- */
 
   return (
-    <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      {/* `compacto`: o cabeçalho do admin já escreve "Auditoria" e o subtítulo
+          da rota. A descrição só dizia o que a tela é — o bloco cinza logo
+          abaixo, sobre o autor congelado, é o que traz informação que não está
+          em nenhum outro lugar. A pílula de voltar e o botão Atualizar dividem
+          agora uma única linha. A contagem de alterações continua no painel da
+          lista, em `descricaoLista`. */}
       <Cabecalho
+        compacto
         titulo="Auditoria"
         icone="History"
         descricao="Registro de toda alteração feita nas apurações fiscais e nos processos de legalização, com autor, papel e horário de cada movimento."

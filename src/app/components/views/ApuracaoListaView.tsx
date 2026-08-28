@@ -238,7 +238,7 @@ export default function ApuracaoListaView() {
   return (
     <Suspense
       fallback={
-        <div className="cz-tarefas mx-auto max-w-[1600px] space-y-6 p-6">
+        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
           <Carregando texto="Carregando apuração fiscal" />
         </div>
       }
@@ -749,16 +749,27 @@ function Conteudo() {
 
   const vazioComFiltro = temFiltroAlemDaCompetencia(filtros);
 
+  /**
+   * Competência em foco + total encontrado.
+   *
+   * Era a descrição do cabeçalho, hoje compacto porque o cabeçalho do admin já
+   * escreve "Apuração fiscal". Qual mês está na tela e quantas competências
+   * voltaram é a informação que o operador confere antes de olhar a lista, então
+   * ficou no cabeçalho do painel de filtros, colada nos controles que a mudam.
+   */
+  const resumoLista = `${rotuloCompetencia} · ${plural(
+    paginacao.total,
+    "competência encontrada",
+    "competências encontradas"
+  )}`;
+
   return (
-    <div className="cz-tarefas mx-auto max-w-[1600px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
       <Cabecalho
+        compacto
         titulo="Apuração fiscal"
         icone="Calculator"
-        descricao={`${rotuloCompetencia} · ${plural(
-          paginacao.total,
-          "competência encontrada",
-          "competências encontradas"
-        )}`}
+        descricao={resumoLista}
         acoes={acoesCabecalho}
       />
 
@@ -774,6 +785,7 @@ function Conteudo() {
 
       <Painel
         titulo="Filtros"
+        descricao={resumoLista}
         acoes={
           filtroAtivo ? (
             <Botao variante="secundario" icone="X" onClick={limpar}>

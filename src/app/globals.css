@@ -676,7 +676,28 @@ select.error {
     letter-spacing: -0.011em;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Cor de texto ancorada                                                      */
+/*                                                                            */
+/* BUG QUE ISTO CORRIGE, e vale registrar porque e facil de repetir: o bloco   */
+/* :root tem um @media (prefers-color-scheme: dark) que troca --foreground por  */
+/* #ededed, e o body usa `color: var(--foreground)`. O painel e o login sao     */
+/* telas de fundo BRANCO fixo. Quem estiver com o sistema em tema escuro       */
+/* herdava texto quase branco sobre branco — o titulo do login ficou           */
+/* literalmente invisivel em producao.                                        */
+/*                                                                            */
+/* A ancora tem de ficar no container, nao em cada componente: qualquer texto  */
+/* novo que alguem escrever aqui sem classe de cor tem de nascer legivel.      */
+/* -------------------------------------------------------------------------- */
+
 .cz-admin,
+.cz-auth,
+.cz-tarefas {
+    color: #14161B;
+}
+
+.cz-admin,
+.cz-auth,
 .cz-tarefas {
     /* Sombras quase inexistentes: quem separa e a borda. */
     --cz-elev-1: 0 1px 2px rgba(16, 24, 40, 0.03);
@@ -707,10 +728,13 @@ select.error {
 /* resolvem isso para todo componente sem repetir tracking em cada arquivo.     */
 /* -------------------------------------------------------------------------- */
 
+/* O fallback nao e decorativo: sem ele, usar a classe fora de um container que
+   define os tokens deixa a cor invalida e o texto herda o body, que em tema
+   escuro do sistema e quase branco. Foi assim que o titulo do login desapareceu. */
 .cz-titulo {
     letter-spacing: -0.028em;
     font-weight: 700;
-    color: var(--cz-texto);
+    color: var(--cz-texto, #14161B);
 }
 
 .cz-valor {
@@ -718,7 +742,7 @@ select.error {
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
-    color: var(--cz-texto);
+    color: var(--cz-texto, #14161B);
 }
 
 /* -------------------------------------------------------------------------- */

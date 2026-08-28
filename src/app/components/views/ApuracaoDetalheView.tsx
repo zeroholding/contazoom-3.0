@@ -648,7 +648,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
 
   if (naoEncontrada) {
     return (
-      <div className="cz-tarefas p-6 max-w-7xl mx-auto space-y-6">
+      <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
         <Cabecalho
           titulo="Competência não encontrada"
           descricao="O registro pode ter sido removido ou o endereço está incorreto."
@@ -685,7 +685,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
 
   if (carregandoPagina && !dados) {
     return (
-      <div className="cz-tarefas p-6 max-w-7xl mx-auto space-y-6">
+      <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
         <Carregando texto="Carregando a competência" />
       </div>
     );
@@ -693,7 +693,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
 
   if (!dados || !tarefa || !empresa) {
     return (
-      <div className="cz-tarefas p-6 max-w-7xl mx-auto space-y-6">
+      <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
         <Cabecalho
           titulo="Apuração fiscal"
           descricao="Não foi possível carregar esta competência."
@@ -726,7 +726,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
     : tarefa.etapaAtual;
 
   return (
-    <div className="cz-tarefas p-6 max-w-7xl mx-auto space-y-6">
+    <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
       <Cabecalho
         titulo={nomeEmpresa(empresa)}
         descricao={`${tarefa.competenciaLabel} · ${

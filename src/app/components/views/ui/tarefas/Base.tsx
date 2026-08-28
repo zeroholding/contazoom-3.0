@@ -84,8 +84,11 @@ type CartaoKpiProps = {
   carregando?: boolean;
   /**
    * Miniatura à direita do cartão: barrinhas, rosca, faísca. A tela injeta o
-   * desenho pronto; este arquivo é casca e não sabe desenhar gráfico. Ocupa
-   * pouco menos da metade da largura e não empurra o número.
+   * desenho pronto; este arquivo é casca e não sabe desenhar gráfico.
+   *
+   * Fica numa coluna que cede espaço antes do número e tem teto de altura, para
+   * a faísca não empurrar o valor de 30px nem esticar o cartão acima dos irmãos
+   * da mesma grade.
    */
   grafico?: ReactNode;
   /** Texto do link no pé quando há `href`. */
@@ -194,8 +197,13 @@ export function CartaoKpi({
 
   const conteudo = (
     <>
-      <div className={`flex flex-1 gap-4 px-5 ${href ? "pt-[18px]" : "py-[18px]"}`}>
-        <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`flex flex-1 gap-3 px-5 ${href ? "pt-[18px]" : "py-[18px]"}`}>
+        {/* `min-w-[6.5rem]` é o piso do número: cabe um valor de cinco dígitos
+            em 30px sem quebrar linha nem virar corpo menor. Piso diferente de
+            zero não atrapalha o `truncate` do rótulo e do detalhe — o que
+            quebraria truncamento em item flex é o `min-width: auto` do default,
+            e este continua substituído. */}
+        <div className="flex min-w-[6.5rem] flex-1 flex-col">
           <p className="flex items-center gap-1.5 text-[13px] font-medium leading-5 text-[var(--cz-texto-suave)]">
             <Icone
               nome={icone}
@@ -215,7 +223,13 @@ export function CartaoKpi({
         </div>
 
         {grafico && (
-          <div className="flex w-[42%] max-w-[9.5rem] shrink-0 items-center justify-end">
+          // A coluna do desenho pede 36% mas encolhe (`min-w-0`, sem
+          // `shrink-0`): em cartão estreito quem cede é a faísca, nunca o
+          // número. O teto de altura mais `overflow-hidden` garantem que a
+          // grade fique com a mesma altura com e sem gráfico — o valor, o
+          // rótulo e a linha de comparação continuam sendo o que define quanto
+          // o cartão mede.
+          <div className="flex max-h-[4.75rem] min-w-0 max-w-[8.5rem] basis-[36%] items-center justify-end overflow-hidden">
             {grafico}
           </div>
         )}
@@ -252,6 +266,113 @@ export function CartaoKpi({
 
 /* ------------------------------- Cabeçalho -------------------------------- */
 
+/**
+ * Pílula de voltar + trilha local.
+ *
+ * Fora do `Cabecalho` porque os dois modos dele — completo e compacto — mostram
+ * exatamente este bloco, e duas cópias do mesmo markup divergem na primeira
+ * manutenção. Não é export: continua sendo detalhe interno do cabeçalho.
+ */
+function NavegacaoLocal({
+  voltarPara,
+  voltarTexto,
+  passos,
+}: {
+  voltarPara?: string;
+  voltarTexto: string;
+  passos: { texto: string; href?: string }[];
+}) {
+  const temTrilha = passos.length > 0;
+  if (!voltarPara && !temTrilha) return null;
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+      {voltarPara && (
+        // Pílula de verdade, não link solto: o alvo de clique fica visível
+        // antes do hover, que é o que faltava para as telas de detalhe.
+        <Link
+          href={voltarPara}
+          className="group inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-texto-fraco)] hover:text-[var(--cz-texto)]"
+        >
+          <ChevronLeft
+            className="h-4 w-4 transition-transform duration-150 group-hover:-translate-x-0.5"
+            aria-hidden="true"
+          />
+          {voltarTexto}
+        </Link>
+      )}
+
+      {voltarPara && temTrilha && (
+        <span
+          className="h-4 w-px bg-[var(--cz-hairline-forte)]"
+          aria-hidden="true"
+        />
+      )}
+
+      {temTrilha && (
+        <nav aria-label="Trilha de navegação">
+          <ol className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-medium text-[var(--cz-texto-suave)]">
+            {passos.map((passo, i) => {
+              const ultimo = i === passos.length - 1;
+              return (
+                <li
+                  key={`${passo.texto}-${i}`}
+                  className="flex items-center gap-1.5"
+                >
+                  {i > 0 && (
+                    <ChevronRight
+                      className="h-3.5 w-3.5 shrink-0 text-[var(--cz-texto-fraco)]"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {passo.href && !ultimo ? (
+                    <Link
+                      href={passo.href}
+                      className="transition-colors hover:text-[var(--cz-laranja-forte)]"
+                    >
+                      {passo.texto}
+                    </Link>
+                  ) : (
+                    <span
+                      aria-current={ultimo ? "page" : undefined}
+                      className={ultimo ? "text-[var(--cz-texto)]" : undefined}
+                    >
+                      {passo.texto}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Cabeçalho da tela.
+ *
+ * MODO COMPACTO (`compacto`, opcional, default `false`)
+ *
+ * O cabeçalho do admin já imprime trilha, título grande e subtítulo por rota.
+ * Nas telas de LISTA o título da view era o mesmo texto de novo, dois blocos
+ * empilhados dizendo a mesma coisa antes do primeiro dado — perto de 90px de
+ * altura gastos em repetição. Com `compacto`, a view para de pintar título,
+ * descrição e ícone e sobra só a barra de ação, encostada no topo do conteúdo.
+ *
+ * O `titulo` continua no documento como `<h1 className="sr-only">`. Isso não é
+ * zelo decorativo: sem h1 a página perde a raiz da árvore de cabeçalhos, e
+ * leitor de tela e navegação por landmarks ficam sem âncora para "onde estou".
+ * O texto continua existindo, só não é pintado.
+ *
+ * A `descricao` sai da tela por inteiro no modo compacto. Quando ela carregava
+ * dado — contagem, competência, resumo do filtro — quem chama move o texto para
+ * um painel da própria tela; nenhuma das cinco listas perdeu contagem.
+ *
+ * Telas de DETALHE não usam `compacto`: lá o título é o nome da empresa ou a
+ * competência, informação que o cabeçalho do admin não tem.
+ */
 export function Cabecalho({
   titulo,
   descricao,
@@ -261,6 +382,7 @@ export function Cabecalho({
   voltarTexto = "Voltar",
   trilha,
   selos,
+  compacto = false,
 }: {
   titulo: string;
   descricao?: string;
@@ -272,75 +394,63 @@ export function Cabecalho({
   trilha?: { texto: string; href?: string }[];
   /** Faixa de selos abaixo do título, no lugar de um painel só para isso. */
   selos?: ReactNode;
+  /**
+   * Esconde título, descrição e ícone, deixando só a barra de ação. O título
+   * segue no documento como h1 de leitor de tela. Para tela cujo título já
+   * aparece no cabeçalho do admin.
+   */
+  compacto?: boolean;
 }) {
   const passos = trilha ?? [];
   const temTrilha = passos.length > 0;
+  const navegacao = (
+    <NavegacaoLocal
+      voltarPara={voltarPara}
+      voltarTexto={voltarTexto}
+      passos={passos}
+    />
+  );
+
+  if (compacto) {
+    const temNavegacao = Boolean(voltarPara) || temTrilha;
+
+    // Sem nada visível, devolve só o h1. Um wrapper vazio ainda contaria como
+    // irmão no `space-y` da tela e abriria um vão de 24px sem conteúdo dentro.
+    if (!temNavegacao && !acoes && !selos) {
+      return <h1 className="sr-only">{titulo}</h1>;
+    }
+
+    return (
+      // Uma linha só: voltar/trilha à esquerda, ações à direita. Sem o bloco de
+      // título a barra tem a altura de um botão, então o `-mb-1` encurta o vão
+      // até o primeiro painel — senão o respiro de 24px da tela, que existe
+      // para separar blocos de conteúdo, sobraria como buraco embaixo dela.
+      <div className="-mb-1 space-y-3">
+        <h1 className="sr-only">{titulo}</h1>
+
+        {(temNavegacao || acoes) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {navegacao}
+            {acoes && (
+              // `ml-auto` e não `justify-between`: com ou sem navegação à
+              // esquerda, a barra de ação encosta na direita do mesmo jeito.
+              <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+                {acoes}
+              </div>
+            )}
+          </div>
+        )}
+
+        {selos && (
+          <div className="flex flex-wrap items-center gap-2">{selos}</div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      {(voltarPara || temTrilha) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {voltarPara && (
-            // Pílula de verdade, não link solto: o alvo de clique fica visível
-            // antes do hover, que é o que faltava para as telas de detalhe.
-            <Link
-              href={voltarPara}
-              className="group inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-texto-fraco)] hover:text-[var(--cz-texto)]"
-            >
-              <ChevronLeft
-                className="h-4 w-4 transition-transform duration-150 group-hover:-translate-x-0.5"
-                aria-hidden="true"
-              />
-              {voltarTexto}
-            </Link>
-          )}
-
-          {voltarPara && temTrilha && (
-            <span
-              className="h-4 w-px bg-[var(--cz-hairline-forte)]"
-              aria-hidden="true"
-            />
-          )}
-
-          {temTrilha && (
-            <nav aria-label="Trilha de navegação">
-              <ol className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-medium text-[var(--cz-texto-suave)]">
-                {passos.map((passo, i) => {
-                  const ultimo = i === passos.length - 1;
-                  return (
-                    <li
-                      key={`${passo.texto}-${i}`}
-                      className="flex items-center gap-1.5"
-                    >
-                      {i > 0 && (
-                        <ChevronRight
-                          className="h-3.5 w-3.5 shrink-0 text-[var(--cz-texto-fraco)]"
-                          aria-hidden="true"
-                        />
-                      )}
-                      {passo.href && !ultimo ? (
-                        <Link
-                          href={passo.href}
-                          className="transition-colors hover:text-[var(--cz-laranja-forte)]"
-                        >
-                          {passo.texto}
-                        </Link>
-                      ) : (
-                        <span
-                          aria-current={ultimo ? "page" : undefined}
-                          className={ultimo ? "text-[var(--cz-texto)]" : undefined}
-                        >
-                          {passo.texto}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </nav>
-          )}
-        </div>
-      )}
+      {navegacao}
 
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div className="flex min-w-0 items-center gap-3">

@@ -607,8 +607,12 @@ export default function Sidebar({
 
         {isAdmin && (
           <div className="px-3 py-2">
+            {/* Vai para Tarefas, não para /admin. /admin e a tela de usuarios e
+                acessos: e configuracao, nao o trabalho do dia. Quem entra no
+                painel quer ver as apuracoes do mes, e Usuarios continua a um
+                clique na barra lateral de la. */}
             <Link
-              href="/admin"
+              href="/admin/tarefas"
               className={`flex items-center justify-center gap-2 rounded-lg bg-gray-900 text-orange-500 shadow-sm border border-gray-800 hover:bg-gray-800 transition-all ${collapsed ? 'p-2' : 'px-4 py-2.5'}`}
             >
               <AdminIcon />

@@ -757,8 +757,14 @@ export default function UsuariosView() {
   const podeGerenciar = permissoes.gerenciarUsuarios;
 
   return (
-    <div className="cz-tarefas p-6 max-w-7xl mx-auto space-y-6">
+    <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
+      {/* `compacto`: o cabeçalho do admin já escreve "Usuários" e o subtítulo
+          "Perfis de acesso e contas da equipe". O título aqui vira h1 de leitor
+          de tela e a descrição sai — o painel "O que cada perfil permite",
+          logo abaixo dos indicadores, explica os perfis com mais precisão do
+          que uma linha de texto conseguia. */}
       <Cabecalho
+        compacto
         titulo="Usuários e níveis de acesso"
         icone="Users"
         descricao="É aqui que se define quem executa quais etapas do módulo de tarefas: cada perfil libera um conjunto diferente de ações."

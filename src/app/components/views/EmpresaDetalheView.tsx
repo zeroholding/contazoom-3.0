@@ -502,7 +502,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
   if (carregando && !empresa) {
     return (
-      <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
         <Carregando texto="Carregando empresa" />
       </div>
     );
@@ -510,7 +510,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
   if (naoEncontrada) {
     return (
-      <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
         <Cabecalho
           titulo="Empresa não encontrada"
           icone="Building2"
@@ -537,7 +537,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
   if (!empresa) {
     return (
-      <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
         <Cabecalho
           titulo="Empresa"
           icone="Building2"
@@ -559,7 +559,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
     .join(" · ");
 
   return (
-    <div className="cz-tarefas mx-auto max-w-7xl space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
       <Cabecalho
         titulo={empresa.razaoSocial}
         descricao={descricao}

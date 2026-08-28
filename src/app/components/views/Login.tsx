@@ -91,9 +91,9 @@ export default function Login() {
           <Image
             src="/logopng.webp"
             alt="ContaZoom"
-            width={150}
-            height={34}
-            className="h-8 w-auto object-contain"
+            width={210}
+            height={48}
+            className="h-11 w-auto object-contain"
             priority
           />
           <p className="flex items-center gap-2 text-[13px] font-medium text-[#6B7280]">
@@ -229,9 +229,9 @@ export default function Login() {
           <Image
             src="/logopng.webp"
             alt="ContaZoom"
-            width={150}
-            height={34}
-            className="h-8 w-auto object-contain"
+            width={210}
+            height={48}
+            className="h-11 w-auto object-contain"
             priority
           />
         </div>
