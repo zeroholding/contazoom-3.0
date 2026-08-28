@@ -12,6 +12,7 @@ import {
   useImperativeHandle,
   useCallback,
 } from "react";
+import { ClipboardList } from "lucide-react";
 import gsap from "gsap";
 
 type Leaf = { href: string; label: string };
@@ -194,6 +195,9 @@ function clamp(n: number, min: number, max: number) {
 // Guardar o resultado enquanto a aba estiver aberta evita o refetch repetido.
 // Reseta naturalmente num full reload / novo login.
 let adminCheckCache: boolean | null = null;
+// Mesmo ciclo de vida do cache acima: `/api/admin/check` passou a devolver
+// `interno` junto com `isAdmin`, então uma requisição responde as duas coisas.
+let internoCheckCache: boolean | null = null;
 
 /** Handle exposto para animar fechamento */
 type RailFlyoutHandle = { close: () => Promise<void> };
@@ -357,10 +361,15 @@ export default function Sidebar({
   const pathname = usePathname();
 
   const [isAdmin, setIsAdmin] = useState<boolean>(adminCheckCache ?? false);
+  // Comercial, Contabilidade e Assistente contábil trabalham no módulo de
+  // tarefas mas NÃO são ADMIN. Sem este segundo sinal eles não teriam nenhum
+  // caminho até uma área que podem usar: o bloco abaixo só aparecia para admin.
+  const [isInterno, setIsInterno] = useState<boolean>(internoCheckCache ?? false);
   useEffect(() => {
     // Já sabemos o resultado nesta sessão → não refazer a cada navegação.
     if (adminCheckCache !== null) {
       setIsAdmin(adminCheckCache);
+      setIsInterno(internoCheckCache ?? false);
       return;
     }
     let aborted = false;
@@ -368,7 +377,11 @@ export default function Sidebar({
       .then(r => r.json())
       .then(d => {
         adminCheckCache = !!d.isAdmin;
-        if (!aborted) setIsAdmin(adminCheckCache);
+        internoCheckCache = !!d.interno;
+        if (!aborted) {
+          setIsAdmin(adminCheckCache);
+          setIsInterno(internoCheckCache);
+        }
       })
       .catch(() => {});
     return () => { aborted = true; };
@@ -600,6 +613,22 @@ export default function Sidebar({
             >
               <AdminIcon />
               {!collapsed && <span className="font-bold text-sm tracking-wide">PAINEL ADMIN</span>}
+            </Link>
+          </div>
+        )}
+
+        {/* Equipe interna sem ADMIN: entra direto no módulo de tarefas, que é a
+            área dela. Administrador já chega lá pelo Painel Admin, então os dois
+            blocos não aparecem juntos. */}
+        {isInterno && !isAdmin && (
+          <div className="px-3 py-2">
+            <Link
+              href="/admin/tarefas"
+              title={collapsed ? "Tarefas contábeis" : undefined}
+              className={`flex items-center justify-center gap-2 rounded-lg bg-gray-900 text-orange-500 shadow-sm border border-gray-800 hover:bg-gray-800 transition-all ${collapsed ? 'p-2' : 'px-4 py-2.5'}`}
+            >
+              <ClipboardList className="h-5 w-5 shrink-0" aria-hidden="true" />
+              {!collapsed && <span className="font-bold text-sm tracking-wide">TAREFAS</span>}
             </Link>
           </div>
         )}

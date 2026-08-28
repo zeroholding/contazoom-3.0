@@ -8,53 +8,61 @@ datasource db {
 }
 
 model User {
-  id                String              @id @default(uuid())
-  name              String
-  email             String              @unique @db.Citext
-  passwordHash      String              @map("password_hash")
-  country           String?             @db.VarChar(2)
-  role              String              @default("USER")
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
-  blingAccounts     BlingAccount[]
-  blingOauthStates  BlingOauthState[]
-  categorias        Categoria[]
-  contasPagar       ContaPagar[]
-  contasReceber     ContaReceber[]
-  formasPagamento   FormaPagamento[]
-  meliAccounts      MeliAccount[]
-  meliOauthStates   MeliOauthState[]
-  meliVendas        MeliVenda[]
-  shopeeAccounts    ShopeeAccount[]
-  shopeeOauthStates ShopeeOauthState[]
-  shopeeVendas      ShopeeVenda[]
-  skus              SKU[]
-  skuCustoHistorico SKUCustoHistorico[]
-  notifications     SyncNotification[]
-  settings          UserSettings?
-  aliquotasImposto  AliquotaImposto[]
-  documents         Document[]
-  documentFolders   DocumentFolder[]
-  documentLogs      DocumentLog[]
+  id                  String               @id @default(uuid())
+  name                String
+  email               String               @unique @db.Citext
+  passwordHash        String               @map("password_hash")
+  country             String?              @db.VarChar(2)
+  role                String               @default("USER")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  blingAccounts       BlingAccount[]
+  blingOauthStates    BlingOauthState[]
+  categorias          Categoria[]
+  contasPagar         ContaPagar[]
+  contasReceber       ContaReceber[]
+  formasPagamento     FormaPagamento[]
+  meliAccounts        MeliAccount[]
+  meliOauthStates     MeliOauthState[]
+  meliVendas          MeliVenda[]
+  shopeeAccounts      ShopeeAccount[]
+  shopeeOauthStates   ShopeeOauthState[]
+  shopeeVendas        ShopeeVenda[]
+  skus                SKU[]
+  skuCustoHistorico   SKUCustoHistorico[]
+  notifications       SyncNotification[]
+  settings            UserSettings?
+  aliquotasImposto    AliquotaImposto[]
+  documents           Document[]
+  documentFolders     DocumentFolder[]
+  documentLogs        DocumentLog[]
   flexShippingConfigs FlexShippingConfig[]
+
+  // --- Módulo de tarefas contábeis -----------------------------------------
+  // Relações inversas apenas: não criam coluna nem alteram a tabela `usuario`.
+  empresas             Empresa[]
+  empresasResponsavel  Empresa[]             @relation("EmpresaResponsavel")
+  apuracoesResponsavel TarefaApuracao[]      @relation("ApuracaoResponsavel")
+  processosResponsavel ProcessoLegalizacao[] @relation("ProcessoResponsavel")
+  tarefaLogs           TarefaLog[]           @relation("TarefaLogAutor")
 
   @@index([createdAt])
   @@map("usuario")
 }
 
 model MeliAccount {
-  id                        String      @id @default(cuid())
-  userId                    String
-  ml_user_id                BigInt
-  nickname                  String?
-  access_token              String
-  refresh_token             String
-  expires_at                DateTime
+  id                          String      @id @default(cuid())
+  userId                      String
+  ml_user_id                  BigInt
+  nickname                    String?
+  access_token                String
+  refresh_token               String
+  expires_at                  DateTime
   refresh_token_invalid_until DateTime?
-  created_at                DateTime    @default(now())
-  updated_at                DateTime    @updatedAt
-  user                      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  meliVendas                MeliVenda[]
+  created_at                  DateTime    @default(now())
+  updated_at                  DateTime    @updatedAt
+  user                        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meliVendas                  MeliVenda[]
 
   @@unique([userId, ml_user_id], name: "userId_ml_user_id")
   @@map("meli_account")
@@ -73,19 +81,19 @@ model MeliOauthState {
 }
 
 model ShopeeAccount {
-  id                        String        @id @default(cuid())
-  userId                    String        @map("user_id")
-  shop_id                   String
-  shop_name                 String?       @map("shop_name")
-  merchant_id               String?
-  access_token              String
-  refresh_token             String
-  expires_at                DateTime
+  id                          String        @id @default(cuid())
+  userId                      String        @map("user_id")
+  shop_id                     String
+  shop_name                   String?       @map("shop_name")
+  merchant_id                 String?
+  access_token                String
+  refresh_token               String
+  expires_at                  DateTime
   refresh_token_invalid_until DateTime?
-  created_at                DateTime      @default(now())
-  updated_at                DateTime      @updatedAt
-  user                      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shopeeVendas              ShopeeVenda[]
+  created_at                  DateTime      @default(now())
+  updated_at                  DateTime      @updatedAt
+  user                        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopeeVendas                ShopeeVenda[]
 
   @@unique([userId, shop_id], name: "userId_shop_id")
   @@map("shopee_account")
@@ -104,17 +112,17 @@ model ShopeeOauthState {
 }
 
 model BlingAccount {
-  id                        String   @id @default(cuid())
-  userId                    String   @map("user_id")
-  bling_user_id             String?  @map("bling_user_id")
-  account_name              String?  @map("account_name")
-  access_token              String
-  refresh_token             String
-  expires_at                DateTime
+  id                          String    @id @default(cuid())
+  userId                      String    @map("user_id")
+  bling_user_id               String?   @map("bling_user_id")
+  account_name                String?   @map("account_name")
+  access_token                String
+  refresh_token               String
+  expires_at                  DateTime
   refresh_token_invalid_until DateTime?
-  created_at                DateTime @default(now())
-  updated_at                DateTime @updatedAt
-  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @updatedAt
+  user                        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bling_user_id], name: "userId_bling_user_id")
   @@map("bling_account")
@@ -344,21 +352,21 @@ model FormaPagamento {
 }
 
 model Categoria {
-  id              String         @id @default(cuid())
-  userId          String         @map("user_id")
-  blingId         String?        @map("bling_id")
-  nome            String
-  descricao       String?
-  tipo            String?
-  ativo           Boolean        @default(true)
-  categoriaPaiId  String?        @map("categoria_pai_id")
-  sincronizadoEm  DateTime       @default(now()) @map("sincronizado_em")
-  atualizadoEm    DateTime       @updatedAt @map("atualizado_em")
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categoriaPai    Categoria?     @relation("SubCategorias", fields: [categoriaPaiId], references: [id], onDelete: SetNull)
-  subCategorias   Categoria[]    @relation("SubCategorias")
-  contasPagar     ContaPagar[]
-  contasReceber   ContaReceber[]
+  id             String         @id @default(cuid())
+  userId         String         @map("user_id")
+  blingId        String?        @map("bling_id")
+  nome           String
+  descricao      String?
+  tipo           String?
+  ativo          Boolean        @default(true)
+  categoriaPaiId String?        @map("categoria_pai_id")
+  sincronizadoEm DateTime       @default(now()) @map("sincronizado_em")
+  atualizadoEm   DateTime       @updatedAt @map("atualizado_em")
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoriaPai   Categoria?     @relation("SubCategorias", fields: [categoriaPaiId], references: [id], onDelete: SetNull)
+  subCategorias  Categoria[]    @relation("SubCategorias")
+  contasPagar    ContaPagar[]
+  contasReceber  ContaReceber[]
 
   @@unique([userId, blingId], name: "userId_blingId")
   @@index([userId])
@@ -422,19 +430,19 @@ model ContaReceber {
 }
 
 model AliquotaImposto {
-  id             String   @id @default(cuid())
-  userId         String   @map("user_id")
-  conta          String   // Conta/CNPJ (ex: "Mercado Livre - Moscou", "Shopee Principal")
-  accountId      String?  @map("account_id")
-  plataforma     String?
-  aliquota       Decimal  @db.Decimal(5, 2) // Percentual (ex: 5.00 para 5%)
-  dataInicio     DateTime @map("data_inicio")
-  dataFim        DateTime @map("data_fim")
-  descricao      String?  // Descrição adicional (ex: "Simples Nacional", "Lucro Presumido")
-  ativo          Boolean  @default(true)
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  conta      String // Conta/CNPJ (ex: "Mercado Livre - Moscou", "Shopee Principal")
+  accountId  String?  @map("account_id")
+  plataforma String?
+  aliquota   Decimal  @db.Decimal(5, 2) // Percentual (ex: 5.00 para 5%)
+  dataInicio DateTime @map("data_inicio")
+  dataFim    DateTime @map("data_fim")
+  descricao  String? // Descrição adicional (ex: "Simples Nacional", "Lucro Presumido")
+  ativo      Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([conta])
@@ -445,26 +453,26 @@ model AliquotaImposto {
 }
 
 model Document {
-  id              String   @id @default(cuid())
-  userId          String   @map("user_id")
-  fileName        String   @map("file_name")
-  fileUrl         String   @map("file_url")
-  originalName    String   @map("original_name")
-  mimeType        String   @map("mime_type")
-  sizeBytes       Int      @map("size_bytes")
-  
+  id           String @id @default(cuid())
+  userId       String @map("user_id")
+  fileName     String @map("file_name")
+  fileUrl      String @map("file_url")
+  originalName String @map("original_name")
+  mimeType     String @map("mime_type")
+  sizeBytes    Int    @map("size_bytes")
+
   // Categorization
-  category        String   // "INSTITUCIONAL", "IMPOSTOS", "FATURAMENTO", "FOLHA"
-  subFolder       String?  @map("sub_folder") // e.g. "2026/01_Janeiro"
-  folderId        String?  @map("folder_id")
-  
-  folder          DocumentFolder? @relation(fields: [folderId], references: [id], onDelete: Restrict)
-  
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  logs            DocumentLog[]
+  category  String // "INSTITUCIONAL", "IMPOSTOS", "FATURAMENTO", "FOLHA"
+  subFolder String? @map("sub_folder") // e.g. "2026/01_Janeiro"
+  folderId  String? @map("folder_id")
+
+  folder DocumentFolder? @relation(fields: [folderId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs DocumentLog[]
 
   @@index([userId])
   @@index([category])
@@ -482,10 +490,10 @@ model DocumentFolder {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documents     Document[]
-  parentFolder  DocumentFolder?  @relation("SubFolders", fields: [parentId], references: [id], onDelete: Cascade)
-  subFolders    DocumentFolder[] @relation("SubFolders")
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents    Document[]
+  parentFolder DocumentFolder?  @relation("SubFolders", fields: [parentId], references: [id], onDelete: Cascade)
+  subFolders   DocumentFolder[] @relation("SubFolders")
 
   @@index([userId])
   @@index([parentId])
@@ -495,12 +503,12 @@ model DocumentFolder {
 model DocumentLog {
   id         String   @id @default(cuid())
   documentId String   @map("document_id")
-  action     String   // "VIEWED", "DOWNLOADED"
+  action     String // "VIEWED", "DOWNLOADED"
   userId     String   @map("user_id") // Quem realizou a ação
   createdAt  DateTime @default(now()) @map("created_at")
 
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([documentId])
   @@index([userId])
@@ -508,16 +516,309 @@ model DocumentLog {
 }
 
 model FlexShippingConfig {
-  id                   String   @id @default(cuid())
-  userId               String   @map("user_id")
-  custoPorPacote       Decimal  @db.Decimal(10, 2) @map("custo_por_pacote")
-  unidadesPorCobranca  Int      @default(1) @map("unidades_por_cobranca")
-  descricao            String?
-  ativo                Boolean  @default(true)
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(cuid())
+  userId              String   @map("user_id")
+  custoPorPacote      Decimal  @map("custo_por_pacote") @db.Decimal(10, 2)
+  unidadesPorCobranca Int      @default(1) @map("unidades_por_cobranca")
+  descricao           String?
+  ativo               Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("flex_shipping_config")
+}
+
+// ============================================================================
+// MÓDULO DE TAREFAS CONTÁBEIS
+//
+// Especificação completa em NOVIDADES/MODULO_TAREFAS_CONTABEIS.md
+//
+// Tudo aqui é ADITIVO: nenhuma tabela existente é alterada. O model User só
+// ganhou relações inversas, que são virtuais no Prisma e não geram coluna.
+//
+// Padrões seguidos do resto do schema: cuid() como id, @@map em snake_case,
+// created_at/updated_at, onDelete: Cascade nos filhos, e status/tipo como
+// String com os valores válidos listados em comentário (o schema não usa enum
+// em nenhum lugar; as constantes vivem em src/lib/tarefa-etapas.ts).
+// ============================================================================
+
+/// A empresa (CNPJ) atendida. É a unidade de trabalho da contabilidade.
+///
+/// Separada do User de propósito: User é login, Empresa é quem sofre a
+/// apuração. Um login pode responder por vários CNPJs, e a ContaZoom pode
+/// atender um CNPJ que ainda não tem login (comum em cliente em abertura).
+model Empresa {
+  id              String    @id @default(cuid())
+  cnpj            String    @unique @db.VarChar(14) // só dígitos, sem máscara
+  razaoSocial     String    @map("razao_social")
+  nomeFantasia    String?   @map("nome_fantasia")
+  regime          String // SIMPLES_NACIONAL, LUCRO_PRESUMIDO
+  uf              String?   @db.VarChar(2)
+  municipio       String?
+  inicioAtividade DateTime? @map("inicio_atividade")
+
+  /// Situação no atendimento, não na Receita.
+  /// ATIVA, SUSPENSA, ENCERRADA, EM_ABERTURA
+  situacao String @default("ATIVA")
+
+  /// Qual imposto municipal/estadual se aplica, usado para nomear a etapa 6 do
+  /// Lucro Presumido: comércio apura ICMS, serviço apura ISS, nunca os dois.
+  /// ICMS, ISS, AMBOS, NENHUM
+  tributoLocal String @default("AMBOS") @map("tributo_local")
+
+  /// Login do cliente, quando existir. SetNull e não Cascade: apagar o login
+  /// nunca pode apagar o histórico fiscal da empresa.
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  responsavelId String? @map("responsavel_id")
+  responsavel   User?   @relation("EmpresaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  observacoes String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  apuracoes       TarefaApuracao[]
+  processos       ProcessoLegalizacao[]
+  regimeHistorico EmpresaRegimeHistorico[]
+
+  @@index([userId])
+  @@index([regime])
+  @@index([situacao])
+  @@index([razaoSocial])
+  @@map("empresa")
+}
+
+/// Linha do tempo do regime tributário da empresa.
+///
+/// Existe porque desenquadramento existe. Sem isto, mudar o regime reescreveria
+/// o passado: a apuração de março (Simples) passaria a ser lida como Lucro
+/// Presumido só porque a empresa mudou em julho.
+model EmpresaRegimeHistorico {
+  id             String    @id @default(cuid())
+  empresaId      String    @map("empresa_id")
+  regime         String
+  vigenciaInicio DateTime  @map("vigencia_inicio")
+  vigenciaFim    DateTime? @map("vigencia_fim") // null = vigente
+  motivo         String?
+  registradoPor  String?   @map("registrado_por")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([empresaId])
+  @@index([vigenciaInicio])
+  @@map("empresa_regime_historico")
+}
+
+/// Uma competência (mês/ano) de uma empresa.
+///
+/// `ano` e `mes` como Int em vez de DateTime ou string "2026/01_Janeiro":
+/// ordena e filtra sem parsing, a unicidade composta é natural e não sofre com
+/// fuso horário — que é o defeito de DateTime para competência.
+model TarefaApuracao {
+  id        String @id @default(cuid())
+  empresaId String @map("empresa_id")
+  ano       Int
+  mes       Int // 1 a 12
+
+  /// Regime CONGELADO na criação da tarefa. Ver EmpresaRegimeHistorico.
+  regime String
+
+  /// Posição no fluxo. 0 = não iniciada. Máximo depende do regime (10 ou 14).
+  etapaAtual Int @default(0) @map("etapa_atual")
+
+  /// Resumo macro DERIVADO da etapa. Gravado para permitir filtro e agregação
+  /// no banco; recalculado sempre na mesma transação da mudança de etapa.
+  /// AGUARDANDO_DOCUMENTACAO, EM_ELABORACAO, EM_REVISAO, ENTREGUE,
+  /// PENDENCIA_IDENTIFICADA, CONCLUIDO
+  status String @default("AGUARDANDO_DOCUMENTACAO")
+
+  /// Bloqueio ativo. Sai do fluxo normal: a tarefa pode estar na etapa 4 e
+  /// bloqueada ao mesmo tempo, e o status macro passa a refletir o bloqueio.
+  bloqueada           Boolean   @default(false)
+  bloqueioMotivo      String?   @map("bloqueio_motivo")
+  bloqueioDesde       DateTime? @map("bloqueio_desde")
+  /// CLIENTE, ESCRITORIO, COMERCIAL_CZ, TERCEIRO
+  bloqueioResponsavel String?   @map("bloqueio_responsavel")
+
+  prazoEntrega DateTime? @map("prazo_entrega")
+  iniciadaEm   DateTime? @map("iniciada_em")
+  concluidaEm  DateTime? @map("concluida_em")
+
+  responsavelId String? @map("responsavel_id")
+  responsavel   User?   @relation("ApuracaoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  observacoes String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  empresa Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  etapas  TarefaApuracaoEtapa[]
+  logs    TarefaLog[]
+
+  /// Uma apuração por empresa por competência. É a trava que impede duplicata
+  /// quando dois operadores abrem o mês ao mesmo tempo.
+  @@unique([empresaId, ano, mes], name: "empresa_competencia")
+  @@index([status])
+  @@index([ano, mes])
+  @@index([bloqueada])
+  @@index([prazoEntrega])
+  @@index([responsavelId])
+  @@map("tarefa_apuracao")
+}
+
+/// Uma linha por etapa do fluxo, criada junto com a tarefa.
+///
+/// Materializar as etapas (em vez de só guardar etapaAtual) é o que permite
+/// saber quando cada etapa foi concluída e por quem, marcar etapa opcional como
+/// não aplicável sem furar a numeração, e medir onde o processo trava.
+model TarefaApuracaoEtapa {
+  id              String  @id @default(cuid())
+  tarefaId        String  @map("tarefa_id")
+  numero          Int // 1..10 (SN) ou 1..14 (LP)
+  chave           String
+  titulo          String // congelado na criação
+  /// COMERCIAL_CZ, ESCRITORIO, AMBOS
+  responsavelTipo String  @map("responsavel_tipo")
+  opcional        Boolean @default(false)
+
+  /// PENDENTE, EM_ANDAMENTO, CONCLUIDA, NAO_APLICAVEL
+  situacao String @default("PENDENTE")
+
+  iniciadaEm   DateTime? @map("iniciada_em")
+  concluidaEm  DateTime? @map("concluida_em")
+  concluidaPor String?   @map("concluida_por")
+  observacao   String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tarefa TarefaApuracao @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+
+  @@unique([tarefaId, numero])
+  @@index([tarefaId])
+  @@index([situacao])
+  @@map("tarefa_apuracao_etapa")
+}
+
+/// Processo pontual de legalização, com começo e fim.
+///
+/// Separado da apuração porque o ciclo de vida é outro: não tem competência,
+/// não nasce sozinho todo mês, pode haver vários em paralelo e depende de prazo
+/// de órgão externo.
+model ProcessoLegalizacao {
+  id        String  @id @default(cuid())
+  empresaId String? @map("empresa_id") // opcional: abertura ainda não tem empresa
+
+  /// Identificação provisória para o processo existir antes do CNPJ.
+  identificacaoProvisoria String? @map("identificacao_provisoria")
+
+  /// ABERTURA_CNPJ, ENCERRAMENTO_CNPJ, REGULARIZACAO_CNPJ,
+  /// ALTERACAO_CADASTRAL, DESENQUADRAMENTO
+  tipo String
+
+  etapaAtual Int    @default(0) @map("etapa_atual")
+  status     String @default("AGUARDANDO_DOCUMENTACAO")
+
+  bloqueada           Boolean   @default(false)
+  bloqueioMotivo      String?   @map("bloqueio_motivo")
+  bloqueioDesde       DateTime? @map("bloqueio_desde")
+  bloqueioResponsavel String?   @map("bloqueio_responsavel")
+
+  /// Protocolo no órgão de terceiro. É o primeiro dado que o cliente pergunta.
+  protocoloExterno String? @map("protocolo_externo")
+  /// JUNTA_COMERCIAL, RECEITA_FEDERAL, PREFEITURA, SEFAZ, CERTIFICADORA
+  orgaoExterno     String? @map("orgao_externo")
+
+  prazoEstimado DateTime? @map("prazo_estimado")
+  abertoEm      DateTime  @default(now()) @map("aberto_em")
+  concluidoEm   DateTime? @map("concluido_em")
+
+  responsavelId String? @map("responsavel_id")
+  responsavel   User?   @relation("ProcessoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  observacoes String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  empresa Empresa?                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  etapas  ProcessoLegalizacaoEtapa[]
+  logs    TarefaLog[]
+
+  @@index([empresaId])
+  @@index([tipo])
+  @@index([status])
+  @@index([bloqueada])
+  @@index([abertoEm])
+  @@map("processo_legalizacao")
+}
+
+model ProcessoLegalizacaoEtapa {
+  id              String    @id @default(cuid())
+  processoId      String    @map("processo_id")
+  numero          Int
+  chave           String
+  titulo          String
+  responsavelTipo String    @map("responsavel_tipo")
+  opcional        Boolean   @default(false)
+  situacao        String    @default("PENDENTE")
+  iniciadaEm      DateTime? @map("iniciada_em")
+  concluidaEm     DateTime? @map("concluida_em")
+  concluidaPor    String?   @map("concluida_por")
+  observacao      String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  processo ProcessoLegalizacao @relation(fields: [processoId], references: [id], onDelete: Cascade)
+
+  @@unique([processoId, numero])
+  @@index([processoId])
+  @@map("processo_legalizacao_etapa")
+}
+
+/// O "quem mudou o quê e quando".
+///
+/// Uma tabela para os dois tipos de tarefa, com FKs opcionais: a tela de
+/// auditoria é uma só, e unir duas tabelas em toda consulta seria pior.
+///
+/// APPEND-ONLY. A aplicação nunca faz UPDATE nem DELETE aqui, nem para admin:
+/// log editável não é prova de nada.
+model TarefaLog {
+  id String @id @default(cuid())
+
+  apuracaoId String? @map("apuracao_id")
+  processoId String? @map("processo_id")
+
+  /// TAREFA_CRIADA, ETAPA_CONCLUIDA, ETAPA_AVANCADA, ETAPA_RETORNADA,
+  /// ETAPA_NAO_APLICAVEL, STATUS_ALTERADO, BLOQUEIO_REGISTRADO,
+  /// BLOQUEIO_RESOLVIDO, RESPONSAVEL_ALTERADO, PRAZO_ALTERADO,
+  /// OBSERVACAO_ADICIONADA, TAREFA_CONCLUIDA, TAREFA_REABERTA,
+  /// PROTOCOLO_ATUALIZADO, EMPRESA_VINCULADA
+  acao String
+
+  de      String? // valor anterior, legível
+  para    String? // valor novo, legível
+  detalhe String? // motivo, observação
+
+  autorId    String  @map("autor_id")
+  /// Congelado: nome de funcionário muda e sai da empresa, log não muda.
+  autorNome  String  @map("autor_nome")
+  autorPapel String? @map("autor_papel")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  apuracao TarefaApuracao?      @relation(fields: [apuracaoId], references: [id], onDelete: Cascade)
+  processo ProcessoLegalizacao? @relation(fields: [processoId], references: [id], onDelete: Cascade)
+  /// Restrict: excluir usuário não pode apagar o histórico do que ele fez.
+  autor    User                 @relation("TarefaLogAutor", fields: [autorId], references: [id], onDelete: Restrict)
+
+  @@index([apuracaoId, createdAt])
+  @@index([processoId, createdAt])
+  @@index([autorId])
+  @@index([createdAt])
+  @@index([acao])
+  @@map("tarefa_log")
 }

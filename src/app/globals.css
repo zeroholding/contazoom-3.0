@@ -233,3 +233,100 @@ select.error {
 .animate-slide-in-right {
     animation: slide-in-right 0.3s ease-out;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Módulo de tarefas contábeis — campos compactos                             */
+/* Especificação: NOVIDADES/MODULO_TAREFAS_CONTABEIS.md, seção 15             */
+/*                                                                            */
+/* O estilo global de input acima é de formulário de cadastro: h-12,          */
+/* border-2, sombra em três camadas e foco em #C5837B. Numa barra de filtro   */
+/* com seis campos lado a lado, ou num modal de conclusão de etapa, isso      */
+/* ocupa o dobro da altura necessária, e o foco rosado não é a paleta do      */
+/* sistema (laranja/preto/branco).                                           */
+/*                                                                            */
+/* Este bloco é ESCOPADO em .cz-tarefas: nenhuma tela existente muda. O       */
+/* !important é obrigatório aqui porque as regras globais também usam         */
+/* !important em border-color e box-shadow — sem ele, nada seria aplicado.    */
+/* -------------------------------------------------------------------------- */
+
+.cz-tarefas input[type="text"],
+.cz-tarefas input[type="email"],
+.cz-tarefas input[type="password"],
+.cz-tarefas input[type="number"],
+.cz-tarefas input[type="tel"],
+.cz-tarefas input[type="search"],
+.cz-tarefas input[type="date"],
+.cz-tarefas input[type="month"],
+.cz-tarefas textarea,
+.cz-tarefas select {
+    height: auto;
+    min-height: 2.5rem;
+    border-radius: 0.5rem;
+    border-width: 1px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    border-color: #D0D5DD !important;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05) !important;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.cz-tarefas textarea {
+    min-height: 5.25rem;
+}
+
+.cz-tarefas input[type="text"]:focus,
+.cz-tarefas input[type="email"]:focus,
+.cz-tarefas input[type="password"]:focus,
+.cz-tarefas input[type="number"]:focus,
+.cz-tarefas input[type="tel"]:focus,
+.cz-tarefas input[type="search"]:focus,
+.cz-tarefas input[type="date"]:focus,
+.cz-tarefas input[type="month"]:focus,
+.cz-tarefas textarea:focus,
+.cz-tarefas select:focus {
+    border-color: #EA580C !important;
+    box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.16) !important;
+    outline: none;
+}
+
+.cz-tarefas input:disabled,
+.cz-tarefas textarea:disabled,
+.cz-tarefas select:disabled {
+    background-color: #F9FAFB;
+    cursor: not-allowed;
+}
+
+/* O label global tem margin-bottom 8px e cor fixa; no módulo os rótulos são
+   menores e ficam colados no campo. */
+.cz-tarefas label {
+    margin-bottom: 0.375rem;
+    font-size: 0.8125rem;
+    color: #344054 !important;
+}
+
+/* Campo em erro: borda vermelha vence o foco laranja enquanto o erro existir. */
+.cz-tarefas .campo-invalido,
+.cz-tarefas .campo-invalido:focus {
+    border-color: #D92D20 !important;
+    box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.14) !important;
+}
+
+/* Coluna do Kanban: rolagem própria, barra discreta. */
+.cz-kanban-coluna {
+    scrollbar-width: thin;
+    scrollbar-color: #D0D5DD transparent;
+}
+
+.cz-kanban-coluna::-webkit-scrollbar {
+    width: 6px;
+}
+
+.cz-kanban-coluna::-webkit-scrollbar-thumb {
+    background-color: #D0D5DD;
+    border-radius: 9999px;
+}
+
+.cz-kanban-coluna::-webkit-scrollbar-track {
+    background: transparent;
+}
