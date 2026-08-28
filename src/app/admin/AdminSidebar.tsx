@@ -53,13 +53,15 @@ const GESTAO: ItemNav[] = [
 /**
  * Item de navegação.
  *
- * O ativo NÃO é mais preenchimento laranja cheio. Laranja é a cor de ação do
- * conteúdo (botão "Concluir etapa", por exemplo); quando a sidebar também usa
- * laranja em bloco, os dois disputam a atenção e o olho não sabe qual é o
- * próximo passo. Aqui o ativo se resolve com fundo sutil + ícone laranja + um
- * traço vertical de 3px na borda esquerda: continua inconfundível e para de
- * competir. O traço é absoluto de propósito — borda real empurraria o texto
- * 3px e o item dançaria ao trocar de rota.
+ * Toda a aparência vem de `.cz-nav-item` na folha global: padding, raio, cor de
+ * repouso, hover, a pastilha laranja clara do ativo e o tracinho vertical
+ * colado na borda DA BARRA. Aqui só entram a classe e o `aria-current` — o
+ * estado visual e o estado anunciado ao leitor de tela passam a ser a mesma
+ * coisa, e não dois lugares que podem divergir.
+ *
+ * O ícone não recebe cor própria de propósito: lucide desenha com
+ * `currentColor`, então ele herda o cinza do item em repouso e o laranja escuro
+ * quando ativo, sem duplicar a regra em TypeScript.
  */
 function ItemLink({
   item,
@@ -77,25 +79,9 @@ function ItemLink({
         href={item.href}
         title={collapsed ? item.texto : undefined}
         aria-current={ativo ? "page" : undefined}
-        className={`group relative flex items-center gap-3 rounded-lg py-2.5 text-sm transition-colors ${
-          collapsed ? "justify-center px-0" : "px-3"
-        } ${
-          ativo
-            ? "bg-gray-800 font-semibold text-white"
-            : "font-medium text-gray-400 hover:bg-gray-800/60 hover:text-gray-100"
-        }`}
+        className="cz-nav-item"
       >
-        {ativo && (
-          <span
-            aria-hidden="true"
-            className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-orange-500"
-          />
-        )}
-        <Icone
-          className={`h-5 w-5 shrink-0 transition-colors ${
-            ativo ? "text-orange-500" : "text-gray-500 group-hover:text-gray-300"
-          }`}
-        />
+        <Icone aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
         {!collapsed && <span className="truncate">{item.texto}</span>}
       </Link>
     </li>
@@ -105,28 +91,30 @@ function ItemLink({
 /**
  * Rótulo de seção.
  *
- * Recolhido ele desaparece, mas a divisória continua (ver `Divisoria`): sem uma
- * das duas coisas os dois grupos viram uma lista corrida de nove ícones iguais.
+ * Minúsculo e cinza claro, sem caixa alta espaçada: numa barra branca o rótulo
+ * é referência de leitura, não elemento gráfico. Recolhido ele desaparece, mas
+ * a divisória continua (ver `Divisoria`) — sem uma das duas coisas os dois
+ * grupos viram uma lista corrida de oito ícones iguais.
  */
 function RotuloSecao({ texto, collapsed }: { texto: string; collapsed: boolean }) {
   if (collapsed) return null;
   return (
-    <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+    <p className="px-3 pb-1.5 text-[11px] font-normal leading-4 text-[var(--cz-texto-fraco)]">
       {texto}
     </p>
   );
 }
 
 function Divisoria() {
-  return <div aria-hidden="true" className="my-4 h-px bg-gray-800" />;
+  return <div aria-hidden="true" className="my-3.5 h-px bg-[var(--cz-hairline)]" />;
 }
 
-/** Círculo de iniciais. Tom quente para casar com o escudo do topo. */
+/** Círculo de iniciais em laranja suave, o mesmo par de tons da pastilha ativa. */
 function Avatar({ nome, titulo }: { nome: string | null; titulo?: string }) {
   return (
     <span
       title={titulo}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-600/15 text-[11px] font-bold text-orange-300 ring-1 ring-inset ring-orange-500/25"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cz-laranja-suave)] text-[11px] font-bold text-[var(--cz-laranja-forte)] ring-1 ring-inset ring-[var(--cz-laranja-borda)]"
     >
       {iniciais(nome)}
     </span>
@@ -138,7 +126,7 @@ function AvatarNeutro({ titulo }: { titulo: string }) {
   return (
     <span
       title={titulo}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-800 text-gray-500 ring-1 ring-inset ring-gray-700"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)] ring-1 ring-inset ring-[var(--cz-hairline-forte)]"
     >
       <UserRound aria-hidden="true" className="h-4 w-4" />
     </span>
@@ -153,9 +141,9 @@ function AvatarNeutro({ titulo }: { titulo: string }) {
  * papel também estão no header; o e-mail aparece no `title` do bloco do header
  * justamente para não ficar preso aqui.
  *
- * Enquanto carrega, esqueleto com as mesmas alturas do conteúdo final (16 / 18 /
- * 24px). Em fundo escuro o esqueleto claro do kit é agressivo, então entra com
- * `opacity-20` — mantém o brilho animado e para de brigar com o preto.
+ * Enquanto carrega, esqueleto com as mesmas alturas do conteúdo final (16 / 14 /
+ * 18px). Em barra clara o esqueleto do kit entra direto: o `opacity-20` que
+ * existia aqui era compensação do fundo preto e agora só apagaria o brilho.
  */
 function BlocoUsuario({ collapsed }: { collapsed: boolean }) {
   const { sessao, carregando, interno } = useSessao();
@@ -169,7 +157,7 @@ function BlocoUsuario({ collapsed }: { collapsed: boolean }) {
     if (carregando) {
       return (
         <div className="mx-auto h-9 w-9 overflow-hidden rounded-full">
-          <div className="cz-esqueleto h-full w-full opacity-20" />
+          <div className="cz-esqueleto h-full w-full" />
         </div>
       );
     }
@@ -188,7 +176,7 @@ function BlocoUsuario({ collapsed }: { collapsed: boolean }) {
     <div className="flex items-center gap-2.5">
       {carregando ? (
         <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full">
-          <div className="cz-esqueleto h-full w-full opacity-20" />
+          <div className="cz-esqueleto h-full w-full" />
         </div>
       ) : sessao ? (
         <Avatar nome={nome} />
@@ -199,23 +187,25 @@ function BlocoUsuario({ collapsed }: { collapsed: boolean }) {
       <div className="min-w-0 flex-1">
         {carregando ? (
           <>
-            <div className="cz-esqueleto h-4 w-28 opacity-20" />
-            <div className="cz-esqueleto mt-1 h-3.5 w-32 opacity-20" />
-            <div className="cz-esqueleto mt-1.5 h-[18px] w-24 opacity-20" />
+            <div className="cz-esqueleto h-4 w-28" />
+            <div className="cz-esqueleto mt-1 h-3.5 w-32" />
+            <div className="cz-esqueleto mt-1.5 h-[18px] w-24" />
           </>
         ) : sessao ? (
           <>
-            <p className="truncate text-[13px] font-semibold leading-tight text-white">
+            <p className="truncate text-[13px] font-semibold leading-tight text-[var(--cz-texto)]">
               {nome}
             </p>
-            <p className="mt-1 truncate text-[11px] leading-tight text-gray-500">
+            <p className="mt-1 truncate text-[11px] leading-tight text-[var(--cz-texto-fraco)]">
               {sessao.email}
             </p>
-            <span className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[11px] font-medium text-gray-300">
+            <span className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-md border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--cz-texto-suave)]">
+              {/* Laranja = trabalha no escritório; cinza = acesso de cliente. É
+                  o único ponto colorido do bloco, então ele significa algo. */}
               <span
                 aria-hidden="true"
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                  interno ? "bg-orange-500" : "bg-gray-500"
+                  interno ? "bg-[var(--cz-laranja)]" : "bg-[var(--cz-texto-fraco)]"
                 }`}
               />
               <span className="truncate">{rotuloPapel}</span>
@@ -223,10 +213,10 @@ function BlocoUsuario({ collapsed }: { collapsed: boolean }) {
           </>
         ) : (
           <>
-            <p className="truncate text-[13px] font-semibold leading-tight text-gray-300">
+            <p className="truncate text-[13px] font-semibold leading-tight text-[var(--cz-texto)]">
               Sessão não identificada
             </p>
-            <p className="mt-1 text-[11px] leading-tight text-gray-500">
+            <p className="mt-1 text-[11px] leading-tight text-[var(--cz-texto-fraco)]">
               Recarregue a página para tentar de novo
             </p>
           </>
@@ -249,34 +239,39 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
   const estaAtivo = (href: string, exato = false) =>
     exato ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
+  // Recolhida, o container perde padding lateral para o tracinho do ativo cair
+  // exatamente sobre a borda da barra — a folha global compensa `-0.5rem` aqui
+  // e `-1rem` na barra aberta.
+  const padLista = collapsed ? "px-2" : "px-4";
+
   return (
     <aside
       id="cz-menu-admin"
-      className={`fixed inset-y-0 left-0 z-50 transform bg-gray-900 text-white transition-all duration-200 ease-in-out ${
-        collapsed ? "w-[4rem]" : "w-64"
-      } hidden md:flex flex-col`}
+      // A largura vem da MESMA variável que dá a margem ao conteúdo. Antes eram
+      // dois valores (classe aqui, `--sidebar-w` lá) que precisavam combinar na
+      // mão e dessincronizavam durante a animação.
+      className="fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:flex md:w-[var(--sidebar-w)]"
     >
-      {/* Marca. Escudo em caixa própria para o ícone ter o mesmo peso ótico do
-          texto — Shield solto ao lado de uma palavra fica sempre pequeno ou
-          desalinhado. A linha de contexto só existe expandida. */}
+      {/* Marca. A altura casa com a do cabeçalho (4.5rem) para as duas linhas
+          finas virarem uma só linha contínua atravessando a tela. */}
       <div
-        className={`flex h-16 shrink-0 items-center border-b border-gray-800 ${
+        className={`flex h-[4.5rem] shrink-0 items-center border-b border-[var(--cz-hairline)] ${
           collapsed ? "justify-center px-0" : "gap-2.5 px-4"
         }`}
       >
         <span
           aria-hidden="true"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-600/15 ring-1 ring-inset ring-orange-500/30"
+          className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-[var(--cz-laranja)]"
         >
-          <Shield className="h-[18px] w-[18px] text-orange-500" />
+          <Shield className="h-[18px] w-[18px] text-white" />
         </span>
         {!collapsed && (
           <span className="min-w-0">
-            <span className="block truncate text-[15px] font-semibold leading-tight tracking-tight text-white">
-              ContaZoom <span className="text-orange-500">Admin</span>
+            <span className="block truncate text-[15px] font-bold leading-tight tracking-[-0.02em] text-[var(--cz-texto)]">
+              ContaZoom
             </span>
-            <span className="block truncate text-[11px] leading-tight text-gray-500">
-              Painel interno do escritório
+            <span className="block truncate text-[11px] leading-tight text-[var(--cz-texto-fraco)]">
+              Painel do escritório
             </span>
           </span>
         )}
@@ -284,10 +279,12 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
 
       <nav
         aria-label="Navegação do admin"
-        className="cz-rolagem flex-1 overflow-y-auto px-3 py-5"
+        className={`cz-rolagem flex-1 overflow-y-auto py-4 ${padLista} ${
+          collapsed ? "cz-nav-recolhida" : ""
+        }`}
       >
         <RotuloSecao texto="Operação" collapsed={collapsed} />
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {OPERACAO.map((item) => (
             <ItemLink
               key={item.href}
@@ -301,7 +298,7 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
         <Divisoria />
 
         <RotuloSecao texto="Gestão Global" collapsed={collapsed} />
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {GESTAO.map((item) => (
             <ItemLink
               key={item.href}
@@ -313,19 +310,21 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
         </ul>
       </nav>
 
-      <div className="shrink-0 border-t border-gray-800 px-3 py-3">
+      <div className={`shrink-0 border-t border-[var(--cz-hairline)] py-3 ${padLista}`}>
         <BlocoUsuario collapsed={collapsed} />
       </div>
 
-      <div className="shrink-0 border-t border-gray-800 p-3">
+      <div
+        className={`shrink-0 border-t border-[var(--cz-hairline)] py-3 ${padLista} ${
+          collapsed ? "cz-nav-recolhida" : ""
+        }`}
+      >
         <Link
           href="/dashboard"
           title={collapsed ? "Sair do Admin" : undefined}
-          className={`flex items-center gap-3 rounded-lg py-2.5 text-sm font-medium text-gray-400 transition-colors hover:bg-gray-800/60 hover:text-gray-100 ${
-            collapsed ? "justify-center px-0" : "px-3"
-          }`}
+          className="cz-nav-item"
         >
-          <ArrowLeft className="h-5 w-5 shrink-0" />
+          <ArrowLeft aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
           {!collapsed && <span className="truncate">Sair do Admin</span>}
         </Link>
       </div>

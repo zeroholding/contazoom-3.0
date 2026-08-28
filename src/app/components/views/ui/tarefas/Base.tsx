@@ -10,14 +10,28 @@
  * prop são API pública; prop nova entra sempre opcional e com default que
  * reproduz o comportamento anterior.
  *
+ * LINGUAGEM VISUAL (referência aprovada pelo cliente)
+ *
+ * O desenho separa por BORDA, não por sombra: superfície branca, filete de 1px
+ * em cinza quase branco, raio de 14px no cartão e 10px em botão e pastilha,
+ * sombra praticamente ausente. Sombra empilhada em cada bloco é o que fazia o
+ * painel parecer datado — a borda delimita sem ruído e sobra contraste para o
+ * laranja significar ação.
+ *
+ * Paleta: laranja, branco, preto e cinza. Verde não entra como acento; a
+ * variação boa é LARANJA e vermelho fica reservado para queda e erro. Os
+ * valores `tom="verde"` e `tom="ok"` continuam na API porque as telas passam,
+ * mas renderizam neutros.
+ *
  * Duas convenções que valem para o arquivo inteiro:
  *
  * 1. Padding de conteúdo é responsabilidade de quem usa. O `Painel` só cuida do
  *    próprio cabeçalho e rodapé — as telas passam `px-5 py-4` no filho, e às
  *    vezes no próprio `className` do painel. Padding fixo aqui dobraria o delas.
- * 2. Cor de borda, sombra e numeral tabular vêm da camada `.cz-tarefas` em
- *    globals.css (`--cz-hairline`, `--cz-elev-*`, `.cz-num`). Foco visível é
- *    automático lá, então nenhum componente aqui declara classe `focus:`.
+ * 2. Cor de borda, sombra, tipografia do número e numeral tabular vêm da camada
+ *    `.cz-tarefas` em globals.css (`--cz-hairline`, `--cz-elev-*`, `.cz-titulo`,
+ *    `.cz-valor`, `.cz-num`). Foco visível é automático lá, então nenhum
+ *    componente aqui declara classe `focus:`.
  */
 
 import Link from "next/link";
@@ -55,38 +69,58 @@ type CartaoKpiProps = {
   titulo: string;
   valor: number | string;
   icone: string;
-  /** Cor do acento do cartão. Laranja é o padrão da marca. */
+  /** Cor do ícone do rótulo. Laranja é o padrão da marca. */
   tom?: TomKpi;
   detalhe?: string;
   href?: string;
   /**
-   * Tendência ao lado do número. `valor` é a variação em pontos percentuais
-   * (`12` vira "+12%"). `positivoEhBom` inverte a cor para indicador onde subir
-   * é ruim — atraso, pendência — sem inverter a seta, que continua apontando
-   * para onde o número foi.
+   * Tendência na linha de comparação. `valor` é a variação em pontos
+   * percentuais (`12` vira "+12%"). `positivoEhBom` inverte a cor para
+   * indicador onde subir é ruim — atraso, pendência — sem inverter a seta, que
+   * continua apontando para onde o número foi.
    */
   variacao?: { valor: number; positivoEhBom?: boolean };
   /** Rende o próprio cartão em esqueleto, preservando a altura da grade. */
   carregando?: boolean;
+  /**
+   * Miniatura à direita do cartão: barrinhas, rosca, faísca. A tela injeta o
+   * desenho pronto; este arquivo é casca e não sabe desenhar gráfico. Ocupa
+   * pouco menos da metade da largura e não empurra o número.
+   */
+  grafico?: ReactNode;
+  /** Texto do link no pé quando há `href`. */
+  acaoTexto?: string;
 };
 
 /**
- * Tons do cartão.
+ * Cor do ícone por tom.
  *
- * `barra` é o acento fino no topo; `fundo`/`icone` vestem o bloco de 32px do
- * ícone. O número nunca é colorido: em grade de seis, seis números coloridos
- * disputam entre si e nenhum vence.
+ * Só o ícone, e só a cor: o quadrado colorido de 32px no canto oposto competia
+ * com o número, e em grade de seis cartões seis blocos chapados davam o mesmo
+ * peso visual a tudo.
+ *
+ * `verde` e `azul` caem em cinza de propósito. Verde está proibido na paleta, e
+ * azul está fora dela (laranja + branco + preto/cinza); o glifo do ícone já
+ * distingue "concluído" de "em andamento" sem precisar de matiz própria. Ambos
+ * seguem aceitos na união de tipos porque as telas passam.
  */
-const TOM_KPI: Record<TomKpi, { barra: string; fundo: string; icone: string }> = {
-  laranja: { barra: "bg-orange-500", fundo: "bg-orange-50", icone: "text-orange-600" },
-  cinza: { barra: "bg-gray-300", fundo: "bg-gray-100", icone: "text-gray-600" },
-  verde: { barra: "bg-[#12B76A]", fundo: "bg-[#ECFDF3]", icone: "text-[#027A48]" },
-  vermelho: { barra: "bg-[#F04438]", fundo: "bg-[#FEF2F2]", icone: "text-[#B42318]" },
-  ambar: { barra: "bg-[#F79009]", fundo: "bg-[#FFFAEB]", icone: "text-[#B54708]" },
-  azul: { barra: "bg-[#2E90FA]", fundo: "bg-[#EFF8FF]", icone: "text-[#175CD3]" },
+const TOM_KPI: Record<TomKpi, string> = {
+  laranja: "text-[var(--cz-laranja)]",
+  cinza: "text-[var(--cz-texto-fraco)]",
+  verde: "text-[var(--cz-texto-fraco)]",
+  vermelho: "text-[#B42318]",
+  ambar: "text-[#B54708]",
+  azul: "text-[var(--cz-texto-fraco)]",
 };
 
-/** Seta de tendência com cor semântica. */
+/**
+ * Variação da linha de comparação.
+ *
+ * Texto colorido, não pastilha: na referência a variação é só o número com a
+ * seta, colada no texto cinza que explica contra o quê ("vs. trimestre
+ * anterior"). Laranja para o movimento bom — verde está fora da paleta — e
+ * vermelho para o ruim, que é o único uso de vermelho permitido aqui.
+ */
 function Tendencia({
   valor,
   positivoEhBom = true,
@@ -99,10 +133,10 @@ function Tendencia({
   const Seta = neutro ? Minus : valor > 0 ? ArrowUpRight : ArrowDownRight;
 
   const cor = neutro
-    ? "bg-gray-100 text-gray-600"
+    ? "text-[var(--cz-texto-fraco)]"
     : bom
-      ? "bg-[#ECFDF3] text-[#027A48]"
-      : "bg-[#FEF2F2] text-[#B42318]";
+      ? "text-[var(--cz-laranja-forte)]"
+      : "text-[#B42318]";
 
   // Formatação à mão em vez de `Intl`: o servidor e o navegador podem resolver
   // locale diferente e a hidratação acusa divergência de texto.
@@ -114,9 +148,9 @@ function Tendencia({
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold ${cor}`}
+      className={`inline-flex shrink-0 items-center gap-0.5 text-[12px] font-bold leading-[18px] ${cor}`}
     >
-      <Seta className="h-3 w-3 shrink-0" aria-hidden="true" />
+      <Seta className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span className="sr-only">variação de </span>
       <span className="cz-num">{`${sinal}${numero}%`}</span>
     </span>
@@ -124,14 +158,20 @@ function Tendencia({
 }
 
 /**
- * Cartão de indicador.
+ * Cartão de indicador. Três linhas, na ordem da referência.
  *
- * O número é o protagonista: 28px, peso semibold, numeral tabular. O rótulo vai
- * acima em caixa alta pequena, e o ícone encolheu para um bloco de 32px no canto
- * — antes era uma caixa colorida de 48px que competia com o próprio dado. A cor
- * do `tom` ficou num acento de 3px no topo: em grade de seis cartões, seis
- * blocos chapados davam o mesmo peso visual a tudo e o olho não sabia onde
- * começar.
+ * 1. Rótulo cinza de 13px com o ícone pequeno À ESQUERDA do texto, colado nele.
+ * 2. O número, protagonista: 30px em peso 800 e tracking apertado, via
+ *    `.cz-valor`. Nunca colorido — em grade de seis, seis números coloridos
+ *    disputam entre si e nenhum vence.
+ * 3. Linha de comparação de 12px: o `detalhe` em cinza seguido da `variacao`
+ *    colorida.
+ *
+ * `mt-auto` na linha de comparação mantém a comparação rente ao rodapé: sem
+ * ele, o cartão sem detalhe esticaria e os números da grade ficariam em alturas
+ * diferentes. Com `href`, o cartão inteiro continua clicável — o que muda é que
+ * o chevron deixou de aparecer solto no hover e virou link de texto no pé, que
+ * é visível antes do mouse chegar.
  */
 export function CartaoKpi({
   titulo,
@@ -142,65 +182,65 @@ export function CartaoKpi({
   href,
   variacao,
   carregando = false,
+  grafico,
+  acaoTexto = "Ver detalhes",
 }: CartaoKpiProps) {
-  if (carregando) return <EsqueletoCartaoKpi />;
+  // O esqueleto recebe a mesma informação de geometria: cartão com link é mais
+  // alto por causa do pé, e ghost mais baixo faria a grade saltar.
+  if (carregando) return <EsqueletoCartaoKpi comAcao={Boolean(href)} />;
 
-  const t = TOM_KPI[tom] ?? TOM_KPI.laranja;
+  const corIcone = TOM_KPI[tom] ?? TOM_KPI.laranja;
+  const temComparacao = Boolean(detalhe) || Boolean(variacao);
 
   const conteudo = (
     <>
-      <span
-        className={`absolute inset-x-0 top-0 h-[3px] ${t.barra}`}
-        aria-hidden="true"
-      />
-      <div className="flex flex-1 flex-col px-5 pb-4 pt-4">
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-gray-500">
-            {titulo}
+      <div className={`flex flex-1 gap-4 px-5 ${href ? "pt-[18px]" : "py-[18px]"}`}>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <p className="flex items-center gap-1.5 text-[13px] font-medium leading-5 text-[var(--cz-texto-suave)]">
+            <Icone
+              nome={icone}
+              className={`h-[15px] w-[15px] shrink-0 ${corIcone}`}
+            />
+            <span className="truncate">{titulo}</span>
           </p>
-          <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${t.fundo} ${t.icone}`}
-          >
-            <Icone nome={icone} className="h-4 w-4" />
-          </span>
+
+          <p className="cz-valor mt-2 text-[1.875rem] leading-9">{valor}</p>
+
+          {temComparacao && (
+            <p className="mt-auto flex items-center gap-1.5 pt-2 text-[12px] leading-[18px] text-[var(--cz-texto-suave)]">
+              {detalhe && <span className="truncate">{detalhe}</span>}
+              {variacao && <Tendencia {...variacao} />}
+            </p>
+          )}
         </div>
 
-        <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="cz-num text-[1.75rem] font-semibold leading-none tracking-[-0.02em] text-gray-900">
-            {valor}
-          </span>
-          {variacao && <Tendencia {...variacao} />}
-        </div>
-
-        {detalhe && (
-          // `mt-auto` mantém o detalhe rente ao rodapé: em grade, o cartão sem
-          // detalhe esticaria e os números ficariam em alturas diferentes.
-          <p
-            className={`mt-auto truncate pt-2 text-xs text-gray-500 ${
-              href ? "pr-5" : ""
-            }`}
-          >
-            {detalhe}
-          </p>
+        {grafico && (
+          <div className="flex w-[42%] max-w-[9.5rem] shrink-0 items-center justify-end">
+            {grafico}
+          </div>
         )}
       </div>
+
       {href && (
-        <ChevronRight
-          className="absolute bottom-3.5 right-4 h-4 w-4 text-orange-500 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100"
-          aria-hidden="true"
-        />
+        <span className="flex items-center gap-1 px-5 pb-[18px] pt-3 text-[12px] font-semibold leading-[18px] text-[var(--cz-laranja-forte)]">
+          {acaoTexto}
+          <ChevronRight
+            className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </span>
       )}
     </>
   );
 
   const casca =
-    "group relative flex h-full flex-col overflow-hidden rounded-xl border border-[var(--cz-hairline)] bg-white shadow-[var(--cz-elev-1)]";
+    "group relative flex h-full flex-col overflow-hidden rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-1)]";
 
   if (href) {
     return (
       <Link
         href={href}
-        className={`${casca} transition-all duration-150 hover:border-orange-300 hover:shadow-[var(--cz-elev-2)]`}
+        className={`${casca} transition-colors duration-150 hover:border-[var(--cz-laranja-borda)]`}
       >
         {conteudo}
       </Link>
@@ -241,11 +281,11 @@ export function Cabecalho({
       {(voltarPara || temTrilha) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {voltarPara && (
-            // Botão de verdade, não link solto: o alvo de clique fica visível
+            // Pílula de verdade, não link solto: o alvo de clique fica visível
             // antes do hover, que é o que faltava para as telas de detalhe.
             <Link
               href={voltarPara}
-              className="group inline-flex items-center gap-1.5 rounded-lg border border-[var(--cz-hairline-forte)] bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-600 shadow-[var(--cz-elev-1)] transition-colors hover:border-gray-400 hover:text-gray-900"
+              className="group inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-texto-fraco)] hover:text-[var(--cz-texto)]"
             >
               <ChevronLeft
                 className="h-4 w-4 transition-transform duration-150 group-hover:-translate-x-0.5"
@@ -264,7 +304,7 @@ export function Cabecalho({
 
           {temTrilha && (
             <nav aria-label="Trilha de navegação">
-              <ol className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-gray-500">
+              <ol className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-medium text-[var(--cz-texto-suave)]">
                 {passos.map((passo, i) => {
                   const ultimo = i === passos.length - 1;
                   return (
@@ -274,21 +314,21 @@ export function Cabecalho({
                     >
                       {i > 0 && (
                         <ChevronRight
-                          className="h-3.5 w-3.5 shrink-0 text-gray-300"
+                          className="h-3.5 w-3.5 shrink-0 text-[var(--cz-texto-fraco)]"
                           aria-hidden="true"
                         />
                       )}
                       {passo.href && !ultimo ? (
                         <Link
                           href={passo.href}
-                          className="transition-colors hover:text-orange-600"
+                          className="transition-colors hover:text-[var(--cz-laranja-forte)]"
                         >
                           {passo.texto}
                         </Link>
                       ) : (
                         <span
                           aria-current={ultimo ? "page" : undefined}
-                          className={ultimo ? "text-gray-700" : undefined}
+                          className={ultimo ? "text-[var(--cz-texto)]" : undefined}
                         >
                           {passo.texto}
                         </span>
@@ -305,18 +345,18 @@ export function Cabecalho({
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div className="flex min-w-0 items-center gap-3">
           {icone && (
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--cz-hairline)] bg-white text-orange-600 shadow-[var(--cz-elev-1)]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] text-[var(--cz-laranja)]">
               <Icone nome={icone} className="h-5 w-5" />
             </span>
           )}
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold tracking-[-0.02em] text-gray-900 sm:text-[1.625rem]">
+            <h1 className="cz-titulo truncate text-2xl sm:text-[1.625rem]">
               {titulo}
             </h1>
             {descricao && (
               // Largura de leitura: em monitor largo a linha ia de ponta a
               // ponta e o olho perdia o começo da próxima.
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-gray-500">
+              <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-[var(--cz-texto-suave)]">
                 {descricao}
               </p>
             )}
@@ -378,7 +418,7 @@ export function Carregando({
       // as nove telas usam sem informar variante.
       corpo = (
         <EsqueletoPainel>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-[var(--cz-hairline)]">
             {[0, 1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center gap-4 px-5 py-4">
                 <Linha largura="2rem" altura="2rem" redondo className="shrink-0" />
@@ -402,10 +442,10 @@ export function Carregando({
     <div className="space-y-4">
       <p
         role="status"
-        className="flex items-center gap-2.5 text-sm font-medium text-gray-500"
+        className="flex items-center gap-2.5 text-[13px] font-medium text-[var(--cz-texto-suave)]"
       >
         <Loader2
-          className="h-4 w-4 shrink-0 animate-spin text-orange-500"
+          className="h-4 w-4 shrink-0 animate-spin text-[var(--cz-laranja)]"
           aria-hidden="true"
         />
         {texto}
@@ -438,10 +478,10 @@ export function Vazio({
   icone?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--cz-hairline-forte)] bg-[#FCFCFD] px-6 py-12 text-center">
-      {/* Círculo com halo: o `bg-gray-100` de antes achatava o ícone contra o
-          fundo. O anel de offset dá profundidade sem pedir cor nova. */}
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white text-gray-400 shadow-[var(--cz-elev-1)] ring-1 ring-[var(--cz-hairline)] ring-offset-4 ring-offset-[#F2F4F7]">
+    <div className="flex flex-col items-center justify-center rounded-[14px] border border-dashed border-[var(--cz-hairline-forte)] bg-[#FCFCFD] px-6 py-12 text-center">
+      {/* Círculo delimitado por filete, sem sombra nem halo: a borda é o que
+          separa nesta linguagem, e o ícone é decoração, não protagonista. */}
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] text-[var(--cz-texto-fraco)]">
         {icone === "Inbox" ? (
           // `Inbox` não está no mapa do `Icone` e cairia em `Circle`.
           <Inbox className="h-6 w-6" aria-hidden="true" />
@@ -449,11 +489,9 @@ export function Vazio({
           <Icone nome={icone} className="h-6 w-6" />
         )}
       </div>
-      <h3 className="text-[0.9375rem] font-semibold tracking-[-0.01em] text-gray-900">
-        {titulo}
-      </h3>
+      <h3 className="cz-titulo text-[15px]">{titulo}</h3>
       {descricao && (
-        <p className="mt-1.5 max-w-md text-sm leading-relaxed text-gray-500">
+        <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
           {descricao}
         </p>
       )}
@@ -466,7 +504,12 @@ export function Vazio({
  * Faixa de erro ou aviso, dispensável pelo operador.
  *
  * Ícone diferente por tom, não só cor diferente: quem não distingue vermelho de
- * verde receberia a faixa sem a informação mais importante dela.
+ * laranja receberia a faixa sem a informação mais importante dela.
+ *
+ * `ok` perdeu o verde e virou laranja claro — na linguagem nova o movimento bom
+ * é laranja, a mesma regra da variação do KPI. `info` virou cinza: azul está
+ * fora da paleta e a faixa de informação não precisa de matiz própria para se
+ * distinguir das outras três.
  */
 const TOM_AVISO: Record<
   "erro" | "atencao" | "info" | "ok",
@@ -481,11 +524,13 @@ const TOM_AVISO: Record<
     simbolo: AlertTriangle,
   },
   info: {
-    casca: "border-[#B2DDFF] border-l-[#1570EF] bg-[#EFF8FF] text-[#175CD3]",
+    casca:
+      "border-[var(--cz-hairline-forte)] border-l-[var(--cz-texto-fraco)] bg-[var(--cz-fundo)] text-[var(--cz-texto-suave)]",
     simbolo: Info,
   },
   ok: {
-    casca: "border-[#ABEFC6] border-l-[#039855] bg-[#ECFDF3] text-[#027A48]",
+    casca:
+      "border-[var(--cz-laranja-borda)] border-l-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]",
     simbolo: CheckCircle2,
   },
 };
@@ -507,12 +552,9 @@ export function Aviso({
   return (
     <div
       role={tom === "erro" ? "alert" : "status"}
-      className={`flex items-start gap-3 rounded-lg border border-l-4 px-4 py-3 text-sm shadow-[var(--cz-elev-1)] ${t.casca}`}
+      className={`flex items-start gap-3 rounded-[12px] border border-l-[3px] px-4 py-3 text-[13.5px] ${t.casca}`}
     >
-      <Simbolo
-        className="mt-px h-[18px] w-[18px] shrink-0"
-        aria-hidden="true"
-      />
+      <Simbolo className="mt-px h-[18px] w-[18px] shrink-0" aria-hidden="true" />
       <span className="flex-1 font-medium leading-relaxed">{mensagem}</span>
       {onFechar && (
         <button
@@ -521,7 +563,7 @@ export function Aviso({
           aria-label="Fechar aviso"
           // Alvo de 32px: o `p-0.5` de antes dava 20px, abaixo do que a mão
           // acerta sem mirar.
-          className="-my-1 -mr-1.5 shrink-0 rounded-lg p-1.5 opacity-70 transition hover:bg-black/5 hover:opacity-100"
+          className="-my-1 -mr-1.5 shrink-0 rounded-[10px] p-1.5 opacity-70 transition hover:bg-black/5 hover:opacity-100"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -585,19 +627,21 @@ export function Paginacao({
 
   const lista = paginasVisiveis(pagina, paginas);
   const passo =
-    "inline-flex items-center gap-1 rounded-lg border border-[var(--cz-hairline-forte)] bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 shadow-[var(--cz-elev-1)] transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none";
+    "inline-flex items-center gap-1 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto)] transition-colors hover:border-[var(--cz-texto-fraco)] disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <nav
       aria-label="Paginação"
       className="flex flex-col items-center justify-between gap-3 border-t border-[var(--cz-hairline)] px-4 py-3 sm:flex-row"
     >
-      <p className="text-sm text-gray-500">
-        <span className="cz-num font-semibold text-gray-900">{total}</span>{" "}
+      <p className="text-[13px] text-[var(--cz-texto-suave)]">
+        <span className="cz-num font-bold text-[var(--cz-texto)]">{total}</span>{" "}
         {rotulo}
         <span aria-hidden="true"> · </span>
-        página <span className="cz-num font-medium text-gray-700">{pagina}</span>{" "}
-        de <span className="cz-num font-medium text-gray-700">{paginas}</span>
+        página{" "}
+        <span className="cz-num font-medium text-[var(--cz-texto)]">{pagina}</span>{" "}
+        de{" "}
+        <span className="cz-num font-medium text-[var(--cz-texto)]">{paginas}</span>
       </p>
 
       <div className="flex items-center gap-1.5">
@@ -623,7 +667,7 @@ export function Paginacao({
               <span
                 key={`reticencia-${i}`}
                 aria-hidden="true"
-                className="px-1 text-sm text-gray-400"
+                className="px-1 text-[13px] text-[var(--cz-texto-fraco)]"
               >
                 …
               </span>
@@ -634,10 +678,10 @@ export function Paginacao({
                 onClick={() => onMudar(item)}
                 aria-label={`Página ${item}`}
                 aria-current={item === pagina ? "page" : undefined}
-                className={`cz-num inline-flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-sm font-medium transition-colors ${
+                className={`cz-num inline-flex h-8 min-w-8 items-center justify-center rounded-[10px] px-2 text-[13px] font-medium transition-colors ${
                   item === pagina
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    ? "bg-[var(--cz-texto)] text-white"
+                    : "text-[var(--cz-texto-suave)] hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-texto)]"
                 }`}
               >
                 {item}
@@ -671,6 +715,7 @@ export function Painel({
   denso = false,
   rodape,
   elevacao = 1,
+  verTudo,
 }: {
   titulo?: string;
   descricao?: string;
@@ -682,6 +727,11 @@ export function Painel({
   rodape?: ReactNode;
   /** 2 destaca o painel do resto da coluna. Sombra vem das vars do tema. */
   elevacao?: 1 | 2;
+  /**
+   * Link discreto no canto direito do cabeçalho ("Ver tudo >"), do jeito da
+   * referência. Fica ao lado de `acoes`, não no lugar dela.
+   */
+  verTudo?: { href: string; texto?: string };
 }) {
   const sombra =
     elevacao === 2 ? "shadow-[var(--cz-elev-2)]" : "shadow-[var(--cz-elev-1)]";
@@ -689,29 +739,37 @@ export function Painel({
 
   return (
     <section
-      className={`rounded-xl border border-[var(--cz-hairline)] bg-white ${sombra} ${className}`}
+      className={`rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] ${sombra} ${className}`}
     >
-      {(titulo || acoes) && (
+      {(titulo || acoes || verTudo) && (
         // Coluna no celular, linha no resto: com `flex-wrap` o bloco de ações
         // caía embaixo e desalinhava assim que o título passava de uma linha.
         <div
           className={`flex flex-col gap-3 border-b border-[var(--cz-hairline)] sm:flex-row sm:items-start sm:justify-between ${respiro}`}
         >
           <div className="min-w-0 flex-1">
-            {titulo && (
-              <h2 className="text-[0.9375rem] font-semibold tracking-[-0.01em] text-gray-900">
-                {titulo}
-              </h2>
-            )}
+            {titulo && <h2 className="cz-titulo text-[15px]">{titulo}</h2>}
             {descricao && (
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
+              <p className="mt-1 max-w-3xl text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
                 {descricao}
               </p>
             )}
           </div>
-          {acoes && (
+          {(acoes || verTudo) && (
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {acoes}
+              {verTudo && (
+                <Link
+                  href={verTudo.href}
+                  className="group inline-flex items-center gap-1 text-[12.5px] font-semibold text-[var(--cz-laranja-forte)] transition-colors hover:text-[var(--cz-laranja)]"
+                >
+                  {verTudo.texto ?? "Ver tudo"}
+                  <ChevronRight
+                    className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -730,7 +788,13 @@ export function Painel({
   );
 }
 
-/** Par rótulo/valor da ficha de detalhe. */
+/**
+ * Par rótulo/valor da ficha de detalhe.
+ *
+ * O rótulo era caixa alta de 11px com tracking aberto; virou cinza de 12.5px em
+ * caixa normal, que é como a referência escreve rótulo. Caixa alta pequena
+ * custa legibilidade e brigava com o rótulo do KPI, que agora é do mesmo jeito.
+ */
 export function Dado({
   rotulo,
   children,
@@ -740,17 +804,23 @@ export function Dado({
 }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-gray-500">
+      <dt className="text-[12.5px] font-medium leading-[18px] text-[var(--cz-texto-suave)]">
         {rotulo}
       </dt>
-      <dd className="mt-1.5 text-sm font-medium leading-snug text-gray-900">
+      <dd className="mt-1 text-[13.5px] font-semibold leading-snug text-[var(--cz-texto)]">
         {children}
       </dd>
     </div>
   );
 }
 
-/** Barra de progresso de etapas. Laranja porque é trabalho em curso. */
+/**
+ * Barra de progresso de etapas.
+ *
+ * Laranja porque é trabalho em curso, e laranja escuro quando fecha — o verde
+ * de conclusão saiu da paleta. Quem informa "acabou" é o 100% no texto, não a
+ * troca de matiz.
+ */
 export function Progresso({
   feito,
   total,
@@ -778,19 +848,23 @@ export function Progresso({
       >
         <div
           className={`h-full rounded-full transition-all duration-300 ${
-            completo ? "bg-[#039855]" : "bg-orange-500"
+            completo ? "bg-[var(--cz-laranja-forte)]" : "bg-[var(--cz-laranja)]"
           }`}
           style={{ width: `${pct}%` }}
         />
       </div>
       {mostrarTexto && (
         <div
-          className="mt-1.5 flex items-center justify-between text-[11px] font-medium text-gray-500"
+          className="mt-1.5 flex items-center justify-between text-[11.5px] font-medium text-[var(--cz-texto-suave)]"
           aria-hidden="true"
         >
           <span className="cz-num">{`${feito}/${total}`}</span>
           <span
-            className={`cz-num ${completo ? "text-[#027A48]" : "text-gray-500"}`}
+            className={`cz-num ${
+              completo
+                ? "text-[var(--cz-laranja-forte)]"
+                : "text-[var(--cz-texto-suave)]"
+            }`}
           >{`${pct}%`}</span>
         </div>
       )}

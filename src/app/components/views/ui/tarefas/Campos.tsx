@@ -16,6 +16,12 @@
  * (`.cz-tarefas select { padding }`), o componente resolve por `style` em vez de
  * utilitária: seletor com elemento vence classe única do Tailwind, então uma
  * utilitária ali simplesmente não pintaria.
+ *
+ * O acabamento segue a referência aprovada: o que separa é BORDA de 1px em
+ * cinza quase branco, não sombra. Nenhum controle deste arquivo tem sombra —
+ * botão, trilha do alternador e barra de abas trabalham com borda e cor sólida.
+ * A única sombra do módulo ficou no modal, que é o único elemento que de fato
+ * flutua sobre o resto.
  */
 
 import { ReactNode, SelectHTMLAttributes, useId } from "react";
@@ -59,7 +65,7 @@ function Campo({
   return (
     <div className={className}>
       <label htmlFor={id} className="flex items-baseline gap-1">
-        <span className="text-[0.8125rem] font-semibold leading-5 text-gray-900">
+        <span className="text-[0.8125rem] font-semibold leading-5 text-[#14161B]">
           {rotulo}
         </span>
         {obrigatorio && (
@@ -81,13 +87,32 @@ function Campo({
           <span>{erro}</span>
         </p>
       ) : ajuda ? (
-        <p id={`${id}-ajuda`} className="mt-1.5 text-xs leading-5 text-gray-500">
+        <p
+          id={`${id}-ajuda`}
+          className="mt-1.5 text-xs leading-5 text-[#6B7280]"
+        >
           {ajuda}
         </p>
       ) : null}
     </div>
   );
 }
+
+/* ----------------------------------- Raio --------------------------------- */
+
+/**
+ * Raio do campo, 10px como na referência.
+ *
+ * A folha escopada crava `border-radius: 0.5rem` em `.cz-tarefas input` — um
+ * seletor com elemento, que vence utilitária de classe única. O sufixo `!`
+ * resolve sem tocar em `globals.css`. É sufixo porque no Tailwind v4 o
+ * modificador important mudou de lugar: `!rounded-[10px]` não gera classe
+ * nenhuma.
+ *
+ * Altura (40px), borda fina e o foco laranja continuam vindo da folha: aqui só
+ * o canto muda.
+ */
+const RAIO_CAMPO = "rounded-[10px]!";
 
 /* --------------------------------- Entrada -------------------------------- */
 
@@ -122,7 +147,7 @@ export function Entrada({
         required={required}
         aria-invalid={erro ? true : undefined}
         aria-describedby={erro ? `${id}-erro` : ajuda ? `${id}-ajuda` : undefined}
-        className={`${erro ? "campo-invalido" : ""} ${className}`}
+        className={`${RAIO_CAMPO} ${erro ? "campo-invalido" : ""} ${className}`}
         {...props}
       />
     </Campo>
@@ -162,7 +187,7 @@ export function Area({
         required={required}
         aria-invalid={erro ? true : undefined}
         aria-describedby={erro ? `${id}-erro` : ajuda ? `${id}-ajuda` : undefined}
-        className={`${erro ? "campo-invalido" : ""} ${className}`}
+        className={`${RAIO_CAMPO} ${erro ? "campo-invalido" : ""} ${className}`}
         {...props}
       />
     </Campo>
@@ -221,7 +246,9 @@ export function Escolha({
             erro ? `${id}-erro` : ajuda ? `${id}-ajuda` : undefined
           }
           style={{ paddingRight: "2.25rem", ...style }}
-          className={`appearance-none ${erro ? "campo-invalido" : ""} ${className}`}
+          className={`appearance-none ${RAIO_CAMPO} ${
+            erro ? "campo-invalido" : ""
+          } ${className}`}
           {...props}
         >
           {vazio !== undefined && <option value="">{vazio}</option>}
@@ -233,7 +260,7 @@ export function Escolha({
         </select>
         <ChevronDown
           aria-hidden="true"
-          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+          className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA1AC]"
         />
       </div>
     </Campo>
@@ -258,27 +285,52 @@ type BotaoProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   larguraCheia?: boolean;
 };
 
+/**
+ * Dois tipos de botão dão conta da referência: laranja chapado e pílula branca.
+ *
+ * O que saiu foi a pilha de acabamento da versão anterior — borda de tom mais
+ * escuro em volta do preenchido e sombra tingida por baixo. Duas camadas para
+ * dizer a mesma coisa que a cor já dizia, e é o par que datava o painel: sombra
+ * colorida em botão é vocabulário de 2015. O desenho novo separa por borda e
+ * cor sólida, então o botão fica chapado.
+ *
+ * A borda transparente fica no lugar da borda escura de propósito: o secundário
+ * tem 1px de borda de verdade, e sem esse 1px reservado no preenchido os dois
+ * ficariam com 2px de diferença de altura na mesma fileira.
+ *
+ * Hover mexe só no fundo. Borda que muda de cor no hover faz o botão "pular" de
+ * tamanho aparente, e com sombra fora sobrou contraste de fundo para dar
+ * resposta ao mouse.
+ */
 const VARIANTE: Record<string, string> = {
-  // Borda um tom abaixo do fundo: dá aresta ao botão sem gradiente. A sombra é
-  // tingida de laranja para o primário não parecer colado no cartão branco.
   primario:
-    "bg-orange-500 text-white border border-orange-600 shadow-[0_1px_2px_rgba(194,65,12,0.24)] hover:bg-orange-600 hover:border-orange-700 active:bg-orange-700",
+    "bg-[#F26212] text-white border border-transparent hover:bg-[#D9500A] active:bg-[#C34706]",
   escuro:
-    "bg-gray-900 text-white border border-gray-900 shadow-[0_1px_2px_rgba(16,24,40,0.24)] hover:bg-gray-800 hover:border-gray-800 active:bg-gray-900",
-  // #D0D5DD é a hairline forte do módulo: some menos que gray-200 e não vira
-  // moldura como gray-400.
+    "bg-[#14161B] text-white border border-transparent hover:bg-[#272B33] active:bg-[#14161B]",
+  // Pílula da referência: branca, hairline forte (#DCE0E7) e nada mais. A
+  // hairline forte some menos que a fina do cartão, que é o que o olho precisa
+  // para reconhecer o alvo como clicável sem sombra.
   secundario:
-    "bg-white text-gray-700 border border-[#D0D5DD] shadow-[0_1px_2px_rgba(16,24,40,0.06)] hover:bg-gray-50 hover:text-gray-900 hover:border-[#98A2B3] active:bg-gray-100",
+    "bg-white text-[#374151] border border-[#DCE0E7] hover:bg-[#F8F9FB] hover:text-[#14161B] active:bg-[#F1F3F6]",
   perigo:
-    "bg-[#D92D20] text-white border border-[#B42318] shadow-[0_1px_2px_rgba(180,35,24,0.24)] hover:bg-[#B42318] hover:border-[#912018] active:bg-[#912018]",
+    "bg-[#D92D20] text-white border border-transparent hover:bg-[#B42318] active:bg-[#912018]",
   fantasma:
-    "bg-transparent text-gray-600 border border-transparent hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200",
+    "bg-transparent text-[#6B7280] border border-transparent hover:bg-[#F4F5F7] hover:text-[#14161B] active:bg-[#EDEFF3]",
 };
 
+/**
+ * Raio de 10px nos três tamanhos: na referência a curva não acompanha a altura
+ * do controle, é constante. `sm` e `lg` com raios diferentes fariam a mesma
+ * tela ter dois vocabulários de canto.
+ *
+ * Peso 600 nos três, e a escala de texto é 12 / 13 / 14px. O 13px do `md` é o
+ * tamanho da fileira de pílulas da referência — era 14px em peso 500 aqui, o
+ * que deixava o secundário com a mesma presença do primário.
+ */
 const TAMANHO_BOTAO: Record<string, string> = {
-  sm: "gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold",
-  md: "gap-2 rounded-lg px-4 py-2 text-sm font-medium",
-  lg: "gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold",
+  sm: "gap-1.5 rounded-[10px] px-2.5 py-1.5 text-xs leading-4 font-semibold",
+  md: "gap-2 rounded-[10px] px-3.5 py-2 text-[0.8125rem] leading-5 font-semibold",
+  lg: "gap-2 rounded-[10px] px-5 py-2.5 text-sm leading-5 font-semibold",
 };
 
 const TAMANHO_ICONE: Record<string, string> = {
@@ -336,7 +388,7 @@ export function Abas({
     <div
       role="tablist"
       aria-label="Seções do registro"
-      className="cz-rolagem flex gap-1 overflow-x-auto border-b border-[#EAECF0]"
+      className="cz-rolagem flex gap-1 overflow-x-auto border-b border-[#EDEFF3]"
     >
       {abas.map((aba) => {
         const selecionada = aba.chave === ativa;
@@ -347,19 +399,21 @@ export function Abas({
             role="tab"
             aria-selected={selecionada}
             onClick={() => onMudar(aba.chave)}
-            className={`relative -mb-px flex items-center gap-2 whitespace-nowrap rounded-t-lg px-3.5 pb-3 pt-2.5 text-sm transition-colors ${
+            className={`relative -mb-px flex items-center gap-2 whitespace-nowrap rounded-t-[10px] px-3.5 pb-3 pt-2.5 text-sm transition-colors ${
               selecionada
-                ? "font-semibold text-orange-700"
-                : "font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                ? "font-semibold text-[#C2410C]"
+                : "font-medium text-[#6B7280] hover:bg-[#F8F9FB] hover:text-[#14161B]"
             }`}
           >
             {aba.texto}
             {aba.contagem !== undefined && (
+              // Contagem em raio médio, igual às pastilhas: cápsula aqui abriria
+              // uma segunda linguagem de canto na mesma barra.
               <span
-                className={`cz-num inline-flex min-w-[1.375rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[0.6875rem] font-bold leading-4 ${
+                className={`cz-num inline-flex min-w-[1.375rem] items-center justify-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-bold leading-4 ${
                   selecionada
-                    ? "bg-orange-100 text-orange-700"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-[#FFF2E9] text-[#C2410C]"
+                    : "bg-[#F1F3F6] text-[#4B5563]"
                 }`}
               >
                 {aba.contagem}
@@ -370,7 +424,7 @@ export function Abas({
             <span
               aria-hidden="true"
               className={`absolute inset-x-2 bottom-0 h-[3px] rounded-t-full transition-colors ${
-                selecionada ? "bg-orange-500" : "bg-transparent"
+                selecionada ? "bg-[#F26212]" : "bg-transparent"
               }`}
             />
           </button>
@@ -393,7 +447,9 @@ export function Alternador({
   return (
     <div
       role="group"
-      className="inline-flex items-center gap-0.5 rounded-xl border border-[#D0D5DD] bg-gray-50 p-1 shadow-[0_1px_2px_rgba(16,24,40,0.06)]"
+      // Trilha em cinza de fundo com hairline em volta, sem sombra. Raio 12 por
+      // fora e 8 por dentro: com o p-1 de 4px as duas curvas ficam paralelas.
+      className="inline-flex items-center gap-0.5 rounded-xl border border-[#DCE0E7] bg-[#F8F9FB] p-1"
     >
       {opcoes.map((o) => {
         const ativo = o.valor === valor;
@@ -403,10 +459,14 @@ export function Alternador({
             type="button"
             aria-pressed={ativo}
             onClick={() => onMudar(o.valor)}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+            // O ativo continua escuro em vez de virar pastilha laranja clara:
+            // laranja forte sobre laranja suave dá 3,7:1 de contraste, e texto
+            // pequeno precisa de 4,5:1. Escuro sobre claro resolve sem gastar a
+            // cor de ação, que no módulo significa "aqui você clica para agir".
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.8125rem] leading-5 font-semibold transition-colors ${
               ativo
-                ? "bg-gray-900 text-white shadow-[0_1px_2px_rgba(16,24,40,0.24)]"
-                : "text-gray-600 hover:bg-white hover:text-gray-900"
+                ? "bg-[#14161B] text-white"
+                : "text-[#4B5563] hover:bg-white hover:text-[#14161B]"
             }`}
           >
             <Icone nome={o.icone} className="h-4 w-4" />

@@ -69,7 +69,7 @@ function Anuncio({ texto }: { texto: string }) {
 /* --------------------------------- Casca ---------------------------------- */
 
 const CASCA =
-  "rounded-xl border border-[var(--cz-hairline)] bg-white shadow-[var(--cz-elev-1)]";
+  "rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-1)]";
 
 /**
  * Casca do `Painel` em estado fantasma.
@@ -115,24 +115,47 @@ export function EsqueletoPainel({
 /**
  * Cartão de KPI fantasma, sem anúncio.
  *
- * A geometria é espelho do `CartaoKpi` de Base.tsx: mesma casca, mesmo
- * `px-5 pb-4 pt-4`, mesmo bloco de ícone de 32px e mesma linha de número de
- * 28px — dá 126px de altura nos dois. Se o cartão de lá mudar de altura, este
- * muda junto, senão a grade salta quando o dado chega.
+ * A geometria é espelho do `CartaoKpi` de Base.tsx, linha por linha:
+ *
+ *   18px de topo + rótulo de 20px + 8px + número de 36px + 8px + comparação de
+ *   18px + 18px de base = 126px.
+ *
+ * As alturas vão em wrapper de altura fixa, nunca em padding dentro do bloco de
+ * altura fixa: com `box-sizing: border-box` o padding comeria a linha e o total
+ * sairia menor que o do cartão real.
+ *
+ * `comAcao` reproduz o pé do cartão com link (`pt-3` + linha de 18px + 18px de
+ * base = 48px a mais). Quem sabe disso é o `CartaoKpi`, que tem o `href` na mão
+ * e repassa — ghost mais baixo que o cartão faria a grade saltar quando o dado
+ * chega, que é justamente o que o esqueleto existe para evitar.
  */
-function CartaoFantasma() {
+function CartaoFantasma({ comAcao = false }: { comAcao?: boolean }) {
   return (
-    <div className={`relative h-full overflow-hidden ${CASCA}`}>
-      {/* Barra de acento em cinza: o tom só se conhece com o dado na mão. */}
-      <div className="absolute inset-x-0 top-0 h-[3px] bg-[#EFF1F4]" />
-      <div className="flex flex-col px-5 pb-4 pt-4">
-        <div className="flex items-start justify-between gap-3">
-          <Linha largura="70%" altura="0.6875rem" className="mt-1" />
-          <Linha largura="2rem" altura="2rem" className="shrink-0" />
+    <div className={`flex h-full flex-col overflow-hidden ${CASCA}`}>
+      <div
+        className={`flex flex-1 flex-col px-5 ${
+          comAcao ? "pt-[18px]" : "py-[18px]"
+        }`}
+      >
+        {/* Ícone pequeno colado no rótulo, igual ao cartão de verdade. */}
+        <div className="flex h-5 items-center gap-1.5">
+          <Linha largura="0.9375rem" altura="0.9375rem" className="shrink-0" />
+          <Linha largura="58%" altura="0.75rem" />
         </div>
-        <Linha largura="4.5rem" altura="1.75rem" className="mt-2.5" />
-        <Linha largura="85%" altura="0.6875rem" className="mt-3" />
+        <div className="mt-2 flex h-9 items-center">
+          <Linha largura="4.5rem" altura="1.875rem" />
+        </div>
+        <div className="mt-auto flex h-[26px] items-end">
+          <Linha largura="70%" altura="0.75rem" />
+        </div>
       </div>
+      {comAcao && (
+        <div className="px-5 pb-[18px] pt-3">
+          <div className="flex h-[18px] items-center">
+            <Linha largura="5.5rem" altura="0.75rem" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -140,14 +163,17 @@ function CartaoFantasma() {
 /** Um cartão de KPI isolado. É o que `CartaoKpi carregando` renderiza. */
 export function EsqueletoCartaoKpi({
   rotulo = "Carregando indicador",
+  comAcao = false,
 }: {
   rotulo?: string;
+  /** Reserva o pé do link. O default é o cartão sem `href`. */
+  comAcao?: boolean;
 }) {
   return (
     <div className="h-full">
       <Anuncio texto={rotulo} />
       <div aria-hidden="true" className="h-full">
-        <CartaoFantasma />
+        <CartaoFantasma comAcao={comAcao} />
       </div>
     </div>
   );
@@ -171,9 +197,12 @@ const GRADE_KPI: Record<number, string> = {
 export function EsqueletoKpi({
   quantidade = 4,
   rotulo = "Carregando indicadores",
+  comAcao = false,
 }: {
   quantidade?: number;
   rotulo?: string;
+  /** Grade cujos cartões têm `href`: reserva o pé do link em todos. */
+  comAcao?: boolean;
 }) {
   const total = Math.max(1, Math.round(quantidade));
 
@@ -182,7 +211,7 @@ export function EsqueletoKpi({
       <Anuncio texto={rotulo} />
       <div aria-hidden="true" className={GRADE_KPI[total] ?? GRADE_KPI[4]}>
         {Array.from({ length: total }, (_, i) => (
-          <CartaoFantasma key={i} />
+          <CartaoFantasma key={i} comAcao={comAcao} />
         ))}
       </div>
     </div>
@@ -236,7 +265,7 @@ export function EsqueletoTabela({
             <Linha key={c} largura={c === 0 ? "60%" : "45%"} altura="0.6875rem" />
           ))}
         </div>
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-[var(--cz-hairline)]">
           {Array.from({ length: rows }, (_, r) => (
             <div key={r} className={`grid ${grade} items-center gap-4 px-5 py-3`}>
               {Array.from({ length: cols }, (_, c) => (
@@ -342,10 +371,16 @@ export function EsqueletoFicha({
         aria-hidden="true"
         className="grid gap-5 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4"
       >
+        {/* 18px de rótulo + 4px + 18px de valor = os 40px do `Dado` de verdade,
+            que agora tem rótulo de 12.5px em caixa normal, não caixa alta. */}
         {Array.from({ length: total }, (_, i) => (
-          <div key={i} className="min-w-0 space-y-2">
-            <Linha largura={i % 2 === 0 ? "4.5rem" : "5.5rem"} altura="0.625rem" />
-            <Linha largura={LARGURAS[i % LARGURAS.length]} altura="0.875rem" />
+          <div key={i} className="min-w-0">
+            <div className="flex h-[18px] items-center">
+              <Linha largura={i % 2 === 0 ? "4.5rem" : "5.5rem"} altura="0.75rem" />
+            </div>
+            <div className="mt-1 flex h-[18px] items-center">
+              <Linha largura={LARGURAS[i % LARGURAS.length]} altura="0.875rem" />
+            </div>
           </div>
         ))}
       </div>

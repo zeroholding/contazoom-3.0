@@ -13,6 +13,11 @@
  * `prefers-reduced-motion`. Modal que aparece sem transição parece falha de
  * renderização.
  *
+ * Acabamento: hairline clara em volta, raio de 16px e `--cz-elev-3`. O modal é o
+ * único componente do módulo que mantém sombra de verdade, e por um motivo
+ * literal — ele é o único que flutua sobre o conteúdo. Nos botões, cartões e
+ * selos a sombra saiu, porque lá ela era decoração e é o que datava o painel.
+ *
  * `ModalMotivo` existe porque quatro ações do módulo exigem motivo escrito
  * (voltar etapa, reabrir, registrar pendência, dispensar etapa) e o mínimo de
  * caracteres muda entre apuração e legalização: 5 numa, 3 na outra. Validar no
@@ -93,7 +98,7 @@ export function Modal({
 
   return (
     <div
-      className="cz-modal-fundo fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4 backdrop-blur-sm"
+      className="cz-modal-fundo fixed inset-0 z-50 flex items-center justify-center bg-[#14161B]/50 p-4 backdrop-blur-sm"
       onMouseDown={(evento) => {
         // Fecha só no clique no fundo. `onMouseDown` no lugar de `onClick`
         // evita fechar quando a pessoa começa a selecionar texto dentro e
@@ -109,13 +114,13 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className={`cz-tarefas cz-modal-caixa flex w-full ${larguras[largura]} max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[#EAECF0] bg-white`}
+        className={`cz-tarefas cz-modal-caixa flex w-full ${larguras[largura]} max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[#EDEFF3] bg-white`}
         style={{ boxShadow: "var(--cz-elev-3)" }}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EAECF0] px-6 py-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDEFF3] px-6 py-4">
           <div className="flex min-w-0 items-start gap-3">
             {icone && (
-              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-orange-100 bg-orange-50 text-orange-600">
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]">
                 <Icone
                   nome={icone}
                   className="h-[1.125rem] w-[1.125rem]"
@@ -123,11 +128,10 @@ export function Modal({
               </span>
             )}
             <div className="min-w-0">
-              <h3 className="text-lg font-bold leading-6 tracking-[-0.01em] text-gray-900">
-                {titulo}
-              </h3>
+              {/* `cz-titulo` já traz peso 700 e o tracking apertado do painel. */}
+              <h3 className="cz-titulo text-lg leading-6">{titulo}</h3>
               {descricao && (
-                <p className="mt-1 text-sm leading-5 text-gray-500">
+                <p className="mt-1 text-sm leading-5 text-[#6B7280]">
                   {descricao}
                 </p>
               )}
@@ -137,7 +141,7 @@ export function Modal({
             type="button"
             onClick={onFechar}
             aria-label="Fechar"
-            className="-mr-1.5 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            className="-mr-1.5 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#14161B]"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -148,7 +152,7 @@ export function Modal({
         </div>
 
         {rodape && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-[#EAECF0] bg-gray-50 px-6 py-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-[#EDEFF3] bg-[#F8F9FB] px-6 py-4">
             {rodape}
           </div>
         )}
@@ -282,10 +286,14 @@ export function ModalMotivo({
                   <span>{faltam === 1 ? "caractere" : "caracteres"}</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-gray-500">
+                // Contador satisfeito em cinza, não em verde: verde no módulo é
+                // cor de domínio (status concluído, prazo no prazo) e gastá-la
+                // num contador de caracteres esvazia o sinal onde ele decide
+                // algo. O ícone e o texto já dizem que o mínimo foi atingido.
+                <span className="inline-flex items-center gap-1 text-[#6B7280]">
                   <Icone
                     nome="CheckCircle2"
-                    className="mr-0.5 h-3.5 w-3.5 shrink-0 text-[#039855]"
+                    className="mr-0.5 h-3.5 w-3.5 shrink-0 text-[#9AA1AC]"
                   />
                   <span className="cz-num">{limpo.length}</span>
                   <span>

@@ -15,7 +15,7 @@
  *
  *   forte  → informação principal. Fundo tingido, texto pesado, ícone maior.
  *   medio  → sinal que precisa ser lido, mas não domina.
- *   fraco  → contexto. Sem fundo, só borda e texto na cor do domínio.
+ *   fraco  → contexto. Fundo branco, borda e texto na cor do domínio.
  *
  * O default é por TIPO de selo, não global: status nasce forte, regime e
  * responsável nascem fracos. As telas não passam a prop e mesmo assim ganham a
@@ -50,18 +50,34 @@ import Icone from "./Icone";
 
 export type PesoSelo = "forte" | "medio" | "fraco";
 
+/**
+ * Raio médio (8px) para todo selo, sempre.
+ *
+ * Antes o raio dependia do comprimento do rótulo: cápsula até 18 caracteres,
+ * canto suave acima. Duas formas para a mesma coisa, e uma linha de cartão com
+ * quatro selos mostrava as duas ao mesmo tempo. A referência resolve isso com
+ * uma curva só — as pastilhas dela são de canto médio, inclusive as sólidas com
+ * ícone. Rótulo longo em cápsula era justamente o que fazia o selo parecer
+ * comprimido, e ninguém precisa mais decidir nada por contagem de caractere.
+ *
+ * O rótulo continua nunca abreviado: vem da tabela de domínio e é o contrato com
+ * o escritório.
+ */
 const BASE =
-  "inline-flex items-center border align-middle whitespace-nowrap";
+  "inline-flex items-center rounded-lg border align-middle whitespace-nowrap";
 
 /**
  * O que muda entre os pesos é altura, folga, peso de fonte e assentamento — não
  * a cor. Assim o selo forte fica visivelmente mais alto que os vizinhos numa
  * linha com `items-center`, que é o que faz o olho bater nele primeiro, e a cor
  * continua sendo só o sinal do domínio.
+ *
+ * O forte perdeu a sombra que tinha: com fundo tingido, texto em 700 e ícone
+ * maior, ele já se destaca por tamanho e peso. A sombra só empilhava ruído em
+ * cima de um elemento de 24px de altura.
  */
 const FORMA: Record<PesoSelo, string> = {
-  forte:
-    "gap-1.5 px-3 py-1.5 text-xs font-bold shadow-[0_1px_2px_rgba(16,24,40,0.08)]",
+  forte: "gap-1.5 px-3 py-1.5 text-xs font-bold",
   medio: "gap-1.5 px-2.5 py-1 text-xs font-semibold",
   fraco: "gap-1 px-2 py-0.5 text-xs font-medium",
 };
@@ -73,20 +89,9 @@ const TAM_ICONE: Record<PesoSelo, string> = {
 };
 
 /**
- * Pílula redonda combina com rótulo curto. Em "Aguardando documentação do
- * cliente" o raio total transforma o selo num comprimido: a curva fica longa
- * demais para a altura e o texto parece frouxo dentro dela. A partir de ~18
- * caracteres o canto suave assenta melhor. O rótulo nunca é abreviado — ele vem
- * da tabela de domínio e é o contrato com o escritório.
- */
-function raio(texto: string): string {
-  return texto.length > 18 ? "rounded-md" : "rounded-full";
-}
-
-/**
- * Base de todos os selos. `className` do chamador é sempre a última classe da
- * string: duas telas passam `!px-1.5 !py-0` no `SeloPapel` e precisam vencer o
- * padding do peso.
+ * Base de todos os selos. `className` do chamador é SEMPRE a última classe da
+ * string: há tela que aperta o padding do `SeloPapel` para caber na coluna, e
+ * ela precisa vencer o padding do peso.
  */
 function Selo({
   cor,
@@ -100,7 +105,7 @@ function Selo({
 }: {
   cor: string;
   peso: PesoSelo;
-  /** Serve para decidir o raio e como conteúdo quando não há `children`. */
+  /** Conteúdo do selo quando não há `children`, e base do `title` curto. */
   texto: string;
   icone?: string;
   title?: string;
@@ -112,7 +117,7 @@ function Selo({
   return (
     <span
       title={title}
-      className={`${BASE} ${raio(texto)} ${FORMA[peso]} ${
+      className={`${BASE} ${FORMA[peso]} ${
         numerico ? "cz-num" : ""
       } ${cor} ${className}`}
     >
@@ -122,7 +127,13 @@ function Selo({
   );
 }
 
-/** Mesma família de cor, com e sem preenchimento. */
+/**
+ * Mesma família de cor, com e sem preenchimento.
+ *
+ * No peso fraco o fundo é branco sólido, não mais branco a 70%: translúcido
+ * sobre cartão tingido devolvia uma terceira cor que não estava em lugar nenhum
+ * da paleta, e a referência trabalha com superfície branca fechada.
+ */
 function tom(
   peso: PesoSelo,
   borda: string,
@@ -130,7 +141,7 @@ function tom(
   texto: string
 ): string {
   return peso === "fraco"
-    ? `${borda} bg-white/70 ${texto}`
+    ? `${borda} bg-white ${texto}`
     : `${borda} ${fundo} ${texto}`;
 }
 
@@ -214,10 +225,17 @@ export function SeloRegime({
   className?: string;
   peso?: PesoSelo;
 }) {
-  const cor =
-    regime === "SIMPLES_NACIONAL"
-      ? tom(peso, "border-[#ABEFC6]", "bg-[#ECFDF3]", "text-[#027A48]")
-      : tom(peso, "border-[#B2DDFF]", "bg-[#EFF8FF]", "text-[#175CD3]");
+  // Regime é NEUTRO nas duas opções. Antes Simples Nacional era verde e Lucro
+  // Presumido azul, e nenhuma das duas cores significava nada: regime não é bom
+  // nem ruim, não muda no mês e não cobra ação. Eram só dois matizes fora da
+  // paleta para distinguir duas coisas que o próprio texto já distingue ("SN" e
+  // "LP"). Gastar cor onde o texto resolve tira sinal de onde a cor decide algo.
+  const cor = tom(
+    peso,
+    "border-[var(--cz-hairline-forte)]",
+    "bg-[var(--cz-fundo)]",
+    "text-[var(--cz-texto-suave)]"
+  );
 
   const texto = completo
     ? REGIME_LABEL[regime] ?? regime
@@ -319,12 +337,24 @@ export function SeloResponsavelEtapa({
   className?: string;
   peso?: PesoSelo;
 }) {
+  // Laranja só no Comercial C.Z, que é a etapa cuja pendência costuma travar o
+  // mês e a que a gestão precisa achar na lista. Escritório e Ambos ficam
+  // neutros: o "Ambos" era roxo, uma cor que não existe em nenhum outro lugar do
+  // painel e que aparecia justamente na etapa menos crítica das três.
   const cor =
     tipo === "COMERCIAL_CZ"
-      ? tom(peso, "border-[#FED7AA]", "bg-[#FFF4EB]", "text-[#C2410C]")
-      : tipo === "ESCRITORIO"
-      ? tom(peso, "border-gray-200", "bg-gray-100", "text-gray-700")
-      : tom(peso, "border-[#D9D6FE]", "bg-[#F4F3FF]", "text-[#5925DC]");
+      ? tom(
+          peso,
+          "border-[var(--cz-laranja-borda)]",
+          "bg-[var(--cz-laranja-suave)]",
+          "text-[var(--cz-laranja-forte)]"
+        )
+      : tom(
+          peso,
+          "border-[var(--cz-hairline-forte)]",
+          "bg-[var(--cz-fundo)]",
+          "text-[var(--cz-texto-suave)]"
+        );
 
   return (
     <Selo
@@ -358,9 +388,21 @@ function corSituacaoEmpresa(situacao: string, peso: PesoSelo): string {
     case "SUSPENSA":
       return tom(peso, "border-[#FEDF89]", "bg-[#FFFAEB]", "text-[#B54708]");
     case "EM_ABERTURA":
-      return tom(peso, "border-[#B2DDFF]", "bg-[#EFF8FF]", "text-[#175CD3]");
+      // Era azul. Virou laranja: abertura é trabalho em curso, e no painel novo
+      // trabalho em curso é laranja — a mesma regra da barra de progresso.
+      return tom(
+        peso,
+        "border-[var(--cz-laranja-borda)]",
+        "bg-[var(--cz-laranja-suave)]",
+        "text-[var(--cz-laranja-forte)]"
+      );
     default:
-      return tom(peso, "border-gray-200", "bg-gray-100", "text-gray-600");
+      return tom(
+        peso,
+        "border-[var(--cz-hairline-forte)]",
+        "bg-[var(--cz-fundo)]",
+        "text-[var(--cz-texto-suave)]"
+      );
   }
 }
 

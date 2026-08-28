@@ -7,23 +7,37 @@ import {
   useCallback,
   useMemo,
   useState,
+  type FormEvent,
   type ReactNode,
   type UIEvent,
 } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
-import { ChevronRight, PanelLeftClose, PanelLeftOpen, UserRound } from "lucide-react";
+import {
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  Settings,
+  UserRound,
+} from "lucide-react";
 import AdminSidebar from "./AdminSidebar";
 import { useSessao } from "@/hooks/useSessao";
-import { papelLabel, papelSelo } from "@/lib/papeis";
+import { papelLabel } from "@/lib/papeis";
 import { iniciais } from "@/app/components/views/ui/tarefas/formato";
 
-const FULL_W = "16rem";
+const FULL_W = "15rem";
 const RAIL_W = "4rem";
 const LS_KEY = "cz_sidebar_collapsed";
 
 const useIsoLayout = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+/** Única tela do admin que filtra empresa por texto. Ver `BuscaEmpresa`. */
+const ROTA_BUSCA = "/admin/tarefas/apuracao";
+
+/** Tela de usuários e níveis de acesso. Destino do atalho de configuração. */
+const ROTA_ACESSOS = "/admin";
 
 /* -------------------------------------------------------------------------- */
 /*                          Rótulos de rota do admin                          */
@@ -42,6 +56,25 @@ const ROTULO_ROTA: Record<string, string> = {
   "/admin/tarefas/legalizacao": "Legalização",
   "/admin/tarefas/auditoria": "Auditoria",
   "/admin/empresas": "Empresas",
+};
+
+/**
+ * Subtítulo do header, por rota.
+ *
+ * Fica ao lado de `ROTULO_ROTA` porque as duas linhas do título são um par: sem
+ * isso alguém acrescenta rota num mapa e esquece do outro. Rota fora do mapa
+ * fica SEM subtítulo de propósito — frase genérica ("Gerencie seus dados") gasta
+ * a segunda linha mais visível da tela para não dizer nada.
+ */
+const SUBTITULO_ROTA: Record<string, string> = {
+  "/admin": "Perfis de acesso e contas da equipe",
+  "/admin/documentos": "Envio de documentos para os clientes",
+  "/admin/auditoria-documentos": "Quem acessou e baixou cada documento",
+  "/admin/tarefas": "Visão geral das apurações e dos processos",
+  "/admin/tarefas/apuracao": "Competências por empresa, etapa e prazo",
+  "/admin/tarefas/legalizacao": "Aberturas, alterações e encerramentos de CNPJ",
+  "/admin/tarefas/auditoria": "Histórico de alterações com autor e horário",
+  "/admin/empresas": "Carteira de empresas e regime tributário",
 };
 
 /**
@@ -85,6 +118,14 @@ function montarMigalhas(pathname: string): Migalha[] {
   return migalhas;
 }
 
+/** Rota de detalhe herda do pai: o pai é a penúltima migalha. */
+function heranca(migalhas: Migalha[], mapa: Record<string, string>): string {
+  const ultima = migalhas[migalhas.length - 1];
+  const pai = migalhas[migalhas.length - 2];
+  if (ultima?.tipo === "registro" && pai && mapa[pai.href]) return mapa[pai.href];
+  return "";
+}
+
 /**
  * Título do header.
  *
@@ -96,14 +137,13 @@ function montarMigalhas(pathname: string): Migalha[] {
  */
 function tituloDaRota(migalhas: Migalha[], pathname: string): string {
   if (ROTULO_ROTA[pathname]) return ROTULO_ROTA[pathname];
+  return heranca(migalhas, ROTULO_ROTA) || "Centro de Controle";
+}
 
-  const ultima = migalhas[migalhas.length - 1];
-  const pai = migalhas[migalhas.length - 2];
-  if (ultima?.tipo === "registro" && pai && ROTULO_ROTA[pai.href]) {
-    return ROTULO_ROTA[pai.href];
-  }
-
-  return "Centro de Controle";
+/** Mesma regra de herança do título, sem fallback: sem texto real, sem linha. */
+function subtituloDaRota(migalhas: Migalha[], pathname: string): string {
+  if (SUBTITULO_ROTA[pathname]) return SUBTITULO_ROTA[pathname];
+  return heranca(migalhas, SUBTITULO_ROTA);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -112,12 +152,21 @@ function tituloDaRota(migalhas: Migalha[], pathname: string): string {
 
 function Separador() {
   return (
-    <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0 text-gray-300" />
+    <ChevronRight
+      aria-hidden="true"
+      className="h-3 w-3 shrink-0 text-[var(--cz-hairline-forte)]"
+    />
   );
 }
 
 /**
  * Trilha de navegação.
+ *
+ * A referência do cliente não tem trilha, mas em `/admin/tarefas/apuracao/<id>`
+ * o título diz "Apuração fiscal" e a pessoa está DENTRO de uma competência —
+ * sem a trilha não há o que diga isso nem por onde voltar. Ela fica então acima
+ * do título, em 11px cinza claro, discreta o suficiente para o título continuar
+ * sendo a primeira coisa que o olho pega.
  *
  * Em tela estreita o meio do caminho é colapsado num reticente: com `display:
  * none` os itens do meio saem também da árvore de acessibilidade, então o leitor
@@ -129,12 +178,15 @@ function Trilha({ migalhas }: { migalhas: Migalha[] }) {
 
   return (
     <nav aria-label="Trilha de navegação">
-      <ol className="flex items-center gap-1.5 text-xs font-medium leading-4 text-gray-500">
+      <ol className="flex items-center gap-1.5 text-[11px] font-medium leading-[14px] text-[var(--cz-texto-fraco)]">
         <li className="flex shrink-0 items-center gap-1.5">
           {resto.length === 0 ? (
-            <span className="text-gray-700">{primeira.texto}</span>
+            <span>{primeira.texto}</span>
           ) : (
-            <Link href={primeira.href} className="transition-colors hover:text-gray-900">
+            <Link
+              href={primeira.href}
+              className="transition-colors hover:text-[var(--cz-texto)]"
+            >
               {primeira.texto}
             </Link>
           )}
@@ -143,7 +195,7 @@ function Trilha({ migalhas }: { migalhas: Migalha[] }) {
         {temMeio && (
           <li aria-hidden="true" className="flex shrink-0 items-center gap-1.5 md:hidden">
             <Separador />
-            <span className="text-gray-400">…</span>
+            <span>…</span>
           </li>
         )}
 
@@ -158,11 +210,13 @@ function Trilha({ migalhas }: { migalhas: Migalha[] }) {
             >
               <Separador />
               {ultima ? (
-                <span className="truncate text-gray-700">{migalha.texto}</span>
+                <span className="truncate text-[var(--cz-texto-suave)]">
+                  {migalha.texto}
+                </span>
               ) : (
                 <Link
                   href={migalha.href}
-                  className="truncate transition-colors hover:text-gray-900"
+                  className="truncate transition-colors hover:text-[var(--cz-texto)]"
                 >
                   {migalha.texto}
                 </Link>
@@ -176,13 +230,90 @@ function Trilha({ migalhas }: { migalhas: Migalha[] }) {
 }
 
 /**
+ * Busca de empresa.
+ *
+ * Campo real, não decoração: ao enviar, navega para a lista de apuração com
+ * `?busca=`, que é lido por `lerFiltros` daquela tela e filtra por razão social,
+ * fantasia e CNPJ. O `placeholder` diz exatamente o que o campo faz, para
+ * ninguém digitar "boleto" esperando busca global.
+ *
+ * Some na própria `/admin/tarefas/apuracao`: aquela tela lê a URL só na
+ * montagem, então trocar o parâmetro sem sair da rota mudaria o endereço e não a
+ * lista — a tela mostraria um resultado e a URL prometeria outro. E lá o campo
+ * de busca próprio, com debounce, já está na tela.
+ */
+function BuscaEmpresa() {
+  const router = useRouter();
+  const [termo, setTermo] = useState("");
+
+  const enviar = (evento: FormEvent<HTMLFormElement>) => {
+    evento.preventDefault();
+    const limpo = termo.trim();
+    if (!limpo) return;
+    router.push(`${ROTA_BUSCA}?busca=${encodeURIComponent(limpo)}`);
+  };
+
+  return (
+    <form
+      role="search"
+      onSubmit={enviar}
+      className="relative hidden w-80 shrink-0 lg:block"
+    >
+      <Search
+        aria-hidden="true"
+        className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--cz-texto-fraco)]"
+      />
+      <input
+        type="search"
+        className="cz-busca"
+        value={termo}
+        onChange={(evento) => setTermo(evento.target.value)}
+        placeholder="Buscar empresa por nome ou CNPJ"
+        aria-label="Buscar empresa por nome ou CNPJ na apuração fiscal"
+      />
+    </form>
+  );
+}
+
+/**
+ * Atalho para usuários e acessos.
+ *
+ * A referência tem um ícone de engrenagem no header. Aqui ele só existe quando
+ * tem para onde ir de verdade: `permissoes.gerenciarUsuarios` é ADMIN, e é
+ * exatamente quem passa pelo `RoleGuard` de `/admin`. Para os outros papéis o
+ * botão sairia da tela em vez de levar a um aviso de acesso negado. E na própria
+ * `/admin` ele desaparece, porque link para a página atual é botão morto.
+ */
+function AtalhoAcessos() {
+  const { permissoes } = useSessao();
+  const pathname = usePathname();
+
+  if (!permissoes.gerenciarUsuarios) return null;
+  if (pathname === ROTA_ACESSOS) return null;
+
+  return (
+    <Link
+      href={ROTA_ACESSOS}
+      title="Usuários e acessos"
+      aria-label="Abrir usuários e acessos"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--cz-hairline)] text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-hairline-forte)] hover:text-[var(--cz-texto)]"
+    >
+      <Settings aria-hidden="true" className="h-[18px] w-[18px]" />
+    </Link>
+  );
+}
+
+/**
  * Identidade de quem está logado.
  *
- * Substitui o selo fixo "Sessão Administrador", que era texto cravado e passou a
- * mentir com cinco papéis no sistema. Três estados, todos honestos:
- * carregando (esqueleto do tamanho final, sem salto), sessão lida (nome e papel
- * REAIS) e sessão que não resolveu (estado neutro — `/admin/documentos` roda sem
- * barreira de papel, então não dá para presumir nada).
+ * Três estados, todos honestos: carregando (esqueleto do tamanho final, sem
+ * salto), sessão lida (nome e papel REAIS) e sessão que não resolveu (estado
+ * neutro — `/admin/documentos` roda sem barreira de papel, então não dá para
+ * presumir nada).
+ *
+ * O papel vira texto cinza, não selo colorido: `papelSelo` pinta contábil de
+ * azul e assistente de roxo, e o painel é laranja, branco e cinza. A cor do
+ * papel continua onde ela trabalha, na tabela de usuários.
  *
  * Em tela estreita só o círculo sobrevive; o `title` carrega nome, e-mail e
  * papel, que é o dado que a sidebar oculta no celular.
@@ -198,7 +329,7 @@ function Identidade() {
         </div>
         <div className="hidden sm:block">
           <div className="cz-esqueleto h-4 w-28" />
-          <div className="cz-esqueleto mt-1 h-5 w-24" />
+          <div className="cz-esqueleto mt-1 h-3.5 w-20" />
         </div>
       </div>
     );
@@ -207,16 +338,16 @@ function Identidade() {
   if (!sessao) {
     return (
       <div className="flex shrink-0 items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--cz-hairline-forte)] bg-gray-100 text-gray-400">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)]">
           <UserRound aria-hidden="true" className="h-4 w-4" />
         </span>
         <div className="hidden sm:block">
-          <p className="text-[13px] font-semibold leading-tight text-gray-700">
+          <p className="text-[13px] font-semibold leading-tight text-[var(--cz-texto)]">
             Sessão não identificada
           </p>
-          <span className="mt-1 inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">
+          <p className="mt-1 text-[11px] leading-tight text-[var(--cz-texto-fraco)]">
             Papel não informado
-          </span>
+          </p>
         </div>
       </div>
     );
@@ -232,20 +363,16 @@ function Identidade() {
       className="flex min-w-0 items-center gap-2.5"
       title={`${nome} · ${sessao.email} · ${rotulo}`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[11px] font-bold text-orange-700 ring-1 ring-inset ring-orange-200">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cz-laranja-suave)] text-[11px] font-bold text-[var(--cz-laranja-forte)] ring-1 ring-inset ring-[var(--cz-laranja-borda)]">
         {iniciais(nome)}
       </span>
-      <div className="hidden min-w-0 max-w-[10rem] sm:block lg:max-w-[14rem]">
-        <p className="truncate text-[13px] font-semibold leading-tight text-gray-900">
+      <div className="hidden min-w-0 max-w-[10rem] sm:block lg:max-w-[12rem]">
+        <p className="truncate text-[13px] font-semibold leading-tight text-[var(--cz-texto)]">
           {nome}
         </p>
-        <span
-          className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${papelSelo(
-            sessao.papel
-          )}`}
-        >
+        <p className="mt-1 truncate text-[11px] leading-tight text-[var(--cz-texto-suave)]">
           {rotulo}
-        </span>
+        </p>
       </div>
     </div>
   );
@@ -269,6 +396,10 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
 
   const migalhas = useMemo(() => montarMigalhas(pathname ?? ""), [pathname]);
   const titulo = useMemo(() => tituloDaRota(migalhas, pathname ?? ""), [migalhas, pathname]);
+  const subtitulo = useMemo(
+    () => subtituloDaRota(migalhas, pathname ?? ""),
+    [migalhas, pathname]
+  );
 
   useEffect(() => {
     const stored = localStorage.getItem(LS_KEY);
@@ -320,14 +451,17 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
     : "Recolher o menu lateral";
 
   return (
-    <div ref={containerRef} className="cz-admin flex h-screen bg-[#F2F4F7] font-sans">
+    <div
+      ref={containerRef}
+      className="cz-admin flex h-screen bg-[var(--cz-fundo)] font-sans"
+    >
       <AdminSidebar collapsed={isSidebarCollapsed} />
 
       {/* A sidebar aparece em `md`, então a margem do conteúdo tem de começar em
           `md` também — em `lg` ela cobria o conteúdo entre 768px e 1024px. */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden md:ml-[var(--sidebar-w)] transition-all duration-200">
         <header
-          className={`z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--cz-hairline)] bg-white px-4 transition-shadow duration-200 sm:px-6 ${
+          className={`z-20 flex h-[4.5rem] shrink-0 items-center justify-between gap-3 border-b border-[var(--cz-hairline)] bg-[var(--cz-superficie)] px-4 transition-shadow duration-200 sm:px-6 ${
             rolado ? "shadow-[var(--cz-elev-2)]" : "shadow-none"
           }`}
         >
@@ -339,7 +473,7 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
               aria-expanded={!isSidebarCollapsed}
               aria-controls="cz-menu-admin"
               title={rotuloBotao}
-              className="-ml-1.5 hidden shrink-0 rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 md:block"
+              className="-ml-1.5 hidden shrink-0 rounded-lg p-2 text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)] md:block"
             >
               {isSidebarCollapsed ? (
                 <PanelLeftOpen className="h-5 w-5" />
@@ -350,13 +484,20 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
 
             <div className="min-w-0">
               <Trilha migalhas={migalhas} />
-              <h2 className="truncate text-[17px] font-semibold leading-6 tracking-tight text-gray-900">
-                {titulo}
-              </h2>
+              <h2 className="cz-titulo truncate text-[22px] leading-7">{titulo}</h2>
+              {subtitulo && (
+                <p className="truncate text-[13px] leading-4 text-[var(--cz-texto-suave)]">
+                  {subtitulo}
+                </p>
+              )}
             </div>
           </div>
 
-          <Identidade />
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            {pathname !== ROTA_BUSCA && <BuscaEmpresa />}
+            <AtalhoAcessos />
+            <Identidade />
+          </div>
         </header>
 
         <main

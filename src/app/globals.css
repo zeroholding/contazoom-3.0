@@ -541,3 +541,282 @@ select.error {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Telas de autenticacao (login e cadastro)                                   */
+/*                                                                            */
+/* Escopado em .cz-auth. O estilo global de input mais acima e de formulario   */
+/* de cadastro longo: h-12, border-2, sombra em tres camadas e foco em         */
+/* #C5837B, um rosa que nao existe na paleta do sistema (laranja, preto,       */
+/* branco). Numa porta de entrada com dois campos isso pesa e desalinha a      */
+/* marca — mas nao posso mexer no global sem mudar a aparencia de dezenas de   */
+/* telas que dependem dele. Por isso a sobrescrita mora aqui.                  */
+/*                                                                            */
+/* O !important e obrigatorio: as regras globais tambem usam !important em     */
+/* border-color e box-shadow, e sem ele nada disto seria aplicado.             */
+/* -------------------------------------------------------------------------- */
+
+.cz-auth input[type="text"],
+.cz-auth input[type="email"],
+.cz-auth input[type="password"],
+.cz-auth select {
+    /* Mesmos valores do painel: raio 10px, hairline forte, sem sombra. */
+    height: 2.75rem;
+    border-radius: 10px;
+    border-width: 1px;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    border-color: #DCE0E7 !important;
+    box-shadow: none !important;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.cz-auth input[type="text"]:focus,
+.cz-auth input[type="email"]:focus,
+.cz-auth input[type="password"]:focus,
+.cz-auth select:focus {
+    border-color: #F26212 !important;
+    box-shadow: 0 0 0 3px rgba(242, 98, 18, 0.13) !important;
+    outline: none;
+}
+
+/* Campo com erro: o vermelho vence o foco laranja enquanto o erro existir,
+   senao a pessoa foca o campo errado e ele parece corrigido. */
+.cz-auth input.cz-auth-invalido,
+.cz-auth input.cz-auth-invalido:focus {
+    border-color: #D92D20 !important;
+    box-shadow: 0 0 0 4px rgba(217, 45, 32, 0.12) !important;
+}
+
+/* O global forca `label { color: #373737 !important }`; o texto do rotulo vai
+   num span filho, que herda e aceita a classe. Aqui so o espacamento. */
+.cz-auth label {
+    margin-bottom: 0.4375rem;
+}
+
+/* Preenchimento automatico do navegador pinta o campo de azul-claro e ignora
+   background-color. `box-shadow` interno e a unica forma de recuperar o branco. */
+.cz-auth input:-webkit-autofill,
+.cz-auth input:-webkit-autofill:hover,
+.cz-auth input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #101828;
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+    box-shadow: 0 0 0 1000px #ffffff inset !important;
+}
+
+.cz-auth input.cz-auth-invalido:focus {
+    border-color: #D92D20 !important;
+}
+
+.cz-auth a:focus-visible,
+.cz-auth button:focus-visible {
+    outline: 2px solid #F26212;
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+}
+
+/* Sobre o painel laranja o proprio laranja do foco desaparece. */
+.cz-auth-marca a:focus-visible,
+.cz-auth-marca button:focus-visible {
+    outline-color: #FFFFFF;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Painel da marca                                                            */
+/*                                                                            */
+/* LARANJA, nao preto. A referencia do cliente mostra o painel claro assentado */
+/* sobre laranja, e e a leitura certa da paleta: laranja e branco, sem terceira */
+/* cor. O degrade e curto e fica dentro da familia (#F26212 -> #C74A08): sair   */
+/* para amarelo, como estava antes, inventa uma cor que a marca nao tem.        */
+/* -------------------------------------------------------------------------- */
+
+.cz-auth-marca {
+    background-color: #F26212;
+    background-image:
+        radial-gradient(55rem 40rem at 20% 0%, rgba(255, 255, 255, 0.16), transparent 62%),
+        linear-gradient(160deg, #F26212 0%, #DD5309 55%, #C74A08 100%);
+}
+
+/* Malha fina por cima: fundo grande de uma cor so mostra banda em monitor de
+   8 bits, e a malha quebra isso sem virar textura visivel. */
+.cz-auth-malha {
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 3.5rem 3.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cz-auth * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Upgrade de design do painel                                                */
+/*                                                                            */
+/* Este bloco vem DEPOIS do bloco de acabamento anterior de proposito: ele     */
+/* redefine as mesmas variaveis (--cz-elev-*, --cz-hairline) com valores mais  */
+/* planos, e na cascata o ultimo vence. Assim nenhum componente precisa mudar  */
+/* de classe para receber a linguagem nova.                                   */
+/*                                                                            */
+/* A mudanca de fundo e esta: o desenho passa a separar por BORDA, nao por     */
+/* sombra. Sombra empilhada em cada cartao suja o painel e faz tudo parecer    */
+/* flutuando; borda fina de 1px em cinza quase branco delimita sem ruido, e    */
+/* sobra contraste para o laranja significar acao.                             */
+/* -------------------------------------------------------------------------- */
+
+.cz-admin,
+.cz-auth {
+    /* Plus Jakarta Sans. Carregada em layout.tsx via next/font. O fallback
+       existe para o primeiro paint e para quando o Google Fonts nao responde. */
+    font-family: var(--font-jakarta), var(--font-geist-sans), ui-sans-serif,
+        system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.011em;
+}
+
+.cz-admin,
+.cz-tarefas {
+    /* Sombras quase inexistentes: quem separa e a borda. */
+    --cz-elev-1: 0 1px 2px rgba(16, 24, 40, 0.03);
+    --cz-elev-2: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.03);
+    --cz-elev-3: 0 12px 32px rgba(16, 24, 40, 0.10), 0 4px 8px rgba(16, 24, 40, 0.04);
+
+    --cz-hairline: #EDEFF3;
+    --cz-hairline-forte: #DCE0E7;
+
+    --cz-laranja: #F26212;
+    --cz-laranja-forte: #D9500A;
+    --cz-laranja-suave: #FFF2E9;
+    --cz-laranja-borda: #FFD9BF;
+
+    --cz-fundo: #F8F9FB;
+    --cz-superficie: #FFFFFF;
+
+    --cz-texto: #14161B;
+    --cz-texto-suave: #6B7280;
+    --cz-texto-fraco: #9AA1AC;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tipografia do painel                                                       */
+/*                                                                            */
+/* A referencia tem uma hierarquia clara e pouca variacao: titulo bem preto e  */
+/* apertado, subtitulo cinza, e numero grande em peso 800. Duas classes         */
+/* resolvem isso para todo componente sem repetir tracking em cada arquivo.     */
+/* -------------------------------------------------------------------------- */
+
+.cz-titulo {
+    letter-spacing: -0.028em;
+    font-weight: 700;
+    color: var(--cz-texto);
+}
+
+.cz-valor {
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    color: var(--cz-texto);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Item de navegacao da barra lateral clara                                   */
+/*                                                                            */
+/* Na referencia o item ativo e uma pastilha laranja clarissima com o texto e o */
+/* icone laranja, mais um tracinho laranja colado na BORDA DA BARRA — nao na    */
+/* borda da pastilha. Esse tracinho e o que amarra o item na estrutura em vez   */
+/* de deixar a pastilha solta no meio do branco.                              */
+/* -------------------------------------------------------------------------- */
+
+.cz-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 0.625rem;
+    padding: 0.5625rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--cz-texto-suave);
+    transition: background-color 130ms ease, color 130ms ease;
+}
+
+.cz-nav-item:hover {
+    background-color: #F4F5F7;
+    color: var(--cz-texto);
+}
+
+.cz-nav-item[aria-current="page"] {
+    background-color: var(--cz-laranja-suave);
+    color: var(--cz-laranja-forte);
+    font-weight: 600;
+}
+
+/* O traco fica na borda da barra: -1rem cancela o px-4 do container. */
+.cz-nav-item[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    left: -1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 1.25rem;
+    width: 3px;
+    border-radius: 0 9999px 9999px 0;
+    background-color: var(--cz-laranja);
+}
+
+/* Barra recolhida: o container perde o padding lateral, e o traco iria para
+   fora da tela. */
+.cz-nav-recolhida .cz-nav-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.cz-nav-recolhida .cz-nav-item[aria-current="page"]::before {
+    left: -0.5rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Campo de busca do cabecalho                                                */
+/*                                                                            */
+/* Escopado com classe propria porque a folha global crava altura, raio e foco  */
+/* rosado em `input[type="search"]` por seletor de elemento.                    */
+/* -------------------------------------------------------------------------- */
+
+.cz-admin input.cz-busca {
+    height: 2.5rem;
+    width: 100%;
+    border-radius: 9999px;
+    border-width: 1px;
+    padding: 0 1rem 0 2.375rem;
+    font-size: 0.8125rem;
+    background-color: var(--cz-superficie);
+    border-color: var(--cz-hairline) !important;
+    box-shadow: none !important;
+    transition: border-color 130ms ease, box-shadow 130ms ease;
+}
+
+.cz-admin input.cz-busca:focus {
+    border-color: var(--cz-laranja) !important;
+    box-shadow: 0 0 0 3px rgba(242, 98, 18, 0.12) !important;
+    outline: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Ponto de notificacao                                                       */
+/* -------------------------------------------------------------------------- */
+
+.cz-ponto::after {
+    content: "";
+    position: absolute;
+    top: 0.375rem;
+    right: 0.4375rem;
+    height: 0.4375rem;
+    width: 0.4375rem;
+    border-radius: 9999px;
+    background-color: #EF4444;
+    box-shadow: 0 0 0 2px var(--cz-superficie);
+}
