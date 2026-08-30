@@ -54,19 +54,39 @@ export type UsuarioInterno = {
 
 export type EmpresaLista = {
   id: string;
-  cnpj: string;
+  /** `null` na empresa em abertura, que é cadastrada antes de o CNPJ existir. */
+  cnpj: string | null;
+  grupo: string | null;
   razaoSocial: string;
   nomeFantasia: string | null;
   regime: string;
+  /** PLANO_SIMPLES, PLANO_PRESUMIDO, PLANO_STANDBY, SEM_PLANO_SUSPENSA */
+  planoInterno: string;
+  /** Derivada do plano e do CNPJ. Mantida para a tela de detalhe e o histórico. */
   situacao: string;
   tributoLocal: string;
+  inscricaoMunicipal: string | null;
+  inscricaoEstadual: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
   uf: string | null;
   municipio: string | null;
+  responsavelOperacional: string | null;
+  socioAdmNome: string | null;
+  socioAdmCpf: string | null;
   userId: string | null;
   responsavelId: string | null;
   createdAt: string;
   _count: { apuracoes: number; processos: number };
-  cnpjFormatado: string;
+  /** Máscaras aplicadas no servidor, para toda tela mostrar o mesmo formato. */
+  cnpjFormatado: string | null;
+  cepFormatado: string | null;
+  socioAdmCpfFormatado: string | null;
+  /** Endereço em uma linha, montado no servidor. */
+  enderecoLinha: string | null;
 };
 
 export type RegimeHistorico = {
@@ -82,12 +102,24 @@ export type RegimeHistorico = {
 
 export type EmpresaDetalhe = {
   id: string;
-  cnpj: string;
+  cnpj: string | null;
+  grupo: string | null;
   razaoSocial: string;
   nomeFantasia: string | null;
   regime: string;
+  planoInterno: string;
+  inscricaoMunicipal: string | null;
+  inscricaoEstadual: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
   uf: string | null;
   municipio: string | null;
+  responsavelOperacional: string | null;
+  socioAdmNome: string | null;
+  socioAdmCpf: string | null;
   inicioAtividade: string | null;
   situacao: string;
   tributoLocal: string;
@@ -96,7 +128,9 @@ export type EmpresaDetalhe = {
   observacoes: string | null;
   createdAt: string;
   updatedAt: string;
-  cnpjFormatado: string;
+  cnpjFormatado: string | null;
+  cepFormatado: string | null;
+  socioAdmCpfFormatado: string | null;
   user: PessoaResumo | null;
   responsavel: PessoaResumo | null;
   regimeHistorico: RegimeHistorico[];
@@ -148,12 +182,16 @@ export type ApuracaoLista = {
     id: string;
     razaoSocial: string;
     nomeFantasia: string | null;
-    cnpj: string;
+    /** `null` na empresa em abertura. */
+    cnpj: string | null;
     regime: string;
+    planoInterno: string;
   };
   responsavel: PessoaResumo | null;
   prazoEntrega: string | null;
   prazo: SituacaoPrazo;
+  /** Dias úteis e corridos até o prazo. `null` sem prazo ou já concluída. */
+  contagemPrazo: ContagemPrazoApi | null;
   bloqueada: boolean;
   bloqueioMotivo: string | null;
   bloqueioResponsavel: string | null;
@@ -161,7 +199,25 @@ export type ApuracaoLista = {
   diasEmBloqueio: number | null;
   iniciadaEm: string | null;
   concluidaEm: string | null;
+  observacoes: string | null;
+  /** Quantos anexos a competência tem. Contagem, não a lista. */
+  anexos: number;
   atualizadaEm: string;
+};
+
+/**
+ * Contagem de prazo como a API devolve.
+ *
+ * Espelha `ContagemPrazo` de `src/lib/dias-uteis.ts`. Declarada aqui em vez de
+ * importada de lá porque `tipos.ts` é o contrato do que chega pela rede — e o que
+ * chega pela rede é JSON, que já passou por serialização. Amarrar o tipo da tela
+ * ao tipo do domínio esconderia a diferença no dia em que ela existir.
+ */
+export type ContagemPrazoApi = {
+  corridos: number;
+  uteis: number;
+  hoje: boolean;
+  atrasado: boolean;
 };
 
 export type Etapa = {
@@ -245,11 +301,13 @@ export type ProcessoLista = {
   status: string;
   empresa: {
     id: string;
-    cnpj: string;
+    /** `null` na empresa em abertura, que existe antes de o CNPJ sair. */
+    cnpj: string | null;
     razaoSocial: string;
     nomeFantasia: string | null;
     regime: string;
     situacao: string;
+    planoInterno: string;
   } | null;
   identificacaoProvisoria: string | null;
   etapaAtual: number;
@@ -265,10 +323,15 @@ export type ProcessoLista = {
   prazoEstimado: string | null;
   situacaoPrazo: string;
   diasPrazo: number | null;
+  /** Dias úteis e corridos até o prazo. `null` sem prazo ou já encerrado. */
+  contagemPrazo: ContagemPrazoApi | null;
   abertoEm: string;
   concluidoEm: string | null;
   diasEmAberto: number | null;
   responsavel: PessoaResumo | null;
+  observacoes: string | null;
+  /** Quantos anexos o processo tem. Contagem, não a lista. */
+  anexos: number;
 };
 
 /** `GET /api/tarefas/legalizacao/[id]` faz spread — não existe wrapper `processo`. */

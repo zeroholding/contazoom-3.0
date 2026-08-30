@@ -23,12 +23,30 @@
 
 import prisma from "@/lib/prisma";
 import {
+  cepValido,
+  cnpjValido,
+  cpfValido,
+  formatarCnpj,
+  limparInscricao,
+  somenteDigitos,
+} from "@/lib/documento";
+import {
+  PLANO_INTERNO,
+  PLANOS_INTERNOS_VALIDOS,
   REGIMES_VALIDOS,
   SITUACAO_EMPRESA,
   SITUACOES_EMPRESA_VALIDAS,
   TRIBUTO_LOCAL,
   TRIBUTOS_LOCAIS_VALIDOS,
+  situacaoDoPlano,
 } from "@/lib/tarefa-etapas";
+
+/**
+ * `formatarCnpj` continua sendo importado daqui por três rotas. O cálculo mudou
+ * de casa para `src/lib/documento.ts` (que não importa nada e por isso serve ao
+ * navegador também); o reexport evita mexer nos chamadores só por causa disso.
+ */
+export { formatarCnpj };
 
 /* -------------------------------------------------------------------------- */
 /*                                    CNPJ                                    */
@@ -37,22 +55,6 @@ import {
 export type ResultadoCnpj =
   | { ok: true; digitos: string }
   | { ok: false; erro: string };
-
-/**
- * Pesos do cálculo dos dígitos verificadores, conforme a Receita Federal.
- * O segundo dígito usa 13 posições porque entra o primeiro dígito já calculado.
- */
-const PESOS_PRIMEIRO_DV = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-const PESOS_SEGUNDO_DV = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-
-function digitoVerificador(base: string, pesos: number[]): number {
-  const soma = pesos.reduce(
-    (total, peso, indice) => total + Number(base[indice]) * peso,
-    0
-  );
-  const resto = soma % 11;
-  return resto < 2 ? 0 : 11 - resto;
-}
 
 /**
  * Valida o CNPJ e devolve apenas os dígitos.
@@ -71,21 +73,13 @@ export function normalizarCnpj(valor: unknown): ResultadoCnpj {
   // o dígito verificador reprova adiante.
   const bruto =
     typeof valor === "number" ? String(valor).padStart(14, "0") : valor;
-  const digitos = bruto.replace(/\D/g, "");
+  const digitos = somenteDigitos(bruto);
 
   if (!digitos) return { ok: false, erro: "Informe o CNPJ da empresa." };
   if (digitos.length !== 14) {
     return { ok: false, erro: "O CNPJ deve ter 14 dígitos." };
   }
-  if (/^(\d)\1{13}$/.test(digitos)) {
-    return { ok: false, erro: "CNPJ inválido." };
-  }
-  if (
-    digitoVerificador(digitos.slice(0, 12), PESOS_PRIMEIRO_DV) !==
-      Number(digitos[12]) ||
-    digitoVerificador(digitos.slice(0, 13), PESOS_SEGUNDO_DV) !==
-      Number(digitos[13])
-  ) {
+  if (!cnpjValido(digitos)) {
     return {
       ok: false,
       erro: "CNPJ inválido: o dígito verificador não confere.",
@@ -95,14 +89,28 @@ export function normalizarCnpj(valor: unknown): ResultadoCnpj {
   return { ok: true, digitos };
 }
 
-/** Aplica a máscara 00.000.000/0000-00. Devolve a entrada se não der 14 dígitos. */
-export function formatarCnpj(digitos: string): string {
-  const limpo = digitos.replace(/\D/g, "");
-  if (limpo.length !== 14) return digitos;
-  return `${limpo.slice(0, 2)}.${limpo.slice(2, 5)}.${limpo.slice(
-    5,
-    8
-  )}/${limpo.slice(8, 12)}-${limpo.slice(12)}`;
+/**
+ * CNPJ OPCIONAL.
+ *
+ * Empresa em abertura não tem CNPJ, e a regra nova do módulo é que todo processo
+ * de legalização nasce atrelado a uma empresa já cadastrada — inclusive a
+ * abertura. Então o cadastro tem de aceitar empresa sem CNPJ, e a coluna virou
+ * `String?` com `@unique` (no Postgres, `unique` permite vários NULL, então
+ * várias empresas em abertura convivem sem conflito).
+ *
+ * Ausente devolve `null`; presente e torto devolve erro. Ausente e torto são
+ * coisas diferentes: a primeira é cadastro legítimo, a segunda é digitação.
+ */
+export function normalizarCnpjOpcional(
+  valor: unknown
+): { ok: true; digitos: string | null } | { ok: false; erro: string } {
+  if (valor === undefined || valor === null) return { ok: true, digitos: null };
+  if (typeof valor === "string" && !valor.trim()) {
+    return { ok: true, digitos: null };
+  }
+  const resultado = normalizarCnpj(valor);
+  if (!resultado.ok) return resultado;
+  return { ok: true, digitos: resultado.digitos };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -144,23 +152,46 @@ export function formatarData(data: Date): string {
 /* -------------------------------------------------------------------------- */
 
 export type DadosEmpresa = {
+  grupo: string | null;
   razaoSocial: string;
   nomeFantasia: string | null;
   regime: string;
+  planoInterno: string;
   situacao: string;
   tributoLocal: string;
+  inscricaoMunicipal: string | null;
+  inscricaoEstadual: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
   uf: string | null;
   municipio: string | null;
+  responsavelOperacional: string | null;
+  socioAdmNome: string | null;
+  socioAdmCpf: string | null;
   inicioAtividade: Date | null;
   userId: string | null;
   responsavelId: string | null;
   observacoes: string | null;
 };
 
-/** Campos editáveis pelo PATCH. `cnpj` e `regime` ficam de fora de propósito. */
+/**
+ * Campos editáveis pelo PATCH.
+ *
+ * `regime` fica de fora porque mudar regime tem rota própria
+ * (`POST /empresas/[id]/regime`), que fecha a vigência anterior e abre a nova —
+ * um UPDATE direto reescreveria o passado fiscal.
+ *
+ * `cnpj` entra agora, e é mudança de comportamento: antes era imutável porque era
+ * a identidade da empresa. Com empresa em abertura sendo cadastrada SEM CNPJ, o
+ * momento em que o CNPJ sai da Junta é justamente quando ele precisa ser
+ * gravado. A rota só permite preencher um CNPJ vazio, nunca trocar um existente.
+ */
 export type AtualizacaoEmpresa = Partial<
   Omit<DadosEmpresa, "regime" | "inicioAtividade">
->;
+> & { cnpj?: string | null };
 
 export type ResultadoValidacao<T> =
   | { ok: true; dados: T }
@@ -230,6 +261,98 @@ function validarSituacao(valor: unknown): ResultadoValidacao<string> {
   return { ok: true, dados: situacao };
 }
 
+/**
+ * Plano interno ContaZoom.
+ *
+ * Fechado como o regime, e com default: o cadastro tem de aceitar quem esqueceu
+ * de escolher, e "Plano Simples" é o plano da maior parte da carteira. Recusar o
+ * cadastro por causa disso trocaria um dado corrigível por um cadastro perdido.
+ */
+export function validarPlanoInterno(valor: unknown): ResultadoValidacao<string> {
+  const plano = texto(valor);
+  if (!plano) return { ok: true, dados: PLANO_INTERNO.PLANO_SIMPLES };
+  if (!PLANOS_INTERNOS_VALIDOS.includes(plano)) {
+    return {
+      ok: false,
+      erro: `Plano interno inválido. Use uma destas opções: ${PLANOS_INTERNOS_VALIDOS.join(
+        ", "
+      )}.`,
+      campo: "planoInterno",
+    };
+  }
+  return { ok: true, dados: plano };
+}
+
+/**
+ * CEP: guardado só com dígitos, como CNPJ e CPF.
+ *
+ * Vazio é legítimo — muito cliente é cadastrado antes de o endereço fechar. Já
+ * CEP presente e torto não passa: endereço é o que vai para a Junta e para a
+ * Prefeitura, e CEP errado volta como exigência semanas depois.
+ */
+function validarCep(valor: unknown): ResultadoValidacao<string | null> {
+  const bruto = texto(valor);
+  if (!bruto) return { ok: true, dados: null };
+  const digitos = somenteDigitos(bruto);
+  if (!cepValido(digitos)) {
+    return {
+      ok: false,
+      erro: "CEP inválido. Informe os 8 dígitos.",
+      campo: "cep",
+    };
+  }
+  return { ok: true, dados: digitos };
+}
+
+/** CPF do sócio administrador. Opcional, mas se vier tem de ter DV correto. */
+function validarSocioAdmCpf(valor: unknown): ResultadoValidacao<string | null> {
+  const bruto = texto(valor);
+  if (!bruto) return { ok: true, dados: null };
+  const digitos = somenteDigitos(bruto);
+  if (digitos.length !== 11) {
+    return {
+      ok: false,
+      erro: "O CPF do sócio administrador deve ter 11 dígitos.",
+      campo: "socioAdmCpf",
+    };
+  }
+  if (!cpfValido(digitos)) {
+    return {
+      ok: false,
+      erro: "CPF do sócio administrador inválido: o dígito verificador não confere.",
+      campo: "socioAdmCpf",
+    };
+  }
+  return { ok: true, dados: digitos };
+}
+
+/**
+ * Inscrição estadual e municipal: só higienizadas, nunca validadas por DV.
+ *
+ * Cada estado tem regra própria (SP tem 12 dígitos, RJ tem 8, MG tem 13) e cada
+ * prefeitura define o formato da municipal. Implementar 27 algoritmos para um
+ * campo de cadastro trocaria um problema pequeno — dado torto — por um grande:
+ * recusar dado certo de um estado cuja regra foi transcrita errada aqui.
+ * "ISENTO" passa intacto, porque é valor legítimo de inscrição estadual.
+ */
+function inscricao(valor: unknown): string | null {
+  const bruto = texto(valor);
+  if (!bruto) return null;
+  const limpo = limparInscricao(bruto);
+  return limpo ? limpo : null;
+}
+
+/*
+ * Telefone NÃO tem campo no cadastro de empresa.
+ *
+ * O escritório listou dez campos e escreveu "ter somente estes campos para
+ * inserir". Telefone do responsável operacional seria útil, mas acrescentar
+ * campo que ninguém pediu é o que faz formulário virar formulário longo. A
+ * máscara e a validação de telefone existem em `src/lib/documento.ts` e estão
+ * testadas; quando o campo for pedido, é uma linha aqui e um `EntradaDocumento`
+ * na tela.
+ */
+
 function validarTributoLocal(valor: unknown): ResultadoValidacao<string> {
   const tributo = texto(valor);
   if (!tributo) return { ok: true, dados: TRIBUTO_LOCAL.AMBOS };
@@ -289,14 +412,20 @@ export function validarPayloadEmpresa(
   const regime = validarRegime(corpo.regime);
   if (!regime.ok) return regime;
 
-  const situacao = validarSituacao(corpo.situacao);
-  if (!situacao.ok) return situacao;
+  const planoInterno = validarPlanoInterno(corpo.planoInterno);
+  if (!planoInterno.ok) return planoInterno;
 
   const tributoLocal = validarTributoLocal(corpo.tributoLocal);
   if (!tributoLocal.ok) return tributoLocal;
 
   const uf = validarUf(corpo.uf);
   if (!uf.ok) return uf;
+
+  const cep = validarCep(corpo.cep);
+  if (!cep.ok) return cep;
+
+  const socioAdmCpf = validarSocioAdmCpf(corpo.socioAdmCpf);
+  if (!socioAdmCpf.ok) return socioAdmCpf;
 
   // Data ausente é legítima (nem todo cadastro sabe a data de abertura); data
   // presente e ilegível não é, porque viraria início de vigência errado.
@@ -312,16 +441,47 @@ export function validarPayloadEmpresa(
     }
   }
 
+  /**
+   * Situação DERIVADA, não digitada.
+   *
+   * O cadastro deixou de ter campo "Situação": quem responde por isso agora é o
+   * plano interno, e empresa sem CNPJ é "em abertura" por definição. `situacao`
+   * continua gravada porque `abrir-mes`, o painel e a tela de detalhe leem essa
+   * coluna, e porque ENCERRADA guarda algo que plano nenhum carrega.
+   *
+   * Um `situacao` explícito no corpo ainda vence: é como a rota de encerramento e
+   * um script de correção afirmam ENCERRADA, que não é derivável de plano.
+   */
+  const temCnpj = Boolean(somenteDigitos(String(corpo.cnpj ?? "")).length === 14);
+  let situacao = situacaoDoPlano(planoInterno.dados, temCnpj);
+  if (corpo.situacao !== undefined && corpo.situacao !== null && corpo.situacao !== "") {
+    const informada = validarSituacao(corpo.situacao);
+    if (!informada.ok) return informada;
+    situacao = informada.dados;
+  }
+
   return {
     ok: true,
     dados: {
+      grupo: texto(corpo.grupo),
       razaoSocial: razaoSocial.dados,
       nomeFantasia: texto(corpo.nomeFantasia),
       regime: regime.dados,
-      situacao: situacao.dados,
+      planoInterno: planoInterno.dados,
+      situacao,
       tributoLocal: tributoLocal.dados,
+      inscricaoMunicipal: inscricao(corpo.inscricaoMunicipal),
+      inscricaoEstadual: inscricao(corpo.inscricaoEstadual),
+      cep: cep.dados,
+      logradouro: texto(corpo.logradouro),
+      numero: texto(corpo.numero)?.slice(0, 20) ?? null,
+      complemento: texto(corpo.complemento),
+      bairro: texto(corpo.bairro),
       uf: uf.dados,
       municipio: texto(corpo.municipio),
+      responsavelOperacional: texto(corpo.responsavelOperacional),
+      socioAdmNome: texto(corpo.socioAdmNome),
+      socioAdmCpf: socioAdmCpf.dados,
       inicioAtividade,
       userId: texto(corpo.userId),
       responsavelId: texto(corpo.responsavelId),
@@ -338,7 +498,13 @@ export function validarPayloadEmpresa(
  * `userId` ausente mantém o que está gravado.
  */
 export function validarAtualizacaoEmpresa(
-  body: unknown
+  body: unknown,
+  /**
+   * CNPJ gravado hoje. A rota passa porque só ela leu a empresa, e sem isso o
+   * recálculo de `situacao` não sabe distinguir empresa em abertura de empresa
+   * com CNPJ — e marcaria uma empresa sem CNPJ como ATIVA ao mudar o plano.
+   */
+  contexto: { cnpjAtual?: string | null; planoAtual?: string | null } = {}
 ): ResultadoValidacao<AtualizacaoEmpresa> {
   const corpo = lerCorpo(body);
   if (!corpo) {
@@ -351,6 +517,12 @@ export function validarAtualizacaoEmpresa(
     const razaoSocial = validarRazaoSocial(corpo.razaoSocial);
     if (!razaoSocial.ok) return razaoSocial;
     dados.razaoSocial = razaoSocial.dados;
+  }
+
+  if ("planoInterno" in corpo) {
+    const planoInterno = validarPlanoInterno(corpo.planoInterno);
+    if (!planoInterno.ok) return planoInterno;
+    dados.planoInterno = planoInterno.dados;
   }
 
   if ("situacao" in corpo) {
@@ -373,13 +545,82 @@ export function validarAtualizacaoEmpresa(
     dados.uf = uf.dados;
   }
 
+  if ("cep" in corpo) {
+    const cep = validarCep(corpo.cep);
+    if (!cep.ok) return cep;
+    dados.cep = cep.dados;
+  }
+
+  if ("socioAdmCpf" in corpo) {
+    const cpf = validarSocioAdmCpf(corpo.socioAdmCpf);
+    if (!cpf.ok) return cpf;
+    dados.socioAdmCpf = cpf.dados;
+  }
+
+  if ("cnpj" in corpo) {
+    const cnpj = normalizarCnpjOpcional(corpo.cnpj);
+    if (!cnpj.ok) return { ok: false, erro: cnpj.erro, campo: "cnpj" };
+    dados.cnpj = cnpj.digitos;
+  }
+
+  if ("grupo" in corpo) dados.grupo = texto(corpo.grupo);
   if ("nomeFantasia" in corpo) dados.nomeFantasia = texto(corpo.nomeFantasia);
+  if ("inscricaoMunicipal" in corpo) {
+    dados.inscricaoMunicipal = inscricao(corpo.inscricaoMunicipal);
+  }
+  if ("inscricaoEstadual" in corpo) {
+    dados.inscricaoEstadual = inscricao(corpo.inscricaoEstadual);
+  }
+  if ("logradouro" in corpo) dados.logradouro = texto(corpo.logradouro);
+  if ("numero" in corpo) {
+    dados.numero = texto(corpo.numero)?.slice(0, 20) ?? null;
+  }
+  if ("complemento" in corpo) dados.complemento = texto(corpo.complemento);
+  if ("bairro" in corpo) dados.bairro = texto(corpo.bairro);
   if ("municipio" in corpo) dados.municipio = texto(corpo.municipio);
+  if ("responsavelOperacional" in corpo) {
+    dados.responsavelOperacional = texto(corpo.responsavelOperacional);
+  }
+  if ("socioAdmNome" in corpo) dados.socioAdmNome = texto(corpo.socioAdmNome);
   if ("userId" in corpo) dados.userId = texto(corpo.userId);
   if ("responsavelId" in corpo) {
     dados.responsavelId = texto(corpo.responsavelId);
   }
   if ("observacoes" in corpo) dados.observacoes = texto(corpo.observacoes);
+
+  /**
+   * Plano mudou e situação não veio no corpo: a situação é recalculada.
+   *
+   * É o que mantém as duas colunas coerentes sem obrigar cada chamador a saber
+   * da regra. Quem manda `situacao` explicitamente está afirmando um valor
+   * (ENCERRADA, tipicamente) e não é sobrescrito — a linha acima já gravou.
+   *
+   * O `temCnpj` sai do CNPJ que o próprio PATCH está gravando; se ele não mexe
+   * em CNPJ, vale o que já está no banco, que a rota informa em `contexto`.
+   */
+  const situacaoDerivavel =
+    dados.planoInterno !== undefined && dados.situacao === undefined;
+
+  if (situacaoDerivavel) {
+    const temCnpj =
+      dados.cnpj !== undefined
+        ? Boolean(dados.cnpj)
+        : Boolean(contexto.cnpjAtual);
+    dados.situacao = situacaoDoPlano(dados.planoInterno, temCnpj);
+  }
+
+  // Mesma coisa no sentido inverso: preencher o CNPJ de uma empresa em abertura
+  // tira ela de EM_ABERTURA. É o momento em que o processo de abertura terminou,
+  // e deixar a empresa marcada como "em abertura" depois de ter CNPJ a manteria
+  // fora da geração mensal de competência para sempre.
+  if (
+    !situacaoDerivavel &&
+    dados.situacao === undefined &&
+    dados.cnpj &&
+    !contexto.cnpjAtual
+  ) {
+    dados.situacao = situacaoDoPlano(contexto.planoAtual ?? null, true);
+  }
 
   return { ok: true, dados };
 }

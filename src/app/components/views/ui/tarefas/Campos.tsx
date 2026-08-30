@@ -24,7 +24,7 @@
  * flutua sobre o resto.
  */
 
-import { ReactNode, SelectHTMLAttributes, useId } from "react";
+import { ReactNode, SelectHTMLAttributes, useId, useState } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -32,6 +32,14 @@ import type {
 } from "react";
 import { ChevronDown, Loader2 } from "lucide-react";
 import Icone from "./Icone";
+import {
+  PLACEHOLDER_DOCUMENTO,
+  aplicarMascara,
+  digitosFaltando,
+  erroDocumento,
+  somenteDigitos,
+  type TipoDocumento,
+} from "@/lib/documento";
 
 /* --------------------------------- Wrapper -------------------------------- */
 
@@ -191,6 +199,102 @@ export function Area({
         {...props}
       />
     </Campo>
+  );
+}
+
+/* ----------------------------- Entrada com máscara ------------------------ */
+
+type EntradaDocumentoProps = {
+  /** Qual documento o campo guarda. Decide máscara, validação e placeholder. */
+  tipo: TipoDocumento;
+  rotulo: string;
+  /** Valor MASCARADO. O pai guarda com máscara e envia `somenteDigitos(valor)`. */
+  value: string;
+  onChange: (mascarado: string) => void;
+  required?: boolean;
+  /** Erro vindo do servidor. Tem prioridade sobre a validação local. */
+  erro?: string | null;
+  ajuda?: string;
+  placeholder?: string;
+  wrapperClassName?: string;
+  autoComplete?: string;
+  disabled?: boolean;
+};
+
+/**
+ * Campo de CPF, CNPJ, CEP ou telefone: mascara na digitação e valida antes de
+ * enviar.
+ *
+ * O formulário de empresa não tinha nada disso — o CNPJ tinha máscara copiada na
+ * tela e zero validação, e CPF, CEP e telefone nem existiam. O efeito prático
+ * era o operador digitar um dígito errado, salvar, e receber um 400 que ele lê
+ * como sistema quebrado.
+ *
+ * QUANDO O ERRO APARECE, que é a decisão que faz a diferença:
+ *
+ *   - enquanto falta dígito, nada. Acusar "CPF inválido" no terceiro dígito é
+ *     acusar a pessoa de errar enquanto ela está digitando certo.
+ *   - no instante em que o número FECHA e o verificador não confere, aparece.
+ *     Isso é o mais cedo possível sem ser antes da hora, e é onde a correção
+ *     custa um caractere.
+ *   - ao sair do campo incompleto, aparece dizendo quantos dígitos faltam.
+ *
+ * A máscara é reaplicada a cada tecla sobre os dígitos, e não editada em cima do
+ * texto: assim apagar do meio, colar da nota fiscal e digitar por cima da
+ * pontuação todos terminam no mesmo lugar.
+ *
+ * `inputMode="numeric"` para o teclado do celular abrir no numérico. Não é
+ * `type="number"` de propósito: número em `input[type=number]` aceita `e`, sinal
+ * e roda com a rolagem do mouse, e nenhum documento é um número — é uma sequência
+ * de dígitos com tamanho fixo.
+ */
+export function EntradaDocumento({
+  tipo,
+  rotulo,
+  value,
+  onChange,
+  required,
+  erro,
+  ajuda,
+  placeholder,
+  wrapperClassName,
+  autoComplete = "off",
+  disabled,
+}: EntradaDocumentoProps) {
+  const [tocado, setTocado] = useState(false);
+
+  const digitos = somenteDigitos(value);
+  const faltam = digitosFaltando(tipo, digitos);
+  const completo = digitos.length > 0 && faltam === 0;
+
+  // Mostra o erro local quando o número já fechou (aí é dígito verificador
+  // errado, e vale avisar na hora) ou quando a pessoa já saiu do campo.
+  const erroLocal =
+    completo || tocado
+      ? erroDocumento(tipo, digitos, { obrigatorio: required, rotulo })
+      : null;
+
+  return (
+    <Entrada
+      rotulo={rotulo}
+      required={required}
+      disabled={disabled}
+      inputMode="numeric"
+      autoComplete={autoComplete}
+      placeholder={placeholder ?? PLACEHOLDER_DOCUMENTO[tipo]}
+      wrapperClassName={wrapperClassName}
+      value={value}
+      erro={erro ?? erroLocal}
+      ajuda={ajuda}
+      onChange={(e) => {
+        onChange(aplicarMascara(tipo, e.target.value));
+        // Digitar depois de um erro limpa a marca de "já saiu do campo": a
+        // pessoa está corrigindo, e manter o vermelho enquanto ela conserta é
+        // ruído.
+        if (tocado) setTocado(false);
+      }}
+      onBlur={() => setTocado(true)}
+    />
   );
 }
 

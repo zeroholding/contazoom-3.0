@@ -6,6 +6,9 @@ networks:
 volumes:
   contazoom_postgres_data:
   contazoom_redis_data:
+  # Mesmo motivo do compose de produção: sem volume, arquivo enviado morre no
+  # próximo `docker compose up --build`.
+  contazoom_uploads:
 
 services:
   migrate:
@@ -29,6 +32,10 @@ services:
       - "3000:3000"
     env_file:
       - .env.dev
+    environment:
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - contazoom_uploads:/app/uploads
     depends_on:
       - postgres
       - redis

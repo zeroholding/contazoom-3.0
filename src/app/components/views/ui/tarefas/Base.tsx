@@ -899,6 +899,53 @@ export function Painel({
 }
 
 /**
+ * Seção de formulário dentro de modal.
+ *
+ * Existe porque formulário longo sem agrupamento é o que obriga a rolar: onze
+ * campos empilhados sem hierarquia não dizem onde uma ideia acaba e a outra
+ * começa, então o olho tem de ler todos para achar um. Com quatro blocos
+ * ("Identificação", "Endereço", "Pessoas", "Plano e tributação") o cadastro de
+ * empresa passou de três telas de rolagem para uma só.
+ *
+ * O ícone não é decoração: é o que deixa o bloco reconhecível de relance, e é
+ * SVG do lucide, nunca emoji. A hairline de topo separa sem gastar sombra nem
+ * fundo — mesmo vocabulário do resto do módulo, onde o que separa é borda.
+ *
+ * O primeiro bloco não leva hairline (`first:border-t-0`): linha logo abaixo do
+ * cabeçalho do modal viraria uma segunda borda paralela à dele.
+ */
+export function BlocoForm({
+  icone,
+  titulo,
+  descricao,
+  children,
+}: {
+  icone: string;
+  titulo: string;
+  descricao?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-4 border-t border-[var(--cz-hairline)] pt-5 first:border-t-0 first:pt-0">
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]">
+          <Icone nome={icone} className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="cz-titulo text-[13.5px] leading-5">{titulo}</h3>
+          {descricao && (
+            <p className="mt-0.5 max-w-3xl text-xs leading-5 text-[var(--cz-texto-suave)]">
+              {descricao}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+/**
  * Par rótulo/valor da ficha de detalhe.
  *
  * O rótulo era caixa alta de 11px com tracking aberto; virou cinza de 12.5px em

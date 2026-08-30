@@ -18,7 +18,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireInterno } from "@/lib/api-guard";
-import { REGIMES_VALIDOS, SITUACAO_EMPRESA } from "@/lib/tarefa-etapas";
+import {
+  PLANOS_QUE_GERAM_COMPETENCIA,
+  REGIMES_VALIDOS,
+} from "@/lib/tarefa-etapas";
 import {
   STATUS_VALIDOS,
   competenciaAnterior,
@@ -75,7 +78,16 @@ export async function GET(req: NextRequest) {
       bloqueiosAbertos,
     ] = await Promise.all([
       prisma.tarefaApuracao.count({ where: daCompetencia }),
-      prisma.empresa.count({ where: { situacao: SITUACAO_EMPRESA.ATIVA } }),
+      // Empresas que geram trabalho todo mês: mesmo critério de `abrir-mes`, que
+      // agora é o plano interno (Simples ou Presumido) mais ter CNPJ. Se este
+      // número divergisse de lá, o painel diria "12 empresas ativas" e a abertura
+      // criaria 9 competências, sem explicação.
+      prisma.empresa.count({
+        where: {
+          planoInterno: { in: PLANOS_QUE_GERAM_COMPETENCIA },
+          cnpj: { not: null },
+        },
+      }),
       // Em andamento = tem trabalho para fazer agora: nem encerrada, nem travada.
       prisma.tarefaApuracao.count({
         where: { ...daCompetencia, concluidaEm: null, bloqueada: false },

@@ -8,6 +8,11 @@ networks:
 volumes:
   contazoom_postgres_data:
   contazoom_redis_data:
+  # Arquivo enviado pelo sistema (documentos do cliente e anexos de tarefa) vai
+  # para disco, em `UPLOAD_DIR`. Sem este volume o diretório vive dentro do
+  # container e TODO arquivo desaparece no próximo deploy — a linha no banco
+  # continua lá, apontando para um arquivo que não existe mais.
+  contazoom_uploads:
 
 services:
   migrate:
@@ -24,6 +29,13 @@ services:
     restart: always
     env_file:
       - .env.prod
+    environment:
+      # Precisa casar com o ponto de montagem abaixo. O código cai em
+      # `process.cwd()/uploads` quando a variável não existe, o que dentro do
+      # container é justamente o caminho que não persiste.
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - contazoom_uploads:/app/uploads
     depends_on:
       - postgres
       - redis

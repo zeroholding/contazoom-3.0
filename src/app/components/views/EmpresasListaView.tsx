@@ -44,6 +44,7 @@ import type {
 import { dataCurta, plural } from "@/app/components/views/ui/tarefas/formato";
 import {
   Aviso,
+  BlocoForm,
   Cabecalho,
   CartaoKpi,
   Carregando,
@@ -55,23 +56,25 @@ import {
   Area,
   Botao,
   Entrada,
+  EntradaDocumento,
   Escolha,
   type Opcao,
 } from "@/app/components/views/ui/tarefas/Campos";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
 import {
+  SeloPlanoInterno,
   SeloRegime,
-  SeloSituacaoEmpresa,
 } from "@/app/components/views/ui/tarefas/Selos";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
 import {
+  PLANO_INTERNO,
+  PLANO_INTERNO_LABEL,
   REGIME,
   REGIME_LABEL,
-  SITUACAO_EMPRESA,
-  SITUACAO_EMPRESA_LABEL,
   TRIBUTO_LOCAL,
   TRIBUTO_LOCAL_LABEL,
 } from "@/lib/tarefa-etapas";
+import { somenteDigitos } from "@/lib/documento";
 import { useSessao } from "@/hooks/useSessao";
 
 /* -------------------------------------------------------------------------- */
@@ -101,7 +104,7 @@ type UsuarioAdmin = {
 const LIMITE = 50;
 
 const REGIMES = Object.values(REGIME) as string[];
-const SITUACOES = Object.values(SITUACAO_EMPRESA) as string[];
+const PLANOS = Object.values(PLANO_INTERNO) as string[];
 const TRIBUTOS = Object.values(TRIBUTO_LOCAL) as string[];
 
 const OPCOES_REGIME: Opcao[] = REGIMES.map((valor) => ({
@@ -109,9 +112,9 @@ const OPCOES_REGIME: Opcao[] = REGIMES.map((valor) => ({
   texto: REGIME_LABEL[valor] ?? valor,
 }));
 
-const OPCOES_SITUACAO: Opcao[] = SITUACOES.map((valor) => ({
+const OPCOES_PLANO: Opcao[] = PLANOS.map((valor) => ({
   valor,
-  texto: SITUACAO_EMPRESA_LABEL[valor] ?? valor,
+  texto: PLANO_INTERNO_LABEL[valor] ?? valor,
 }));
 
 const OPCOES_TRIBUTO: Opcao[] = TRIBUTOS.map((valor) => ({
@@ -119,21 +122,34 @@ const OPCOES_TRIBUTO: Opcao[] = TRIBUTOS.map((valor) => ({
   texto: TRIBUTO_LOCAL_LABEL[valor] ?? valor,
 }));
 
-/** Cada KPI é uma situação. Ordem de leitura: o que trabalha primeiro. */
-const KPIS: { situacao: string; titulo: string; icone: string; tom: "verde" | "azul" | "ambar" | "cinza" }[] = [
-  { situacao: SITUACAO_EMPRESA.ATIVA, titulo: "Ativas", icone: "CheckCircle2", tom: "verde" },
-  { situacao: SITUACAO_EMPRESA.EM_ABERTURA, titulo: "Em abertura", icone: "Hourglass", tom: "azul" },
-  { situacao: SITUACAO_EMPRESA.SUSPENSA, titulo: "Suspensas", icone: "AlertTriangle", tom: "ambar" },
-  { situacao: SITUACAO_EMPRESA.ENCERRADA, titulo: "Encerradas", icone: "Ban", tom: "cinza" },
+/**
+ * Um indicador por PLANO INTERNO, não mais por situação.
+ *
+ * A situação ("Ativa/Suspensa/Encerrada/Em abertura") saiu da tela: descrevia um
+ * estado que ninguém consultava. A pergunta do dia a dia é quantos clientes há em
+ * cada plano — e é o plano que decide quem entra na abertura mensal de
+ * competência. Os dois primeiros indicadores somam exatamente as empresas que
+ * geram trabalho todo mês.
+ */
+const KPIS: {
+  plano: string;
+  titulo: string;
+  icone: string;
+  tom: "verde" | "azul" | "ambar" | "cinza";
+}[] = [
+  { plano: PLANO_INTERNO.PLANO_SIMPLES, titulo: "Plano Simples", icone: "BadgeCheck", tom: "verde" },
+  { plano: PLANO_INTERNO.PLANO_PRESUMIDO, titulo: "Plano Presumido", icone: "BadgeCheck", tom: "azul" },
+  { plano: PLANO_INTERNO.PLANO_STANDBY, titulo: "Plano Standby", icone: "PauseCircle", tom: "ambar" },
+  { plano: PLANO_INTERNO.SEM_PLANO_SUSPENSA, titulo: "Sem plano", icone: "Ban", tom: "cinza" },
 ];
 
 /* -------------------------------------------------------------------------- */
 /*                                  Filtros                                   */
 /* -------------------------------------------------------------------------- */
 
-type Filtros = { regime: string; situacao: string; busca: string };
+type Filtros = { regime: string; planoInterno: string; busca: string };
 
-const FILTROS_VAZIOS: Filtros = { regime: "", situacao: "", busca: "" };
+const FILTROS_VAZIOS: Filtros = { regime: "", planoInterno: "", busca: "" };
 
 /**
  * Lê os filtros da URL descartando valor inválido.
@@ -141,56 +157,66 @@ const FILTROS_VAZIOS: Filtros = { regime: "", situacao: "", busca: "" };
  * A rota devolve 400 para `regime=QUALQUERCOISA`, e um link colado à mão viraria
  * faixa de erro no lugar da lista. Filtrar aqui transforma link torto em lista
  * completa, que é o comportamento menos surpreendente.
+ *
+ * `situacao=` na URL é aceito e traduzido para plano: links de "as suspensas do
+ * Simples" já foram colados em conversa antes desta mudança, e abrir num filtro
+ * vazio seria pior que abrir no equivalente mais próximo.
  */
 function lerFiltros(params: URLSearchParams | null): Filtros {
   if (!params) return FILTROS_VAZIOS;
   const regime = params.get("regime") ?? "";
-  const situacao = params.get("situacao") ?? "";
+  const plano = params.get("planoInterno") ?? "";
+  const situacaoLegado = params.get("situacao") ?? "";
+
+  const planoDoLegado =
+    situacaoLegado === "SUSPENSA" || situacaoLegado === "ENCERRADA"
+      ? PLANO_INTERNO.SEM_PLANO_SUSPENSA
+      : situacaoLegado === "EM_ABERTURA"
+        ? PLANO_INTERNO.PLANO_STANDBY
+        : "";
+
   return {
     regime: REGIMES.includes(regime) ? regime : "",
-    situacao: SITUACOES.includes(situacao) ? situacao : "",
+    planoInterno: PLANOS.includes(plano) ? plano : planoDoLegado,
     busca: params.get("busca") ?? "",
   };
 }
 
 function temFiltro(filtros: Filtros): boolean {
-  return !!filtros.regime || !!filtros.situacao || !!filtros.busca.trim();
+  return !!filtros.regime || !!filtros.planoInterno || !!filtros.busca.trim();
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                   CNPJ                                     */
-/* -------------------------------------------------------------------------- */
-
-/** Máscara progressiva 00.000.000/0000-00. Só para os olhos: o envio é digitado. */
-function mascaraCnpj(valor: string): string {
-  const d = valor.replace(/\D/g, "").slice(0, 14);
-  if (d.length <= 2) return d;
-  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
-  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
-  if (d.length <= 12) {
-    return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
-  }
-  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(
-    8,
-    12
-  )}-${d.slice(12)}`;
-}
-
-const digitosDe = (valor: string) => valor.replace(/\D/g, "");
 
 /* -------------------------------------------------------------------------- */
 /*                              Formulário novo                               */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Os dez campos que o escritório pediu, na ordem em que pediu, mais os três que
+ * o fluxo de etapas já exigia (regime, tributo local, responsável interno).
+ *
+ * Documento fica no estado COM máscara e é enviado com `somenteDigitos`. O banco
+ * guarda 14 dígitos de CNPJ, 11 de CPF e 8 de CEP; enviar formatado quebraria a
+ * unicidade do CNPJ — o mesmo número com e sem ponto viraria duas empresas.
+ */
 type Formulario = {
-  cnpj: string;
+  grupo: string;
   razaoSocial: string;
-  regime: string;
-  nomeFantasia: string;
-  situacao: string;
-  tributoLocal: string;
-  uf: string;
+  cnpj: string;
+  inscricaoMunicipal: string;
+  inscricaoEstadual: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
   municipio: string;
+  uf: string;
+  responsavelOperacional: string;
+  socioAdmNome: string;
+  socioAdmCpf: string;
+  regime: string;
+  planoInterno: string;
+  tributoLocal: string;
   inicioAtividade: string;
   responsavelId: string;
   userId: string;
@@ -199,14 +225,24 @@ type Formulario = {
 
 function formularioVazio(): Formulario {
   return {
-    cnpj: "",
+    grupo: "",
     razaoSocial: "",
-    regime: "",
-    nomeFantasia: "",
-    situacao: SITUACAO_EMPRESA.ATIVA,
-    tributoLocal: TRIBUTO_LOCAL.AMBOS,
-    uf: "",
+    cnpj: "",
+    inscricaoMunicipal: "",
+    inscricaoEstadual: "",
+    cep: "",
+    logradouro: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
     municipio: "",
+    uf: "",
+    responsavelOperacional: "",
+    socioAdmNome: "",
+    socioAdmCpf: "",
+    regime: "",
+    planoInterno: PLANO_INTERNO.PLANO_SIMPLES,
+    tributoLocal: TRIBUTO_LOCAL.AMBOS,
     inicioAtividade: "",
     responsavelId: "",
     userId: "",
@@ -290,7 +326,7 @@ function Conteudo() {
     () =>
       query({
         regime: filtros.regime,
-        situacao: filtros.situacao,
+        planoInterno: filtros.planoInterno,
         busca: filtros.busca.trim(),
       }),
     [filtros]
@@ -318,7 +354,7 @@ function Conteudo() {
 
     const url = `/api/empresas${query({
       regime: filtros.regime,
-      situacao: filtros.situacao,
+      planoInterno: filtros.planoInterno,
       busca: filtros.busca.trim(),
       page: pagina,
       limit: LIMITE,
@@ -360,12 +396,18 @@ function Conteudo() {
 
   const contagem = useMemo(() => {
     const mapa: Record<string, number> = {};
-    for (const situacao of SITUACOES) mapa[situacao] = 0;
+    for (const plano of PLANOS) mapa[plano] = 0;
     for (const empresa of empresas) {
-      mapa[empresa.situacao] = (mapa[empresa.situacao] ?? 0) + 1;
+      mapa[empresa.planoInterno] = (mapa[empresa.planoInterno] ?? 0) + 1;
     }
     return mapa;
   }, [empresas]);
+
+  /** Quantas empresas desta página ainda não têm CNPJ (estão em abertura). */
+  const semCnpj = useMemo(
+    () => empresas.filter((empresa) => !empresa.cnpj).length,
+    [empresas]
+  );
 
   // Só quando a página cobre o total filtrado os números fecham com o total.
   const kpiParcial = paginacao.total > empresas.length;
@@ -375,8 +417,10 @@ function Conteudo() {
     if (filtros.regime) {
       partes.push(REGIME_LABEL[filtros.regime] ?? filtros.regime);
     }
-    if (filtros.situacao) {
-      partes.push(SITUACAO_EMPRESA_LABEL[filtros.situacao] ?? filtros.situacao);
+    if (filtros.planoInterno) {
+      partes.push(
+        PLANO_INTERNO_LABEL[filtros.planoInterno] ?? filtros.planoInterno
+      );
     }
     if (filtros.busca.trim()) partes.push(`busca "${filtros.busca.trim()}"`);
     return partes.length > 0 ? partes.join(" · ") : "toda a carteira";
@@ -469,12 +513,15 @@ function Conteudo() {
     setCampoInvalido(null);
     setDuplicadaId(null);
 
-    const digitos = digitosDe(form.cnpj);
-    if (digitos.length !== 14) {
-      setCampoInvalido("cnpj");
-      setErroForm("Informe os 14 dígitos do CNPJ.");
-      return;
-    }
+    /**
+     * Razão social é o ÚNICO campo obrigatório de verdade, junto com regime.
+     *
+     * CNPJ deixou de ser: a empresa em abertura é cadastrada sem ele, e é
+     * justamente ela que precisa existir para o processo de abertura poder ser
+     * atrelado a uma empresa. Os campos de documento se validam sozinhos
+     * (`EntradaDocumento` acusa DV errado no instante em que o número fecha), e a
+     * rota revalida tudo — o cliente nunca é autoridade.
+     */
     if (form.razaoSocial.trim().length < 2) {
       setCampoInvalido("razaoSocial");
       setErroForm("A razão social deve ter pelo menos 2 caracteres.");
@@ -486,18 +533,52 @@ function Conteudo() {
       return;
     }
 
+    const cnpjDigitos = somenteDigitos(form.cnpj);
+    if (cnpjDigitos.length > 0 && cnpjDigitos.length !== 14) {
+      setCampoInvalido("cnpj");
+      setErroForm(
+        "Complete o CNPJ ou deixe em branco, se a empresa ainda não foi aberta."
+      );
+      return;
+    }
+
+    const cpfDigitos = somenteDigitos(form.socioAdmCpf);
+    if (cpfDigitos.length > 0 && cpfDigitos.length !== 11) {
+      setCampoInvalido("socioAdmCpf");
+      setErroForm("Complete o CPF do sócio administrador ou deixe em branco.");
+      return;
+    }
+
+    const cepDigitos = somenteDigitos(form.cep);
+    if (cepDigitos.length > 0 && cepDigitos.length !== 8) {
+      setCampoInvalido("cep");
+      setErroForm("Complete o CEP ou deixe em branco.");
+      return;
+    }
+
     setEnviando(true);
     try {
       const resposta = await apiPost<RespostaCriacao>("/api/empresas", {
-        // Só os dígitos: ver a nota 3 do topo do arquivo.
-        cnpj: digitos,
+        // Só os dígitos: ver a nota 3 do topo do arquivo. Vazio vai como
+        // `undefined` para a rota tratar como "não informado", não como "".
+        cnpj: cnpjDigitos || undefined,
+        grupo: form.grupo.trim(),
         razaoSocial: form.razaoSocial.trim(),
         regime: form.regime,
-        nomeFantasia: form.nomeFantasia.trim(),
-        situacao: form.situacao,
+        planoInterno: form.planoInterno,
         tributoLocal: form.tributoLocal,
-        uf: form.uf.trim().toUpperCase(),
+        inscricaoMunicipal: form.inscricaoMunicipal.trim(),
+        inscricaoEstadual: form.inscricaoEstadual.trim(),
+        cep: cepDigitos || undefined,
+        logradouro: form.logradouro.trim(),
+        numero: form.numero.trim(),
+        complemento: form.complemento.trim(),
+        bairro: form.bairro.trim(),
         municipio: form.municipio.trim(),
+        uf: form.uf.trim().toUpperCase(),
+        responsavelOperacional: form.responsavelOperacional.trim(),
+        socioAdmNome: form.socioAdmNome.trim(),
+        socioAdmCpf: cpfDigitos || undefined,
         inicioAtividade: form.inicioAtividade || undefined,
         responsavelId: form.responsavelId,
         // Campo escondido nunca é enviado: enviar "" limparia o vínculo.
@@ -581,27 +662,42 @@ function Conteudo() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {KPIS.map((kpi) => (
           <CartaoKpi
-            key={kpi.situacao}
+            key={kpi.plano}
             titulo={kpi.titulo}
-            valor={contagem[kpi.situacao] ?? 0}
+            valor={contagem[kpi.plano] ?? 0}
             icone={kpi.icone}
             tom={kpi.tom}
-            detalhe={
-              filtroAtivo ? "No filtro atual" : "Em toda a carteira"
-            }
+            detalhe={filtroAtivo ? "No filtro atual" : "Em toda a carteira"}
           />
         ))}
       </div>
 
-      <p className="flex items-start gap-1.5 text-xs text-gray-500">
-        <Icone nome="Info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>
-          Os contadores refletem o filtro atual
-          {kpiParcial
-            ? ` e somam apenas as ${empresas.length} empresas desta página, de ${paginacao.total} encontradas. Filtre ou navegue pelas páginas para ver o restante.`
-            : ", somando todas as empresas encontradas."}
-        </span>
-      </p>
+      <div className="space-y-1.5">
+        <p className="flex items-start gap-1.5 text-xs text-gray-500">
+          <Icone nome="Info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Os contadores refletem o filtro atual
+            {kpiParcial
+              ? ` e somam apenas as ${empresas.length} empresas desta página, de ${paginacao.total} encontradas. Filtre ou navegue pelas páginas para ver o restante.`
+              : ", somando todas as empresas encontradas."}{" "}
+            Só <strong className="font-semibold">Plano Simples</strong> e{" "}
+            <strong className="font-semibold">Plano Presumido</strong> entram na
+            abertura mensal de competência.
+          </span>
+        </p>
+        {semCnpj > 0 && (
+          <p className="flex items-start gap-1.5 text-xs text-gray-500">
+            <Icone nome="Hourglass" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              {semCnpj === 1
+                ? "1 empresa desta página ainda não tem CNPJ"
+                : `${semCnpj} empresas desta página ainda não têm CNPJ`}
+              . Elas ficam fora da abertura mensal até o CNPJ ser preenchido, e
+              existem para o processo de abertura poder ser atrelado a elas.
+            </span>
+          </p>
+        )}
+      </div>
 
       {/* ------------------------------ Filtros ----------------------------- */}
 
@@ -624,20 +720,24 @@ function Conteudo() {
             value={filtros.regime}
             onChange={(e) => alterar({ regime: e.target.value })}
           />
+          {/* Rótulo "Situação", opções de PLANO INTERNO: é o que o escritório
+              pediu, e é coerente — o plano é o que agora diz a situação
+              operacional da empresa. */}
           <Escolha
             rotulo="Situação"
-            vazio="Todas as situações"
-            opcoes={OPCOES_SITUACAO}
-            value={filtros.situacao}
-            onChange={(e) => alterar({ situacao: e.target.value })}
+            vazio="Todos os planos"
+            opcoes={OPCOES_PLANO}
+            value={filtros.planoInterno}
+            onChange={(e) => alterar({ planoInterno: e.target.value })}
+            ajuda="Plano interno ContaZoom. Simples e Presumido geram competência todo mês."
           />
           <Entrada
             rotulo="Buscar empresa"
             type="search"
-            placeholder="Razão social, nome fantasia ou CNPJ"
+            placeholder="Razão social, grupo, CNPJ, sócio ou CPF"
             value={textoBusca}
             onChange={(e) => setTextoBusca(e.target.value)}
-            ajuda="O CNPJ pode ser colado com pontuação"
+            ajuda="CNPJ e CPF podem ser colados com pontuação"
           />
         </div>
       </Painel>
@@ -688,7 +788,11 @@ function Conteudo() {
       ) : (
         <Painel className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-left text-sm">
+            {/* Subiu de 1120 para 1340 com a coluna de sócio administrador. A
+                tabela rola na horizontal em tela estreita, e é o certo aqui:
+                esconder coluna faria a mesma tela mostrar dados diferentes
+                dependendo do monitor. */}
+            <table className="w-full min-w-[1340px] text-left text-sm">
               <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
                   <th scope="col" className="px-5 py-3">
@@ -702,6 +806,9 @@ function Conteudo() {
                   </th>
                   <th scope="col" className="px-5 py-3">
                     Situação
+                  </th>
+                  <th scope="col" className="px-5 py-3">
+                    Sócio administrador
                   </th>
                   <th scope="col" className="px-5 py-3">
                     UF / Município
@@ -745,20 +852,55 @@ function Conteudo() {
                       >
                         {empresa.razaoSocial}
                       </Link>
-                      {empresa.nomeFantasia && (
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          {empresa.nomeFantasia}
+                      {/* Grupo antes de nome fantasia: numa carteira com vários
+                          CNPJs do mesmo dono, é o grupo que identifica de quem é
+                          a empresa. */}
+                      {(empresa.grupo || empresa.nomeFantasia) && (
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-500">
+                          {empresa.grupo && (
+                            <span className="inline-flex items-center gap-1 font-semibold text-gray-600">
+                              <Icone nome="Layers" className="h-3 w-3 shrink-0" />
+                              {empresa.grupo}
+                            </span>
+                          )}
+                          {empresa.grupo && empresa.nomeFantasia && <span>·</span>}
+                          {empresa.nomeFantasia && (
+                            <span>{empresa.nomeFantasia}</span>
+                          )}
                         </p>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3 font-mono text-xs text-gray-600">
-                      {empresa.cnpjFormatado}
+                      {empresa.cnpjFormatado ?? (
+                        // Empresa em abertura. O texto diz o motivo, porque um
+                        // travessão sozinho parece cadastro incompleto.
+                        <span className="inline-flex items-center gap-1 font-sans text-xs font-semibold text-gray-400">
+                          <Icone nome="Hourglass" className="h-3.5 w-3.5" />
+                          Em abertura
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <SeloRegime regime={empresa.regime} completo />
                     </td>
                     <td className="px-5 py-3">
-                      <SeloSituacaoEmpresa situacao={empresa.situacao} />
+                      <SeloPlanoInterno plano={empresa.planoInterno} />
+                    </td>
+                    <td className="px-5 py-3 text-gray-600">
+                      {empresa.socioAdmNome ? (
+                        <>
+                          <span className="font-medium text-gray-900">
+                            {empresa.socioAdmNome}
+                          </span>
+                          {empresa.socioAdmCpfFormatado && (
+                            <p className="mt-0.5 font-mono text-xs text-gray-500">
+                              {empresa.socioAdmCpfFormatado}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-gray-600">
                       {empresa.uf || empresa.municipio ? (
@@ -810,12 +952,21 @@ function Conteudo() {
 
       {/* --------------------------- Nova empresa --------------------------- */}
 
+      {/*
+        Modal `2xl` (1152px) e grade de três colunas.
+
+        Antes era `lg` (672px) em coluna única com onze campos, o que dava três
+        telas de rolagem — e rolagem em modal é o pior lugar para ela existir: a
+        pessoa perde o rodapé com o botão de salvar e não sabe se o formulário
+        acabou. Com a largura certa e os campos agrupados por assunto, o cadastro
+        inteiro cabe de uma vez.
+      */}
       <Modal
         aberto={modalNova}
         titulo="Nova empresa"
         icone="Building2"
-        largura="lg"
-        descricao="O regime escolhido aqui define o fluxo de etapas de toda competência aberta para esta empresa."
+        largura="2xl"
+        descricao="Cadastre a empresa antes de abrir competência ou processo — os dois só podem ser atrelados a uma empresa que já existe aqui."
         onFechar={() => setModalNova(false)}
         rodape={
           <>
@@ -837,152 +988,275 @@ function Conteudo() {
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-6">
           {erroForm && !campoInvalido && <Aviso mensagem={erroForm} />}
 
           {duplicadaId && (
-            <Aviso
-              tom="atencao"
-              mensagem="Este CNPJ já está cadastrado. Abra a empresa existente para conferir antes de criar outra."
-            />
-          )}
-          {duplicadaId && (
-            <Link
-              href={`/admin/empresas/${duplicadaId}`}
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-orange-600 transition-colors hover:text-orange-700"
-            >
-              <Icone nome="ExternalLink" className="h-4 w-4" />
-              Abrir a empresa já cadastrada
-            </Link>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Entrada
-              rotulo="CNPJ"
-              required
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="00.000.000/0000-00"
-              value={form.cnpj}
-              erro={erroDe("cnpj")}
-              ajuda="Pode colar com pontuação. É a identidade da empresa e não muda depois."
-              onChange={(e) => editar({ cnpj: mascaraCnpj(e.target.value) })}
-            />
-            <Escolha
-              rotulo="Regime tributário"
-              required
-              vazio="Selecione o regime"
-              opcoes={OPCOES_REGIME}
-              value={form.regime}
-              erro={erroDe("regime")}
-              ajuda="Simples Nacional tem 10 etapas por competência; Lucro Presumido, 14."
-              onChange={(e) => editar({ regime: e.target.value })}
-            />
-          </div>
-
-          <Entrada
-            rotulo="Razão social"
-            required
-            value={form.razaoSocial}
-            erro={erroDe("razaoSocial")}
-            onChange={(e) => editar({ razaoSocial: e.target.value })}
-          />
-
-          <Entrada
-            rotulo="Nome fantasia"
-            value={form.nomeFantasia}
-            erro={erroDe("nomeFantasia")}
-            ajuda="Opcional. Quando existe, é o nome usado nos cartões e nas listas."
-            onChange={(e) => editar({ nomeFantasia: e.target.value })}
-          />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Escolha
-              rotulo="Situação"
-              opcoes={OPCOES_SITUACAO}
-              value={form.situacao}
-              erro={erroDe("situacao")}
-              ajuda="Somente empresa ativa entra na abertura mensal de competência."
-              onChange={(e) => editar({ situacao: e.target.value })}
-            />
-            <Escolha
-              rotulo="Tributo local"
-              opcoes={OPCOES_TRIBUTO}
-              value={form.tributoLocal}
-              erro={erroDe("tributoLocal")}
-              ajuda="Ajusta o título da etapa de ICMS/ISS no Lucro Presumido: comércio apura ICMS, serviço apura ISS."
-              onChange={(e) => editar({ tributoLocal: e.target.value })}
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Entrada
-              rotulo="UF"
-              maxLength={2}
-              placeholder="SP"
-              value={form.uf}
-              erro={erroDe("uf")}
-              onChange={(e) =>
-                editar({ uf: e.target.value.toUpperCase().slice(0, 2) })
-              }
-            />
-            <Entrada
-              rotulo="Município"
-              wrapperClassName="sm:col-span-2"
-              value={form.municipio}
-              erro={erroDe("municipio")}
-              onChange={(e) => editar({ municipio: e.target.value })}
-            />
-          </div>
-
-          <Entrada
-            rotulo="Início de atividade"
-            type="date"
-            value={form.inicioAtividade}
-            erro={erroDe("inicioAtividade")}
-            ajuda="Quando informada, passa a ser o início de vigência da primeira linha do histórico de regime."
-            onChange={(e) => editar({ inicioAtividade: e.target.value })}
-          />
-
-          <Escolha
-            rotulo="Responsável interno"
-            vazio="Sem responsável definido"
-            opcoes={opcoesResponsavel}
-            value={form.responsavelId}
-            erro={erroDe("responsavelId")}
-            ajuda="Quem responde pela empresa no escritório."
-            onChange={(e) => editar({ responsavelId: e.target.value })}
-          />
-
-          {semAcessoClientes ? (
-            <p className="flex items-start gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
-              <Icone nome="Lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                Somente administrador vincula o login do cliente à empresa. O
-                cadastro segue normalmente sem esse vínculo, e um administrador
-                pode acrescentá-lo depois na tela da empresa.
-              </span>
-            </p>
-          ) : (
-            <Escolha
-              rotulo="Cliente vinculado"
-              vazio="Nenhum login vinculado"
-              opcoes={opcoesCliente}
-              value={form.userId}
-              erro={erroDe("userId")}
-              ajuda="Login pelo qual o cliente acessa o próprio painel. Opcional."
-              onChange={(e) => editar({ userId: e.target.value })}
-            />
+            <div className="space-y-2">
+              <Aviso
+                tom="atencao"
+                mensagem="Este CNPJ já está cadastrado. Abra a empresa existente para conferir antes de criar outra."
+              />
+              <Link
+                href={`/admin/empresas/${duplicadaId}`}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-orange-600 transition-colors hover:text-orange-700"
+              >
+                <Icone nome="ExternalLink" className="h-4 w-4" />
+                Abrir a empresa já cadastrada
+              </Link>
+            </div>
           )}
 
-          <Area
-            rotulo="Observações"
-            rows={3}
-            value={form.observacoes}
-            erro={erroDe("observacoes")}
-            placeholder="Particularidades do cliente, combinados de prazo, contatos"
-            onChange={(e) => editar({ observacoes: e.target.value })}
-          />
+          {/* ------------------------ Identificação ------------------------ */}
+
+          <BlocoForm
+            icone="Building2"
+            titulo="Identificação"
+            descricao="Quem é a empresa. Só a razão social é obrigatória: quem está em abertura ainda não tem CNPJ nem inscrição."
+          >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Entrada
+                rotulo="Nome do grupo"
+                wrapperClassName="lg:col-span-1"
+                value={form.grupo}
+                erro={erroDe("grupo")}
+                placeholder="Grupo Xpto"
+                ajuda="Agrupa os CNPJs do mesmo dono. Opcional."
+                onChange={(e) => editar({ grupo: e.target.value })}
+              />
+              <Entrada
+                rotulo="Razão social"
+                required
+                wrapperClassName="lg:col-span-2"
+                value={form.razaoSocial}
+                erro={erroDe("razaoSocial")}
+                onChange={(e) => editar({ razaoSocial: e.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <EntradaDocumento
+                tipo="cnpj"
+                rotulo="CNPJ"
+                value={form.cnpj}
+                erro={erroDe("cnpj")}
+                ajuda="Deixe em branco se a empresa ainda não foi aberta. Depois de preenchido não muda."
+                onChange={(cnpj) => editar({ cnpj })}
+              />
+              <Entrada
+                rotulo="Inscrição municipal"
+                value={form.inscricaoMunicipal}
+                erro={erroDe("inscricaoMunicipal")}
+                ajuda='Aceita "ISENTO".'
+                onChange={(e) =>
+                  editar({ inscricaoMunicipal: e.target.value })
+                }
+              />
+              <Entrada
+                rotulo="Inscrição estadual"
+                value={form.inscricaoEstadual}
+                erro={erroDe("inscricaoEstadual")}
+                ajuda='Aceita "ISENTO".'
+                onChange={(e) => editar({ inscricaoEstadual: e.target.value })}
+              />
+            </div>
+          </BlocoForm>
+
+          {/* -------------------------- Endereço --------------------------- */}
+
+          <BlocoForm
+            icone="MapPin"
+            titulo="Endereço completo"
+            descricao="É o endereço que vai para a Junta e para a Prefeitura. CEP errado volta como exigência semanas depois."
+          >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+              <EntradaDocumento
+                tipo="cep"
+                rotulo="CEP"
+                wrapperClassName="lg:col-span-2"
+                value={form.cep}
+                erro={erroDe("cep")}
+                onChange={(cep) => editar({ cep })}
+              />
+              <Entrada
+                rotulo="Logradouro"
+                wrapperClassName="lg:col-span-3"
+                value={form.logradouro}
+                erro={erroDe("logradouro")}
+                placeholder="Avenida Paulista"
+                onChange={(e) => editar({ logradouro: e.target.value })}
+              />
+              <Entrada
+                rotulo="Número"
+                wrapperClassName="lg:col-span-1"
+                maxLength={20}
+                value={form.numero}
+                erro={erroDe("numero")}
+                placeholder="1000"
+                onChange={(e) => editar({ numero: e.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+              <Entrada
+                rotulo="Complemento"
+                wrapperClassName="lg:col-span-2"
+                value={form.complemento}
+                erro={erroDe("complemento")}
+                placeholder="Sala 42"
+                onChange={(e) => editar({ complemento: e.target.value })}
+              />
+              <Entrada
+                rotulo="Bairro"
+                wrapperClassName="lg:col-span-2"
+                value={form.bairro}
+                erro={erroDe("bairro")}
+                onChange={(e) => editar({ bairro: e.target.value })}
+              />
+              <Entrada
+                rotulo="Município"
+                wrapperClassName="lg:col-span-1"
+                value={form.municipio}
+                erro={erroDe("municipio")}
+                onChange={(e) => editar({ municipio: e.target.value })}
+              />
+              <Entrada
+                rotulo="UF"
+                wrapperClassName="lg:col-span-1"
+                maxLength={2}
+                placeholder="SP"
+                value={form.uf}
+                erro={erroDe("uf")}
+                onChange={(e) =>
+                  editar({ uf: e.target.value.toUpperCase().slice(0, 2) })
+                }
+              />
+            </div>
+          </BlocoForm>
+
+          {/* --------------------------- Pessoas --------------------------- */}
+
+          <BlocoForm
+            icone="Contact"
+            titulo="Pessoas"
+            descricao="Responsável operacional é do lado do cliente, quem manda os documentos. Responsável interno é quem cuida da empresa aqui dentro."
+          >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Entrada
+                rotulo="Responsável operacional"
+                value={form.responsavelOperacional}
+                erro={erroDe("responsavelOperacional")}
+                ajuda="Contato do cliente no dia a dia."
+                onChange={(e) =>
+                  editar({ responsavelOperacional: e.target.value })
+                }
+              />
+              <Entrada
+                rotulo="Sócio administrador"
+                value={form.socioAdmNome}
+                erro={erroDe("socioAdmNome")}
+                ajuda="Nome completo, como no documento."
+                onChange={(e) => editar({ socioAdmNome: e.target.value })}
+              />
+              <EntradaDocumento
+                tipo="cpf"
+                rotulo="CPF do sócio administrador"
+                value={form.socioAdmCpf}
+                erro={erroDe("socioAdmCpf")}
+                onChange={(socioAdmCpf) => editar({ socioAdmCpf })}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Escolha
+                rotulo="Responsável interno"
+                vazio="Sem responsável definido"
+                opcoes={opcoesResponsavel}
+                value={form.responsavelId}
+                erro={erroDe("responsavelId")}
+                ajuda="Herdado por toda competência aberta para esta empresa."
+                onChange={(e) => editar({ responsavelId: e.target.value })}
+              />
+              {semAcessoClientes ? (
+                <p className="flex items-start gap-1.5 self-end rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
+                  <Icone nome="Lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Somente administrador vincula o login do cliente à empresa.
+                    O cadastro segue normalmente sem esse vínculo, e um
+                    administrador pode acrescentá-lo depois na tela da empresa.
+                  </span>
+                </p>
+              ) : (
+                <Escolha
+                  rotulo="Cliente vinculado"
+                  vazio="Nenhum login vinculado"
+                  opcoes={opcoesCliente}
+                  value={form.userId}
+                  erro={erroDe("userId")}
+                  ajuda="Login pelo qual o cliente acessa o próprio painel. Opcional."
+                  onChange={(e) => editar({ userId: e.target.value })}
+                />
+              )}
+            </div>
+          </BlocoForm>
+
+          {/* ------------------- Plano e regime tributário ------------------ */}
+
+          <BlocoForm
+            icone="Tag"
+            titulo="Plano e tributação"
+            descricao="O plano decide se a empresa entra na abertura mensal. O regime decide quantas etapas cada competência tem, e não muda por aqui depois."
+          >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Escolha
+                rotulo="Plano interno ContaZoom"
+                required
+                opcoes={OPCOES_PLANO}
+                value={form.planoInterno}
+                erro={erroDe("planoInterno")}
+                ajuda="Simples e Presumido geram competência todo mês. Standby e sem plano não."
+                onChange={(e) => editar({ planoInterno: e.target.value })}
+              />
+              <Escolha
+                rotulo="Regime tributário"
+                required
+                vazio="Selecione o regime"
+                opcoes={OPCOES_REGIME}
+                value={form.regime}
+                erro={erroDe("regime")}
+                ajuda="Simples Nacional tem 10 etapas por competência; Lucro Presumido, 14."
+                onChange={(e) => editar({ regime: e.target.value })}
+              />
+              <Escolha
+                rotulo="Tributo local"
+                opcoes={OPCOES_TRIBUTO}
+                value={form.tributoLocal}
+                erro={erroDe("tributoLocal")}
+                ajuda="Nomeia a etapa de ICMS/ISS: comércio apura ICMS, serviço apura ISS."
+                onChange={(e) => editar({ tributoLocal: e.target.value })}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Entrada
+                rotulo="Início de atividade"
+                type="date"
+                value={form.inicioAtividade}
+                erro={erroDe("inicioAtividade")}
+                ajuda="Vira o início de vigência da primeira linha do histórico de regime."
+                onChange={(e) => editar({ inicioAtividade: e.target.value })}
+              />
+              <Area
+                rotulo="Observações"
+                wrapperClassName="lg:col-span-2"
+                rows={2}
+                value={form.observacoes}
+                erro={erroDe("observacoes")}
+                placeholder="Particularidades do cliente, combinados de prazo, contatos"
+                onChange={(e) => editar({ observacoes: e.target.value })}
+              />
+            </div>
+          </BlocoForm>
         </div>
       </Modal>
     </div>

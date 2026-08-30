@@ -13,7 +13,7 @@ import {
   TIPO_PROCESSO_LABEL,
   SITUACAO_ETAPA,
 } from "@/lib/tarefa-etapas";
-import { STATUS_VALIDOS, situacaoPrazo } from "@/lib/tarefa-status";
+import { STATUS_VALIDOS, contagemPrazo, situacaoPrazo } from "@/lib/tarefa-status";
 import {
   criarProcesso,
   diasEmAberto,
@@ -36,6 +36,7 @@ const SELECAO_EMPRESA = {
   nomeFantasia: true,
   regime: true,
   situacao: true,
+  planoInterno: true,
 } as const;
 
 const SELECAO_USUARIO = { id: true, name: true, email: true } as const;
@@ -107,6 +108,10 @@ export async function GET(req: NextRequest) {
             select: { numero: true, titulo: true, situacao: true, opcional: true },
             orderBy: { numero: "asc" },
           },
+          // Contagem, não a lista: o cartão mostra "3 anexos", e trazer o
+          // metadado de trinta arquivos por cartão só para exibir um número
+          // carregaria a página à toa.
+          _count: { select: { anexos: true } },
         },
         // Aberto antes de encerrado (`nulls: "first"`, senão o Postgres joga os
         // nulos para o fim), e dentro disso o mais antigo primeiro: processo
@@ -151,10 +156,20 @@ export async function GET(req: NextRequest) {
         prazoEstimado: processo.prazoEstimado,
         situacaoPrazo: prazo.situacao,
         diasPrazo: prazo.dias,
+        // Dias úteis e corridos vêm do SERVIDOR, para lista, cartão e detalhe
+        // mostrarem o mesmo número. Calculado no cliente, dependeria do relógio e
+        // do fuso da máquina de quem olha.
+        contagemPrazo: contagemPrazo(
+          processo.prazoEstimado,
+          concluido,
+          agora
+        ),
         abertoEm: processo.abertoEm,
         concluidoEm: processo.concluidoEm,
         diasEmAberto: diasEmAberto(processo.abertoEm, processo.concluidoEm, agora),
         responsavel: processo.responsavel,
+        observacoes: processo.observacoes,
+        anexos: processo._count.anexos,
       };
     });
 
@@ -196,21 +211,32 @@ export async function POST(req: NextRequest) {
   const empresaId = textoLimpo(corpo.empresaId);
   const identificacaoProvisoria = textoLimpo(corpo.identificacaoProvisoria);
 
-  // A regra que sustenta o módulo de legalização: abertura de CNPJ não tem CNPJ.
-  // O processo precisa existir antes da empresa, então `empresaId` é opcional
-  // SÓ nesse tipo — e aí a identificação provisória passa a ser obrigatória,
-  // porque sem ela o processo não teria nome nenhum na lista.
-  if (tipo === TIPO_PROCESSO.ABERTURA_CNPJ) {
-    if (!empresaId && !identificacaoProvisoria) {
-      return erro(
-        "Abertura de CNPJ sem empresa vinculada exige identificação provisória (por exemplo o nome do cliente ou o nome empresarial pretendido).",
-        400,
-        "IDENTIFICACAO_OBRIGATORIA"
-      );
-    }
-  } else if (!empresaId) {
+  /**
+   * EMPRESA OBRIGATÓRIA EM TODOS OS TIPOS, inclusive abertura de CNPJ.
+   *
+   * Mudança de regra pedida pelo escritório em 30/08/2026: "antes de criar o
+   * processo de legalização, ou apuração, somente conseguirmos atrelá-los a
+   * alguma empresa criada ali anteriormente".
+   *
+   * Antes, abertura era a exceção — o processo nascia solto, com uma
+   * identificação provisória, porque a empresa não podia ser cadastrada sem
+   * CNPJ. O que destravou isso foi `empresa.cnpj` virar opcional na mesma
+   * mudança: agora a empresa em abertura É cadastrada, sem CNPJ, e o processo
+   * nasce atrelado a ela desde o primeiro dia.
+   *
+   * O ganho prático é que o histórico deixa de ter dois lugares. Antes, o
+   * trabalho feito antes do CNPJ ficava no processo e o de depois na empresa, e
+   * ninguém juntava os dois. Agora é uma linha do tempo só.
+   *
+   * `identificacaoProvisoria` continua na tabela e continua aceita: os processos
+   * abertos antes desta mudança têm o nome deles ali, e apagar a coluna
+   * apagaria o único registro de por qual nome o processo começou.
+   */
+  if (!empresaId) {
     return erro(
-      `${TIPO_PROCESSO_LABEL[tipo]} exige uma empresa já cadastrada. Só abertura de CNPJ pode ser aberta sem empresa.`,
+      `${
+        TIPO_PROCESSO_LABEL[tipo] ?? "Este tipo de processo"
+      } exige uma empresa já cadastrada. Cadastre a empresa primeiro — se ela ainda não foi aberta, cadastre sem CNPJ e preencha o número quando o registro sair.`,
       400,
       "EMPRESA_OBRIGATORIA"
     );
@@ -225,14 +251,27 @@ export async function POST(req: NextRequest) {
   const observacoes = textoLimpo(corpo.observacoes);
 
   try {
-    if (empresaId) {
-      const empresa = await prisma.empresa.findUnique({
-        where: { id: empresaId },
-        select: { id: true },
-      });
-      if (!empresa) {
-        return erro("Empresa não encontrada.", 404, "EMPRESA_NAO_ENCONTRADA");
-      }
+    const empresa = await prisma.empresa.findUnique({
+      where: { id: empresaId },
+      select: { id: true, cnpj: true, razaoSocial: true },
+    });
+    if (!empresa) {
+      return erro("Empresa não encontrada.", 404, "EMPRESA_NAO_ENCONTRADA");
+    }
+
+    /**
+     * Abertura de CNPJ numa empresa que JÁ TEM CNPJ é 409, não erro de corpo.
+     *
+     * O corpo está correto; o conflito é com o estado do cadastro. E o erro é
+     * quase sempre escolher a empresa errada no seletor, então a mensagem diz
+     * qual empresa foi escolhida e qual é o processo certo para o que ela quer.
+     */
+    if (tipo === TIPO_PROCESSO.ABERTURA_CNPJ && empresa.cnpj) {
+      return erro(
+        `${empresa.razaoSocial} já tem CNPJ, então não há o que abrir. Para mudar dados de uma empresa aberta, use Alteração cadastral.`,
+        409,
+        "EMPRESA_JA_ABERTA"
+      );
     }
 
     if (responsavelId) {

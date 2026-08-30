@@ -20,6 +20,7 @@ import {
 import {
   DIAS_ALERTA_PRAZO,
   STATUS_VALIDOS,
+  contagemPrazo,
   diasEmBloqueio,
   parseCompetencia,
   situacaoPrazo,
@@ -149,6 +150,7 @@ export async function GET(req: NextRequest) {
           iniciadaEm: true,
           concluidaEm: true,
           responsavelId: true,
+          observacoes: true,
           updatedAt: true,
           empresa: {
             select: {
@@ -157,9 +159,14 @@ export async function GET(req: NextRequest) {
               nomeFantasia: true,
               cnpj: true,
               regime: true,
+              planoInterno: true,
             },
           },
           responsavel: { select: { id: true, name: true, email: true } },
+          // Contagem, não a lista: o cartão só precisa mostrar "3 anexos", e
+          // trazer trinta linhas de metadado por cartão para exibir um número
+          // seria carregar a página inteira à toa.
+          _count: { select: { anexos: true } },
         },
         orderBy: [
           { ano: "desc" },
@@ -239,6 +246,18 @@ export async function GET(req: NextRequest) {
         responsavel: tarefa.responsavel,
         prazoEntrega: tarefa.prazoEntrega,
         prazo: { situacao: prazoInfo.situacao, dias: prazoInfo.dias },
+        // Dias úteis e corridos calculados no SERVIDOR, e não na tela.
+        //
+        // O escritório usa as duas contagens: corridos é o que o cliente cobra
+        // ("faz 15 dias que mandei"), úteis é o que dá para trabalhar. Vindo de
+        // cá, a lista, o cartão e o detalhe mostram o mesmo número — feito no
+        // cliente, cada tela dependeria do relógio e do fuso da máquina de quem
+        // olha, e dois operadores veriam prazos diferentes para a mesma tarefa.
+        contagemPrazo: contagemPrazo(
+          tarefa.prazoEntrega,
+          Boolean(tarefa.concluidaEm),
+          agora
+        ),
         bloqueada: tarefa.bloqueada,
         bloqueioMotivo: tarefa.bloqueioMotivo,
         bloqueioResponsavel: tarefa.bloqueioResponsavel,
@@ -248,6 +267,8 @@ export async function GET(req: NextRequest) {
           : null,
         iniciadaEm: tarefa.iniciadaEm,
         concluidaEm: tarefa.concluidaEm,
+        observacoes: tarefa.observacoes,
+        anexos: tarefa._count.anexos,
         atualizadaEm: tarefa.updatedAt,
       };
     });

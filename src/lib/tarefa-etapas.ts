@@ -80,6 +80,88 @@ export const SITUACAO_EMPRESA_LABEL: Record<string, string> = {
   EM_ABERTURA: "Em abertura",
 };
 
+/* -------------------------------------------------------------------------- */
+/*                        Plano interno ContaZoom                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O plano que a ContaZoom vende para a empresa.
+ *
+ * Substitui `situacao` como status OPERACIONAL visível na tela de empresas:
+ * "Ativa/Suspensa" descrevia um estado que ninguém consultava, enquanto a
+ * pergunta real do dia a dia é qual plano a empresa tem — é isso que decide se
+ * ela gera competência todo mês e com que fluxo.
+ *
+ * NÃO é o regime tributário, e a distinção importa: `regime`
+ * (SIMPLES_NACIONAL/LUCRO_PRESUMIDO) escolhe o FLUXO DE ETAPAS da apuração e é
+ * congelado em cada competência; `planoInterno` é comercial e pode mudar sem
+ * mexer em etapa nenhuma. Reaproveitar `regime` para guardar o plano derrubaria
+ * `fluxoApuracao`, que lança exceção em regime desconhecido.
+ *
+ * "SEM_PLANO_SUSPENSA" é um valor só, com esse nome, porque foi assim que o
+ * escritório descreveu a opção: empresa sem plano é empresa suspensa.
+ */
+export const PLANO_INTERNO = {
+  PLANO_SIMPLES: "PLANO_SIMPLES",
+  PLANO_PRESUMIDO: "PLANO_PRESUMIDO",
+  PLANO_STANDBY: "PLANO_STANDBY",
+  SEM_PLANO_SUSPENSA: "SEM_PLANO_SUSPENSA",
+} as const;
+export type PlanoInterno = (typeof PLANO_INTERNO)[keyof typeof PLANO_INTERNO];
+
+export const PLANO_INTERNO_LABEL: Record<string, string> = {
+  PLANO_SIMPLES: "Plano Simples",
+  PLANO_PRESUMIDO: "Plano Presumido",
+  PLANO_STANDBY: "Plano Standby",
+  SEM_PLANO_SUSPENSA: "Sem plano — suspensa",
+};
+
+/** Selo curto, para coluna estreita e cartão. */
+export const PLANO_INTERNO_CURTO: Record<string, string> = {
+  PLANO_SIMPLES: "Simples",
+  PLANO_PRESUMIDO: "Presumido",
+  PLANO_STANDBY: "Standby",
+  SEM_PLANO_SUSPENSA: "Sem plano",
+};
+
+/**
+ * Planos que GERAM competência na abertura mensal.
+ *
+ * Standby e sem plano não geram: standby é cliente parado, que paga só para
+ * manter o cadastro, e sem plano é cliente que saiu. Abrir competência para
+ * esses dois criaria 12 tarefas por ano que ninguém trabalha e que sujariam todo
+ * indicador de atraso do painel.
+ */
+export const PLANOS_QUE_GERAM_COMPETENCIA: string[] = [
+  PLANO_INTERNO.PLANO_SIMPLES,
+  PLANO_INTERNO.PLANO_PRESUMIDO,
+];
+
+export function planoGeraCompetencia(plano: string | null | undefined): boolean {
+  return !!plano && PLANOS_QUE_GERAM_COMPETENCIA.includes(plano);
+}
+
+/**
+ * Situação derivada do plano.
+ *
+ * `Empresa.situacao` continua no banco porque três rotas e a tela de detalhe
+ * dependem dela, e porque ENCERRADA guarda uma informação que plano nenhum
+ * carrega (a empresa deixou de existir, não só de ser cliente). O que mudou é
+ * que ela deixou de ser digitada: passa a ser calculada a partir do plano e da
+ * existência do CNPJ, e só um PATCH explícito a sobrescreve.
+ *
+ * Empresa sem CNPJ é EM_ABERTURA por definição, independente do plano — é o caso
+ * do cadastro criado para a abertura poder ser aberta atrelada a uma empresa.
+ */
+export function situacaoDoPlano(
+  plano: string | null | undefined,
+  temCnpj: boolean
+): string {
+  if (!temCnpj) return SITUACAO_EMPRESA.EM_ABERTURA;
+  if (planoGeraCompetencia(plano)) return SITUACAO_EMPRESA.ATIVA;
+  return SITUACAO_EMPRESA.SUSPENSA;
+}
+
 /**
  * Qual imposto local a empresa apura.
  *
@@ -165,6 +247,15 @@ export const ACAO_LOG = {
   TAREFA_REABERTA: "TAREFA_REABERTA",
   PROTOCOLO_ATUALIZADO: "PROTOCOLO_ATUALIZADO",
   EMPRESA_VINCULADA: "EMPRESA_VINCULADA",
+  /**
+   * Anexo entra no log como qualquer outra ação.
+   *
+   * O arquivo é apagável, o log não: `tarefa_log` é append-only, então "quem
+   * anexou o contrato social e quando" continua respondido mesmo depois de
+   * alguém remover o arquivo. Sem isso, remover anexo apagaria o rastro.
+   */
+  ANEXO_ADICIONADO: "ANEXO_ADICIONADO",
+  ANEXO_REMOVIDO: "ANEXO_REMOVIDO",
 } as const;
 export type AcaoLog = (typeof ACAO_LOG)[keyof typeof ACAO_LOG];
 
@@ -184,6 +275,8 @@ export const ACAO_LOG_LABEL: Record<string, string> = {
   TAREFA_REABERTA: "Tarefa reaberta",
   PROTOCOLO_ATUALIZADO: "Protocolo atualizado",
   EMPRESA_VINCULADA: "Empresa vinculada",
+  ANEXO_ADICIONADO: "Anexo adicionado",
+  ANEXO_REMOVIDO: "Anexo removido",
 };
 
 /* -------------------------------------------------------------------------- */
@@ -476,24 +569,68 @@ export const ETAPAS_LUCRO_PRESUMIDO: DefinicaoEtapa[] = [
 /* -------------------------------------------------------------------------- */
 /*                      Legalização — cinco fluxos                            */
 /*                                                                            */
-/* PROPOSTA A VALIDAR. Não existe documento de origem para legalização; estes  */
-/* fluxos vêm da descrição verbal do Gianluca mais prática de mercado. Trate   */
-/* como rascunho até o escritório revisar — ver seção 11 da especificação.     */
+/* ABERTURA DE EMPRESA: as 20 etapas abaixo são as REAIS, passadas pelo        */
+/* escritório, com os títulos transcritos literalmente. Substituíram as 12     */
+/* etapas genéricas que existiam aqui como proposta.                           */
+/*                                                                            */
+/* Os outros quatro fluxos SEGUEM SENDO PROPOSTA: o escritório disse que vai   */
+/* trazer os nomes e as etapas exatas depois. Não existe documento de origem   */
+/* para eles — trate como rascunho, ver seção 11 da especificação.             */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Abertura de empresa — 20 etapas.
+ *
+ * Sobre as duas colunas que o escritório NÃO especificou, e que o sistema exige:
+ *
+ * `responsavel` decide QUEM PODE CONCLUIR a etapa (`podeConcluirEtapa` em
+ * `src/lib/api-guard.ts`), e é a coluna com mais chance de precisar de correção.
+ * O critério aplicado: etapa que fala com o cliente (formulário, pagamento de
+ * taxa, assinatura, entrega) é COMERCIAL_CZ; etapa executada em portal de órgão
+ * (viabilidade, DBE, JUCESP, emissão de documento) é ESCRITORIO; conferência de
+ * atividade e envio para assinatura são AMBOS, porque na prática os dois lados
+ * tocam. ADMIN passa por cima de todas.
+ *
+ * `statusDerivado` é o status macro que a etapa produz no Kanban. Aqui o mapa
+ * segue o desenho do fluxo: 1 é coleta (AGUARDANDO_DOCUMENTACAO), 2 a 13 é
+ * execução (EM_ELABORACAO), 14 a 18 é acompanhamento e emissão no órgão
+ * (EM_REVISAO), 19 é entrega (ENTREGUE) e 20 fecha (CONCLUIDO).
+ *
+ * As etapas 9 e 12 dependem de terceiro (cliente pagar a taxa, sócio assinar no
+ * Autentique) e são justamente onde o processo trava. Elas não são opcionais: o
+ * jeito de registrar a espera é a PENDÊNCIA, que sobrepõe o status sem mexer na
+ * etapa — foi para isso que o bloqueio existe.
+ *
+ * Nenhuma etapa é opcional neste fluxo. O escritório listou vinte passos como
+ * sequência obrigatória, e etapa opcional que ninguém pediu só serviria para
+ * alguém pular conferência.
+ *
+ * Processo aberto ANTES desta mudança continua com as 12 etapas antigas, porque
+ * o título é copiado para `processo_legalizacao_etapa` na criação. Isso é o
+ * desenho, não um efeito colateral: fluxo que muda retroativamente falsifica o
+ * histórico do que foi realmente executado.
+ */
 export const ETAPAS_ABERTURA_CNPJ: DefinicaoEtapa[] = [
-  { numero: 1, chave: "COLETA_DOCUMENTOS_SOCIOS", titulo: "Coleta de documentos e dados dos sócios", descricao: "Recebimento de documento de identidade, comprovante de endereço e dados cadastrais de cada sócio.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 2, chave: "DEFINICAO_CNAE_REGIME", titulo: "Definição de atividade (CNAE), regime e capital social", descricao: "Escolha das atividades, do regime tributário e do capital social, com orientação do escritório.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 3, chave: "CONSULTA_VIABILIDADE", titulo: "Consulta de viabilidade (nome e endereço)", descricao: "Verificação de disponibilidade do nome empresarial e de permissão da atividade no endereço.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 4, chave: "REGISTRO_ATO_CONSTITUTIVO", titulo: "Registro do ato constitutivo", descricao: "Elaboração e registro do contrato social ou requerimento de empresário.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 5, chave: "OBTENCAO_CNPJ", titulo: "Obtenção do CNPJ", descricao: "Emissão da inscrição no Cadastro Nacional da Pessoa Jurídica.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 6, chave: "INSCRICAO_ESTADUAL", titulo: "Inscrição estadual, quando aplicável", descricao: "Solicitação de inscrição estadual para atividades sujeitas ao ICMS.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: true, orgao: ORGAO_EXTERNO.SEFAZ },
-  { numero: 7, chave: "INSCRICAO_MUNICIPAL_ALVARA", titulo: "Inscrição municipal e alvará", descricao: "Inscrição no cadastro municipal e obtenção do alvará de funcionamento.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.PREFEITURA },
-  { numero: 8, chave: "ENQUADRAMENTO_TRIBUTARIO", titulo: "Enquadramento tributário", descricao: "Formalização da opção pelo regime tributário definido na etapa 2.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 9, chave: "CERTIFICADO_DIGITAL", titulo: "Emissão de certificado digital", descricao: "Emissão do certificado necessário para transmissão de obrigações e emissão de nota.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.CERTIFICADORA },
-  { numero: 10, chave: "HABILITACAO_NOTA_FISCAL", titulo: "Habilitação para emissão de nota fiscal", descricao: "Liberação da emissão de nota fiscal no âmbito estadual e/ou municipal.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
-  { numero: 11, chave: "ENTREGA_DOCUMENTACAO", titulo: "Entrega da documentação ao cliente", descricao: "Envio ao cliente de todos os documentos e acessos gerados no processo.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
-  { numero: 12, chave: "ENCERRAMENTO_PROCESSO", titulo: "Encerramento do processo", descricao: "Conclusão do processo, com arquivamento e vínculo da empresa criada ao sistema.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
+  { numero: 1, chave: "FORMULARIO_ABERTURA_DRIVE", titulo: "Formulário de Abertura CNPJ - Drive", descricao: "Envio e preenchimento do formulário de abertura no Drive, com os dados e documentos dos sócios.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 2, chave: "CONFERENCIA_ATIVIDADES_PLANNER", titulo: "Conferência das Atividades do CNPJ - Planner", descricao: "Conferência das atividades (CNAE) pretendidas e registro do resultado no Planner.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 3, chave: "PROCESSO_VIABILIDADE", titulo: "Processo de Viabilidade", descricao: "Abertura do processo de viabilidade de nome empresarial e de endereço.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 4, chave: "CONFERENCIA_VIABILIDADE", titulo: "Conferência do Processo de Viabilidade", descricao: "Conferência do retorno da viabilidade antes de seguir para o DBE.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 5, chave: "DBE_ABERTURA", titulo: "DBE - Abertura CNPJ", descricao: "Preenchimento e transmissão do Documento Básico de Entrada para abertura do CNPJ.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 6, chave: "CONFERENCIA_DBE", titulo: "Conferência do DBE - Abertura", descricao: "Conferência dos dados do DBE gerado antes do registro digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 7, chave: "ABERTURA_REGISTRO_DIGITAL_JUCESP", titulo: "Abertura Registro Digital JUCESP", descricao: "Abertura do Registro Digital no sistema da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 8, chave: "EMISSAO_TAXA_JUCESP", titulo: "Emissão da Taxa - JUCESP", descricao: "Emissão da guia da taxa de registro na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 9, chave: "PAGAMENTO_TAXA_JUCESP", titulo: "Confirmação de Pagamento da Taxa JUCESP", descricao: "Confirmação do pagamento da guia da JUCESP junto ao cliente.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 10, chave: "PREENCHIMENTO_REGISTRO_DIGITAL_JUCESP", titulo: "Preenchimento do Registro Digital JUCESP", descricao: "Preenchimento completo do Registro Digital na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 11, chave: "EMISSAO_CONTRATO_SOCIAL", titulo: "Emissão do Contrato Social - Junta Comercial", descricao: "Geração do contrato social pelo sistema da Junta Comercial.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 12, chave: "ENVIO_CONTRATO_AUTENTIQUE", titulo: "Envio do Contrato Social via Autentique", descricao: "Envio do contrato social para assinatura eletrônica dos sócios pelo Autentique.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 13, chave: "FINALIZACAO_REGISTRO_DIGITAL_JUCESP", titulo: "Finalização do Registro Digital JUCESP", descricao: "Finalização do Registro Digital com o contrato social assinado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 14, chave: "PROTOCOLO_REGISTRO_DIGITAL_ENVIADO", titulo: "Protocolo de Registro Digital JUCESP enviado", descricao: "Envio do protocolo do Registro Digital à JUCESP e registro do número do protocolo.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 15, chave: "ACOMPANHAMENTO_REGISTRO_DIGITAL", titulo: "Acompanhamento do Registro Digital JUCESP", descricao: "Acompanhamento da análise do Registro Digital até a decisão da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 16, chave: "REGISTRO_DIGITAL_DEFERIDO", titulo: "Registro Digital JUCESP - DEFERIDO", descricao: "Deferimento do Registro Digital pela JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 17, chave: "EMISSAO_DOCUMENTOS_APROVADA", titulo: "Emissão dos Documentos - Aprovada (Aguardar até 24h)", descricao: "Aprovação da emissão dos documentos oficiais. A liberação pela JUCESP pode levar até 24 horas.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 18, chave: "EMISSAO_DOCUMENTOS_OFICIAIS", titulo: "Emissão dos Documentos Oficiais", descricao: "Emissão do contrato social registrado, do CNPJ e dos demais documentos oficiais.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
+  { numero: 19, chave: "ENVIO_DOCUMENTOS_CLIENTE", titulo: "Envio dos Documentos Oficiais ao Cliente", descricao: "Envio ao cliente de todos os documentos oficiais e acessos gerados no processo.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
+  { numero: 20, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo, com arquivamento e o CNPJ registrado no cadastro da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
 ];
 
 export const ETAPAS_ENCERRAMENTO_CNPJ: DefinicaoEtapa[] = [
@@ -618,6 +755,9 @@ export const REGIMES_VALIDOS = Object.values(REGIME) as string[];
 export const TIPOS_PROCESSO_VALIDOS = Object.values(TIPO_PROCESSO) as string[];
 export const SITUACOES_EMPRESA_VALIDAS = Object.values(
   SITUACAO_EMPRESA
+) as string[];
+export const PLANOS_INTERNOS_VALIDOS = Object.values(
+  PLANO_INTERNO
 ) as string[];
 export const TRIBUTOS_LOCAIS_VALIDOS = Object.values(TRIBUTO_LOCAL) as string[];
 export const BLOQUEIO_RESPONSAVEIS_VALIDOS = Object.values(

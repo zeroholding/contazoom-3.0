@@ -550,8 +550,20 @@ model FlexShippingConfig {
 /// apuração. Um login pode responder por vários CNPJs, e a ContaZoom pode
 /// atender um CNPJ que ainda não tem login (comum em cliente em abertura).
 model Empresa {
-  id              String    @id @default(cuid())
-  cnpj            String    @unique @db.VarChar(14) // só dígitos, sem máscara
+  id String @id @default(cuid())
+
+  /// CNPJ só com dígitos, sem máscara.
+  ///
+  /// OPCIONAL desde a mudança de 30/08/2026: empresa em abertura não tem CNPJ, e
+  /// a regra nova é que todo processo de legalização nasce atrelado a uma empresa
+  /// já cadastrada — inclusive a abertura. Sem isto, abertura seria o único
+  /// processo solto no sistema.
+  ///
+  /// Segue `@unique`: no Postgres, índice único aceita vários NULL, então quantas
+  /// empresas em abertura existirem convivem sem conflito, e no instante em que o
+  /// CNPJ sai a unicidade volta a valer.
+  cnpj String? @unique @db.VarChar(14)
+
   razaoSocial     String    @map("razao_social")
   nomeFantasia    String?   @map("nome_fantasia")
   regime          String // SIMPLES_NACIONAL, LUCRO_PRESUMIDO
@@ -559,8 +571,61 @@ model Empresa {
   municipio       String?
   inicioAtividade DateTime? @map("inicio_atividade")
 
+  /// Grupo econômico / grupo do cliente. Várias empresas do mesmo dono.
+  ///
+  /// Texto livre e não tabela própria: o escritório pediu "NOME DO GRUPO" como
+  /// campo de cadastro, e uma tabela de grupos exigiria manter cadastro de grupo
+  /// antes de cadastrar empresa — passo a mais para um dado que hoje só serve
+  /// para agrupar visualmente.
+  grupo String?
+
+  inscricaoMunicipal String? @map("inscricao_municipal")
+  inscricaoEstadual  String? @map("inscricao_estadual")
+
+  /// Endereço completo, em partes.
+  ///
+  /// Separado em colunas, e não um campo "endereço" só: CEP e UF são o que se
+  /// filtra e o que a Junta e a Prefeitura exigem por campo. Endereço num blob de
+  /// texto não dá para conferir nem para reaproveitar em documento.
+  cep         String? @db.VarChar(8) // só dígitos
+  logradouro  String?
+  numero      String? @db.VarChar(20)
+  complemento String?
+  bairro      String?
+
+  /// Nome de quem responde pela empresa no dia a dia, do lado do cliente.
+  ///
+  /// Não é FK: é o contato operacional do cliente (quem manda as notas, quem
+  /// atende o telefone), que não tem login no sistema. `responsavelId` continua
+  /// sendo o responsável INTERNO, do escritório — são duas pessoas diferentes e
+  /// juntá-las num campo só perderia uma das duas.
+  responsavelOperacional String? @map("responsavel_operacional")
+
+  socioAdmNome String? @map("socio_adm_nome")
+  /// CPF do sócio administrador, só dígitos. Sem `@unique`: a mesma pessoa pode
+  /// ser sócia administradora de várias empresas, o que é o caso comum em grupo.
+  socioAdmCpf  String? @map("socio_adm_cpf") @db.VarChar(11)
+
+  /// Plano interno ContaZoom. É o status OPERACIONAL da empresa.
+  /// PLANO_SIMPLES, PLANO_PRESUMIDO, PLANO_STANDBY, SEM_PLANO_SUSPENSA
+  ///
+  /// Substituiu `situacao` na tela de empresas (filtro, indicadores e selo) e é
+  /// quem decide a abertura mensal de competência: Simples e Presumido geram,
+  /// Standby e sem plano não.
+  ///
+  /// Coluna PRÓPRIA, e não reaproveitando `regime`: `fluxoApuracao` lança exceção
+  /// em regime desconhecido, então gravar "PLANO_STANDBY" em `regime` derrubaria
+  /// a tela de toda competência da empresa.
+  planoInterno String @default("PLANO_SIMPLES") @map("plano_interno")
+
   /// Situação no atendimento, não na Receita.
   /// ATIVA, SUSPENSA, ENCERRADA, EM_ABERTURA
+  ///
+  /// DERIVADA do plano interno e da existência do CNPJ (`situacaoDoPlano` em
+  /// src/lib/tarefa-etapas.ts), não mais digitada no cadastro. Continua no banco
+  /// porque ENCERRADA guarda algo que plano nenhum carrega — a empresa deixou de
+  /// existir, não só de ser cliente — e porque três rotas e a tela de detalhe
+  /// dependem dela. Só um PATCH explícito a sobrescreve.
   situacao String @default("ATIVA")
 
   /// Qual imposto municipal/estadual se aplica, usado para nomear a etapa 6 do
@@ -587,7 +652,9 @@ model Empresa {
   @@index([userId])
   @@index([regime])
   @@index([situacao])
+  @@index([planoInterno])
   @@index([razaoSocial])
+  @@index([grupo])
   @@map("empresa")
 }
 
@@ -658,6 +725,7 @@ model TarefaApuracao {
   empresa Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   etapas  TarefaApuracaoEtapa[]
   logs    TarefaLog[]
+  anexos  TarefaAnexo[]
 
   /// Uma apuração por empresa por competência. É a trava que impede duplicata
   /// quando dois operadores abrem o mês ao mesmo tempo.
@@ -747,6 +815,7 @@ model ProcessoLegalizacao {
   empresa Empresa?                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   etapas  ProcessoLegalizacaoEtapa[]
   logs    TarefaLog[]
+  anexos  TarefaAnexo[]
 
   @@index([empresaId])
   @@index([tipo])
@@ -821,4 +890,52 @@ model TarefaLog {
   @@index([createdAt])
   @@index([acao])
   @@map("tarefa_log")
+}
+
+/// Documento ou imagem anexado a uma competência ou a um processo.
+///
+/// MODEL PRÓPRIO, e não `processoId` acrescentado a `Document`.
+///
+/// `Document` é o cofre de documentos do CLIENTE: `userId` é obrigatório, o
+/// arquivo aparece na árvore de pastas do painel dele, e o upload é restrito a
+/// administrador. Anexo de tarefa é o oposto em todas essas três dimensões — é
+/// interno, pertence à tarefa e não a um login, e quem anexa é quem trabalha no
+/// fluxo. Pendurar um `processoId` opcional em `Document` faria todo anexo de
+/// tarefa precisar de um usuário dono arbitrário e aparecer na pasta do cliente.
+///
+/// Uma tabela para os dois tipos de tarefa, com FKs opcionais, seguindo
+/// `TarefaLog`: a tela de anexos é uma só e unir duas tabelas em cada consulta
+/// seria pior. A regra "exatamente uma das duas FKs preenchida" é garantida por
+/// CHECK no banco, não só na aplicação.
+model TarefaAnexo {
+  id String @id @default(cuid())
+
+  apuracaoId String? @map("apuracao_id")
+  processoId String? @map("processo_id")
+
+  /// Nome que o arquivo tinha na máquina de quem enviou. É o que a tela mostra.
+  nomeOriginal String @map("nome_original")
+  /// Nome no disco: timestamp + aleatório + nome higienizado. Nunca o original,
+  /// senão dois envios de "contrato.pdf" sobrescreveriam um ao outro.
+  arquivo      String @unique
+  tipoMime     String @map("tipo_mime")
+  tamanhoBytes Int    @map("tamanho_bytes")
+
+  /// Congelados como em TarefaLog: quem enviou continua respondido depois de o
+  /// funcionário sair da empresa.
+  enviadoPorId   String  @map("enviado_por_id")
+  enviadoPorNome String  @map("enviado_por_nome")
+
+  /// Descrição opcional ("contrato social assinado", "guia paga").
+  descricao String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  apuracao TarefaApuracao?      @relation(fields: [apuracaoId], references: [id], onDelete: Cascade)
+  processo ProcessoLegalizacao? @relation(fields: [processoId], references: [id], onDelete: Cascade)
+
+  @@index([apuracaoId, createdAt])
+  @@index([processoId, createdAt])
+  @@index([enviadoPorId])
+  @@map("tarefa_anexo")
 }

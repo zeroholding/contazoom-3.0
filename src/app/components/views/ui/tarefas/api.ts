@@ -112,6 +112,32 @@ export const apiPatch = <T>(url: string, dados?: unknown) =>
 export const apiDelete = <T>(url: string, dados?: unknown) =>
   comCorpo<T>("DELETE", url, dados);
 
+/**
+ * Upload de arquivo (multipart).
+ *
+ * Separado de `comCorpo` porque NÃO pode ter `Content-Type` definido à mão: o
+ * navegador precisa montar o cabeçalho junto com o `boundary` do multipart, e
+ * escrever `multipart/form-data` sem boundary faz o servidor não achar campo
+ * nenhum. É o erro clássico de upload com fetch.
+ *
+ * O tratamento de erro é o mesmo das outras chamadas, então a tela recebe
+ * `ErroApi` com mensagem em português igual ao resto — inclusive nos 413 e 415
+ * que só esta rota devolve.
+ */
+export async function apiUpload<T>(
+  url: string,
+  formulario: FormData,
+  sinal?: AbortSignal
+): Promise<T> {
+  const resposta = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    body: formulario,
+    signal: sinal,
+  });
+  return tratar<T>(resposta);
+}
+
 /** Mensagem legível de qualquer erro capturado num `catch`. */
 export function mensagemDeErro(erro: unknown): string {
   if (erro instanceof ErroApi) return erro.message;

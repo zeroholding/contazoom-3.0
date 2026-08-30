@@ -10,6 +10,10 @@
     "lint": "eslint",
     "test:flex-shipping": "node --experimental-strip-types scripts/test-flex-shipping.mjs",
     "test:spreadsheet": "node --experimental-strip-types scripts/test-spreadsheet.mjs",
+    "test:dias-uteis": "node --experimental-strip-types scripts/test-dias-uteis.mjs",
+    "test:documento": "node --experimental-strip-types scripts/test-documento.mjs",
+    "test:anexo": "node --experimental-strip-types scripts/test-anexo.mjs",
+    "test:tarefas": "npm run test:dias-uteis && npm run test:documento && npm run test:anexo",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy"
   },

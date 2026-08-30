@@ -36,6 +36,8 @@ import {
 } from "@/lib/tarefa-status";
 import {
   BLOQUEIO_RESPONSAVEL_LABEL,
+  PLANO_INTERNO_CURTO,
+  PLANO_INTERNO_LABEL,
   REGIME_LABEL,
   REGIME_SIGLA,
   RESPONSAVEL_LABEL,
@@ -421,6 +423,82 @@ export function SeloSituacaoEmpresa({
       peso={peso}
       texto={SITUACAO_EMPRESA_LABEL[situacao] ?? situacao}
       icone={ICONE_SITUACAO_EMPRESA[situacao] ?? "Building2"}
+      className={className}
+    />
+  );
+}
+
+/* --------------------------- Plano interno ContaZoom ---------------------- */
+
+/**
+ * Ícone por plano. Como todo selo do módulo: cor + texto + ícone, nunca só cor.
+ *
+ * Standby ganha "PauseCircle" e sem plano ganha "Ban" porque a diferença entre
+ * os dois é operacional e importa: standby é cliente parado que volta, sem plano
+ * é cliente que saiu. Dois cinzas iguais apagariam essa diferença.
+ */
+const ICONE_PLANO_INTERNO: Record<string, string> = {
+  PLANO_SIMPLES: "BadgeCheck",
+  PLANO_PRESUMIDO: "BadgeCheck",
+  PLANO_STANDBY: "PauseCircle",
+  SEM_PLANO_SUSPENSA: "Ban",
+};
+
+/**
+ * Cor por plano.
+ *
+ * Os dois planos que geram competência ficam em verde e azul — cor de "isto
+ * trabalha". Standby fica em âmbar (parado, mas volta) e sem plano em cinza
+ * (fora da operação). A escala é a mesma do resto do módulo, e o laranja da marca
+ * fica de fora de propósito: no módulo laranja significa "clique aqui para agir",
+ * e gastá-lo num selo informativo esvazia o sinal onde ele decide algo.
+ */
+function corPlanoInterno(plano: string, peso: PesoSelo): string {
+  switch (plano) {
+    case "PLANO_SIMPLES":
+      return tom(peso, "border-[#ABEFC6]", "bg-[#ECFDF3]", "text-[#027A48]");
+    case "PLANO_PRESUMIDO":
+      return tom(peso, "border-[#B2DDFF]", "bg-[#EFF8FF]", "text-[#175CD3]");
+    case "PLANO_STANDBY":
+      return tom(peso, "border-[#FEDF89]", "bg-[#FFFAEB]", "text-[#B54708]");
+    case "SEM_PLANO_SUSPENSA":
+      return tom(
+        peso,
+        "border-[var(--cz-hairline-forte)]",
+        "bg-[var(--cz-fundo)]",
+        "text-[var(--cz-texto-suave)]"
+      );
+    default:
+      return tom(
+        peso,
+        "border-[var(--cz-hairline-forte)]",
+        "bg-[var(--cz-fundo)]",
+        "text-[var(--cz-texto-suave)]"
+      );
+  }
+}
+
+export function SeloPlanoInterno({
+  plano,
+  curto = false,
+  className = "",
+  peso = "medio",
+}: {
+  plano: string;
+  /** Rótulo abreviado, para coluna estreita e cartão. */
+  curto?: boolean;
+  className?: string;
+  peso?: PesoSelo;
+}) {
+  const texto = curto
+    ? PLANO_INTERNO_CURTO[plano] ?? plano
+    : PLANO_INTERNO_LABEL[plano] ?? plano;
+  return (
+    <Selo
+      cor={corPlanoInterno(plano, peso)}
+      peso={peso}
+      texto={texto}
+      icone={ICONE_PLANO_INTERNO[plano] ?? "Tag"}
       className={className}
     />
   );

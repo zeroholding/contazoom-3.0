@@ -32,6 +32,7 @@ import {
   ErroApi,
   apiDelete,
   apiGet,
+  apiPatch,
   apiPost,
   mensagemDeErro,
   query,
@@ -47,9 +48,12 @@ import {
   iniciais,
   nomeEmpresa,
   plural,
+  rotuloEmpresa,
 } from "@/app/components/views/ui/tarefas/formato";
+import { textoContagemCurto } from "@/lib/dias-uteis";
 import {
   Aviso,
+  BlocoForm,
   Cabecalho,
   Carregando,
   Paginacao,
@@ -59,11 +63,17 @@ import {
 } from "@/app/components/views/ui/tarefas/Base";
 import {
   Alternador,
+  Area,
   Botao,
   Entrada,
   Escolha,
   type Opcao,
 } from "@/app/components/views/ui/tarefas/Campos";
+import {
+  AnexosDaTarefa,
+  AnexosEmEspera,
+  enviarAnexosPendentes,
+} from "@/app/components/views/ui/tarefas/Anexos";
 import {
   Modal,
   ModalMotivo,
@@ -76,6 +86,7 @@ import {
 } from "@/app/components/views/ui/tarefas/Selos";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
 import CartaoApuracao from "@/app/components/views/ui/tarefas/CartaoApuracao";
+import { PAPEL } from "@/lib/papeis";
 import {
   MESES,
   STATUS,
@@ -103,6 +114,22 @@ import { useSessao } from "@/hooks/useSessao";
 type RespostaLista = { tarefas: ApuracaoLista[]; pagination: Pagination };
 type RespostaEmpresas = { empresas: EmpresaLista[]; pagination: Pagination };
 type RespostaUsuarios = { usuarios: UsuarioInterno[]; total: number };
+
+/**
+ * ISO para o valor de `input[type=date]`, lendo as partes em UTC.
+ *
+ * O prazo é gravado à meia-noite UTC. Ler com `getMonth()` local no fuso de
+ * Brasília devolveria o dia anterior, e o campo abriria com a data errada — que é
+ * o tipo de defeito que só aparece depois de alguém salvar.
+ */
+function paraInputDate(valor: string | null | undefined): string {
+  if (!valor) return "";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "";
+  const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
+  const dia = String(data.getUTCDate()).padStart(2, "0");
+  return `${data.getUTCFullYear()}-${mes}-${dia}`;
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                  Filtros                                   */
@@ -256,7 +283,7 @@ function Conteudo() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { permissoes } = useSessao();
+  const { permissoes, sessao, papel } = useSessao();
 
   // Os filtros da URL valem só na montagem: daí em diante o estado manda e a
   // URL é espelho. Ler a URL a cada render criaria laço com o `router.replace`.
@@ -487,6 +514,85 @@ function Conteudo() {
     }
   }
 
+  /* ---------------------------- Editar o card ----------------------------- */
+
+  /**
+   * Edição do card na própria lista.
+   *
+   * O que entra: prazo, responsável, observações e anexos. Etapa, status e
+   * bloqueio ficam de fora de propósito — cada um tem rota própria porque move o
+   * fluxo, e um formulário que mistura "trocar o prazo" com "concluir etapa"
+   * convida a mover o fluxo sem querer.
+   *
+   * O alvo é guardado por ID, não o objeto: guardar o objeto congelaria a cópia
+   * do clique, e depois de salvar a tela mostraria o valor antigo até alguém
+   * recarregar.
+   */
+  const [alvoEdicao, setAlvoEdicao] = useState<string | null>(null);
+  const [formEdicao, setFormEdicao] = useState({
+    prazoEntrega: "",
+    responsavelId: "",
+    observacoes: "",
+  });
+  const [erroEdicao, setErroEdicao] = useState("");
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  const emEdicao = useMemo(
+    () => tarefas.find((tarefa) => tarefa.id === alvoEdicao) ?? null,
+    [tarefas, alvoEdicao]
+  );
+
+  const abrirEdicao = useCallback((tarefa: ApuracaoLista) => {
+    setFormEdicao({
+      prazoEntrega: paraInputDate(tarefa.prazoEntrega),
+      responsavelId: tarefa.responsavel?.id ?? "",
+      observacoes: tarefa.observacoes ?? "",
+    });
+    setErroEdicao("");
+    setAlvoEdicao(tarefa.id);
+  }, []);
+
+  async function salvarEdicao() {
+    if (!emEdicao) return;
+
+    setErroEdicao("");
+
+    // Só o que mudou. Chave ausente mantém, `null` limpa — é a diferença que a
+    // rota usa para não apagar campo que ninguém tocou.
+    const payload: Record<string, unknown> = {};
+
+    const prazoAtual = paraInputDate(emEdicao.prazoEntrega);
+    if (formEdicao.prazoEntrega !== prazoAtual) {
+      payload.prazoEntrega = formEdicao.prazoEntrega || null;
+    }
+    if (formEdicao.responsavelId !== (emEdicao.responsavel?.id ?? "")) {
+      payload.responsavelId = formEdicao.responsavelId || null;
+    }
+    const observacoes = formEdicao.observacoes.trim();
+    if (observacoes !== (emEdicao.observacoes ?? "")) {
+      payload.observacoes = observacoes || null;
+    }
+
+    // Fechar sem mexer em campo nenhum é uso legítimo: a pessoa pode ter aberto
+    // o modal só para anexar arquivo, e o anexo já subiu na hora.
+    if (Object.keys(payload).length === 0) {
+      setAlvoEdicao(null);
+      return;
+    }
+
+    setSalvandoEdicao(true);
+    try {
+      await apiPatch(`/api/tarefas/apuracao/${emEdicao.id}`, payload);
+      setAlvoEdicao(null);
+      setMensagemOk(`Competência de ${nomeEmpresa(emEdicao.empresa)} atualizada.`);
+      setRecarga((n) => n + 1);
+    } catch (falha) {
+      setErroEdicao(mensagemDeErro(falha) || "Não foi possível salvar.");
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  }
+
   /* --------------------------- Nova competência --------------------------- */
 
   const [modalNova, setModalNova] = useState(false);
@@ -506,6 +612,16 @@ function Conteudo() {
   const [duplicadaId, setDuplicadaId] = useState<string | null>(null);
   const [enviandoNova, setEnviandoNova] = useState(false);
 
+  /**
+   * Arquivos escolhidos ANTES de a competência existir.
+   *
+   * Ficam em memória e sobem depois do POST, com o id que acabou de nascer. Não
+   * há como pendurar arquivo numa tarefa que ainda não tem id, e inventar uma
+   * área temporária no servidor exigiria id de rascunho e uma rotina para varrer
+   * o que ninguém confirmou.
+   */
+  const [anexosNovos, setAnexosNovos] = useState<File[]>([]);
+
   const abrirNova = useCallback(() => {
     const alvo =
       parseCompetencia(filtros.competencia) ??
@@ -519,18 +635,27 @@ function Conteudo() {
     });
     setErroNova("");
     setDuplicadaId(null);
+    setAnexosNovos([]);
     setModalNova(true);
   }, [filtros.competencia]);
 
-  // Empresas só são carregadas quando o modal abre: são 200 registros que a
-  // lista não usa.
+  /**
+   * Empresas só são carregadas quando um dos modais abre: são 200 registros que a
+   * lista não usa.
+   *
+   * O filtro `situacao=ATIVA` saiu. A situação virou coluna derivada, e a regra
+   * de quem pode ter competência já é imposta pela rota (`POST
+   * /api/tarefas/apuracao` recusa empresa fora do plano). Filtrar aqui também
+   * escondia a empresa que o operador procurava sem dizer por quê. `semCnpj=false`
+   * fica porque empresa em abertura não tem o que apurar — não existe CNPJ.
+   */
   useEffect(() => {
-    if (!modalNova || empresas.length > 0) return;
+    if ((!modalNova && !alvoEdicao) || empresas.length > 0) return;
 
     const controlador = new AbortController();
     setCarregandoEmpresas(true);
     apiGet<RespostaEmpresas>(
-      `/api/empresas${query({ situacao: "ATIVA", limit: 200 })}`,
+      `/api/empresas${query({ semCnpj: "false", limit: 200 })}`,
       controlador.signal
     )
       .then((dados) => setEmpresas(dados.empresas ?? []))
@@ -541,14 +666,10 @@ function Conteudo() {
       .finally(() => setCarregandoEmpresas(false));
 
     return () => controlador.abort();
-  }, [modalNova, empresas.length]);
+  }, [modalNova, alvoEdicao, empresas.length]);
 
   const opcoesEmpresa = useMemo<Opcao[]>(
-    () =>
-      empresas.map((e) => ({
-        valor: e.id,
-        texto: `${e.razaoSocial} · ${e.cnpjFormatado}`,
-      })),
+    () => empresas.map((e) => ({ valor: e.id, texto: rotuloEmpresa(e) })),
     [empresas]
   );
 
@@ -582,7 +703,7 @@ function Conteudo() {
 
     setEnviandoNova(true);
     try {
-      await apiPost<{ tarefa: { id: string; status: string } }>(
+      const criada = await apiPost<{ tarefa: { id: string; status: string } }>(
         "/api/tarefas/apuracao",
         {
           empresaId: nova.empresaId,
@@ -593,8 +714,39 @@ function Conteudo() {
         }
       );
 
+      /**
+       * Anexos sobem AGORA, com a competência já criada.
+       *
+       * Falha de anexo não desfaz a competência: ela está criada e o trabalho
+       * pode começar. A mensagem diz o que faltou, e o operador reenvia pelo
+       * botão de editar. Desfazer a criação por causa de um arquivo grande
+       * demais trocaria um problema pequeno por um grande.
+       */
+      let avisoAnexos = "";
+      const idNovo = criada?.tarefa?.id;
+      if (idNovo && anexosNovos.length > 0) {
+        const resultado = await enviarAnexosPendentes(
+          { apuracaoId: idNovo },
+          anexosNovos
+        );
+        if (resultado.falhas.length > 0) {
+          avisoAnexos = ` ${resultado.enviados} de ${anexosNovos.length} anexos enviados. Não subiram: ${resultado.falhas
+            .map((f) => `${f.nome} (${f.erro})`)
+            .join("; ")}`;
+        } else if (resultado.enviados > 0) {
+          avisoAnexos = ` ${
+            resultado.enviados === 1
+              ? "1 anexo enviado."
+              : `${resultado.enviados} anexos enviados.`
+          }`;
+        }
+      }
+
       setModalNova(false);
-      setMensagemOk(`Competência ${competenciaLabel(ano, mes)} aberta.`);
+      setAnexosNovos([]);
+      setMensagemOk(
+        `Competência ${competenciaLabel(ano, mes)} aberta.${avisoAnexos}`
+      );
       // A rota devolve só `id` e `status`. Em vez de montar um cartão
       // incompleto, aponto o filtro para a competência criada e recarrego —
       // assim a nova linha aparece completa e visível, mesmo que o filtro
@@ -1040,6 +1192,11 @@ function Conteudo() {
                                   ? abrirPendencia
                                   : undefined
                               }
+                              onEditar={
+                                permissoes.gerenciarBloqueio
+                                  ? abrirEdicao
+                                  : undefined
+                              }
                             />
                           ))
                         )}
@@ -1109,7 +1266,9 @@ function Conteudo() {
                               {nomeEmpresa(tarefa.empresa)}
                             </p>
                             <p className="truncate text-xs text-gray-500">
-                              {formatarCnpj(tarefa.empresa.cnpj)}
+                              {tarefa.empresa.cnpj
+                                ? formatarCnpj(tarefa.empresa.cnpj)
+                                : "Em abertura"}
                             </p>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-gray-700">
@@ -1146,6 +1305,21 @@ function Conteudo() {
                               situacao={tarefa.prazo.situacao}
                               dias={tarefa.prazo.dias}
                             />
+                            {/* Dias úteis e corridos embaixo do selo: o selo diz
+                                o estado, o número diz o quanto. */}
+                            {textoContagemCurto(tarefa.contagemPrazo) && (
+                              <p
+                                className={`mt-1 whitespace-nowrap text-xs font-semibold ${
+                                  tarefa.contagemPrazo?.atrasado
+                                    ? "text-[#B42318]"
+                                    : tarefa.contagemPrazo?.hoje
+                                      ? "text-[#B54708]"
+                                      : "text-gray-500"
+                                }`}
+                              >
+                                {textoContagemCurto(tarefa.contagemPrazo)}
+                              </p>
+                            )}
                           </td>
                           <td className="max-w-[12rem] px-4 py-3">
                             {responsavel ? (
@@ -1177,14 +1351,45 @@ function Conteudo() {
                             )}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-right">
-                            <Link
-                              href={destino}
-                              onClick={(evento) => evento.stopPropagation()}
-                              className="inline-flex items-center gap-1 text-sm font-semibold text-orange-600 transition-colors hover:text-orange-700"
-                            >
-                              Abrir
-                              <Icone nome="ChevronRight" className="h-4 w-4" />
-                            </Link>
+                            <span className="inline-flex items-center gap-2">
+                              {tarefa.anexos > 0 && (
+                                <span
+                                  title={`${tarefa.anexos} ${
+                                    tarefa.anexos === 1 ? "anexo" : "anexos"
+                                  }`}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500"
+                                >
+                                  <Icone
+                                    nome="Paperclip"
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  <span className="cz-num">{tarefa.anexos}</span>
+                                </span>
+                              )}
+                              {permissoes.gerenciarBloqueio && (
+                                <Botao
+                                  variante="secundario"
+                                  tamanho="sm"
+                                  icone="Pencil"
+                                  onClick={(evento) => {
+                                    // A linha inteira navega no clique; sem isto
+                                    // editar levaria para o detalhe.
+                                    evento.stopPropagation();
+                                    abrirEdicao(tarefa);
+                                  }}
+                                >
+                                  Editar
+                                </Botao>
+                              )}
+                              <Link
+                                href={destino}
+                                onClick={(evento) => evento.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-sm font-semibold text-orange-600 transition-colors hover:text-orange-700"
+                              >
+                                Abrir
+                                <Icone nome="ChevronRight" className="h-4 w-4" />
+                              </Link>
+                            </span>
                           </td>
                         </tr>
                       );
@@ -1212,7 +1417,7 @@ function Conteudo() {
         titulo="Nova competência"
         descricao="Abre a apuração de um mês para uma empresa ativa. As etapas são criadas conforme o regime vigente."
         icone="CalendarPlus"
-        largura="lg"
+        largura="xl"
         onFechar={() => setModalNova(false)}
         rodape={
           <>
@@ -1256,7 +1461,7 @@ function Conteudo() {
             value={nova.empresaId}
             disabled={carregandoEmpresas}
             onChange={(e) => setNova((n) => ({ ...n, empresaId: e.target.value }))}
-            ajuda="Somente empresas com situação Ativa."
+            ajuda="Só empresa já cadastrada, e com CNPJ: empresa em abertura não tem o que apurar."
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -1284,7 +1489,7 @@ function Conteudo() {
               onChange={(e) =>
                 setNova((n) => ({ ...n, prazoEntrega: e.target.value }))
               }
-              ajuda="Opcional. Sem prazo, a competência não entra no controle de atraso."
+              ajuda="Opcional. Com prazo, o cartão passa a mostrar quantos dias úteis e corridos faltam."
             />
             <Escolha
               rotulo="Responsável"
@@ -1296,7 +1501,127 @@ function Conteudo() {
               }
             />
           </div>
+
+          <BlocoForm
+            icone="Paperclip"
+            titulo="Anexos"
+            descricao="Documento e imagem que já existem agora. Eles são enviados assim que a competência for criada."
+          >
+            <AnexosEmEspera
+              arquivos={anexosNovos}
+              onMudar={setAnexosNovos}
+              desabilitado={enviandoNova}
+            />
+          </BlocoForm>
         </div>
+      </Modal>
+
+      {/* ------------------------- Editar competência ----------------------- */}
+
+      {/*
+        Edição direto na lista, sem passar pelo detalhe.
+
+        O que entra aqui: prazo, responsável, observações e anexos. Etapa, status
+        e pendência ficam fora de propósito — cada um move o fluxo e tem rota
+        própria, e um formulário que mistura "trocar o prazo" com "concluir
+        etapa" convida a mover o fluxo sem querer.
+      */}
+      <Modal
+        aberto={!!emEdicao}
+        titulo="Editar competência"
+        icone="Pencil"
+        largura="xl"
+        descricao={
+          emEdicao
+            ? `${nomeEmpresa(emEdicao.empresa)} · ${competenciaLabel(
+                emEdicao.ano,
+                emEdicao.mes
+              )}`
+            : undefined
+        }
+        onFechar={() => setAlvoEdicao(null)}
+        rodape={
+          <>
+            <Botao
+              variante="secundario"
+              onClick={() => setAlvoEdicao(null)}
+              disabled={salvandoEdicao}
+            >
+              Fechar
+            </Botao>
+            <Botao
+              icone="Save"
+              onClick={salvarEdicao}
+              carregando={salvandoEdicao}
+              textoCarregando="Salvando"
+            >
+              Salvar alterações
+            </Botao>
+          </>
+        }
+      >
+        {emEdicao && (
+          <div className="space-y-6">
+            {erroEdicao && <Aviso mensagem={erroEdicao} />}
+
+            <BlocoForm
+              icone="ClipboardList"
+              titulo="Dados da competência"
+              descricao="Etapa, status e pendência não mudam aqui: cada um tem ação própria na lista e no detalhe, porque move o fluxo."
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Entrada
+                  rotulo="Prazo de entrega"
+                  type="date"
+                  value={formEdicao.prazoEntrega}
+                  onChange={(e) =>
+                    setFormEdicao((f) => ({
+                      ...f,
+                      prazoEntrega: e.target.value,
+                    }))
+                  }
+                  ajuda="Deixe em branco para tirar do controle de atraso."
+                />
+                <Escolha
+                  rotulo="Responsável"
+                  vazio="Sem responsável definido"
+                  opcoes={opcoesResponsavel}
+                  value={formEdicao.responsavelId}
+                  onChange={(e) =>
+                    setFormEdicao((f) => ({
+                      ...f,
+                      responsavelId: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <Area
+                rotulo="Observações"
+                rows={3}
+                value={formEdicao.observacoes}
+                placeholder="O que o próximo a pegar esta competência precisa saber"
+                onChange={(e) =>
+                  setFormEdicao((f) => ({ ...f, observacoes: e.target.value }))
+                }
+                ajuda="Fica no cadastro da competência e entra no histórico quando muda."
+              />
+            </BlocoForm>
+
+            <BlocoForm
+              icone="Paperclip"
+              titulo="Anexos"
+              descricao="Aqui o envio é imediato: cada arquivo sobe na hora, sem esperar o botão de salvar."
+            >
+              <AnexosDaTarefa
+                alvo={{ apuracaoId: emEdicao.id }}
+                usuarioId={sessao?.userId}
+                ehAdmin={papel === PAPEL.ADMIN}
+                onMudou={() => setRecarga((n) => n + 1)}
+              />
+            </BlocoForm>
+          </div>
+        )}
       </Modal>
 
       <ModalMotivo

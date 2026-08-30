@@ -52,18 +52,40 @@ export function Modal({
   titulo: string;
   descricao?: string;
   icone?: string;
-  largura?: "sm" | "md" | "lg" | "xl";
+  largura?: "sm" | "md" | "lg" | "xl" | "2xl";
   onFechar: () => void;
   children: ReactNode;
   rodape?: ReactNode;
 }) {
   const caixa = useRef<HTMLDivElement>(null);
 
+  /**
+   * `onFechar` guardado em ref, e FORA das dependências do efeito.
+   *
+   * Todos os chamadores passam arrow inline (`onFechar={() => setModalNova(false)}`),
+   * o que gera uma função nova a cada render. Com `onFechar` nas dependências, o
+   * efeito reexecutava a cada tecla digitada e o `querySelector` jogava o foco de
+   * volta no PRIMEIRO campo do modal — dois defeitos relatados vinham daqui:
+   *
+   *   - "Prazo de entrega": `<input type="date">` só dispara `change` quando a
+   *     data fica completa, então dia e mês passavam e o primeiro dígito do ano
+   *     disparava o evento, o render, e o foco pulava para o select de empresa.
+   *   - "Identificação provisória": é o terceiro controle do modal, então a
+   *     primeira letra digitada devolvia o foco ao select de tipo de processo.
+   *
+   * A ref mantém o Escape sempre chamando a versão atual do callback sem que a
+   * identidade dele participe da dependência. Consertar aqui resolve os seis
+   * modais do módulo de uma vez, em vez de pedir `useCallback` em cada tela — o
+   * que deixaria a armadilha armada para o próximo modal.
+   */
+  const fecharRef = useRef(onFechar);
+  fecharRef.current = onFechar;
+
   useEffect(() => {
     if (!aberto) return;
 
     const aoTeclar = (evento: KeyboardEvent) => {
-      if (evento.key === "Escape") onFechar();
+      if (evento.key === "Escape") fecharRef.current();
     };
     document.addEventListener("keydown", aoTeclar);
 
@@ -77,7 +99,7 @@ export function Modal({
     const raiz = caixa.current;
     const foco =
       raiz?.querySelector<HTMLElement>(
-        "input:not([type=hidden]), textarea, select"
+        "input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled])"
       ) ?? raiz?.querySelector<HTMLElement>("button");
     foco?.focus();
 
@@ -85,15 +107,28 @@ export function Modal({
       document.removeEventListener("keydown", aoTeclar);
       document.body.style.overflow = overflowAnterior;
     };
-  }, [aberto, onFechar]);
+  }, [aberto]);
 
   if (!aberto) return null;
 
+  /**
+   * Formulário largo em vez de formulário rolável.
+   *
+   * `lg` e `xl` subiram um degrau e `2xl` entrou porque o cadastro de empresa
+   * tem dez campos: em coluna única de 672px aquilo virava três telas de
+   * rolagem. Com 1152px e grade de três colunas o formulário inteiro cabe de uma
+   * vez. Rolagem em modal é o pior lugar para ela existir — a pessoa perde o
+   * rodapé com o botão de salvar e não sabe se o formulário acabou.
+   *
+   * O teto de 90vh continua: modal mais alto que a janela não tem para onde
+   * crescer, e aí a rolagem do corpo é a saída correta, não a preferida.
+   */
   const larguras: Record<string, string> = {
     sm: "max-w-sm",
-    md: "max-w-md",
-    lg: "max-w-2xl",
-    xl: "max-w-4xl",
+    md: "max-w-lg",
+    lg: "max-w-3xl",
+    xl: "max-w-5xl",
+    "2xl": "max-w-6xl",
   };
 
   return (

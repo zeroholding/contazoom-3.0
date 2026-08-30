@@ -48,6 +48,7 @@ import {
   dataHora,
   nomeEmpresa,
   plural,
+  rotuloEmpresa,
   tempoRelativo,
 } from "@/app/components/views/ui/tarefas/formato";
 import {
@@ -529,10 +530,7 @@ function Conteudo() {
 
   const opcoesEmpresa = useMemo<Opcao[]>(
     () =>
-      empresas.map((e) => ({
-        valor: e.id,
-        texto: `${e.razaoSocial} · ${e.cnpjFormatado}`,
-      })),
+      empresas.map((e) => ({ valor: e.id, texto: rotuloEmpresa(e) })),
     [empresas]
   );
 

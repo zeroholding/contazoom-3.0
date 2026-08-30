@@ -47,6 +47,7 @@ import {
 } from "@/app/components/views/ui/tarefas/formato";
 import {
   Aviso,
+  BlocoForm,
   Cabecalho,
   Carregando,
   Dado,
@@ -57,18 +58,23 @@ import {
   Area,
   Botao,
   Entrada,
+  EntradaDocumento,
   Escolha,
   type Opcao,
 } from "@/app/components/views/ui/tarefas/Campos";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
 import {
+  SeloPlanoInterno,
   SeloRegime,
   SeloSituacaoEmpresa,
   SeloStatus,
 } from "@/app/components/views/ui/tarefas/Selos";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
+import { somenteDigitos } from "@/lib/documento";
 import {
   ORGAO_EXTERNO_LABEL,
+  PLANO_INTERNO,
+  PLANO_INTERNO_LABEL,
   REGIME,
   REGIME_LABEL,
   SITUACAO_EMPRESA,
@@ -115,11 +121,26 @@ type UsuarioAdmin = {
 
 const REGIMES = Object.values(REGIME) as string[];
 const SITUACOES = Object.values(SITUACAO_EMPRESA) as string[];
+const PLANOS = Object.values(PLANO_INTERNO) as string[];
 const TRIBUTOS = Object.values(TRIBUTO_LOCAL) as string[];
 
+/**
+ * Situação continua editável AQUI, e só aqui.
+ *
+ * Saiu do cadastro e da lista, onde virou o plano interno. Sobrou nesta tela por
+ * um motivo específico: ENCERRADA não é derivável de plano — é a empresa que
+ * deixou de existir, não a que deixou de ser cliente — e alguém precisa poder
+ * afirmar isso. Quando o plano muda no mesmo formulário, o campo é desabilitado e
+ * a situação é recalculada, para não gravar o valor velho junto com o plano novo.
+ */
 const OPCOES_SITUACAO: Opcao[] = SITUACOES.map((valor) => ({
   valor,
   texto: SITUACAO_EMPRESA_LABEL[valor] ?? valor,
+}));
+
+const OPCOES_PLANO: Opcao[] = PLANOS.map((valor) => ({
+  valor,
+  texto: PLANO_INTERNO_LABEL[valor] ?? valor,
 }));
 
 const OPCOES_TRIBUTO: Opcao[] = TRIBUTOS.map((valor) => ({
@@ -174,12 +195,25 @@ function diaSeguinte(valor: string | null | undefined): string {
 /* -------------------------------------------------------------------------- */
 
 type FormEdicao = {
+  cnpj: string;
+  grupo: string;
   razaoSocial: string;
   nomeFantasia: string;
+  planoInterno: string;
   situacao: string;
   tributoLocal: string;
-  uf: string;
+  inscricaoMunicipal: string;
+  inscricaoEstadual: string;
+  cep: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
   municipio: string;
+  uf: string;
+  responsavelOperacional: string;
+  socioAdmNome: string;
+  socioAdmCpf: string;
   responsavelId: string;
   userId: string;
   observacoes: string;
@@ -187,12 +221,25 @@ type FormEdicao = {
 
 function formDe(empresa: EmpresaDetalhe): FormEdicao {
   return {
+    cnpj: empresa.cnpjFormatado ?? "",
+    grupo: empresa.grupo ?? "",
     razaoSocial: empresa.razaoSocial,
     nomeFantasia: empresa.nomeFantasia ?? "",
+    planoInterno: empresa.planoInterno,
     situacao: empresa.situacao,
     tributoLocal: empresa.tributoLocal,
-    uf: empresa.uf ?? "",
+    inscricaoMunicipal: empresa.inscricaoMunicipal ?? "",
+    inscricaoEstadual: empresa.inscricaoEstadual ?? "",
+    cep: empresa.cepFormatado ?? "",
+    logradouro: empresa.logradouro ?? "",
+    numero: empresa.numero ?? "",
+    complemento: empresa.complemento ?? "",
+    bairro: empresa.bairro ?? "",
     municipio: empresa.municipio ?? "",
+    uf: empresa.uf ?? "",
+    responsavelOperacional: empresa.responsavelOperacional ?? "",
+    socioAdmNome: empresa.socioAdmNome ?? "",
+    socioAdmCpf: empresa.socioAdmCpfFormatado ?? "",
     responsavelId: empresa.responsavelId ?? "",
     userId: empresa.userId ?? "",
     observacoes: empresa.observacoes ?? "",
@@ -345,9 +392,42 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
       return;
     }
 
+    const cnpjDigitos = somenteDigitos(form.cnpj);
+    if (cnpjDigitos.length > 0 && cnpjDigitos.length !== 14) {
+      setCampoEdicao("cnpj");
+      setErroEdicao("Complete os 14 dígitos do CNPJ.");
+      return;
+    }
+
+    const cpfDigitos = somenteDigitos(form.socioAdmCpf);
+    if (cpfDigitos.length > 0 && cpfDigitos.length !== 11) {
+      setCampoEdicao("socioAdmCpf");
+      setErroEdicao("Complete o CPF do sócio administrador ou deixe em branco.");
+      return;
+    }
+
+    const cepDigitos = somenteDigitos(form.cep);
+    if (cepDigitos.length > 0 && cepDigitos.length !== 8) {
+      setCampoEdicao("cep");
+      setErroEdicao("Complete o CEP ou deixe em branco.");
+      return;
+    }
+
     // Só as chaves que mudaram. `null` limpa, chave ausente mantém — é a
     // diferença que a rota usa para não apagar campo que ninguém tocou.
     const payload: Record<string, unknown> = {};
+
+    /**
+     * CNPJ só entra no payload quando a empresa AINDA NÃO TEM.
+     *
+     * É o fim do processo de abertura: a empresa foi cadastrada sem número, o
+     * Registro Digital saiu, e agora o CNPJ é gravado. A rota recusa troca e
+     * recusa apagar — aqui a guarda é a mesma, para o campo nem tentar enviar.
+     */
+    if (!empresa.cnpj && cnpjDigitos) payload.cnpj = cnpjDigitos;
+
+    const grupo = form.grupo.trim();
+    if (grupo !== (empresa.grupo ?? "")) payload.grupo = grupo || null;
 
     const razao = form.razaoSocial.trim();
     if (razao !== empresa.razaoSocial) payload.razaoSocial = razao;
@@ -357,10 +437,55 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
       payload.nomeFantasia = fantasia || null;
     }
 
-    if (form.situacao !== empresa.situacao) payload.situacao = form.situacao;
+    if (form.planoInterno !== empresa.planoInterno) {
+      payload.planoInterno = form.planoInterno;
+    }
+    /**
+     * Situação só vai quando foi mexida À MÃO e o plano NÃO mudou.
+     *
+     * A rota recalcula a situação a partir do plano quando o plano muda, e um
+     * `situacao` explícito no mesmo corpo venceria esse recálculo — mandando o
+     * valor velho junto com o plano novo, a empresa ficaria "Suspensa" depois de
+     * entrar no Plano Simples. Mandar só quando o plano ficou igual preserva o
+     * uso legítimo do campo, que é marcar ENCERRADA.
+     */
+    if (
+      form.planoInterno === empresa.planoInterno &&
+      form.situacao !== empresa.situacao
+    ) {
+      payload.situacao = form.situacao;
+    }
     if (form.tributoLocal !== empresa.tributoLocal) {
       payload.tributoLocal = form.tributoLocal;
     }
+
+    const im = form.inscricaoMunicipal.trim();
+    if (im !== (empresa.inscricaoMunicipal ?? "")) {
+      payload.inscricaoMunicipal = im || null;
+    }
+
+    const ie = form.inscricaoEstadual.trim();
+    if (ie !== (empresa.inscricaoEstadual ?? "")) {
+      payload.inscricaoEstadual = ie || null;
+    }
+
+    if (cepDigitos !== (empresa.cep ?? "")) payload.cep = cepDigitos || null;
+
+    const logradouro = form.logradouro.trim();
+    if (logradouro !== (empresa.logradouro ?? "")) {
+      payload.logradouro = logradouro || null;
+    }
+
+    const numero = form.numero.trim();
+    if (numero !== (empresa.numero ?? "")) payload.numero = numero || null;
+
+    const complemento = form.complemento.trim();
+    if (complemento !== (empresa.complemento ?? "")) {
+      payload.complemento = complemento || null;
+    }
+
+    const bairro = form.bairro.trim();
+    if (bairro !== (empresa.bairro ?? "")) payload.bairro = bairro || null;
 
     const uf = form.uf.trim().toUpperCase();
     if (uf !== (empresa.uf ?? "")) payload.uf = uf || null;
@@ -368,6 +493,20 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
     const municipio = form.municipio.trim();
     if (municipio !== (empresa.municipio ?? "")) {
       payload.municipio = municipio || null;
+    }
+
+    const respOperacional = form.responsavelOperacional.trim();
+    if (respOperacional !== (empresa.responsavelOperacional ?? "")) {
+      payload.responsavelOperacional = respOperacional || null;
+    }
+
+    const socio = form.socioAdmNome.trim();
+    if (socio !== (empresa.socioAdmNome ?? "")) {
+      payload.socioAdmNome = socio || null;
+    }
+
+    if (cpfDigitos !== (empresa.socioAdmCpf ?? "")) {
+      payload.socioAdmCpf = cpfDigitos || null;
     }
 
     if (form.responsavelId !== (empresa.responsavelId ?? "")) {
@@ -554,7 +693,26 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
   /* -------------------------------- Render -------------------------------- */
 
-  const descricao = [empresa.nomeFantasia, empresa.cnpjFormatado]
+  const descricao = [
+    empresa.grupo,
+    empresa.nomeFantasia,
+    empresa.cnpjFormatado ?? "em abertura",
+  ]
+    .filter((parte): parte is string => Boolean(parte))
+    .join(" · ");
+
+  /**
+   * Endereço em uma linha.
+   *
+   * Montado aqui e não no template para partes ausentes não virarem vírgula
+   * sobrando: "Rua X, , , São Paulo" é o resultado de interpolar campo vazio.
+   */
+  const enderecoCompleto = [
+    [empresa.logradouro, empresa.numero].filter(Boolean).join(", ") || null,
+    empresa.complemento,
+    empresa.bairro,
+    empresa.cepFormatado,
+  ]
     .filter((parte): parte is string => Boolean(parte))
     .join(" · ");
 
@@ -646,7 +804,21 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
       >
         <dl className="grid gap-x-6 gap-y-5 px-5 py-5 sm:grid-cols-2 lg:grid-cols-3">
           <Dado rotulo="CNPJ">
-            <span className="font-mono">{empresa.cnpjFormatado}</span>
+            {empresa.cnpjFormatado ? (
+              <span className="font-mono">{empresa.cnpjFormatado}</span>
+            ) : (
+              // Empresa em abertura: o texto diz o motivo, porque "não
+              // informado" aqui pareceria cadastro pela metade.
+              <span className="inline-flex items-center gap-1.5 font-normal text-gray-500">
+                <Icone nome="Hourglass" className="h-3.5 w-3.5 shrink-0" />
+                Em abertura — o CNPJ ainda não existe
+              </span>
+            )}
+          </Dado>
+          <Dado rotulo="Nome do grupo">
+            {empresa.grupo ?? (
+              <span className="font-normal text-gray-400">Não informado</span>
+            )}
           </Dado>
           <Dado rotulo="Razão social">{empresa.razaoSocial}</Dado>
           <Dado rotulo="Nome fantasia">
@@ -654,14 +826,40 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
               <span className="font-normal text-gray-400">Não informado</span>
             )}
           </Dado>
+          <Dado rotulo="Plano interno ContaZoom">
+            <SeloPlanoInterno plano={empresa.planoInterno} />
+          </Dado>
           <Dado rotulo="Regime vigente">
             <SeloRegime regime={empresa.regime} completo />
           </Dado>
           <Dado rotulo="Situação">
             <SeloSituacaoEmpresa situacao={empresa.situacao} />
+            {/* A situação passou a ser calculada. Sem esta nota, quem procura o
+                campo para editar não encontra e conclui que a tela está
+                quebrada. */}
+            <span className="mt-1 block text-xs font-normal text-gray-500">
+              Calculada a partir do plano interno e do CNPJ.
+            </span>
           </Dado>
           <Dado rotulo="Tributo local">
             {TRIBUTO_LOCAL_LABEL[empresa.tributoLocal] ?? empresa.tributoLocal}
+          </Dado>
+          <Dado rotulo="Inscrição municipal">
+            {empresa.inscricaoMunicipal ?? (
+              <span className="font-normal text-gray-400">Não informada</span>
+            )}
+          </Dado>
+          <Dado rotulo="Inscrição estadual">
+            {empresa.inscricaoEstadual ?? (
+              <span className="font-normal text-gray-400">Não informada</span>
+            )}
+          </Dado>
+          <Dado rotulo="Endereço">
+            {enderecoCompleto ? (
+              <span className="font-normal">{enderecoCompleto}</span>
+            ) : (
+              <span className="font-normal text-gray-400">Não informado</span>
+            )}
           </Dado>
           <Dado rotulo="UF">
             {empresa.uf ?? (
@@ -671,6 +869,21 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
           <Dado rotulo="Município">
             {empresa.municipio ?? (
               <span className="font-normal text-gray-400">Não informado</span>
+            )}
+          </Dado>
+          <Dado rotulo="Responsável operacional">
+            {empresa.responsavelOperacional ?? (
+              <span className="font-normal text-gray-400">Não informado</span>
+            )}
+          </Dado>
+          <Dado rotulo="Sócio administrador">
+            {empresa.socioAdmNome ?? (
+              <span className="font-normal text-gray-400">Não informado</span>
+            )}
+            {empresa.socioAdmCpfFormatado && (
+              <span className="mt-0.5 block font-mono text-xs font-normal text-gray-500">
+                {empresa.socioAdmCpfFormatado}
+              </span>
             )}
           </Dado>
           <Dado rotulo="Início de atividade">
@@ -1033,135 +1246,283 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
         }
       >
         {form && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {erroEdicao && !campoEdicao && <Aviso mensagem={erroEdicao} />}
 
-            <div className="grid gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  CNPJ
-                </p>
-                <p className="mt-0.5 font-mono text-sm font-semibold text-gray-900">
-                  {empresa.cnpjFormatado}
-                </p>
-                <p className="mt-1 text-xs text-gray-500">
-                  Não editável: é a identidade da empresa. Apuração, processo e
-                  histórico apontam para ela, e trocar o número transformaria
-                  este histórico no de outra empresa. CNPJ errado se resolve
-                  cadastrando o certo e encerrando este.
-                </p>
+            {/* ----------------------- Identificação ---------------------- */}
+
+            <BlocoForm
+              icone="Building2"
+              titulo="Identificação"
+              descricao={
+                empresa.cnpj
+                  ? "O CNPJ já está preenchido e não muda mais: apuração, processo e histórico apontam para ele."
+                  : "Empresa em abertura. Preencha o CNPJ quando o Registro Digital sair — é a única vez que este campo aceita escrita."
+              }
+            >
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {empresa.cnpj ? (
+                  <div className="rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5">
+                    <p className="text-[0.8125rem] font-semibold leading-5 text-[#14161B]">
+                      CNPJ
+                    </p>
+                    <p className="mt-0.5 font-mono text-sm font-semibold text-gray-900">
+                      {empresa.cnpjFormatado}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      Trocar o número transformaria este histórico no de outra
+                      empresa. CNPJ errado se resolve cadastrando o certo.
+                    </p>
+                  </div>
+                ) : (
+                  <EntradaDocumento
+                    tipo="cnpj"
+                    rotulo="CNPJ"
+                    value={form.cnpj}
+                    erro={erroDoCampo("cnpj")}
+                    ajuda="Grava uma vez, no fim da abertura. Depois não muda."
+                    onChange={(cnpj) => editar({ cnpj })}
+                  />
+                )}
+                <Entrada
+                  rotulo="Nome do grupo"
+                  value={form.grupo}
+                  erro={erroDoCampo("grupo")}
+                  ajuda="Deixe em branco para limpar."
+                  onChange={(e) => editar({ grupo: e.target.value })}
+                />
+                <Entrada
+                  rotulo="Razão social"
+                  required
+                  value={form.razaoSocial}
+                  erro={erroDoCampo("razaoSocial")}
+                  onChange={(e) => editar({ razaoSocial: e.target.value })}
+                />
               </div>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                  Regime
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Entrada
+                  rotulo="Nome fantasia"
+                  value={form.nomeFantasia}
+                  erro={erroDoCampo("nomeFantasia")}
+                  ajuda="Deixe em branco para limpar."
+                  onChange={(e) => editar({ nomeFantasia: e.target.value })}
+                />
+                <Entrada
+                  rotulo="Inscrição municipal"
+                  value={form.inscricaoMunicipal}
+                  erro={erroDoCampo("inscricaoMunicipal")}
+                  ajuda='Aceita "ISENTO".'
+                  onChange={(e) =>
+                    editar({ inscricaoMunicipal: e.target.value })
+                  }
+                />
+                <Entrada
+                  rotulo="Inscrição estadual"
+                  value={form.inscricaoEstadual}
+                  erro={erroDoCampo("inscricaoEstadual")}
+                  ajuda='Aceita "ISENTO".'
+                  onChange={(e) => editar({ inscricaoEstadual: e.target.value })}
+                />
+              </div>
+            </BlocoForm>
+
+            {/* -------------------------- Endereço ------------------------ */}
+
+            <BlocoForm
+              icone="MapPin"
+              titulo="Endereço completo"
+              descricao="É o endereço que vai para a Junta e para a Prefeitura."
+            >
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+                <EntradaDocumento
+                  tipo="cep"
+                  rotulo="CEP"
+                  wrapperClassName="lg:col-span-2"
+                  value={form.cep}
+                  erro={erroDoCampo("cep")}
+                  onChange={(cep) => editar({ cep })}
+                />
+                <Entrada
+                  rotulo="Logradouro"
+                  wrapperClassName="lg:col-span-3"
+                  value={form.logradouro}
+                  erro={erroDoCampo("logradouro")}
+                  onChange={(e) => editar({ logradouro: e.target.value })}
+                />
+                <Entrada
+                  rotulo="Número"
+                  wrapperClassName="lg:col-span-1"
+                  maxLength={20}
+                  value={form.numero}
+                  erro={erroDoCampo("numero")}
+                  onChange={(e) => editar({ numero: e.target.value })}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+                <Entrada
+                  rotulo="Complemento"
+                  wrapperClassName="lg:col-span-2"
+                  value={form.complemento}
+                  erro={erroDoCampo("complemento")}
+                  onChange={(e) => editar({ complemento: e.target.value })}
+                />
+                <Entrada
+                  rotulo="Bairro"
+                  wrapperClassName="lg:col-span-2"
+                  value={form.bairro}
+                  erro={erroDoCampo("bairro")}
+                  onChange={(e) => editar({ bairro: e.target.value })}
+                />
+                <Entrada
+                  rotulo="Município"
+                  wrapperClassName="lg:col-span-1"
+                  value={form.municipio}
+                  erro={erroDoCampo("municipio")}
+                  onChange={(e) => editar({ municipio: e.target.value })}
+                />
+                <Entrada
+                  rotulo="UF"
+                  wrapperClassName="lg:col-span-1"
+                  maxLength={2}
+                  placeholder="SP"
+                  value={form.uf}
+                  erro={erroDoCampo("uf")}
+                  onChange={(e) =>
+                    editar({ uf: e.target.value.toUpperCase().slice(0, 2) })
+                  }
+                />
+              </div>
+            </BlocoForm>
+
+            {/* --------------------------- Pessoas ------------------------ */}
+
+            <BlocoForm
+              icone="Contact"
+              titulo="Pessoas"
+              descricao="Responsável operacional é do lado do cliente. Responsável interno é quem cuida da empresa aqui dentro."
+            >
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Entrada
+                  rotulo="Responsável operacional"
+                  value={form.responsavelOperacional}
+                  erro={erroDoCampo("responsavelOperacional")}
+                  onChange={(e) =>
+                    editar({ responsavelOperacional: e.target.value })
+                  }
+                />
+                <Entrada
+                  rotulo="Sócio administrador"
+                  value={form.socioAdmNome}
+                  erro={erroDoCampo("socioAdmNome")}
+                  onChange={(e) => editar({ socioAdmNome: e.target.value })}
+                />
+                <EntradaDocumento
+                  tipo="cpf"
+                  rotulo="CPF do sócio administrador"
+                  value={form.socioAdmCpf}
+                  erro={erroDoCampo("socioAdmCpf")}
+                  onChange={(socioAdmCpf) => editar({ socioAdmCpf })}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Escolha
+                  rotulo="Responsável interno"
+                  vazio="Sem responsável definido"
+                  opcoes={opcoesResponsavel}
+                  value={form.responsavelId}
+                  erro={erroDoCampo("responsavelId")}
+                  onChange={(e) => editar({ responsavelId: e.target.value })}
+                />
+                {semAcessoClientes ? (
+                  <p className="flex items-start gap-1.5 self-end rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
+                    <Icone nome="Lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Somente administrador vincula ou desvincula o login do
+                      cliente. O vínculo atual é preservado ao salvar:{" "}
+                      {empresa.user
+                        ? empresa.user.name?.trim() || empresa.user.email
+                        : "nenhum login vinculado"}
+                      .
+                    </span>
+                  </p>
+                ) : (
+                  <Escolha
+                    rotulo="Cliente vinculado"
+                    vazio="Nenhum login vinculado"
+                    opcoes={opcoesCliente}
+                    value={form.userId}
+                    erro={erroDoCampo("userId")}
+                    ajuda="Login pelo qual o cliente acessa o próprio painel."
+                    onChange={(e) => editar({ userId: e.target.value })}
+                  />
+                )}
+              </div>
+            </BlocoForm>
+
+            {/* ------------------- Plano e tributação --------------------- */}
+
+            <BlocoForm
+              icone="Tag"
+              titulo="Plano e tributação"
+              descricao="O plano decide se a empresa entra na abertura mensal. O regime tem ação própria porque fecha uma vigência e abre outra no histórico."
+            >
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Escolha
+                  rotulo="Plano interno ContaZoom"
+                  opcoes={OPCOES_PLANO}
+                  value={form.planoInterno}
+                  erro={erroDoCampo("planoInterno")}
+                  ajuda="Simples e Presumido geram competência todo mês."
+                  onChange={(e) => editar({ planoInterno: e.target.value })}
+                />
+                <Escolha
+                  rotulo="Situação"
+                  opcoes={OPCOES_SITUACAO}
+                  value={form.situacao}
+                  erro={erroDoCampo("situacao")}
+                  disabled={form.planoInterno !== empresa.planoInterno}
+                  ajuda={
+                    form.planoInterno !== empresa.planoInterno
+                      ? "Será recalculada a partir do plano novo ao salvar."
+                      : "Normalmente derivada do plano. Mexa só para marcar Encerrada."
+                  }
+                  onChange={(e) => editar({ situacao: e.target.value })}
+                />
+                <Escolha
+                  rotulo="Tributo local"
+                  opcoes={OPCOES_TRIBUTO}
+                  value={form.tributoLocal}
+                  erro={erroDoCampo("tributoLocal")}
+                  ajuda="Nomeia a etapa de ICMS/ISS no Lucro Presumido."
+                  onChange={(e) => editar({ tributoLocal: e.target.value })}
+                />
+              </div>
+
+              <div className="rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5">
+                <p className="text-[0.8125rem] font-semibold leading-5 text-[#14161B]">
+                  Regime tributário
                 </p>
                 <p className="mt-0.5 text-sm font-semibold text-gray-900">
                   {REGIME_LABEL[empresa.regime] ?? empresa.regime}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs leading-5 text-gray-500">
                   Não editável aqui: mudar regime fecha uma vigência e abre
                   outra no histórico, e por isso tem ação própria em Alterar
                   regime.
                 </p>
               </div>
-            </div>
 
-            <Entrada
-              rotulo="Razão social"
-              required
-              value={form.razaoSocial}
-              erro={erroDoCampo("razaoSocial")}
-              onChange={(e) => editar({ razaoSocial: e.target.value })}
-            />
-
-            <Entrada
-              rotulo="Nome fantasia"
-              value={form.nomeFantasia}
-              erro={erroDoCampo("nomeFantasia")}
-              ajuda="Deixe em branco para limpar."
-              onChange={(e) => editar({ nomeFantasia: e.target.value })}
-            />
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Escolha
-                rotulo="Situação"
-                opcoes={OPCOES_SITUACAO}
-                value={form.situacao}
-                erro={erroDoCampo("situacao")}
-                ajuda="Somente empresa ativa entra na abertura mensal de competência."
-                onChange={(e) => editar({ situacao: e.target.value })}
+              <Area
+                rotulo="Observações"
+                rows={3}
+                value={form.observacoes}
+                erro={erroDoCampo("observacoes")}
+                onChange={(e) => editar({ observacoes: e.target.value })}
               />
-              <Escolha
-                rotulo="Tributo local"
-                opcoes={OPCOES_TRIBUTO}
-                value={form.tributoLocal}
-                erro={erroDoCampo("tributoLocal")}
-                ajuda="Ajusta o título da etapa de ICMS/ISS no Lucro Presumido."
-                onChange={(e) => editar({ tributoLocal: e.target.value })}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Entrada
-                rotulo="UF"
-                maxLength={2}
-                placeholder="SP"
-                value={form.uf}
-                erro={erroDoCampo("uf")}
-                onChange={(e) =>
-                  editar({ uf: e.target.value.toUpperCase().slice(0, 2) })
-                }
-              />
-              <Entrada
-                rotulo="Município"
-                wrapperClassName="sm:col-span-2"
-                value={form.municipio}
-                erro={erroDoCampo("municipio")}
-                onChange={(e) => editar({ municipio: e.target.value })}
-              />
-            </div>
-
-            <Escolha
-              rotulo="Responsável interno"
-              vazio="Sem responsável definido"
-              opcoes={opcoesResponsavel}
-              value={form.responsavelId}
-              erro={erroDoCampo("responsavelId")}
-              onChange={(e) => editar({ responsavelId: e.target.value })}
-            />
-
-            {semAcessoClientes ? (
-              <p className="flex items-start gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
-                <Icone nome="Lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <span>
-                  Somente administrador vincula ou desvincula o login do
-                  cliente. O vínculo atual desta empresa é preservado ao salvar:
-                  {" "}
-                  {empresa.user
-                    ? empresa.user.name?.trim() || empresa.user.email
-                    : "nenhum login vinculado"}
-                  .
-                </span>
-              </p>
-            ) : (
-              <Escolha
-                rotulo="Cliente vinculado"
-                vazio="Nenhum login vinculado"
-                opcoes={opcoesCliente}
-                value={form.userId}
-                erro={erroDoCampo("userId")}
-                ajuda="Login pelo qual o cliente acessa o próprio painel."
-                onChange={(e) => editar({ userId: e.target.value })}
-              />
-            )}
-
-            <Area
-              rotulo="Observações"
-              rows={3}
-              value={form.observacoes}
-              erro={erroDoCampo("observacoes")}
-              onChange={(e) => editar({ observacoes: e.target.value })}
-            />
+            </BlocoForm>
           </div>
         )}
       </Modal>

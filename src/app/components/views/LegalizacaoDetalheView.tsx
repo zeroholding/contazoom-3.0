@@ -51,6 +51,7 @@ import {
   iniciais,
   nomeEmpresa,
   plural,
+  rotuloEmpresa,
 } from "@/app/components/views/ui/tarefas/formato";
 import {
   Aviso,
@@ -80,10 +81,13 @@ import {
 import ListaEtapas from "@/app/components/views/ui/tarefas/ListaEtapas";
 import Historico from "@/app/components/views/ui/tarefas/Historico";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
+import { AnexosDaTarefa } from "@/app/components/views/ui/tarefas/Anexos";
+import { PAPEL } from "@/lib/papeis";
 import {
   BLOQUEIO_RESPONSAVEL_LABEL,
   ORGAO_EXTERNO,
   ORGAO_EXTERNO_LABEL,
+  PLANO_INTERNO_CURTO,
   REGIME,
   REGIME_LABEL,
   SITUACAO_EMPRESA_LABEL,
@@ -231,7 +235,7 @@ function ehUltimaAplicavel(etapa: Etapa, etapas: Etapa[]): boolean {
 /* -------------------------------------------------------------------------- */
 
 export default function LegalizacaoDetalheView({ id }: { id: string }) {
-  const { permissoes } = useSessao();
+  const { permissoes, sessao, papel } = useSessao();
 
   const [processo, setProcesso] = useState<ProcessoDetalhe | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -243,6 +247,8 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
   const [ocupado, setOcupado] = useState(false);
   const [recarga, setRecarga] = useState(0);
   const [aba, setAba] = useState("etapas");
+  /** Contagem da aba de anexos. `null` até a aba ser aberta uma vez. */
+  const [totalAnexos, setTotalAnexos] = useState<number | null>(null);
 
   /* ------------------------------- Carga ---------------------------------- */
 
@@ -733,8 +739,10 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
     () =>
       empresas.map((e) => ({
         valor: e.id,
-        texto: `${e.razaoSocial} · ${e.cnpjFormatado} · ${
-          SITUACAO_EMPRESA_LABEL[e.situacao] ?? e.situacao
+        // Plano interno no lugar da situação: é o status operacional da empresa
+        // desde a mudança, e é o que diz se ela gera competência.
+        texto: `${rotuloEmpresa(e)} · ${
+          PLANO_INTERNO_CURTO[e.planoInterno] ?? e.planoInterno
         }`,
       })),
     [empresas]
@@ -1314,6 +1322,14 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
               contagem: processo.bloqueada ? 1 : 0,
             },
             {
+              chave: "anexos",
+              texto: "Anexos",
+              // A contagem só existe depois de a aba ser aberta uma vez: a lista
+              // é carregada sob demanda, e disparar essa requisição no
+              // carregamento do detalhe só para pintar um número não se paga.
+              contagem: totalAnexos ?? undefined,
+            },
+            {
               chave: "historico",
               texto: "Histórico",
               contagem: processo.logs.length,
@@ -1323,6 +1339,25 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
           ativa={aba}
           onMudar={setAba}
         />
+
+        {aba === "anexos" && (
+          <div className="px-5 py-4" role="tabpanel" aria-label="Anexos do processo">
+            <p className="mb-3 flex items-start gap-1.5 text-xs leading-5 text-gray-500">
+              <Icone nome="Info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Formulário de abertura, DBE, comprovante da taxa da JUCESP,
+                contrato social assinado e documentos oficiais ficam aqui, junto
+                do processo — não na pasta do cliente.
+              </span>
+            </p>
+            <AnexosDaTarefa
+              alvo={{ processoId: processo.id }}
+              usuarioId={sessao?.userId}
+              ehAdmin={papel === PAPEL.ADMIN}
+              onMudou={setTotalAnexos}
+            />
+          </div>
+        )}
 
         {aba === "etapas" && (
           <ListaEtapas

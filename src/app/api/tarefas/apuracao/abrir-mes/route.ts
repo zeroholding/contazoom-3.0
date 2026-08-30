@@ -1,5 +1,5 @@
 /**
- * Abertura do mês: cria a competência para todas as empresas ativas.
+ * Abertura do mês: cria a competência para as empresas com plano ativo.
  *
  * POST /api/tarefas/apuracao/abrir-mes
  *
@@ -15,7 +15,10 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { PAPEL, requirePapel } from "@/lib/api-guard";
 import { criarApuracao } from "@/lib/tarefa-service";
-import { REGIMES_VALIDOS, SITUACAO_EMPRESA } from "@/lib/tarefa-etapas";
+import {
+  PLANOS_QUE_GERAM_COMPETENCIA,
+  REGIMES_VALIDOS,
+} from "@/lib/tarefa-etapas";
 import { competenciaAnterior, competenciaLabel } from "@/lib/tarefa-status";
 
 type CorpoAbrirMes = { ano?: unknown; mes?: unknown };
@@ -77,9 +80,24 @@ export async function POST(req: NextRequest) {
       label: competenciaLabel(ano, mes),
     };
 
-    // Empresa EM_ABERTURA não gera competência: ainda não tem CNPJ para apurar.
+    /**
+     * Quem gera competência é o PLANO INTERNO, não mais a situação.
+     *
+     * Plano Simples e Plano Presumido geram; Standby e "sem plano — suspensa" não.
+     * Standby é cliente parado que paga só para manter o cadastro, e sem plano é
+     * cliente que saiu: abrir competência para os dois criaria 12 tarefas por ano
+     * que ninguém trabalha e que sujariam todo indicador de atraso do painel.
+     *
+     * O CNPJ nulo também exclui, e por um motivo diferente: empresa em abertura
+     * não tem número para apurar. Antes isso vinha de graça porque `situacao` era
+     * EM_ABERTURA; agora é explícito, porque plano e CNPJ são independentes — dá
+     * para ter uma empresa em abertura já contratada no Plano Presumido.
+     */
     const empresas = await prisma.empresa.findMany({
-      where: { situacao: SITUACAO_EMPRESA.ATIVA },
+      where: {
+        planoInterno: { in: PLANOS_QUE_GERAM_COMPETENCIA },
+        cnpj: { not: null },
+      },
       select: {
         id: true,
         cnpj: true,
@@ -108,7 +126,10 @@ export async function POST(req: NextRequest) {
         )
         .map((e) => ({
           empresaId: e.id,
-          cnpj: e.cnpj,
+          // O `where` já exclui CNPJ nulo, mas o tipo do Prisma não sabe disso.
+          // `?? ""` em vez de `!`: se um dia o filtro mudar, o relatório mostra
+          // um CNPJ vazio em vez de explodir na renderização.
+          cnpj: e.cnpj ?? "",
           razaoSocial: e.razaoSocial,
           erro: `Regime inválido no cadastro: ${e.regime}`,
         }));
@@ -122,7 +143,7 @@ export async function POST(req: NextRequest) {
         falhas: invalidas,
         criaria: criaria.map((e) => ({
           empresaId: e.id,
-          cnpj: e.cnpj,
+          cnpj: e.cnpj ?? "",
           razaoSocial: e.razaoSocial,
           regime: e.regime,
         })),
@@ -152,7 +173,7 @@ export async function POST(req: NextRequest) {
       if (!REGIMES_VALIDOS.includes(empresa.regime)) {
         falhas.push({
           empresaId: empresa.id,
-          cnpj: empresa.cnpj,
+          cnpj: empresa.cnpj ?? "",
           razaoSocial: empresa.razaoSocial,
           erro: `Regime inválido no cadastro: ${empresa.regime}`,
         });
@@ -190,7 +211,7 @@ export async function POST(req: NextRequest) {
         }
         falhas.push({
           empresaId: empresa.id,
-          cnpj: empresa.cnpj,
+          cnpj: empresa.cnpj ?? "",
           razaoSocial: empresa.razaoSocial,
           erro: error instanceof Error ? error.message : "Erro desconhecido",
         });

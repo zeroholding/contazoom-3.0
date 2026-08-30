@@ -21,6 +21,7 @@ import {
   usuariosInexistentes,
   validarAtualizacaoEmpresa,
 } from "@/lib/empresa";
+import { formatarCep, formatarCpf } from "@/lib/documento";
 
 export const runtime = "nodejs";
 
@@ -91,7 +92,14 @@ export async function GET(
     }
 
     return NextResponse.json({
-      empresa: { ...empresa, cnpjFormatado: formatarCnpj(empresa.cnpj) },
+      empresa: {
+        ...empresa,
+        cnpjFormatado: empresa.cnpj ? formatarCnpj(empresa.cnpj) : null,
+        cepFormatado: empresa.cep ? formatarCep(empresa.cep) : null,
+        socioAdmCpfFormatado: empresa.socioAdmCpf
+          ? formatarCpf(empresa.socioAdmCpf)
+          : null,
+      },
     });
   } catch (error) {
     console.error("Erro ao buscar empresa:", error);
@@ -124,20 +132,6 @@ export async function PATCH(
       );
     }
 
-    // CNPJ é a identidade da empresa: apuração, processo e histórico apontam
-    // para ela. Trocar o número transformaria o histórico de uma empresa no
-    // histórico de outra. CNPJ errado se resolve cadastrando o certo.
-    if ("cnpj" in corpo) {
-      return NextResponse.json(
-        {
-          error:
-            "O CNPJ não pode ser alterado. Cadastre a empresa correta e ajuste a situação desta.",
-          campo: "cnpj",
-        },
-        { status: 400 }
-      );
-    }
-
     // Regime tem rota própria porque mudar regime não é editar um campo: fecha a
     // vigência anterior e abre a nova em EmpresaRegimeHistorico. Um UPDATE
     // simples aqui apagaria a linha do tempo fiscal, e a permissão é outra
@@ -153,7 +147,21 @@ export async function PATCH(
       );
     }
 
-    const atualizacao = validarAtualizacaoEmpresa(corpo);
+    const existente = await prisma.empresa.findUnique({
+      where: { id },
+      select: { id: true, cnpj: true, planoInterno: true },
+    });
+    if (!existente) {
+      return NextResponse.json(
+        { error: "Empresa não encontrada." },
+        { status: 404 }
+      );
+    }
+
+    const atualizacao = validarAtualizacaoEmpresa(corpo, {
+      cnpjAtual: existente.cnpj,
+      planoAtual: existente.planoInterno,
+    });
     if (!atualizacao.ok) {
       return NextResponse.json(
         { error: atualizacao.erro, campo: atualizacao.campo },
@@ -169,15 +177,58 @@ export async function PATCH(
       );
     }
 
-    const existente = await prisma.empresa.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (!existente) {
-      return NextResponse.json(
-        { error: "Empresa não encontrada." },
-        { status: 404 }
-      );
+    /**
+     * CNPJ: pode ser PREENCHIDO uma vez, nunca trocado nem apagado.
+     *
+     * Antes era proibido em qualquer hipótese, porque o CNPJ era a identidade da
+     * empresa e trocá-lo transformaria o histórico de uma empresa no histórico de
+     * outra. Isso continua verdade — o que mudou é que agora existe empresa
+     * cadastrada SEM CNPJ (a que está sendo aberta), e o momento em que o número
+     * sai da Junta é exatamente quando ele precisa ser gravado.
+     *
+     * Então a regra é assimétrica de propósito:
+     *   vazio -> preenchido : permitido, é o fim do processo de abertura
+     *   preenchido -> outro : recusado, seria trocar de empresa
+     *   preenchido -> vazio : recusado, apagaria a identidade
+     */
+    if (dados.cnpj !== undefined) {
+      if (existente.cnpj && dados.cnpj !== existente.cnpj) {
+        return NextResponse.json(
+          {
+            error:
+              "O CNPJ já está preenchido e não pode ser alterado. Cadastre a empresa correta e ajuste o plano desta.",
+            campo: "cnpj",
+          },
+          { status: 400 }
+        );
+      }
+      if (existente.cnpj && !dados.cnpj) {
+        return NextResponse.json(
+          {
+            error: "O CNPJ não pode ser apagado depois de preenchido.",
+            campo: "cnpj",
+          },
+          { status: 400 }
+        );
+      }
+      if (dados.cnpj && dados.cnpj !== existente.cnpj) {
+        const conflito = await prisma.empresa.findUnique({
+          where: { cnpj: dados.cnpj },
+          select: { id: true, razaoSocial: true },
+        });
+        if (conflito) {
+          return NextResponse.json(
+            {
+              error: `O CNPJ ${formatarCnpj(dados.cnpj)} já está cadastrado para ${
+                conflito.razaoSocial
+              }.`,
+              code: "cnpj_duplicado",
+              empresaId: conflito.id,
+            },
+            { status: 409 }
+          );
+        }
+      }
     }
 
     const inexistentes = await usuariosInexistentes([
@@ -197,13 +248,25 @@ export async function PATCH(
       select: {
         id: true,
         cnpj: true,
+        grupo: true,
         razaoSocial: true,
         nomeFantasia: true,
         regime: true,
+        planoInterno: true,
         situacao: true,
         tributoLocal: true,
+        inscricaoMunicipal: true,
+        inscricaoEstadual: true,
+        cep: true,
+        logradouro: true,
+        numero: true,
+        complemento: true,
+        bairro: true,
         uf: true,
         municipio: true,
+        responsavelOperacional: true,
+        socioAdmNome: true,
+        socioAdmCpf: true,
         userId: true,
         responsavelId: true,
         observacoes: true,
@@ -212,7 +275,14 @@ export async function PATCH(
     });
 
     return NextResponse.json({
-      empresa: { ...empresa, cnpjFormatado: formatarCnpj(empresa.cnpj) },
+      empresa: {
+        ...empresa,
+        cnpjFormatado: empresa.cnpj ? formatarCnpj(empresa.cnpj) : null,
+        cepFormatado: empresa.cep ? formatarCep(empresa.cep) : null,
+        socioAdmCpfFormatado: empresa.socioAdmCpf
+          ? formatarCpf(empresa.socioAdmCpf)
+          : null,
+      },
     });
   } catch (error) {
     if (error instanceof SyntaxError) {

@@ -219,6 +219,32 @@ export const SITUACAO_PRAZO_LABEL: Record<string, string> = {
 /** Dias a partir dos quais o prazo passa a ser destacado como "vence em breve". */
 export const DIAS_ALERTA_PRAZO = 3;
 
+/* -------------------------------------------------------------------------- */
+/*                              Dias úteis                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O calendário mora em `src/lib/dias-uteis.ts`, que não importa nada.
+ *
+ * Motivo: o cartão do Kanban é `"use client"` e precisa da contagem; se ela
+ * estivesse aqui, arrastaria `tarefa-etapas.ts` junto. E lá o cálculo pode ser
+ * testado sem banco por `scripts/test-dias-uteis.mjs` — feriado móvel calculado
+ * errado é o tipo de defeito que só aparece em abril do ano seguinte.
+ *
+ * Reexportado para quem já importa prazo daqui não precisar saber disso.
+ */
+export {
+  contagemPrazo,
+  diasCorridosEntre,
+  diasUteisEntre,
+  domingoDePascoa,
+  ehDiaUtil,
+  ehFeriado,
+  textoContagemCurto,
+  textoContagemPrazo,
+} from "./dias-uteis";
+export type { ContagemPrazo } from "./dias-uteis";
+
 /**
  * Situação de prazo e quantos dias faltam (ou passaram).
  *

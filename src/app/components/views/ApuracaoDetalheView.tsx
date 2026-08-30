@@ -77,6 +77,8 @@ import {
 import ListaEtapas from "@/app/components/views/ui/tarefas/ListaEtapas";
 import Historico from "@/app/components/views/ui/tarefas/Historico";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
+import { AnexosDaTarefa } from "@/app/components/views/ui/tarefas/Anexos";
+import { PAPEL } from "@/lib/papeis";
 
 /* -------------------------------------------------------------------------- */
 /*                        Respostas parciais das rotas                        */
@@ -219,7 +221,7 @@ function etapasDoErro(erro: unknown): EtapaResumo[] {
 /* -------------------------------------------------------------------------- */
 
 export default function ApuracaoDetalheView({ id }: { id: string }) {
-  const { permissoes } = useSessao();
+  const { permissoes, sessao, papel } = useSessao();
 
   const [dados, setDados] = useState<ApuracaoDetalhe | null>(null);
   const [carregandoPagina, setCarregandoPagina] = useState(true);
@@ -227,6 +229,14 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
   const [naoEncontrada, setNaoEncontrada] = useState(false);
 
   const [aba, setAba] = useState("etapas");
+  /**
+   * Quantos anexos existem, para a contagem da aba.
+   *
+   * `null` até a aba ser aberta uma vez: a lista é carregada sob demanda, e
+   * disparar essa requisição no carregamento do detalhe inteiro só para pintar um
+   * número na aba não se paga. Depois de aberta, o número fica.
+   */
+  const [totalAnexos, setTotalAnexos] = useState<number | null>(null);
   const [recado, setRecado] = useState<Recado | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
@@ -916,6 +926,14 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
               texto: "Pendências",
               contagem: bloqueada ? 1 : 0,
             },
+            {
+              chave: "anexos",
+              texto: "Anexos",
+              // A contagem só existe depois de a aba ser aberta uma vez: a lista
+              // de anexos é carregada sob demanda, e disparar essa requisição no
+              // detalhe inteiro só para pintar um número não se paga.
+              contagem: totalAnexos ?? undefined,
+            },
             { chave: "historico", texto: "Histórico", contagem: logs.length },
             { chave: "dados", texto: "Dados" },
           ]}
@@ -924,6 +942,26 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
         />
 
         <div className="mt-5">
+          {aba === "anexos" && (
+            <Painel
+              titulo="Anexos da competência"
+              descricao="Documento e imagem que sustentam o trabalho do mês: planilha de faturamento, XML, guia paga, recibo de entrega."
+            >
+              <div
+                className="px-5 py-4"
+                role="tabpanel"
+                aria-label="Anexos da competência"
+              >
+                <AnexosDaTarefa
+                  alvo={{ apuracaoId: tarefa.id }}
+                  usuarioId={sessao?.userId}
+                  ehAdmin={papel === PAPEL.ADMIN}
+                  onMudou={setTotalAnexos}
+                />
+              </div>
+            </Painel>
+          )}
+
           {aba === "etapas" && (
             <Painel
               titulo="Trilha de etapas"

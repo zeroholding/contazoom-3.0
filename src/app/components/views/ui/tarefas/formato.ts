@@ -190,3 +190,34 @@ export function plural(
 ): string {
   return `${quantidade} ${quantidade === 1 ? singular : plural_}`;
 }
+
+/* -------------------------------------------------------------------------- */
+/*                            Rótulo de empresa                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Como a empresa aparece num seletor: "Razão Social · 00.000.000/0000-00".
+ *
+ * Existe porque quatro telas montavam esse texto à mão com template literal
+ * (`${e.razaoSocial} · ${e.cnpjFormatado}`), e com CNPJ opcional as quatro
+ * passariam a escrever "Padaria Xpto · null" para toda empresa em abertura —
+ * template literal interpola `null` como a palavra "null", sem erro de tipo e
+ * sem aviso do TypeScript.
+ *
+ * Sem CNPJ o texto diz "em abertura", que é a informação que o operador precisa
+ * naquele instante: essa empresa existe, dá para atrelar processo a ela, e o
+ * número ainda não saiu.
+ */
+export function rotuloEmpresa(empresa: {
+  razaoSocial: string;
+  cnpjFormatado?: string | null;
+  nomeFantasia?: string | null;
+}): string {
+  const identificacao = empresa.cnpjFormatado || "sem CNPJ (em abertura)";
+  return `${empresa.razaoSocial} · ${identificacao}`;
+}
+
+/** CNPJ para exibição solta, com texto no lugar do vazio. */
+export function cnpjOuAbertura(cnpjFormatado: string | null | undefined): string {
+  return cnpjFormatado || "Em abertura";
+}

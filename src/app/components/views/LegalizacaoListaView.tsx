@@ -30,6 +30,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   apiGet,
+  apiPatch,
   apiPost,
   mensagemDeErro,
   query,
@@ -47,9 +48,11 @@ import {
   iniciais,
   nomeEmpresa,
   plural,
+  rotuloEmpresa,
 } from "@/app/components/views/ui/tarefas/formato";
 import {
   Aviso,
+  BlocoForm,
   Cabecalho,
   CartaoKpi,
   Carregando,
@@ -65,6 +68,11 @@ import {
   Escolha,
   type Opcao,
 } from "@/app/components/views/ui/tarefas/Campos";
+import {
+  AnexosDaTarefa,
+  AnexosEmEspera,
+  enviarAnexosPendentes,
+} from "@/app/components/views/ui/tarefas/Anexos";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
 import {
   SeloBloqueio,
@@ -74,13 +82,30 @@ import {
 } from "@/app/components/views/ui/tarefas/Selos";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
 import { STATUS_LABEL, STATUS_ORDEM } from "@/lib/tarefa-status";
+import { textoContagemCurto } from "@/lib/dias-uteis";
 import {
   ORGAO_EXTERNO_LABEL,
-  SITUACAO_EMPRESA_LABEL,
+  PLANO_INTERNO_CURTO,
   TIPO_PROCESSO,
   TIPO_PROCESSO_LABEL,
 } from "@/lib/tarefa-etapas";
+import { PAPEL } from "@/lib/papeis";
 import { useSessao } from "@/hooks/useSessao";
+
+/**
+ * ISO para o valor de `input[type=date]`, lendo as partes em UTC.
+ *
+ * O prazo é gravado à meia-noite UTC. Ler com `getMonth()` local no fuso de
+ * Brasília devolveria o dia anterior, e o campo abriria com a data errada.
+ */
+function paraInputDate(valor: string | null | undefined): string {
+  if (!valor) return "";
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "";
+  const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
+  const dia = String(data.getUTCDate()).padStart(2, "0");
+  return `${data.getUTCFullYear()}-${mes}-${dia}`;
+}
 
 /* -------------------------------------------------------------------------- */
 /*                            Contratos das rotas                             */
@@ -230,7 +255,7 @@ function Conteudo() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const { permissoes } = useSessao();
+  const { permissoes, sessao, papel } = useSessao();
 
   // A URL vale só na montagem: daí em diante o estado manda e a URL é espelho.
   // Ler a URL a cada render criaria laço com o `router.replace`.
@@ -398,6 +423,43 @@ function Conteudo() {
     return temFiltro(filtros) ? "no filtro atual" : "em toda a lista";
   }, [filtros, itens.length, paginacao.total]);
 
+  /* ---------------------------- Editar o card ----------------------------- */
+
+  /**
+   * Edição do card na própria lista: prazo, responsável, observações e anexos.
+   *
+   * Etapa, protocolo, bloqueio e encerramento ficam fora: cada um move o fluxo e
+   * tem rota própria. O alvo é guardado por ID, não o objeto — guardar o objeto
+   * congelaria a cópia do clique, e depois de salvar a tela mostraria o valor
+   * antigo até alguém recarregar.
+   *
+   * Declarado ANTES do bloco de criação porque o efeito que carrega as empresas
+   * serve aos dois modais e precisa ler `alvoEdicao`.
+   */
+  const [alvoEdicao, setAlvoEdicao] = useState<string | null>(null);
+  const [formEdicao, setFormEdicao] = useState({
+    prazoEstimado: "",
+    responsavelId: "",
+    observacoes: "",
+  });
+  const [erroEdicao, setErroEdicao] = useState("");
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  const emEdicao = useMemo(
+    () => itens.find((item) => item.id === alvoEdicao) ?? null,
+    [itens, alvoEdicao]
+  );
+
+  const abrirEdicao = useCallback((item: ProcessoLista) => {
+    setFormEdicao({
+      prazoEstimado: paraInputDate(item.prazoEstimado),
+      responsavelId: item.responsavel?.id ?? "",
+      observacoes: item.observacoes ?? "",
+    });
+    setErroEdicao("");
+    setAlvoEdicao(item.id);
+  }, []);
+
   /* ---------------------------- Novo processo ---------------------------- */
 
   const [modalNovo, setModalNovo] = useState(false);
@@ -415,6 +477,15 @@ function Conteudo() {
   const [campoInvalido, setCampoInvalido] = useState("");
   const [enviandoNovo, setEnviandoNovo] = useState(false);
 
+  /**
+   * Arquivos escolhidos ANTES de o processo existir.
+   *
+   * Ficam em memória e sobem depois do POST, com o id que acabou de nascer.
+   * Formulário de abertura já vem com contrato social rascunhado, RG do sócio e
+   * comprovante de endereço na mão — anexar ali é o momento natural.
+   */
+  const [anexosNovos, setAnexosNovos] = useState<File[]>([]);
+
   const abrirNovo = useCallback(() => {
     setNovo({
       tipo: "",
@@ -426,17 +497,26 @@ function Conteudo() {
     });
     setErroNovo("");
     setCampoInvalido("");
+    setAnexosNovos([]);
     setModalNovo(true);
   }, []);
 
-  // Empresas só entram quando o modal abre: são 200 registros que a lista não usa.
+  /**
+   * Empresas entram quando um dos modais abre: são 200 registros que a lista não
+   * usa.
+   *
+   * O filtro `situacao=ATIVA` saiu. Processo de legalização é justamente o que se
+   * abre para empresa que NÃO está ativa — encerramento, regularização, e
+   * abertura, que agora tem cadastro próprio sem CNPJ. Filtrar por ATIVA
+   * escondia exatamente as empresas que este formulário precisa oferecer.
+   */
   useEffect(() => {
-    if (!modalNovo || empresas.length > 0) return;
+    if ((!modalNovo && !alvoEdicao) || empresas.length > 0) return;
 
     const controlador = new AbortController();
     setCarregandoEmpresas(true);
     apiGet<RespostaEmpresas>(
-      `/api/empresas${query({ situacao: "ATIVA", limit: 200 })}`,
+      `/api/empresas${query({ limit: 200 })}`,
       controlador.signal
     )
       .then((dados) => setEmpresas(dados.empresas ?? []))
@@ -447,26 +527,34 @@ function Conteudo() {
       .finally(() => setCarregandoEmpresas(false));
 
     return () => controlador.abort();
-  }, [modalNovo, empresas.length]);
+  }, [modalNovo, alvoEdicao, empresas.length]);
 
-  const opcoesEmpresa = useMemo<Opcao[]>(
-    () =>
-      empresas.map((e) => ({
-        valor: e.id,
-        texto: `${e.razaoSocial} · ${e.cnpjFormatado}`,
-      })),
-    [empresas]
-  );
+  const ehAbertura = novo.tipo === TIPO_PROCESSO.ABERTURA_CNPJ;
 
   /**
-   * REGRA DE FORMULÁRIO — abertura de CNPJ é o caso especial.
+   * REGRA DE FORMULÁRIO — a empresa é obrigatória em TODOS os tipos.
    *
-   * Em ABERTURA_CNPJ o CNPJ ainda não existe, então não há empresa para
-   * escolher: o processo nasce com uma identificação provisória e ganha a
-   * empresa depois, pela tela de detalhe. Nos outros quatro tipos a empresa é
-   * obrigatória, porque o processo altera um cadastro que já existe.
+   * Mudou em 30/08/2026: antes, abertura de CNPJ era a exceção e o processo
+   * nascia solto, com identificação provisória, porque não havia como cadastrar
+   * empresa sem CNPJ. Agora há — `empresa.cnpj` é opcional — e o pedido do
+   * escritório foi explícito: processo e competência só podem ser atrelados a
+   * empresa já cadastrada.
+   *
+   * Em abertura, o seletor mostra SÓ as empresas sem CNPJ. É o par natural: a
+   * empresa em abertura é a única que tem o que abrir, e oferecer a carteira
+   * inteira aqui convidaria a escolher a errada — o que a rota recusa com 409,
+   * mas depois de a pessoa já ter preenchido o resto.
    */
-  const ehAbertura = novo.tipo === TIPO_PROCESSO.ABERTURA_CNPJ;
+  const opcoesEmpresa = useMemo<Opcao[]>(() => {
+    const elegiveis = ehAbertura
+      ? empresas.filter((e) => !e.cnpj)
+      : empresas;
+    return elegiveis.map((e) => ({ valor: e.id, texto: rotuloEmpresa(e) }));
+  }, [empresas, ehAbertura]);
+
+  /** Nenhuma empresa em abertura cadastrada: a tela precisa dizer o que fazer. */
+  const semEmpresaEmAbertura =
+    ehAbertura && !carregandoEmpresas && opcoesEmpresa.length === 0;
 
   async function criarProcesso() {
     setErroNovo("");
@@ -478,37 +566,67 @@ function Conteudo() {
       return;
     }
 
-    const identificacao = novo.identificacaoProvisoria.trim();
-
-    if (ehAbertura) {
-      if (!novo.empresaId && !identificacao) {
-        setCampoInvalido("identificacaoProvisoria");
-        setErroNovo(
-          "Em abertura de CNPJ, escolha a empresa já cadastrada ou informe a identificação provisória. Uma das duas precisa existir para o processo ter nome na lista."
-        );
-        return;
-      }
-    } else if (!novo.empresaId) {
+    if (!novo.empresaId) {
       setCampoInvalido("empresaId");
       setErroNovo(
-        `Escolha a empresa. ${
-          TIPO_PROCESSO_LABEL[novo.tipo] ?? "Este tipo"
-        } altera um cadastro que já existe, então a empresa é obrigatória.`
+        ehAbertura
+          ? "Escolha a empresa. Cadastre-a primeiro em Empresas, sem CNPJ — o número é preenchido quando o registro sair."
+          : `Escolha a empresa. ${
+              TIPO_PROCESSO_LABEL[novo.tipo] ?? "Este tipo"
+            } altera um cadastro que já existe, então a empresa é obrigatória.`
       );
       return;
     }
+
+    const identificacao = novo.identificacaoProvisoria.trim();
 
     setEnviandoNovo(true);
     try {
       const criado = await apiPost<RespostaCriacao>("/api/tarefas/legalizacao", {
         tipo: novo.tipo,
-        empresaId: novo.empresaId || undefined,
-        // Identificação provisória só faz sentido em abertura.
+        empresaId: novo.empresaId,
+        // Identificação provisória virou complemento opcional: o nome oficial
+        // agora vem da empresa vinculada. Continua aceita porque em abertura o
+        // nome empresarial pretendido pode ser diferente do cadastrado.
         identificacaoProvisoria: ehAbertura ? identificacao || undefined : undefined,
         prazoEstimado: novo.prazoEstimado || undefined,
         responsavelId: novo.responsavelId || undefined,
         observacoes: novo.observacoes.trim() || undefined,
       });
+
+      /**
+       * Anexos sobem AGORA, com o processo já criado.
+       *
+       * Falha de anexo não desfaz o processo: ele está criado e o trabalho pode
+       * começar. O que muda é o destino — com falha, fico na lista e mostro o
+       * aviso; sem falha, vou direto para o detalhe. Navegar embora com um erro
+       * na tela anterior esconderia o erro.
+       */
+      let falhouAnexo = false;
+      if (criado?.id && anexosNovos.length > 0) {
+        const resultado = await enviarAnexosPendentes(
+          { processoId: criado.id },
+          anexosNovos
+        );
+        if (resultado.falhas.length > 0) {
+          falhouAnexo = true;
+          setErroNovo(
+            `Processo aberto, mas ${resultado.falhas.length} de ${
+              anexosNovos.length
+            } anexos não subiram: ${resultado.falhas
+              .map((f) => `${f.nome} (${f.erro})`)
+              .join("; ")}. Reenvie pelo botão de editar do cartão.`
+          );
+        }
+      }
+
+      setAnexosNovos([]);
+
+      if (falhouAnexo) {
+        setModalNovo(false);
+        setRecarga((n) => n + 1);
+        return;
+      }
 
       setModalNovo(false);
       // A resposta é flat e sem derivados. Em vez de montar um cartão pela
@@ -518,6 +636,48 @@ function Conteudo() {
       setErroNovo(mensagemDeErro(falha) || "Não foi possível abrir o processo.");
     } finally {
       setEnviandoNovo(false);
+    }
+  }
+
+  /* -------------------- Gravação da edição do card ------------------------ */
+
+  async function salvarEdicao() {
+    if (!emEdicao) return;
+
+    setErroEdicao("");
+
+    // Só o que mudou. Chave ausente mantém, `null` limpa. A rota devolve
+    // NADA_A_ALTERAR se nenhum campo vier, então enviar payload vazio seria erro.
+    const payload: Record<string, unknown> = {};
+
+    const prazoAtual = paraInputDate(emEdicao.prazoEstimado);
+    if (formEdicao.prazoEstimado !== prazoAtual) {
+      payload.prazoEstimado = formEdicao.prazoEstimado || null;
+    }
+    if (formEdicao.responsavelId !== (emEdicao.responsavel?.id ?? "")) {
+      payload.responsavelId = formEdicao.responsavelId || null;
+    }
+    const observacoes = formEdicao.observacoes.trim();
+    if (observacoes !== (emEdicao.observacoes ?? "")) {
+      payload.observacoes = observacoes || null;
+    }
+
+    // Fechar sem mexer em campo nenhum é uso legítimo: a pessoa pode ter aberto
+    // o modal só para anexar arquivo, e o anexo já subiu na hora.
+    if (Object.keys(payload).length === 0) {
+      setAlvoEdicao(null);
+      return;
+    }
+
+    setSalvandoEdicao(true);
+    try {
+      await apiPatch(`/api/tarefas/legalizacao/${emEdicao.id}`, payload);
+      setAlvoEdicao(null);
+      setRecarga((n) => n + 1);
+    } catch (falha) {
+      setErroEdicao(mensagemDeErro(falha) || "Não foi possível salvar.");
+    } finally {
+      setSalvandoEdicao(false);
     }
   }
 
@@ -742,7 +902,12 @@ function Conteudo() {
           <ul className="space-y-3">
             {itens.map((item) => (
               <li key={item.id}>
-                <CartaoProcesso item={item} />
+                <CartaoProcesso
+                  item={item}
+                  onEditar={
+                    permissoes.gerenciarBloqueio ? abrirEdicao : undefined
+                  }
+                />
               </li>
             ))}
           </ul>
@@ -806,40 +971,58 @@ function Conteudo() {
             ajuda="Define as etapas do processo e não pode ser alterado depois."
           />
 
+          {/* Sem empresa em abertura cadastrada, o seletor abriria vazio e a
+              pessoa não saberia por quê. O aviso diz o passo que falta. */}
+          {semEmpresaEmAbertura && (
+            <div className="space-y-2">
+              <Aviso
+                tom="atencao"
+                mensagem="Nenhuma empresa sem CNPJ cadastrada. Abertura de CNPJ é aberta para uma empresa que já existe no cadastro e ainda não tem número."
+              />
+              <Link
+                href="/admin/empresas"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-orange-600 transition-colors hover:text-orange-700"
+              >
+                <Icone nome="Plus" className="h-4 w-4" />
+                Cadastrar a empresa em Empresas, deixando o CNPJ em branco
+              </Link>
+            </div>
+          )}
+
           <Escolha
             rotulo="Empresa"
-            required={!!novo.tipo && !ehAbertura}
+            required
             vazio={
               ehAbertura
-                ? "Sem empresa (CNPJ ainda não existe)"
+                ? "Selecione a empresa em abertura"
                 : "Selecione a empresa"
             }
             opcoes={opcoesEmpresa}
             value={novo.empresaId}
             erro={campoInvalido === "empresaId" ? "Campo obrigatório." : null}
-            disabled={carregandoEmpresas}
+            disabled={carregandoEmpresas || semEmpresaEmAbertura}
             onChange={(e) =>
               setNovo((atual) => ({ ...atual, empresaId: e.target.value }))
             }
             ajuda={
               carregandoEmpresas
-                ? "Carregando empresas ativas"
+                ? "Carregando empresas"
                 : ehAbertura
-                ? "Opcional em abertura de CNPJ: a empresa pode ser vinculada depois, na tela do processo."
-                : "Obrigatória: este tipo de processo altera um cadastro que já existe."
+                  ? "Só empresas sem CNPJ aparecem aqui: são as que têm o que abrir."
+                  : "Obrigatória: o processo altera um cadastro que já existe."
             }
           />
 
-          {/* Só aparece em abertura: nos outros tipos não há o que identificar
-              provisoriamente, porque a empresa já está no cadastro. */}
+          {/* Só aparece em abertura, e agora é COMPLEMENTO, não substituto da
+              empresa: o nome empresarial pretendido pode ser diferente do que
+              está cadastrado enquanto a viabilidade não volta. */}
           {ehAbertura && (
             <Entrada
               rotulo="Identificação provisória"
-              required={!novo.empresaId}
               value={novo.identificacaoProvisoria}
               erro={
                 campoInvalido === "identificacaoProvisoria"
-                  ? "Informe a identificação provisória ou escolha uma empresa."
+                  ? "Identificação provisória inválida."
                   : null
               }
               onChange={(e) =>
@@ -848,8 +1031,8 @@ function Conteudo() {
                   identificacaoProvisoria: e.target.value,
                 }))
               }
-              placeholder="Padaria do Gianluca — matriz"
-              ajuda="Nome do cliente ou do projeto, para acompanhar antes de o CNPJ existir."
+              placeholder="EMPRESA XPTO"
+              ajuda="Opcional. Use quando o nome empresarial pretendido é diferente do cadastrado."
             />
           )}
 
@@ -861,7 +1044,7 @@ function Conteudo() {
               onChange={(e) =>
                 setNovo((atual) => ({ ...atual, prazoEstimado: e.target.value }))
               }
-              ajuda="Opcional. Alimenta o alerta de atraso."
+              ajuda="Opcional. Com prazo, o cartão mostra quantos dias úteis e corridos faltam."
             />
             <Escolha
               rotulo="Responsável"
@@ -885,7 +1068,120 @@ function Conteudo() {
             placeholder="Contexto que o escritório precisa saber para começar"
             ajuda="Opcional."
           />
+
+          <BlocoForm
+            icone="Paperclip"
+            titulo="Anexos"
+            descricao="Formulário preenchido, documento do sócio, comprovante de endereço. Eles são enviados assim que o processo for aberto."
+          >
+            <AnexosEmEspera
+              arquivos={anexosNovos}
+              onMudar={setAnexosNovos}
+              desabilitado={enviandoNovo}
+            />
+          </BlocoForm>
         </div>
+      </Modal>
+
+      {/* --------------------------- Editar processo ------------------------ */}
+
+      <Modal
+        aberto={!!emEdicao}
+        titulo="Editar processo"
+        icone="Pencil"
+        largura="xl"
+        descricao={
+          emEdicao
+            ? `${
+                emEdicao.empresa
+                  ? nomeEmpresa(emEdicao.empresa)
+                  : emEdicao.identificacaoProvisoria ?? "Sem identificação"
+              } · ${emEdicao.tipoLabel}`
+            : undefined
+        }
+        onFechar={() => setAlvoEdicao(null)}
+        rodape={
+          <>
+            <Botao
+              variante="secundario"
+              onClick={() => setAlvoEdicao(null)}
+              disabled={salvandoEdicao}
+            >
+              Fechar
+            </Botao>
+            <Botao
+              icone="Save"
+              onClick={salvarEdicao}
+              carregando={salvandoEdicao}
+              textoCarregando="Salvando"
+            >
+              Salvar alterações
+            </Botao>
+          </>
+        }
+      >
+        {emEdicao && (
+          <div className="space-y-6">
+            {erroEdicao && <Aviso mensagem={erroEdicao} />}
+
+            <BlocoForm
+              icone="Landmark"
+              titulo="Dados do processo"
+              descricao="Etapa, protocolo, pendência e encerramento não mudam aqui: cada um tem ação própria, porque move o fluxo."
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Entrada
+                  rotulo="Prazo estimado"
+                  type="date"
+                  value={formEdicao.prazoEstimado}
+                  onChange={(e) =>
+                    setFormEdicao((f) => ({
+                      ...f,
+                      prazoEstimado: e.target.value,
+                    }))
+                  }
+                  ajuda="Deixe em branco para tirar do controle de atraso."
+                />
+                <Escolha
+                  rotulo="Responsável"
+                  vazio="Sem responsável definido"
+                  opcoes={opcoesResponsavel}
+                  value={formEdicao.responsavelId}
+                  onChange={(e) =>
+                    setFormEdicao((f) => ({
+                      ...f,
+                      responsavelId: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <Area
+                rotulo="Observações"
+                rows={3}
+                value={formEdicao.observacoes}
+                placeholder="O que o próximo a pegar este processo precisa saber"
+                onChange={(e) =>
+                  setFormEdicao((f) => ({ ...f, observacoes: e.target.value }))
+                }
+                ajuda="Fica no processo e entra no histórico quando muda."
+              />
+            </BlocoForm>
+
+            <BlocoForm
+              icone="Paperclip"
+              titulo="Anexos"
+              descricao="Aqui o envio é imediato: cada arquivo sobe na hora, sem esperar o botão de salvar."
+            >
+              <AnexosDaTarefa
+                alvo={{ processoId: emEdicao.id }}
+                usuarioId={sessao?.userId}
+                ehAdmin={papel === PAPEL.ADMIN}
+                onMudou={() => setRecarga((n) => n + 1)}
+              />
+            </BlocoForm>
+          </div>
+        )}
       </Modal>
     </div>
   );
@@ -895,23 +1191,35 @@ function Conteudo() {
 /*                                  Cartão                                    */
 /* -------------------------------------------------------------------------- */
 
-function CartaoProcesso({ item }: { item: ProcessoLista }) {
+function CartaoProcesso({
+  item,
+  onEditar,
+}: {
+  item: ProcessoLista;
+  /** Abre o formulário de edição (prazo, responsável, observações e anexos). */
+  onEditar?: (item: ProcessoLista) => void;
+}) {
   const encerrado = !!item.concluidoEm;
 
   /**
    * Título do cartão.
    *
-   * Abertura sem empresa não tem razão social nem CNPJ — o CNPJ é justamente o
-   * que o processo vai produzir. Nesse caso o nome é a identificação
-   * provisória, com rótulo explícito para ninguém procurar o cadastro que
-   * ainda não existe.
+   * Processo aberto DEPOIS de 30/08/2026 sempre tem empresa: a regra nova exige
+   * empresa cadastrada em todos os tipos, inclusive abertura. Os processos
+   * anteriores podem estar sem, e aí o nome é a identificação provisória, com
+   * rótulo explícito para ninguém procurar o cadastro que não existe.
    */
   const semEmpresa = !item.empresa;
   const nome = item.empresa
     ? nomeEmpresa(item.empresa)
     : item.identificacaoProvisoria?.trim() || "Sem identificação";
+  const textoDias = textoContagemCurto(item.contagemPrazo);
 
   return (
+    // `relative` para o botão de editar poder ficar sobreposto no canto: ele não
+    // pode ficar DENTRO da âncora (conteúdo interativo dentro de `<a>` é HTML
+    // inválido e o leitor de tela anuncia um controle só).
+    <div className="relative">
     <Link
       href={`/admin/tarefas/legalizacao/${item.id}`}
       className={`block rounded-xl border p-5 shadow-sm transition-colors ${
@@ -947,11 +1255,21 @@ function CartaoProcesso({ item }: { item: ProcessoLista }) {
               {nome}
             </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-              {item.empresa && <span>{formatarCnpj(item.empresa.cnpj)}</span>}
+              {item.empresa?.cnpj && (
+                <span>{formatarCnpj(item.empresa.cnpj)}</span>
+              )}
+              {item.empresa && !item.empresa.cnpj && (
+                <span className="inline-flex items-center gap-1">
+                  <Icone nome="Hourglass" className="h-3 w-3 shrink-0" />
+                  CNPJ ainda não emitido
+                </span>
+              )}
+              {/* Plano interno no lugar da situação: é o status operacional da
+                  empresa desde a mudança, e é o que diz se ela gera trabalho. */}
               {item.empresa && (
                 <span>
-                  {SITUACAO_EMPRESA_LABEL[item.empresa.situacao] ??
-                    item.empresa.situacao}
+                  {PLANO_INTERNO_CURTO[item.empresa.planoInterno] ??
+                    item.empresa.planoInterno}
                 </span>
               )}
             </div>
@@ -977,6 +1295,17 @@ function CartaoProcesso({ item }: { item: ProcessoLista }) {
               />
             )}
             {item.empresa && <SeloRegime regime={item.empresa.regime} />}
+            {item.anexos > 0 && (
+              <span
+                title={`${item.anexos} ${
+                  item.anexos === 1 ? "anexo" : "anexos"
+                }`}
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-600"
+              >
+                <Icone nome="Paperclip" className="h-3.5 w-3.5 shrink-0" />
+                <span className="cz-num">{item.anexos}</span>
+              </span>
+            )}
             {encerrado && (
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-gray-300 bg-white px-2.5 py-1 text-xs font-semibold text-gray-600">
                 <Icone nome="ClipboardCheck" className="h-3.5 w-3.5" />
@@ -984,6 +1313,31 @@ function CartaoProcesso({ item }: { item: ProcessoLista }) {
               </span>
             )}
           </div>
+
+          {/*
+            Dias úteis e corridos que faltam.
+
+            Em linha própria, fora da fileira de selos: é número que se lê, não
+            estado que se reconhece pela cor. Vermelho só no atraso, quando o
+            número passa a cobrar ação.
+          */}
+          {textoDias && (
+            <p
+              className={`flex items-center gap-1.5 text-xs font-semibold ${
+                item.contagemPrazo?.atrasado
+                  ? "text-[#B42318]"
+                  : item.contagemPrazo?.hoje
+                    ? "text-[#B54708]"
+                    : "text-gray-500"
+              }`}
+            >
+              <Icone
+                nome={item.contagemPrazo?.atrasado ? "AlarmClock" : "CalendarDays"}
+                className="h-3.5 w-3.5 shrink-0"
+              />
+              <span>{textoDias} para o prazo estimado</span>
+            </p>
+          )}
 
           {item.bloqueada && item.bloqueioMotivo && (
             <p className="truncate text-xs text-[#B54708]" title={item.bloqueioMotivo}>
@@ -1052,5 +1406,24 @@ function CartaoProcesso({ item }: { item: ProcessoLista }) {
         </div>
       </div>
     </Link>
+
+    {onEditar && (
+      <button
+        type="button"
+        title="Editar prazo, responsável e anexos"
+        aria-label={`Editar processo de ${nome}`}
+        onClick={(evento) => {
+          // O cartão inteiro é uma âncora. Sem estas duas linhas, editar
+          // navegaria para o detalhe em vez de abrir o formulário.
+          evento.preventDefault();
+          evento.stopPropagation();
+          onEditar(item);
+        }}
+        className="absolute right-3 top-3 rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FFF2E9] hover:text-[#C2410C]"
+      >
+        <Icone nome="Pencil" className="h-4 w-4" />
+      </button>
+    )}
+    </div>
   );
 }
