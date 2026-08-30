@@ -41,7 +41,6 @@ import {
   REGIME_LABEL,
   REGIME_SIGLA,
   RESPONSAVEL_LABEL,
-  SITUACAO_EMPRESA_LABEL,
   SITUACAO_ETAPA_LABEL,
 } from "@/lib/tarefa-etapas";
 import { PAPEL_ICONE, papelLabel, papelSelo } from "@/lib/papeis";
@@ -371,62 +370,20 @@ export function SeloResponsavelEtapa({
 
 /* ------------------------------ Empresa e bloqueio ------------------------ */
 
-/**
- * Situação da empresa também ganhou ícone: era o único selo do módulo que
- * comunicava estado só por cor e texto, e "Ativa" verde contra "Encerrada"
- * cinza é justamente o par que se perde em monitor ruim ou impresso.
+/*
+ * `SeloSituacaoEmpresa` FOI REMOVIDO.
+ *
+ * O escritório pediu "e tirar situação", e situação saiu de toda a interface: do
+ * filtro, dos indicadores, da ficha de cadastro, da faixa de resumo, do
+ * formulário de edição e das duas telas de detalhe de tarefa. Quem responde pelo
+ * estado operacional da empresa é o PLANO INTERNO, logo abaixo.
+ *
+ * O componente saiu junto em vez de ficar exportado sem chamador: selo órfão é
+ * convite a alguém reintroduzir na tela a informação que foi pedida para sair.
+ * A coluna `Empresa.situacao` continua no banco, derivada do plano e da
+ * existência do CNPJ — não foi apagada porque dropar coluna é irreversível e
+ * apagaria o valor histórico das empresas marcadas como encerradas.
  */
-const ICONE_SITUACAO_EMPRESA: Record<string, string> = {
-  ATIVA: "CheckCircle2",
-  SUSPENSA: "AlertTriangle",
-  ENCERRADA: "Ban",
-  EM_ABERTURA: "Hourglass",
-};
-
-function corSituacaoEmpresa(situacao: string, peso: PesoSelo): string {
-  switch (situacao) {
-    case "ATIVA":
-      return tom(peso, "border-[#ABEFC6]", "bg-[#ECFDF3]", "text-[#027A48]");
-    case "SUSPENSA":
-      return tom(peso, "border-[#FEDF89]", "bg-[#FFFAEB]", "text-[#B54708]");
-    case "EM_ABERTURA":
-      // Era azul. Virou laranja: abertura é trabalho em curso, e no painel novo
-      // trabalho em curso é laranja — a mesma regra da barra de progresso.
-      return tom(
-        peso,
-        "border-[var(--cz-laranja-borda)]",
-        "bg-[var(--cz-laranja-suave)]",
-        "text-[var(--cz-laranja-forte)]"
-      );
-    default:
-      return tom(
-        peso,
-        "border-[var(--cz-hairline-forte)]",
-        "bg-[var(--cz-fundo)]",
-        "text-[var(--cz-texto-suave)]"
-      );
-  }
-}
-
-export function SeloSituacaoEmpresa({
-  situacao,
-  className = "",
-  peso = "medio",
-}: {
-  situacao: string;
-  className?: string;
-  peso?: PesoSelo;
-}) {
-  return (
-    <Selo
-      cor={corSituacaoEmpresa(situacao, peso)}
-      peso={peso}
-      texto={SITUACAO_EMPRESA_LABEL[situacao] ?? situacao}
-      icone={ICONE_SITUACAO_EMPRESA[situacao] ?? "Building2"}
-      className={className}
-    />
-  );
-}
 
 /* --------------------------- Plano interno ContaZoom ---------------------- */
 

@@ -66,7 +66,6 @@ import { Modal } from "@/app/components/views/ui/tarefas/Modal";
 import {
   SeloPlanoInterno,
   SeloRegime,
-  SeloSituacaoEmpresa,
   SeloStatus,
 } from "@/app/components/views/ui/tarefas/Selos";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
@@ -77,8 +76,6 @@ import {
   PLANO_INTERNO_LABEL,
   REGIME,
   REGIME_LABEL,
-  SITUACAO_EMPRESA,
-  SITUACAO_EMPRESA_LABEL,
   TIPO_PROCESSO_LABEL,
   TRIBUTO_LOCAL,
   TRIBUTO_LOCAL_LABEL,
@@ -120,23 +117,24 @@ type UsuarioAdmin = {
 /* -------------------------------------------------------------------------- */
 
 const REGIMES = Object.values(REGIME) as string[];
-const SITUACOES = Object.values(SITUACAO_EMPRESA) as string[];
 const PLANOS = Object.values(PLANO_INTERNO) as string[];
 const TRIBUTOS = Object.values(TRIBUTO_LOCAL) as string[];
 
-/**
- * Situação continua editável AQUI, e só aqui.
+/*
+ * SITUAÇÃO SAIU DA INTERFACE, por completo.
  *
- * Saiu do cadastro e da lista, onde virou o plano interno. Sobrou nesta tela por
- * um motivo específico: ENCERRADA não é derivável de plano — é a empresa que
- * deixou de existir, não a que deixou de ser cliente — e alguém precisa poder
- * afirmar isso. Quando o plano muda no mesmo formulário, o campo é desabilitado e
- * a situação é recalculada, para não gravar o valor velho junto com o plano novo.
+ * O escritório pediu: "e tirar situação". Saiu do filtro, dos indicadores, da
+ * ficha de cadastro, da faixa de resumo e do formulário de edição. Quem responde
+ * pelo estado operacional da empresa agora é o PLANO INTERNO.
+ *
+ * A COLUNA continua no banco, e continua sendo gravada — derivada do plano e da
+ * existência do CNPJ por `situacaoDoPlano`. Não foi apagada por dois motivos:
+ * dropar coluna é irreversível e apagaria o valor histórico das empresas
+ * marcadas como ENCERRADA; e a rota `/api/empresas` ainda aceita `?situacao=`
+ * para não quebrar link que já foi compartilhado em conversa.
+ *
+ * Em resumo: ninguém vê nem digita situação. O banco sabe, a tela não mostra.
  */
-const OPCOES_SITUACAO: Opcao[] = SITUACOES.map((valor) => ({
-  valor,
-  texto: SITUACAO_EMPRESA_LABEL[valor] ?? valor,
-}));
 
 const OPCOES_PLANO: Opcao[] = PLANOS.map((valor) => ({
   valor,
@@ -200,7 +198,6 @@ type FormEdicao = {
   razaoSocial: string;
   nomeFantasia: string;
   planoInterno: string;
-  situacao: string;
   tributoLocal: string;
   inscricaoMunicipal: string;
   inscricaoEstadual: string;
@@ -226,7 +223,6 @@ function formDe(empresa: EmpresaDetalhe): FormEdicao {
     razaoSocial: empresa.razaoSocial,
     nomeFantasia: empresa.nomeFantasia ?? "",
     planoInterno: empresa.planoInterno,
-    situacao: empresa.situacao,
     tributoLocal: empresa.tributoLocal,
     inscricaoMunicipal: empresa.inscricaoMunicipal ?? "",
     inscricaoEstadual: empresa.inscricaoEstadual ?? "",
@@ -437,23 +433,16 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
       payload.nomeFantasia = fantasia || null;
     }
 
+    /**
+     * Plano interno vai; situação NUNCA vai.
+     *
+     * Situação saiu da interface a pedido, então a tela não tem opinião sobre
+     * ela. A rota recalcula a coluna sozinha a partir do plano novo e da
+     * existência do CNPJ — é exatamente por isso que o recálculo mora lá e não
+     * aqui: uma tela que não mostra o campo não pode ser a fonte dele.
+     */
     if (form.planoInterno !== empresa.planoInterno) {
       payload.planoInterno = form.planoInterno;
-    }
-    /**
-     * Situação só vai quando foi mexida À MÃO e o plano NÃO mudou.
-     *
-     * A rota recalcula a situação a partir do plano quando o plano muda, e um
-     * `situacao` explícito no mesmo corpo venceria esse recálculo — mandando o
-     * valor velho junto com o plano novo, a empresa ficaria "Suspensa" depois de
-     * entrar no Plano Simples. Mandar só quando o plano ficou igual preserva o
-     * uso legítimo do campo, que é marcar ENCERRADA.
-     */
-    if (
-      form.planoInterno === empresa.planoInterno &&
-      form.situacao !== empresa.situacao
-    ) {
-      payload.situacao = form.situacao;
     }
     if (form.tributoLocal !== empresa.tributoLocal) {
       payload.tributoLocal = form.tributoLocal;
@@ -765,8 +754,10 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
       {/* ---------------------------- Faixa resumo -------------------------- */}
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+        {/* Plano interno onde antes ficava a situação: é ele que diz o estado
+            operacional da empresa desde a mudança pedida pelo escritório. */}
+        <SeloPlanoInterno plano={empresa.planoInterno} />
         <SeloRegime regime={empresa.regime} completo />
-        <SeloSituacaoEmpresa situacao={empresa.situacao} />
         <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-700">
           <Icone nome="Landmark" className="h-3.5 w-3.5" />
           {TRIBUTO_LOCAL_LABEL[empresa.tributoLocal] ?? empresa.tributoLocal}
@@ -831,15 +822,6 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
           </Dado>
           <Dado rotulo="Regime vigente">
             <SeloRegime regime={empresa.regime} completo />
-          </Dado>
-          <Dado rotulo="Situação">
-            <SeloSituacaoEmpresa situacao={empresa.situacao} />
-            {/* A situação passou a ser calculada. Sem esta nota, quem procura o
-                campo para editar não encontra e conclui que a tela está
-                quebrada. */}
-            <span className="mt-1 block text-xs font-normal text-gray-500">
-              Calculada a partir do plano interno e do CNPJ.
-            </span>
           </Dado>
           <Dado rotulo="Tributo local">
             {TRIBUTO_LOCAL_LABEL[empresa.tributoLocal] ?? empresa.tributoLocal}
@@ -1477,19 +1459,6 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
                   erro={erroDoCampo("planoInterno")}
                   ajuda="Simples e Presumido geram competência todo mês."
                   onChange={(e) => editar({ planoInterno: e.target.value })}
-                />
-                <Escolha
-                  rotulo="Situação"
-                  opcoes={OPCOES_SITUACAO}
-                  value={form.situacao}
-                  erro={erroDoCampo("situacao")}
-                  disabled={form.planoInterno !== empresa.planoInterno}
-                  ajuda={
-                    form.planoInterno !== empresa.planoInterno
-                      ? "Será recalculada a partir do plano novo ao salvar."
-                      : "Normalmente derivada do plano. Mexa só para marcar Encerrada."
-                  }
-                  onChange={(e) => editar({ situacao: e.target.value })}
                 />
                 <Escolha
                   rotulo="Tributo local"

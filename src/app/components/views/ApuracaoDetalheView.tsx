@@ -71,7 +71,6 @@ import {
   SeloPrazo,
   SeloRegime,
   SeloResponsavelEtapa,
-  SeloSituacaoEmpresa,
   SeloStatus,
 } from "@/app/components/views/ui/tarefas/Selos";
 import ListaEtapas from "@/app/components/views/ui/tarefas/ListaEtapas";
@@ -876,9 +875,8 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
             </Link>
           </Dado>
           <Dado rotulo="CNPJ">{formatarCnpj(empresa.cnpj)}</Dado>
-          <Dado rotulo="Situação da empresa">
-            <SeloSituacaoEmpresa situacao={empresa.situacao} />
-          </Dado>
+          {/* Situação saiu da interface a pedido do escritório. Quem diz o estado
+              operacional da empresa é o plano interno, na tela da empresa. */}
           <Dado rotulo="Regime">
             <SeloRegime regime={tarefa.regime} completo />
           </Dado>

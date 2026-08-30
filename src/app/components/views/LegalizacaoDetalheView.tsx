@@ -73,9 +73,9 @@ import {
 import { Modal, ModalMotivo } from "@/app/components/views/ui/tarefas/Modal";
 import {
   SeloBloqueio,
+  SeloPlanoInterno,
   SeloPrazo,
   SeloRegime,
-  SeloSituacaoEmpresa,
   SeloStatus,
 } from "@/app/components/views/ui/tarefas/Selos";
 import ListaEtapas from "@/app/components/views/ui/tarefas/ListaEtapas";
@@ -90,7 +90,6 @@ import {
   PLANO_INTERNO_CURTO,
   REGIME,
   REGIME_LABEL,
-  SITUACAO_EMPRESA_LABEL,
   TIPO_PROCESSO,
   TIPO_PROCESSO_LABEL,
   TRIBUTO_LOCAL,
@@ -833,16 +832,14 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
           uf: nova.uf.trim().toUpperCase() || undefined,
           municipio: nova.municipio.trim() || undefined,
           inicioAtividade: nova.inicioAtividade || undefined,
-          // `situacao` de propósito ausente: a empresa nasce EM_ABERTURA e
-          // vira ATIVA quando a abertura for concluída.
+          // `situacao` ausente de propósito: saiu da interface, e a rota deriva a
+          // coluna a partir do plano interno e da existência do CNPJ. Aqui o CNPJ
+          // é obrigatório, então a empresa nasce no Plano Simples e já ativa.
         }
       );
       setModalVinculo(false);
       setMensagemOk(
-        `Empresa ${resposta.empresa.razaoSocial} cadastrada em ${
-          SITUACAO_EMPRESA_LABEL[resposta.empresa.situacao ?? "EM_ABERTURA"] ??
-          "Em abertura"
-        } e vinculada ao processo.`
+        `Empresa ${resposta.empresa.razaoSocial} cadastrada e vinculada ao processo.`
       );
       recarregar();
     } catch (falha) {
@@ -980,8 +977,19 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
   /* -------------------------------- Render ------------------------------- */
 
+  /**
+   * Três casos, e os três aparecem na prática:
+   *
+   *   - empresa com CNPJ: razão social e número
+   *   - empresa sem CNPJ: é uma abertura em andamento, e o texto diz isso em vez
+   *     de imprimir o travessão que `formatarCnpj` devolve para nulo
+   *   - sem empresa: processo aberto antes da regra que exige empresa em todos os
+   *     tipos, então o nome é a identificação provisória
+   */
   const descricao = processo.empresa
-    ? `${nomeEmpresa(processo.empresa)} · ${formatarCnpj(processo.empresa.cnpj)}`
+    ? processo.empresa.cnpj
+      ? `${nomeEmpresa(processo.empresa)} · ${formatarCnpj(processo.empresa.cnpj)}`
+      : `${nomeEmpresa(processo.empresa)} · CNPJ ainda não emitido`
     : `Empresa em abertura: ${
         processo.identificacaoProvisoria?.trim() || "sem identificação"
       }`;
@@ -1198,12 +1206,25 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
           </Dado>
 
           <Dado rotulo="CNPJ">
-            {processo.empresa ? formatarCnpj(processo.empresa.cnpj) : "—"}
+            {processo.empresa?.cnpj ? (
+              formatarCnpj(processo.empresa.cnpj)
+            ) : processo.empresa ? (
+              // Empresa vinculada e sem CNPJ é o caso normal de uma abertura em
+              // andamento. O texto diz isso, porque "—" pareceria dado faltando.
+              <span className="inline-flex items-center gap-1.5 text-gray-500">
+                <Icone nome="Hourglass" className="h-3.5 w-3.5 shrink-0" />
+                Em abertura
+              </span>
+            ) : (
+              "—"
+            )}
           </Dado>
 
-          <Dado rotulo="Situação da empresa">
+          {/* Situação saiu da interface a pedido: quem diz o estado operacional
+              da empresa é o plano interno. */}
+          <Dado rotulo="Plano interno">
             {processo.empresa ? (
-              <SeloSituacaoEmpresa situacao={processo.empresa.situacao} />
+              <SeloPlanoInterno plano={processo.empresa.planoInterno} />
             ) : (
               "—"
             )}
@@ -1917,7 +1938,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
             <div className="space-y-4">
               <Aviso
                 tom="info"
-                mensagem="Sem informar a situação, a empresa nasce Em abertura e passa a Ativa automaticamente quando a última etapa desta abertura for concluída."
+                mensagem="A empresa nasce no Plano Simples e entra na abertura mensal de competência. Ajuste o plano depois, na tela da empresa, se for outro."
               />
 
               <div className="grid gap-4 sm:grid-cols-2">

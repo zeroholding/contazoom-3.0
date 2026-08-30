@@ -357,10 +357,13 @@ export type ProcessoDetalhe = {
   updatedAt: string;
   empresa: {
     id: string;
-    cnpj: string;
+    /** `null` na empresa em abertura, que existe antes de o CNPJ sair. */
+    cnpj: string | null;
     razaoSocial: string;
     nomeFantasia: string | null;
     regime: string;
+    planoInterno: string;
+    /** Derivada e não exibida. Ver a nota em Selos.tsx. */
     situacao: string;
     uf: string | null;
     municipio: string | null;

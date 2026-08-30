@@ -7,7 +7,7 @@ import EmpresasListaView from "@/app/components/views/EmpresasListaView";
 export const metadata: Metadata = {
   title: "Empresas - ContaZoom",
   description:
-    "Carteira de empresas do escritório: regime tributário, situação cadastral, competências e processos de legalização.",
+    "Carteira de empresas do escritório: plano interno ContaZoom, regime tributário, competências e processos de legalização.",
 };
 
 export default function EmpresasPage() {

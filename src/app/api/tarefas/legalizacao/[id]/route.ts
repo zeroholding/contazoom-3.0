@@ -63,6 +63,10 @@ export async function GET(
             razaoSocial: true,
             nomeFantasia: true,
             regime: true,
+            planoInterno: true,
+            // `situacao` continua vindo porque a coluna existe e é derivada, mas a
+            // tela não a mostra mais: quem responde pelo estado operacional da
+            // empresa é o plano interno.
             situacao: true,
             uf: true,
             municipio: true,

@@ -3,16 +3,21 @@
 /**
  * Lista de empresas — a base do módulo de tarefas.
  *
- * A empresa é o que gera competência todo mês: o regime dela escolhe o fluxo de
- * etapas da apuração, e a situação decide se ela entra ou não na abertura
- * automática do mês. Por isso esta tela mostra regime e situação em destaque, e
- * não como campo secundário de cadastro.
+ * A empresa é o que gera competência todo mês: o REGIME escolhe o fluxo de etapas
+ * da apuração, e o PLANO INTERNO decide se ela entra ou não na abertura automática
+ * do mês. Por isso a tela mostra os dois em destaque.
  *
- * Três decisões estruturais:
+ * Situação ("Ativa/Suspensa/Encerrada/Em abertura") NÃO aparece em lugar nenhum
+ * desta tela, a pedido do escritório. A coluna continua no banco, derivada do
+ * plano e da existência do CNPJ — o rótulo do filtro é "Situação" porque foi assim
+ * que o escritório pediu, mas as opções são os planos.
+ *
+ * Quatro decisões estruturais:
  *
  * 1. Os filtros vivem na URL. `router.replace` a cada mudança, leitura da URL
  *    só na montagem. Assim o link filtrado pode ser colado no chat do
- *    escritório ("as encerradas do Simples") e abre igual do outro lado.
+ *    escritório ("as do Presumido em standby") e abre igual do outro lado. Um
+ *    `?situacao=` de link antigo é traduzido para o plano equivalente.
  *
  * 2. Os KPIs são CONTADOS NA PÁGINA CARREGADA, não no banco. Não existe rota de
  *    resumo de empresas, e inventar quatro requisições de contagem a cada tecla
@@ -22,7 +27,12 @@
  *
  * 3. O CNPJ é mascarado na digitação e enviado só com dígitos. O banco guarda 14
  *    dígitos (`@db.VarChar(14)`); enviar formatado quebraria a unicidade — o
- *    mesmo CNPJ com e sem ponto viraria duas empresas.
+ *    mesmo CNPJ com e sem ponto viraria duas empresas. E pode ficar VAZIO: a
+ *    empresa em abertura é cadastrada antes de o número existir.
+ *
+ * 4. O cadastro tem EXATAMENTE os dez campos que o escritório listou, mais o
+ *    plano interno. Tributo local, início de atividade, responsável interno,
+ *    login do cliente e observações ficam na tela da empresa, em Editar.
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
@@ -39,7 +49,6 @@ import {
 import type {
   EmpresaLista,
   Pagination,
-  UsuarioInterno,
 } from "@/app/components/views/ui/tarefas/tipos";
 import { dataCurta, plural } from "@/app/components/views/ui/tarefas/formato";
 import {
@@ -53,7 +62,6 @@ import {
   Vazio,
 } from "@/app/components/views/ui/tarefas/Base";
 import {
-  Area,
   Botao,
   Entrada,
   EntradaDocumento,
@@ -71,8 +79,6 @@ import {
   PLANO_INTERNO_LABEL,
   REGIME,
   REGIME_LABEL,
-  TRIBUTO_LOCAL,
-  TRIBUTO_LOCAL_LABEL,
 } from "@/lib/tarefa-etapas";
 import { somenteDigitos } from "@/lib/documento";
 import { useSessao } from "@/hooks/useSessao";
@@ -82,20 +88,7 @@ import { useSessao } from "@/hooks/useSessao";
 /* -------------------------------------------------------------------------- */
 
 type RespostaLista = { empresas: EmpresaLista[]; pagination: Pagination };
-type RespostaUsuarios = { usuarios: UsuarioInterno[]; total: number };
 type RespostaCriacao = { empresa: EmpresaLista };
-
-/**
- * `GET /api/admin/users` devolve array PLANO, não objeto com wrapper — e exige
- * papel ADMIN. Os dois detalhes estão tratados no carregamento.
- */
-type UsuarioAdmin = {
-  id: string;
-  name: string | null;
-  email: string;
-  role: string | null;
-  createdAt: string;
-};
 
 /* -------------------------------------------------------------------------- */
 /*                            Domínio e constantes                            */
@@ -105,7 +98,6 @@ const LIMITE = 50;
 
 const REGIMES = Object.values(REGIME) as string[];
 const PLANOS = Object.values(PLANO_INTERNO) as string[];
-const TRIBUTOS = Object.values(TRIBUTO_LOCAL) as string[];
 
 const OPCOES_REGIME: Opcao[] = REGIMES.map((valor) => ({
   valor,
@@ -115,11 +107,6 @@ const OPCOES_REGIME: Opcao[] = REGIMES.map((valor) => ({
 const OPCOES_PLANO: Opcao[] = PLANOS.map((valor) => ({
   valor,
   texto: PLANO_INTERNO_LABEL[valor] ?? valor,
-}));
-
-const OPCOES_TRIBUTO: Opcao[] = TRIBUTOS.map((valor) => ({
-  valor,
-  texto: TRIBUTO_LOCAL_LABEL[valor] ?? valor,
 }));
 
 /**
@@ -191,8 +178,25 @@ function temFiltro(filtros: Filtros): boolean {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Os dez campos que o escritório pediu, na ordem em que pediu, mais os três que
- * o fluxo de etapas já exigia (regime, tributo local, responsável interno).
+ * EXATAMENTE os dez campos que o escritório pediu, mais o plano interno.
+ *
+ * "Ter somente estes campos para inserir, ao cadastrar" é literal, e o
+ * formulário respeita. Saíram daqui, a pedido: tributo local, início de
+ * atividade, responsável interno, cliente vinculado e observações. Os cinco
+ * continuam existindo no banco e na tela de detalhe da empresa — o cadastro é que
+ * ficou enxuto, não o cadastro perdeu campo.
+ *
+ * O que isso custa, declarado para quem vier depois:
+ *
+ *   - `tributoLocal` nasce "AMBOS" (default do schema), então a etapa 6 do Lucro
+ *     Presumido aparece com o nome genérico "Apuração de ICMS/ISS" até alguém
+ *     ajustar na tela da empresa.
+ *   - `responsavelId` nasce vazio, então a competência aberta para esta empresa
+ *     nasce sem dono até ser distribuída.
+ *
+ * Nenhum dos dois impede trabalho, e os dois se resolvem em Editar. O ganho é o
+ * cadastro de 60 empresas da carteira não pedir cinco decisões por empresa que
+ * ninguém tem na hora de digitar.
  *
  * Documento fica no estado COM máscara e é enviado com `somenteDigitos`. O banco
  * guarda 14 dígitos de CNPJ, 11 de CPF e 8 de CEP; enviar formatado quebraria a
@@ -216,11 +220,6 @@ type Formulario = {
   socioAdmCpf: string;
   regime: string;
   planoInterno: string;
-  tributoLocal: string;
-  inicioAtividade: string;
-  responsavelId: string;
-  userId: string;
-  observacoes: string;
 };
 
 function formularioVazio(): Formulario {
@@ -242,11 +241,6 @@ function formularioVazio(): Formulario {
     socioAdmCpf: "",
     regime: "",
     planoInterno: PLANO_INTERNO.PLANO_SIMPLES,
-    tributoLocal: TRIBUTO_LOCAL.AMBOS,
-    inicioAtividade: "",
-    responsavelId: "",
-    userId: "",
-    observacoes: "",
   };
 }
 
@@ -435,15 +429,6 @@ function Conteudo() {
   const [duplicadaId, setDuplicadaId] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
-  const [internos, setInternos] = useState<UsuarioInterno[]>([]);
-  const [clientes, setClientes] = useState<UsuarioAdmin[]>([]);
-  /**
-   * `/api/admin/users` é a única fonte do login do cliente e devolve 403 para
-   * quem não é ADMIN. Comercial cadastra empresa mas não vê essa lista, então o
-   * campo desaparece com explicação em vez de virar select vazio ou erro.
-   */
-  const [semAcessoClientes, setSemAcessoClientes] = useState(false);
-
   const editar = useCallback((mudanca: Partial<Formulario>) => {
     setForm((atual) => ({ ...atual, ...mudanca }));
     setCampoInvalido(null);
@@ -457,53 +442,18 @@ function Conteudo() {
     setModalNova(true);
   }, []);
 
-  // Pessoas são carregadas só quando o modal abre: a lista não usa nada disso.
-  useEffect(() => {
-    if (!modalNova) return;
-
-    const controlador = new AbortController();
-
-    if (internos.length === 0) {
-      apiGet<RespostaUsuarios>(
-        "/api/usuarios-internos",
-        controlador.signal
-      )
-        .then((dados) => setInternos(dados.usuarios ?? []))
-        .catch(() => {
-          // Select de responsável fica sem opções; o campo é opcional.
-        });
-    }
-
-    if (clientes.length === 0 && !semAcessoClientes) {
-      apiGet<UsuarioAdmin[]>("/api/admin/users", controlador.signal)
-        .then((dados) => setClientes(Array.isArray(dados) ? dados : []))
-        .catch((falha) => {
-          if (falha instanceof ErroApi && falha.status === 403) {
-            setSemAcessoClientes(true);
-            return;
-          }
-          // Qualquer outra falha também esconde o campo: melhor do que oferecer
-          // um select que não tem como ser preenchido.
-          if (mensagemDeErro(falha)) setSemAcessoClientes(true);
-        });
-    }
-
-    return () => controlador.abort();
-  }, [modalNova, internos.length, clientes.length, semAcessoClientes]);
-
-  const opcoesResponsavel = useMemo<Opcao[]>(
-    () => internos.map((u) => ({ valor: u.id, texto: u.rotulo })),
-    [internos]
-  );
-
-  const opcoesCliente = useMemo<Opcao[]>(
-    () =>
-      clientes.map((u) => ({
-        valor: u.id,
-        texto: u.name?.trim() ? `${u.name} · ${u.email}` : u.email,
-      })),
-    [clientes]
-  );
+  /*
+   * As duas listas de pessoas saíram desta tela.
+   *
+   * Antes o modal carregava `/api/usuarios-internos` e `/api/admin/users` para
+   * preencher "Responsável interno" e "Cliente vinculado". Os dois campos saíram
+   * do cadastro, então as duas requisições viraram trabalho sem consumidor — e
+   * `/api/admin/users` devolvia 403 para o comercial, o que exigia um estado só
+   * para esconder um campo que já não existe.
+   *
+   * Os dois vínculos continuam sendo feitos na tela da empresa, que é onde há
+   * contexto para decidir quem cuida dela.
+   */
 
   const erroDe = (campo: string) =>
     campoInvalido === campo ? erroForm || "Campo inválido." : null;
@@ -566,7 +516,6 @@ function Conteudo() {
         razaoSocial: form.razaoSocial.trim(),
         regime: form.regime,
         planoInterno: form.planoInterno,
-        tributoLocal: form.tributoLocal,
         inscricaoMunicipal: form.inscricaoMunicipal.trim(),
         inscricaoEstadual: form.inscricaoEstadual.trim(),
         cep: cepDigitos || undefined,
@@ -579,11 +528,10 @@ function Conteudo() {
         responsavelOperacional: form.responsavelOperacional.trim(),
         socioAdmNome: form.socioAdmNome.trim(),
         socioAdmCpf: cpfDigitos || undefined,
-        inicioAtividade: form.inicioAtividade || undefined,
-        responsavelId: form.responsavelId,
-        // Campo escondido nunca é enviado: enviar "" limparia o vínculo.
-        ...(semAcessoClientes ? {} : { userId: form.userId }),
-        observacoes: form.observacoes.trim(),
+        // `tributoLocal`, `inicioAtividade`, `responsavelId`, `userId` e
+        // `observacoes` NÃO vão no corpo: os cinco saíram do cadastro. Omitir é
+        // diferente de mandar vazio — a rota aplica o default do schema, e mandar
+        // "" gravaria campo em branco em cima de nada.
       });
 
       const criada = resposta.empresa;
@@ -1167,47 +1115,16 @@ function Conteudo() {
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Escolha
-                rotulo="Responsável interno"
-                vazio="Sem responsável definido"
-                opcoes={opcoesResponsavel}
-                value={form.responsavelId}
-                erro={erroDe("responsavelId")}
-                ajuda="Herdado por toda competência aberta para esta empresa."
-                onChange={(e) => editar({ responsavelId: e.target.value })}
-              />
-              {semAcessoClientes ? (
-                <p className="flex items-start gap-1.5 self-end rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
-                  <Icone nome="Lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    Somente administrador vincula o login do cliente à empresa.
-                    O cadastro segue normalmente sem esse vínculo, e um
-                    administrador pode acrescentá-lo depois na tela da empresa.
-                  </span>
-                </p>
-              ) : (
-                <Escolha
-                  rotulo="Cliente vinculado"
-                  vazio="Nenhum login vinculado"
-                  opcoes={opcoesCliente}
-                  value={form.userId}
-                  erro={erroDe("userId")}
-                  ajuda="Login pelo qual o cliente acessa o próprio painel. Opcional."
-                  onChange={(e) => editar({ userId: e.target.value })}
-                />
-              )}
-            </div>
           </BlocoForm>
 
           {/* ------------------- Plano e regime tributário ------------------ */}
 
           <BlocoForm
             icone="Tag"
-            titulo="Plano e tributação"
-            descricao="O plano decide se a empresa entra na abertura mensal. O regime decide quantas etapas cada competência tem, e não muda por aqui depois."
+            titulo="Plano e regime tributário"
+            descricao="O plano decide se a empresa entra na abertura mensal de competência. O regime decide quantas etapas cada competência tem."
           >
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Escolha
                 rotulo="Plano interno ContaZoom"
                 required
@@ -1227,35 +1144,19 @@ function Conteudo() {
                 ajuda="Simples Nacional tem 10 etapas por competência; Lucro Presumido, 14."
                 onChange={(e) => editar({ regime: e.target.value })}
               />
-              <Escolha
-                rotulo="Tributo local"
-                opcoes={OPCOES_TRIBUTO}
-                value={form.tributoLocal}
-                erro={erroDe("tributoLocal")}
-                ajuda="Nomeia a etapa de ICMS/ISS: comércio apura ICMS, serviço apura ISS."
-                onChange={(e) => editar({ tributoLocal: e.target.value })}
-              />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Entrada
-                rotulo="Início de atividade"
-                type="date"
-                value={form.inicioAtividade}
-                erro={erroDe("inicioAtividade")}
-                ajuda="Vira o início de vigência da primeira linha do histórico de regime."
-                onChange={(e) => editar({ inicioAtividade: e.target.value })}
-              />
-              <Area
-                rotulo="Observações"
-                wrapperClassName="lg:col-span-2"
-                rows={2}
-                value={form.observacoes}
-                erro={erroDe("observacoes")}
-                placeholder="Particularidades do cliente, combinados de prazo, contatos"
-                onChange={(e) => editar({ observacoes: e.target.value })}
-              />
-            </div>
+            {/* Diz onde estão os campos que saíram, senão quem procura por eles
+                conclui que o sistema perdeu funcionalidade. */}
+            <p className="flex items-start gap-1.5 text-xs leading-5 text-gray-500">
+              <Icone nome="Info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Tributo local, início de atividade, responsável interno, login do
+                cliente e observações ficam na tela da empresa, em{" "}
+                <strong className="font-semibold">Editar</strong>. O cadastro pede
+                só o essencial para a empresa existir.
+              </span>
+            </p>
           </BlocoForm>
         </div>
       </Modal>
