@@ -12,8 +12,8 @@
  * POR QUE OS UPLOADS FICAM NUM PASSO SÓ, em vez de dentro do bloco de cada
  * sócio: no celular, escolher arquivo tira a pessoa do navegador e a devolve
  * depois. Se isso acontecer no meio da digitação, ela volta e precisa reencontrar
- * onde estava. Agrupando, a interrupção acontece numa fase só, quando ela já
- * sabe exatamente quais arquivos buscar.
+ * onde estava. Agrupando, a interrupção acontece numa fase só, quando ela já sabe
+ * exatamente quais arquivos buscar.
  */
 
 import Icone from "@/app/components/views/ui/tarefas/Icone";
@@ -23,8 +23,8 @@ import {
   type Erros,
   type FormularioAbertura,
 } from "@/lib/formulario-abertura";
+import { Cartao, Nota, TituloSecao } from "../componentes/Base";
 import { SlotDocumento } from "../componentes/Campos";
-import { CabecalhoPasso } from "./PassoSocios";
 
 export function PassoDocumentos({
   dados,
@@ -48,64 +48,65 @@ export function PassoDocumentos({
 
   return (
     <div className="space-y-5">
-      <CabecalhoPasso
+      <TituloSecao
+        nivel={2}
         icone="Paperclip"
         titulo="Documentos"
         descricao="Cada arquivo já vem identificado com o dono. Nada de pasta comum onde ninguém sabe de quem é o quê."
       />
 
-      <p className="flex items-start gap-2 rounded-[10px] border border-[#EDEFF3] bg-[#F8F9FB] px-3.5 py-3 text-xs font-medium leading-5 text-[#6B7280]">
-        <Icone nome="Info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>
-          PDF, JPG ou PNG, até {tamanhoLegivel(TAMANHO_MAXIMO_BYTES)} por
-          arquivo. Foto do celular serve, desde que o documento esteja legível.{" "}
-          <strong className="font-semibold text-[#B54708]">
-            Os arquivos não ficam salvos se você fechar a página
-          </strong>{" "}
-          — envie o formulário na mesma sessão em que anexar.
-        </span>
-      </p>
+      <Nota tom="atencao">
+        PDF, JPG ou PNG, até {tamanhoLegivel(TAMANHO_MAXIMO_BYTES)} por arquivo.
+        Foto do celular serve, desde que o documento esteja legível.{" "}
+        <strong className="font-bold">
+          Os arquivos não ficam salvos se você fechar a página
+        </strong>{" "}
+        — envie o formulário na mesma sessão em que anexar.
+      </Nota>
 
       {grupos.map((grupo) => {
         const obrigatorios = grupo.slots.filter((s) => s.obrigatorio);
         const prontos = obrigatorios.filter(
           (s) => (arquivos[s.chave]?.length ?? 0) > 0
         ).length;
-        const completo = obrigatorios.length > 0 && prontos === obrigatorios.length;
+        const completo =
+          obrigatorios.length > 0 && prontos === obrigatorios.length;
 
         return (
-          <section
-            key={grupo.chave}
-            className="overflow-hidden rounded-[14px] border border-[#EDEFF3] bg-white"
-            style={{ boxShadow: "var(--cz-elev-1)" }}
-          >
-            <div className="flex items-center justify-between gap-3 border-b border-[#EDEFF3] bg-[#FCFCFD] px-4 py-3 sm:px-5">
-              <div className="flex min-w-0 items-center gap-2.5">
+          <Cartao key={grupo.chave} className="overflow-hidden">
+            <div className="flex items-center justify-between gap-3 border-b border-[#E7EAEF] bg-[#FBFCFD] px-4 py-3.5 sm:px-5">
+              <div className="flex min-w-0 items-center gap-3">
                 <span
                   aria-hidden="true"
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]"
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border ${
+                    completo
+                      ? "border-[#FFDCC4] bg-[#FFF4EC] text-[#D9500A]"
+                      : "border-[#E7EAEF] bg-white text-[#667085]"
+                  }`}
                 >
                   <Icone
                     nome={grupo.chave === "empresa" ? "Building2" : "IdCard"}
-                    className="h-4 w-4"
+                    className="h-[1.125rem] w-[1.125rem]"
                   />
                 </span>
-                {/* Nome da pessoa em caixa alta como cabeçalho do grupo: é o que
-                    faz a propriedade do arquivo ficar óbvia de relance. */}
-                <h3 className="truncate text-[0.875rem] font-bold uppercase tracking-wide text-[#14161B]">
+                {/* Nome da pessoa como cabeçalho do grupo: é o que faz a
+                    propriedade do arquivo ficar óbvia de relance. */}
+                <h3 className="truncate text-[1rem] font-bold tracking-[-0.01em] text-[#101828]">
                   {grupo.titulo}
                 </h3>
               </div>
 
               {obrigatorios.length > 0 && (
                 <span
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.6875rem] font-bold ${
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.75rem] font-bold ${
                     completo
-                      ? "bg-[#FFF2E9] text-[#C2410C]"
-                      : "bg-[#F1F3F6] text-[#4B5563]"
+                      ? "bg-[#FFF4EC] text-[#C2410C]"
+                      : "bg-[#F2F4F7] text-[#475467]"
                   }`}
                 >
-                  {completo && <Icone nome="CheckCircle2" className="h-3.5 w-3.5" />}
+                  {completo && (
+                    <Icone nome="CheckCircle2" className="h-3.5 w-3.5" />
+                  )}
                   <span className="cz-num">
                     {prontos} de {obrigatorios.length}
                   </span>
@@ -113,20 +114,21 @@ export function PassoDocumentos({
               )}
             </div>
 
-            <div className="space-y-4 p-4 sm:p-5">
+            <div className="divide-y divide-[#E7EAEF]">
               {grupo.slots.map((slot) => (
-                <SlotDocumento
-                  key={slot.chave}
-                  rotulo={slot.rotulo}
-                  ajuda={slot.ajuda}
-                  obrigatorio={slot.obrigatorio}
-                  arquivos={arquivos[slot.chave] ?? []}
-                  onMudar={(lista) => onMudarArquivos(slot.chave, lista)}
-                  erro={erros[slot.chave] ?? null}
-                />
+                <div key={slot.chave} className="p-4 sm:p-5">
+                  <SlotDocumento
+                    rotulo={slot.rotulo}
+                    ajuda={slot.ajuda}
+                    obrigatorio={slot.obrigatorio}
+                    arquivos={arquivos[slot.chave] ?? []}
+                    onMudar={(lista) => onMudarArquivos(slot.chave, lista)}
+                    erro={erros[slot.chave] ?? null}
+                  />
+                </div>
               ))}
             </div>
-          </section>
+          </Cartao>
         );
       })}
     </div>

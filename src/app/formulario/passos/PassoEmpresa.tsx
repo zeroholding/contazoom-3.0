@@ -11,22 +11,29 @@
  *  - "Endereço da empresa COMPLETO, com CEP" era texto livre, sem busca.
  */
 
-import { Area, Entrada, Escolha } from "@/app/components/views/ui/tarefas/Campos";
-import Icone from "@/app/components/views/ui/tarefas/Icone";
 import {
   MINIMO_ATIVIDADES,
-  enderecoEmLinha,
   enderecoEfetivoDoSocio,
+  enderecoEmLinha,
   type Erros,
   type FormularioAbertura,
 } from "@/lib/formulario-abertura";
+import {
+  CampoArea,
+  CampoSelect,
+  CampoTexto,
+  Cartao,
+  Nota,
+  TituloSecao,
+} from "../componentes/Base";
 import {
   Binaria,
   CampoEndereco,
   EnderecoEmLeitura,
   EscolhaCartao,
 } from "../componentes/Campos";
-import { CabecalhoPasso } from "./PassoSocios";
+
+const ORDINAIS = ["1ª opção", "2ª opção", "3ª opção"] as const;
 
 export function PassoEmpresa({
   dados,
@@ -39,6 +46,7 @@ export function PassoEmpresa({
 }) {
   const umSocio = dados.socios.length === 1;
   const atividades = dados.atividades.trim();
+  const faltam = MINIMO_ATIVIDADES - atividades.length;
 
   function mudarRazao(indice: number, texto: string) {
     const novas = [...dados.razaoSocialOpcoes] as typeof dados.razaoSocialOpcoes;
@@ -47,65 +55,59 @@ export function PassoEmpresa({
   }
 
   return (
-    <div className="space-y-6">
-      <CabecalhoPasso
+    <div className="space-y-5">
+      <TituloSecao
+        nivel={2}
         icone="Building2"
         titulo="A empresa"
         descricao="Nome, atividade e onde ela vai funcionar."
       />
 
       {/* --------------------------- Razão social ------------------------------ */}
-      <section className="rounded-[14px] border border-[#EDEFF3] bg-white p-4 sm:p-5">
-        <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]">
-            <Icone nome="ScrollText" className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <h3 className="text-[0.9375rem] font-semibold leading-5 text-[#14161B]">
-              Três opções de razão social
-            </h3>
-            <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-              A razão social é o nome oficial no registro, usado em contratos,
-              nota fiscal e documentos. A Junta Comercial pode recusar um nome já
-              registrado, então enviamos três para não recomeçar o processo.
-            </p>
-          </div>
-        </div>
+      <Cartao className="p-4 sm:p-6">
+        <TituloSecao
+          icone="ScrollText"
+          titulo="Três opções de razão social"
+          descricao="A razão social é o nome oficial no registro, usado em contratos, nota fiscal e documentos. A Junta Comercial pode recusar um nome já registrado, então enviamos três para não recomeçar o processo."
+        />
 
         {/* Três campos, os três obrigatórios. Não dá para mandar duas nem cinco. */}
-        <div className="mt-4 space-y-4">
-          {(["1ª opção", "2ª opção", "3ª opção"] as const).map((rotulo, i) => (
-            <Entrada
+        <div className="mt-5 space-y-5">
+          {ORDINAIS.map((rotulo, i) => (
+            <CampoTexto
               key={rotulo}
               rotulo={rotulo}
+              icone={i === 0 ? "BadgeCheck" : "Tag"}
               required
               value={dados.razaoSocialOpcoes[i]}
               onChange={(e) => mudarRazao(i, e.target.value)}
               erro={erros[`razaoSocial.${i}`] ?? null}
               autoComplete="off"
               placeholder={
-                i === 0 ? "Nome preferido" : "Alternativa, caso a anterior seja recusada"
+                i === 0
+                  ? "O nome que você prefere"
+                  : "Alternativa, caso a anterior seja recusada"
               }
             />
           ))}
         </div>
-      </section>
+      </Cartao>
 
-      {/* --------------------------- Nome fantasia ----------------------------- */}
-      <Entrada
-        rotulo="Nome fantasia"
-        required
-        value={dados.nomeFantasia}
-        onChange={(e) => onMudar({ nomeFantasia: e.target.value })}
-        erro={erros["nomeFantasia"] ?? null}
-        ajuda="Como a empresa vai ser conhecida pelo público. Pode ser diferente da razão social."
-        autoComplete="off"
-        placeholder="O nome da fachada, do site, do Instagram"
-      />
+      {/* --------------------- Nome fantasia e atividades ---------------------- */}
+      <Cartao className="space-y-5 p-4 sm:p-6">
+        <CampoTexto
+          rotulo="Nome fantasia"
+          icone="Store"
+          required
+          value={dados.nomeFantasia}
+          onChange={(e) => onMudar({ nomeFantasia: e.target.value })}
+          erro={erros["nomeFantasia"] ?? null}
+          ajuda="Como a empresa vai ser conhecida pelo público. Pode ser diferente da razão social."
+          autoComplete="off"
+          placeholder="O nome da fachada, do site, do Instagram"
+        />
 
-      {/* ---------------------------- Atividades ------------------------------- */}
-      <div>
-        <Area
+        <CampoArea
           rotulo="Quais atividades a empresa vai desenvolver?"
           required
           rows={6}
@@ -113,33 +115,28 @@ export function PassoEmpresa({
           onChange={(e) => onMudar({ atividades: e.target.value })}
           erro={erros["atividades"] ?? null}
           ajuda="Descreva com detalhe os produtos comercializados, o nicho ou os serviços prestados. É isso que define os CNAEs do CNPJ."
-          placeholder="Ex.: venda de roupas femininas pela internet, com estoque próprio, e também confecção sob encomenda para lojistas."
+          placeholder="Ex.: venda de roupas femininas pela internet, com estoque próprio, e também confecção sob encomenda para lojistas da região."
+          contador={
+            // Só depois de começar a digitar: "0 de 30" num campo vazio parece
+            // cobrança antes da hora.
+            atividades.length > 0 && faltam > 0 ? (
+              <p className="cz-num text-[0.8125rem] font-semibold text-[#B54708]">
+                faltam {faltam}
+              </p>
+            ) : atividades.length >= MINIMO_ATIVIDADES ? (
+              <p className="text-[0.8125rem] font-semibold text-[#D9500A]">ok</p>
+            ) : null
+          }
         />
-        {/* Contador só depois de a pessoa começar a digitar: "0 de 30" num campo
-            vazio parece cobrança antes da hora. */}
-        {atividades.length > 0 && atividades.length < MINIMO_ATIVIDADES && (
-          <p className="cz-num mt-1.5 text-xs font-medium text-[#B54708]">
-            {atividades.length} de {MINIMO_ATIVIDADES} caracteres — quanto mais
-            detalhe, mais preciso o CNAE.
-          </p>
-        )}
-      </div>
+      </Cartao>
 
       {/* ------------------------ Endereço da empresa -------------------------- */}
-      <section className="space-y-4 rounded-[14px] border border-[#EDEFF3] bg-white p-4 sm:p-5">
-        <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]">
-            <Icone nome="Store" className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <h3 className="text-[0.9375rem] font-semibold leading-5 text-[#14161B]">
-              Onde a empresa vai funcionar
-            </h3>
-            <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-              É o endereço que vai para a Junta Comercial e para o CNPJ.
-            </p>
-          </div>
-        </div>
+      <Cartao className="space-y-5 p-4 sm:p-6">
+        <TituloSecao
+          icone="MapPin"
+          titulo="Onde a empresa vai funcionar"
+          descricao="É o endereço que vai para a Junta Comercial e para o CNPJ."
+        />
 
         {/* Pergunta antes de sete campos: muita abertura usa o endereço
             residencial do sócio, e nesse caso o endereço já foi digitado. */}
@@ -151,7 +148,9 @@ export function PassoEmpresa({
           opcoes={[
             {
               valor: "SOCIO",
-              texto: umSocio ? "No endereço do sócio" : "No endereço de um dos sócios",
+              texto: umSocio
+                ? "No endereço do sócio"
+                : "No endereço de um dos sócios",
               descricao: "Usa o endereço residencial já informado.",
             },
             {
@@ -163,12 +162,13 @@ export function PassoEmpresa({
         />
 
         {dados.localEmpresa === "SOCIO" && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {/* Com um sócio só, é dele — perguntar "de qual?" com uma opção é
                 atrito puro. */}
             {!umSocio && (
-              <Escolha
+              <CampoSelect
                 rotulo="De qual sócio?"
+                icone="User"
                 required
                 vazio="Selecione"
                 opcoes={dados.socios.map((s, i) => ({
@@ -182,7 +182,8 @@ export function PassoEmpresa({
                 }
                 onChange={(e) =>
                   onMudar({
-                    socioDoEndereco: e.target.value === "" ? null : Number(e.target.value),
+                    socioDoEndereco:
+                      e.target.value === "" ? null : Number(e.target.value),
                   })
                 }
                 erro={erros["socioDoEndereco"] ?? null}
@@ -212,7 +213,7 @@ export function PassoEmpresa({
           />
         )}
 
-        <div className="border-t border-[#EDEFF3] pt-4">
+        <div className="space-y-4 border-t border-[#E7EAEF] pt-5">
           <Binaria
             rotulo="Você tem o IPTU desse endereço?"
             ajuda="Se tiver, pedimos o arquivo no passo de documentos. Não é obrigatório."
@@ -223,19 +224,13 @@ export function PassoEmpresa({
           {/* Avisa, mas não bloqueia: hoje o formulário do escritório também
               trata o IPTU como opcional. */}
           {dados.temIptu === false && (
-            <p
-              role="status"
-              className="mt-3 flex items-start gap-2 rounded-[10px] border border-[#EDEFF3] bg-[#F8F9FB] px-3 py-2.5 text-xs font-medium leading-5 text-[#6B7280]"
-            >
-              <Icone nome="Info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                Sem problema, você pode enviar depois. O processo de viabilidade
-                pode precisar dele.
-              </span>
-            </p>
+            <Nota tom="info">
+              Sem problema, você pode enviar depois. O processo de viabilidade
+              pode precisar dele.
+            </Nota>
           )}
         </div>
-      </section>
+      </Cartao>
     </div>
   );
 }

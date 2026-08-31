@@ -8,13 +8,13 @@
  */
 
 import Icone from "@/app/components/views/ui/tarefas/Icone";
-import { Botao } from "@/app/components/views/ui/tarefas/Campos";
 import {
   MAXIMO_SOCIOS,
   type Erros,
   type FormularioAbertura,
   type Socio,
 } from "@/lib/formulario-abertura";
+import { BotaoForm, Cartao, TituloSecao } from "../componentes/Base";
 import { BlocoSocio } from "./BlocoSocio";
 
 export function PassoSocios({
@@ -35,51 +35,58 @@ export function PassoSocios({
 
   return (
     <div className="space-y-5">
-      <CabecalhoPasso
+      <TituloSecao
+        nivel={2}
         icone="Users"
         titulo="Quem são os sócios"
-        descricao="Comece pela quantidade. Cada pessoa tem os dados dela, sem misturar."
+        descricao="Cada pessoa tem os dados dela, sem misturar. Comece pela quantidade."
       />
 
       {/* --------------------------- Quantidade -------------------------------- */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-[#EDEFF3] bg-white px-4 py-4 sm:px-5">
-        <div className="min-w-0">
-          <p className="text-[0.9375rem] font-semibold leading-5 text-[#14161B]">
-            Quantidade de sócios
-          </p>
-          <p className="mt-0.5 text-xs leading-5 text-[#6B7280]">
-            {total === 1
-              ? "Empresa com um único sócio."
-              : `${total} pessoas na sociedade.`}
-          </p>
-        </div>
+      <Cartao className="px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[0.9375rem] font-semibold leading-5 text-[#101828]">
+              Quantidade de sócios
+            </p>
+            <p className="mt-1 text-[0.8125rem] leading-5 text-[#667085]">
+              {total === 1
+                ? "Empresa com um único sócio."
+                : `${total} pessoas na sociedade.`}
+            </p>
+          </div>
 
-        <div className="flex items-center gap-2.5">
-          <Botao
-            variante="secundario"
-            icone="Trash2"
-            aria-label="Remover o último sócio"
-            disabled={total <= 1}
-            onClick={() => onPedirRemocao(total - 1)}
-          >
-            Remover
-          </Botao>
-          <span
-            className="cz-num min-w-[2.5rem] text-center text-xl font-bold text-[#14161B]"
-            aria-live="polite"
-          >
-            {total}
-          </span>
-          <Botao
-            variante="primario"
-            icone="UserPlus"
-            disabled={total >= MAXIMO_SOCIOS}
-            onClick={onAdicionar}
-          >
-            Adicionar sócio
-          </Botao>
+          {/* Contador com dois passos, em vez de select de 1 a 10: a mudança é
+              quase sempre de um em um, e o select esconde o valor atual atrás de
+              um toque. */}
+          <div className="flex items-center gap-1 rounded-[12px] border border-[#D8DDE5] bg-white p-1">
+            <button
+              type="button"
+              onClick={() => onPedirRemocao(total - 1)}
+              disabled={total <= 1}
+              aria-label="Remover o último sócio"
+              className="cz-campo-foco flex h-11 w-11 items-center justify-center rounded-[10px] text-[#475467] transition-colors hover:bg-[#F2F4F7] hover:text-[#101828] disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Icone nome="MinusCircle" className="h-[1.125rem] w-[1.125rem]" />
+            </button>
+            <span
+              className="cz-num min-w-[2.75rem] text-center text-[1.375rem] font-bold text-[#101828]"
+              aria-live="polite"
+            >
+              {total}
+            </span>
+            <button
+              type="button"
+              onClick={onAdicionar}
+              disabled={total >= MAXIMO_SOCIOS}
+              aria-label="Adicionar um sócio"
+              className="cz-campo-foco flex h-11 w-11 items-center justify-center rounded-[10px] bg-[#FFF4EC] text-[#D9500A] transition-colors hover:bg-[#FFE7D6] disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Icone nome="Plus" className="h-[1.125rem] w-[1.125rem]" />
+            </button>
+          </div>
         </div>
-      </div>
+      </Cartao>
 
       {/* ------------------------------ Blocos --------------------------------- */}
       <div className="space-y-5">
@@ -92,50 +99,22 @@ export function PassoSocios({
             enderecoDoPrimeiro={dados.socios[0].endereco}
             erros={erros}
             onMudar={(parcial) => onMudarSocio(i, parcial)}
-            onRemover={total > 1 ? () => onPedirRemocao(i) : undefined}
+            onRemover={() => onPedirRemocao(i)}
           />
         ))}
       </div>
 
       {total < MAXIMO_SOCIOS && (
-        <button
-          type="button"
+        <BotaoForm
+          variante="secundario"
+          icone="UserPlus"
+          larguraCheia
           onClick={onAdicionar}
-          className="flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-[12px] border border-dashed border-[#C6CCD6] bg-[#F8F9FB] px-4 text-[0.9375rem] font-semibold text-[#4B5563] transition-colors hover:border-[#F26212] hover:bg-[#FFF2E9] hover:text-[#C2410C]"
+          className="min-h-[3.5rem] border-dashed bg-[#FBFCFD]"
         >
-          <Icone nome="UserPlus" className="h-[1.125rem] w-[1.125rem]" />
           Adicionar sócio {total + 1}
-        </button>
+        </BotaoForm>
       )}
-    </div>
-  );
-}
-
-/** Cabeçalho de passo. Repetido nos cinco, então mora aqui e é exportado. */
-export function CabecalhoPasso({
-  icone,
-  titulo,
-  descricao,
-}: {
-  icone: string;
-  titulo: string;
-  descricao: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]">
-        <Icone nome={icone} className="h-5 w-5" />
-      </span>
-      <div className="min-w-0">
-        {/* `h2` porque o `h1` é o título da página. Pular nível quebra a
-            navegação por cabeçalho do leitor de tela. */}
-        <h2 className="text-lg font-bold leading-6 tracking-[-0.02em] text-[#14161B]">
-          {titulo}
-        </h2>
-        <p className="mt-1 max-w-2xl text-[0.875rem] leading-6 text-[#6B7280]">
-          {descricao}
-        </p>
-      </div>
     </div>
   );
 }

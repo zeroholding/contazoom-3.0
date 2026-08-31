@@ -19,10 +19,14 @@
  * com três sócios, página única passa de 45 campos numa rolagem só e a pessoa
  * perde onde está. A barra de progresso resolve o "não sei quanto falta", que é a
  * real reclamação contra multi-passo.
+ *
+ * O container usa `.cz-form` e NÃO `.cz-tarefas`. A primeira versão usava as
+ * duas e herdava o campo do painel; ver o comentário de `.cz-form` em
+ * `globals.css` e o de `componentes/Base.tsx` para o motivo.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Botao } from "@/app/components/views/ui/tarefas/Campos";
+import Image from "next/image";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
 import {
@@ -42,6 +46,7 @@ import {
   limparRascunho,
   salvarRascunho,
 } from "@/lib/formulario-rascunho";
+import { BotaoForm, Cartao, Nota } from "./componentes/Base";
 import { PassoSocios } from "./passos/PassoSocios";
 import { PassoEmpresa } from "./passos/PassoEmpresa";
 import { PassoSociedade } from "./passos/PassoSociedade";
@@ -78,8 +83,8 @@ export default function FormularioAberturaView() {
 
   useEffect(() => {
     const achado = lerRascunho();
-    // Pergunta antes de restaurar. Restaurar em silêncio assusta quem esperava
-    // um formulário em branco, e ela não sabe de onde veio aquele CPF.
+    // Pergunta antes de restaurar. Restaurar em silêncio assusta quem esperava um
+    // formulário em branco, e ela não sabe de onde veio aquele CPF.
     if (achado) setRascunhoEncontrado(achado);
     primeiraCarga.current = false;
   }, []);
@@ -203,13 +208,11 @@ export default function FormularioAberturaView() {
 
     alvo?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    // O campo em si: `aria-invalid` é posto pelo componente `Entrada`, então
-    // serve de seletor sem cada campo precisar de id conhecido aqui.
+    // `aria-invalid` é posto pelo componente de campo, então serve de seletor sem
+    // cada campo precisar de um id conhecido aqui.
     requestAnimationFrame(() => {
-      const campo = (socio ? alvo : document)?.querySelector<HTMLElement>(
-        "[aria-invalid='true']"
-      );
-      campo?.focus();
+      const raiz: ParentNode = socio && alvo ? alvo : document;
+      raiz.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
     });
   }
 
@@ -242,8 +245,8 @@ export default function FormularioAberturaView() {
   }
 
   function irPara(destino: number) {
-    // Para trás, livre. Para frente, só até onde já foi validado — senão a
-    // pessoa cai na revisão sem ter preenchido nada.
+    // Para trás, livre. Para frente, só até onde já foi validado — senão a pessoa
+    // cai na revisão sem ter preenchido nada.
     if (destino > liberado) return;
     setErros({});
     setPasso(destino);
@@ -256,9 +259,9 @@ export default function FormularioAberturaView() {
    * Nesta fase o envio não sai do navegador.
    *
    * Não existe rota nem persistência, e inventar um `POST` para um endpoint que
-   * não existe produziria erro de rede que a pessoa leria como "o formulário
-   * está quebrado". Em vez disso: valida tudo, mostra o resultado e oferece o
-   * resumo em arquivo, que é o que salva um preenchimento de teste.
+   * não existe produziria erro de rede que a pessoa leria como "o formulário está
+   * quebrado". Em vez disso: valida tudo, mostra o resultado e oferece o resumo em
+   * arquivo, que é o que salva um preenchimento de teste.
    */
   function finalizar() {
     setEnviado(true);
@@ -310,28 +313,38 @@ export default function FormularioAberturaView() {
     // `lang` aqui porque o root layout declara `<html lang="en">`: sem isso o
     // leitor de tela lê português com fonética inglesa e o autofill erra os
     // campos. Trocar no root afeta o app inteiro e é decisão separada desta.
-    <div lang="pt-BR" className="cz-tarefas cz-form min-h-screen pb-32 sm:pb-12">
+    <div lang="pt-BR" className="cz-form min-h-screen pb-28 sm:pb-14">
       {/* ------------------------------ Topo ---------------------------------- */}
-      <header className="border-b border-[#EDEFF3] bg-white">
-        <div className="mx-auto max-w-[880px] px-4 py-5 sm:px-6 sm:py-7">
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#F26212] text-white"
-            >
-              <Icone nome="Landmark" className="h-4 w-4" />
+      <header className="border-b border-[#E7EAEF] bg-white">
+        <div className="mx-auto max-w-[920px] px-4 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-8">
+          {/* A logo de verdade, a mesma do login e da barra lateral. */}
+          <Image
+            src="/logopng.webp"
+            alt="ContaZoom"
+            width={210}
+            height={48}
+            className="h-8 w-auto object-contain sm:h-9"
+            priority
+          />
+
+          <div className="mt-6 flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FFDCC4] bg-[#FFF4EC] px-3 py-1 text-[0.75rem] font-bold uppercase tracking-[0.04em] text-[#C2410C]">
+              <Icone nome="Landmark" className="h-3.5 w-3.5" />
+              Legalização
             </span>
-            <p className="text-[0.9375rem] font-bold tracking-[-0.01em] text-[#14161B]">
-              ContaZoom
-            </p>
+            <span className="inline-flex items-center gap-1.5 text-[0.75rem] font-semibold text-[#667085]">
+              <Icone nome="Clock" className="h-3.5 w-3.5" />
+              cerca de 10 minutos
+            </span>
           </div>
 
-          <h1 className="mt-4 text-2xl font-bold leading-8 tracking-[-0.028em] text-[#14161B] sm:text-[1.75rem]">
+          <h1 className="mt-3 text-[1.75rem] font-bold leading-9 tracking-[-0.03em] text-[#101828] sm:text-[2.125rem] sm:leading-[2.75rem]">
             Abertura de CNPJ
           </h1>
-          <p className="mt-2 max-w-xl text-[0.9375rem] leading-6 text-[#6B7280]">
-            Preencha os dados dos sócios e da empresa. Leva cerca de 10 minutos, e
-            o que você digitar fica salvo neste navegador.
+          <p className="mt-2.5 max-w-2xl text-[1rem] leading-[1.6] text-[#667085]">
+            Preencha os dados dos sócios e da empresa, e anexe os documentos de
+            cada pessoa. O que você digitar fica salvo neste navegador, então dá
+            para parar e voltar depois.
           </p>
         </div>
 
@@ -343,29 +356,23 @@ export default function FormularioAberturaView() {
         />
       </header>
 
-      <main ref={topo} className="mx-auto max-w-[880px] scroll-mt-4 px-4 py-6 sm:px-6 sm:py-8">
+      <main
+        ref={topo}
+        className="mx-auto max-w-[920px] scroll-mt-24 px-4 py-6 sm:px-8 sm:py-10"
+      >
         {enviado ? (
           <Concluido onBaixar={baixarResumo} onRecomecar={recomecar} />
         ) : (
           <>
-            {/* Resumo de erros no topo, em `role="alert"`: quem usa leitor de
-                tela precisa ouvir que a tentativa falhou, não só ver vermelho. */}
+            {/* Resumo de erros no topo, em `role="alert"`: quem usa leitor de tela
+                precisa ouvir que a tentativa falhou, não só ver vermelho. */}
             {quantosErros > 0 && (
-              <div
-                role="alert"
-                className="mb-5 flex items-start gap-3 rounded-[12px] border border-l-[3px] border-[#FECDCA] border-l-[#D92D20] bg-[#FEF2F2] px-4 py-3"
-              >
-                <Icone
-                  nome="AlertTriangle"
-                  className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[#B42318]"
-                />
-                <p className="text-[0.875rem] font-medium leading-6 text-[#B42318]">
-                  {quantosErros === 1
-                    ? "Falta corrigir 1 campo neste passo."
-                    : `Faltam corrigir ${quantosErros} campos neste passo.`}{" "}
-                  Eles estão marcados em vermelho abaixo.
-                </p>
-              </div>
+              <Nota tom="erro" className="mb-6">
+                {quantosErros === 1
+                  ? "Falta corrigir 1 campo neste passo."
+                  : `Faltam corrigir ${quantosErros} campos neste passo.`}{" "}
+                Eles estão marcados em vermelho abaixo.
+              </Nota>
             )}
 
             {passo === 0 && (
@@ -406,29 +413,22 @@ export default function FormularioAberturaView() {
               />
             )}
 
-            {/* Aviso de homologação só na revisão, onde o botão de enviar está.
-                No passo 1 seria ruído sobre algo que ainda não vai acontecer. */}
+            {/* Aviso de homologação só na revisão, onde o botão de enviar está. No
+                passo 1 seria ruído sobre algo que ainda não vai acontecer. */}
             {passo === 4 && (
-              <div className="mt-5 flex items-start gap-3 rounded-[12px] border border-l-[3px] border-[#FEDF89] border-l-[#DC6803] bg-[#FFFAEB] px-4 py-3">
-                <Icone
-                  nome="Info"
-                  className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[#B54708]"
-                />
-                <p className="text-[0.875rem] font-medium leading-6 text-[#B54708]">
-                  Esta tela está em homologação: o envio ao escritório ainda não
-                  está ativo. Ao finalizar, você poderá baixar o resumo do
-                  preenchimento.
-                </p>
-              </div>
+              <Nota tom="atencao" className="mt-5">
+                Esta tela está em homologação: o envio ao escritório ainda não está
+                ativo. Ao finalizar, você poderá baixar o resumo do preenchimento.
+              </Nota>
             )}
 
-            <div className="mt-6 flex justify-center">
+            <div className="mt-8 flex justify-center">
               <button
                 type="button"
                 onClick={() => setConfirmandoLimpeza(true)}
-                className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-xs font-semibold text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#B42318]"
+                className="cz-campo-foco inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[0.8125rem] font-semibold text-[#98A2B3] transition-colors hover:bg-[#F2F4F7] hover:text-[#B42318]"
               >
-                <Icone nome="Trash2" className="h-3.5 w-3.5" />
+                <Icone nome="Trash2" className="h-4 w-4" />
                 Limpar preenchimento
               </button>
             </div>
@@ -438,32 +438,30 @@ export default function FormularioAberturaView() {
 
       {/* ---------------------------- Navegação -------------------------------- */}
       {!enviado && (
-        // Fixa no rodapé no celular: sem isso, avançar exige rolar 40 campos até
-        // o fim. No desktop volta a ser um bloco normal no fluxo.
+        // Fixa no rodapé no celular: sem isso, avançar exige rolar 40 campos até o
+        // fim. No desktop volta a ser um bloco normal no fluxo.
         <nav
           aria-label="Navegação do formulário"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-[#EDEFF3] bg-white/95 backdrop-blur sm:static sm:border-t-0 sm:bg-transparent sm:backdrop-blur-none"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E7EAEF] bg-white/95 backdrop-blur sm:static sm:border-t-0 sm:bg-transparent sm:backdrop-blur-none"
         >
-          <div className="mx-auto flex max-w-[880px] items-center gap-3 px-4 py-3 sm:px-6 sm:pb-0">
-            <Botao
+          <div className="mx-auto flex max-w-[920px] items-center gap-3 px-4 py-3 sm:px-8 sm:pb-0 sm:pt-0">
+            <BotaoForm
               variante="secundario"
-              tamanho="lg"
               icone="ArrowLeft"
               onClick={voltar}
               disabled={passo === 0}
             >
-              Voltar
-            </Botao>
-            <Botao
+              <span className="hidden sm:inline">Voltar</span>
+            </BotaoForm>
+            <BotaoForm
               variante="primario"
-              tamanho="lg"
-              icone={passo === TOTAL_PASSOS - 1 ? "Send" : "ArrowRight"}
+              iconeDireita={passo === TOTAL_PASSOS - 1 ? "Send" : "ArrowRight"}
               onClick={avancar}
               larguraCheia
-              className="sm:!w-auto sm:!min-w-[12rem]"
+              className="sm:w-auto! sm:min-w-[13rem]"
             >
               {passo === TOTAL_PASSOS - 1 ? "Finalizar" : "Continuar"}
-            </Botao>
+            </BotaoForm>
           </div>
         </nav>
       )}
@@ -479,10 +477,10 @@ export default function FormularioAberturaView() {
         onFechar={() => setRascunhoEncontrado(null)}
         rodape={
           <>
-            <Botao variante="secundario" onClick={recomecar}>
+            <BotaoForm variante="secundario" onClick={recomecar}>
               Começar de novo
-            </Botao>
-            <Botao
+            </BotaoForm>
+            <BotaoForm
               variante="primario"
               icone="RotateCcw"
               onClick={() => {
@@ -494,11 +492,11 @@ export default function FormularioAberturaView() {
               }}
             >
               Continuar
-            </Botao>
+            </BotaoForm>
           </>
         }
       >
-        <p className="text-[0.9375rem] leading-6 text-[#4B5563]">
+        <p className="text-[0.9375rem] leading-6 text-[#475467]">
           Os campos de texto voltam como estavam.{" "}
           <strong className="font-semibold text-[#B54708]">
             Os arquivos precisam ser escolhidos de novo
@@ -515,24 +513,24 @@ export default function FormularioAberturaView() {
         onFechar={() => setRemovendo(null)}
         rodape={
           <>
-            <Botao variante="secundario" onClick={() => setRemovendo(null)}>
+            <BotaoForm variante="secundario" onClick={() => setRemovendo(null)}>
               Cancelar
-            </Botao>
-            <Botao
+            </BotaoForm>
+            <BotaoForm
               variante="perigo"
               icone="Trash2"
               onClick={() => removendo !== null && removerSocio(removendo)}
             >
               Remover
-            </Botao>
+            </BotaoForm>
           </>
         }
       >
         {/* Nomeia quem sai. Reduzir a quantidade sem dizer de quem eram os dados
             apagaria trabalho em silêncio. */}
-        <p className="text-[0.9375rem] leading-6 text-[#4B5563]">
+        <p className="text-[0.9375rem] leading-6 text-[#475467]">
           Os dados e documentos de{" "}
-          <strong className="font-semibold text-[#14161B]">
+          <strong className="font-semibold text-[#101828]">
             {socioRemovido?.nome.trim() ||
               `Sócio ${removendo !== null ? removendo + 1 : ""}`}
           </strong>{" "}
@@ -548,19 +546,19 @@ export default function FormularioAberturaView() {
         onFechar={() => setConfirmandoLimpeza(false)}
         rodape={
           <>
-            <Botao
+            <BotaoForm
               variante="secundario"
               onClick={() => setConfirmandoLimpeza(false)}
             >
               Cancelar
-            </Botao>
-            <Botao variante="perigo" icone="Trash2" onClick={recomecar}>
+            </BotaoForm>
+            <BotaoForm variante="perigo" icone="Trash2" onClick={recomecar}>
               Limpar tudo
-            </Botao>
+            </BotaoForm>
           </>
         }
       >
-        <p className="text-[0.9375rem] leading-6 text-[#4B5563]">
+        <p className="text-[0.9375rem] leading-6 text-[#475467]">
           Todos os campos e arquivos deste formulário serão apagados, inclusive o
           rascunho salvo neste navegador. Não tem como desfazer.
         </p>
@@ -577,7 +575,10 @@ export default function FormularioAberturaView() {
  * variável não usada é normalmente defeito, e abrir exceção por caso esconderia
  * as reclamações legítimas.
  */
-function semAChave<T>(objeto: Record<string, T>, chave: string): Record<string, T> {
+function semAChave<T>(
+  objeto: Record<string, T>,
+  chave: string
+): Record<string, T> {
   const copia = { ...objeto };
   delete copia[chave];
   return copia;
@@ -588,8 +589,12 @@ function semAChave<T>(objeto: Record<string, T>, chave: string): Record<string, 
 /* -------------------------------------------------------------------------- */
 
 /**
- * Barra de passos. `sticky` no celular: rolando 40 campos, saber onde se está
- * vale mais que os 56px de tela que ela custa.
+ * Barra de passos. `sticky` no topo: rolando 40 campos, saber onde se está vale
+ * mais que os 60px de tela que ela custa.
+ *
+ * No celular o rótulo do passo não cabe, então só o passo ATUAL mostra o texto —
+ * os outros ficam com o número e a linha. Mostrar cinco rótulos de 10 caracteres
+ * em 390px produzia texto cortado no meio da palavra.
  */
 function Trilha({
   passo,
@@ -603,8 +608,8 @@ function Trilha({
   concluido: boolean;
 }) {
   return (
-    <div className="sticky top-0 z-30 border-t border-[#EDEFF3] bg-white/95 backdrop-blur">
-      <ol className="mx-auto flex max-w-[880px] items-stretch gap-1 overflow-x-auto px-2 sm:px-6">
+    <div className="sticky top-0 z-30 border-t border-[#E7EAEF] bg-white/95 backdrop-blur">
+      <ol className="mx-auto flex max-w-[920px] items-stretch gap-1.5 px-4 sm:px-8">
         {PASSOS.map((p, i) => {
           const atual = !concluido && i === passo;
           const feito = concluido || i < passo;
@@ -617,19 +622,19 @@ function Trilha({
                 onClick={() => onIr(i)}
                 disabled={!alcancavel}
                 aria-current={atual ? "step" : undefined}
-                className={`group flex w-full flex-col items-center gap-1.5 px-1 pb-2.5 pt-3 transition-colors ${
+                className={`group flex w-full flex-col items-center gap-2 pb-3 pt-3.5 ${
                   alcancavel ? "cursor-pointer" : "cursor-default"
                 }`}
               >
-                <span className="flex items-center gap-1.5">
+                <span className="flex min-w-0 items-center gap-2">
                   <span
                     aria-hidden="true"
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold transition-colors ${
                       atual
                         ? "bg-[#F26212] text-white"
                         : feito
-                        ? "bg-[#14161B] text-white"
-                        : "bg-[#F1F3F6] text-[#9AA1AC]"
+                        ? "bg-[#101828] text-white"
+                        : "bg-[#EAECF0] text-[#98A2B3]"
                     }`}
                   >
                     {feito ? (
@@ -639,20 +644,18 @@ function Trilha({
                     )}
                   </span>
                   <span
-                    className={`hidden truncate text-xs font-semibold sm:inline ${
+                    className={`truncate text-[0.8125rem] font-semibold ${
                       atual
-                        ? "text-[#C2410C]"
+                        ? "inline text-[#C2410C]"
                         : feito
-                        ? "text-[#14161B]"
-                        : "text-[#9AA1AC]"
+                        ? "hidden text-[#344054] sm:inline"
+                        : "hidden text-[#98A2B3] sm:inline"
                     }`}
                   >
                     {p.titulo}
                   </span>
                 </span>
 
-                {/* No celular o rótulo não cabe; a linha embaixo carrega o estado
-                    sozinha. Por isso o texto acessível vai no `sr-only`. */}
                 <span className="sr-only">
                   Passo {i + 1} de {PASSOS.length}: {p.titulo}
                 </span>
@@ -662,8 +665,8 @@ function Trilha({
                     atual
                       ? "bg-[#F26212]"
                       : feito
-                      ? "bg-[#14161B]"
-                      : "bg-[#EDEFF3]"
+                      ? "bg-[#101828]"
+                      : "bg-[#EAECF0]"
                   }`}
                 />
               </button>
@@ -687,46 +690,36 @@ function Concluido({
   onRecomecar: () => void;
 }) {
   return (
-    <div className="rounded-[16px] border border-[#EDEFF3] bg-white p-6 text-center sm:p-10">
+    <Cartao className="p-6 text-center sm:p-10">
       <span
         aria-hidden="true"
-        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]"
+        className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#FFDCC4] bg-[#FFF4EC] text-[#D9500A]"
       >
-        <Icone nome="CheckCircle2" className="h-7 w-7" />
+        <Icone nome="CheckCircle2" className="h-8 w-8" />
       </span>
 
-      <h2 className="mt-5 text-xl font-bold tracking-[-0.02em] text-[#14161B]">
+      <h2 className="mt-6 text-[1.375rem] font-bold tracking-[-0.02em] text-[#101828]">
         Preenchimento completo
       </h2>
-      <p className="mx-auto mt-2 max-w-md text-[0.9375rem] leading-6 text-[#6B7280]">
+      <p className="mx-auto mt-2.5 max-w-md text-[1rem] leading-[1.6] text-[#667085]">
         Todos os campos obrigatórios foram validados e os documentos de cada sócio
         estão anexados.
       </p>
 
-      <div className="mt-5 rounded-[12px] border border-[#FEDF89] bg-[#FFFAEB] px-4 py-3 text-left">
-        <p className="flex items-start gap-2.5 text-[0.875rem] font-medium leading-6 text-[#B54708]">
-          <Icone nome="Info" className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            O envio ao escritório ainda não está ativo nesta versão. Baixe o
-            resumo para guardar o que você preencheu — ao fechar a página, os
-            arquivos anexados são descartados.
-          </span>
-        </p>
-      </div>
+      <Nota tom="atencao" className="mt-6 text-left">
+        O envio ao escritório ainda não está ativo nesta versão. Baixe o resumo
+        para guardar o que você preencheu — ao fechar a página, os arquivos
+        anexados são descartados.
+      </Nota>
 
-      <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Botao
-          variante="primario"
-          tamanho="lg"
-          icone="Download"
-          onClick={onBaixar}
-        >
+      <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <BotaoForm variante="primario" icone="Download" onClick={onBaixar}>
           Baixar resumo
-        </Botao>
-        <Botao variante="secundario" tamanho="lg" icone="RotateCcw" onClick={onRecomecar}>
+        </BotaoForm>
+        <BotaoForm variante="secundario" icone="RotateCcw" onClick={onRecomecar}>
           Preencher outro
-        </Botao>
+        </BotaoForm>
       </div>
-    </div>
+    </Cartao>
   );
 }

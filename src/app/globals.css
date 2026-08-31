@@ -848,85 +848,179 @@ select.error {
 /* -------------------------------------------------------------------------- */
 /* Formulario publico de abertura de CNPJ (/formulario)                       */
 /*                                                                            */
-/* Escopado em .cz-form, e usado JUNTO com .cz-tarefas: de la vem o estilo de  */
-/* campo, os tokens --cz-*, o foco laranja e a selecao de texto, tudo ja       */
-/* resolvido. Aqui fica so o que e diferente por esta tela ser preenchida por  */
-/* CLIENTE, no celular, uma vez na vida — nao por operador treinado.           */
+/* Escopado em .cz-form, e AUTOSSUFICIENTE: nao usa .cz-tarefas junto.         */
 /*                                                                            */
-/* Este bloco vem no FIM do arquivo de proposito. `.cz-form input[type=text]`  */
-/* tem a mesma especificidade de `.cz-tarefas input[type=text]`, e na cascata  */
-/* o ultimo vence: e assim que a altura de campo daqui passa por cima da do    */
-/* painel sem precisar de !important novo.                                     */
+/* A primeira versao usava as duas classes e herdava o campo do painel. Nao    */
+/* funcionou, e o motivo vale registrar porque e a armadilha desta folha:      */
+/*                                                                            */
+/*  1. o `input {}` global crava `box-shadow` de TRES camadas com !important,  */
+/*     e `.cz-tarefas` sobrescreve com outro !important. Quem chega depois     */
+/*     tem de entrar na briga ou herda o que sobrar — o campo saia com sombra  */
+/*     de caixa flutuante, que e o "estranho" que apareceu no teste;           */
+/*  2. `label { color: #373737 !important }` global + `.cz-tarefas label       */
+/*     { font-size: .8125rem; color:#344054 !important }` mandavam no rotulo;  */
+/*  3. e o pior: o kit `ui/tarefas/Campos.tsx` poe o tamanho do rotulo num     */
+/*     `<span>` INTERNO (`text-[0.8125rem]`). Classe inline no span vence      */
+/*     qualquer regra escrita aqui, entao o rotulo ficava travado em 13px por  */
+/*     mais CSS que eu escrevesse. Era CSS tentando corrigir decisao de JSX.   */
+/*                                                                            */
+/* A saida foi kit proprio (`src/app/formulario/componentes/Base.tsx`) com a   */
+/* classe `.cz-campo` no proprio campo. Aqui ficam so as tres coisas que       */
+/* PRECISAM de CSS: vencer os !important globais, o anel de foco, e o          */
+/* autofill do navegador.                                                     */
 /* -------------------------------------------------------------------------- */
 
 .cz-form {
-    /* DM Sans. Carregada em layout.tsx via next/font, com latin-ext para "ç" e
-       vogal acentuada de razao social nao cairem no fallback no meio da palavra.
-       O painel usa Jakarta; esta tela nao e painel. */
+    /* DM Sans, carregada em layout.tsx via next/font. `latin-ext` para o "ç" e
+       a vogal acentuada de razao social nao cairem no fallback no meio da
+       palavra. O painel usa Jakarta; esta tela nao e painel. */
     font-family: var(--font-dm-sans), var(--font-geist-sans), ui-sans-serif,
         system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    /* Tracking mais solto que o -0.011em do painel: o painel aperta para caber
-       densidade, e aqui o que se quer e leitura confortavel de texto de ajuda. */
-    letter-spacing: -0.006em;
-    background-color: var(--cz-fundo);
-    color: var(--cz-texto);
+    /* Tracking quase neutro: o painel aperta para caber densidade, aqui o que
+       se quer e leitura confortavel de texto de ajuda longo. */
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+
+    /* Tokens proprios, para a tela nao depender de .cz-tarefas para existir. */
+    --czf-marca: #F26212;
+    --czf-marca-forte: #D9500A;
+    --czf-marca-suave: #FFF4EC;
+    --czf-marca-borda: #FFDCC4;
+
+    --czf-borda: #E7EAEF;
+    --czf-borda-campo: #D8DDE5;
+
+    --czf-fundo: #F7F8FA;
+    --czf-texto: #101828;
+    --czf-texto-suave: #667085;
+
+    background-color: var(--czf-fundo);
+    color: var(--czf-texto);
 }
 
-/* Campo de 44px em vez dos 40px do painel.                                    */
-/* 44px e o alvo minimo que a mao acerta sem mirar; no painel os 40px passam    */
-/* porque quem usa esta com mouse e conhece a tela.                             */
-.cz-form input[type="text"],
-.cz-form input[type="email"],
-.cz-form input[type="tel"],
-.cz-form input[type="number"],
-.cz-form textarea,
-.cz-form select {
-    min-height: 2.75rem;
-    border-radius: 10px;
-    font-size: 0.9375rem;
-    padding: 0.625rem 0.875rem;
+/* -------------------------------------------------------------------------- */
+/* O campo                                                                    */
+/*                                                                            */
+/* `!important` em border-color e box-shadow nao e preguica: as regras globais */
+/* usam !important nas mesmas propriedades, e sem ele NADA disto aplica. O     */
+/* resto (altura, raio, padding, cor) vai sem, porque ali nao ha conflito com  */
+/* !important e o valor mais especifico ja vence.                              */
+/* -------------------------------------------------------------------------- */
+
+.cz-form .cz-campo {
+    height: auto;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--czf-borda-campo) !important;
+    /* Sem sombra. O que delimita o campo e a borda; sombra em campo de              
+       formulario e o que datava a tela. */
+    box-shadow: none !important;
+    color: var(--czf-texto);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
-/* No celular sobe para 48px. `pointer: coarse` pega dedo, nao tamanho de tela: */
-/* tablet grande com toque tambem precisa do alvo maior.                        */
+.cz-form .cz-campo::placeholder {
+    color: #A6ADBA;
+    opacity: 1;
+}
+
+.cz-form .cz-campo:hover:not(:focus):not([aria-invalid="true"]) {
+    border-color: #B4BCC9 !important;
+}
+
+/* Foco por box-shadow, nao por outline: outline nao respeita border-radius em
+   todo navegador, e anel de 4px da a presenca que o campo de 52px pede. */
+.cz-form .cz-campo:focus {
+    border-color: var(--czf-marca) !important;
+    box-shadow: 0 0 0 4px rgba(242, 98, 18, 0.14) !important;
+    outline: none;
+}
+
+/* Campo em erro: o vermelho vence o foco laranja enquanto o erro existir. Sem
+   isso a pessoa foca o campo errado e ele parece corrigido. */
+.cz-form .cz-campo[aria-invalid="true"] {
+    border-color: #F04438 !important;
+}
+
+.cz-form .cz-campo[aria-invalid="true"]:focus {
+    border-color: #F04438 !important;
+    box-shadow: 0 0 0 4px rgba(240, 68, 56, 0.14) !important;
+}
+
+.cz-form .cz-campo:disabled {
+    background-color: #F9FAFB;
+    color: #98A2B3;
+    cursor: not-allowed;
+}
+
+/* 16px no toque impede o zoom automatico do Safari no iOS ao focar o campo.
+   Abaixo disso ele amplia a pagina, e a pessoa perde o resto do formulario de
+   vista junto com a barra de navegacao. */
 @media (pointer: coarse) {
-    .cz-form input[type="text"],
-    .cz-form input[type="email"],
-    .cz-form input[type="tel"],
-    .cz-form input[type="number"],
-    .cz-form textarea,
-    .cz-form select {
-        min-height: 3rem;
-        /* 16px impede o zoom automatico do Safari no iOS ao focar o campo. Abaixo
-           disso ele amplia a pagina e a pessoa perde o resto do formulario de
-           vista, com a barra de navegacao saindo da area visivel. */
+    .cz-form .cz-campo {
         font-size: 1rem;
     }
 }
 
-.cz-form textarea {
-    min-height: 6.5rem;
-    line-height: 1.55;
+/* Preenchimento automatico pinta o campo de azul-claro e ignora
+   background-color. `box-shadow` interno e a unica forma de recuperar o branco. */
+.cz-form .cz-campo:-webkit-autofill,
+.cz-form .cz-campo:-webkit-autofill:hover,
+.cz-form .cz-campo:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--czf-texto);
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+    box-shadow: 0 0 0 1000px #ffffff inset !important;
 }
 
-/* Rotulo um pouco maior e mais escuro que no painel: aqui ele e a unica         */
-/* instrucao que a pessoa tem, e nao ha treino nem tela vizinha para comparar.  */
-.cz-form label {
-    margin-bottom: 0.4375rem;
-    font-size: 0.875rem;
-    color: #1F2430 !important;
+/* -------------------------------------------------------------------------- */
+/* O rotulo                                                                   */
+/*                                                                            */
+/* O global aplica `@apply block text-sm font-medium mb-2` e cor fixa em TODO  */
+/* `label`. O espacamento vem do componente (`mt-2` no campo), entao a margem  */
+/* daqui viraria respiro dobrado. A cor vai `inherit` porque quem manda na cor */
+/* e o `<span>` interno, que tem a classe certa.                              */
+/* -------------------------------------------------------------------------- */
+
+.cz-form .cz-rotulo {
+    display: flex;
+    margin-bottom: 0;
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit !important;
 }
 
-/* Numero de sócio, contador de documento e capital: digito de largura fixa para */
-/* a coluna nao dançar enquanto a pessoa digita o valor.                         */
+/* -------------------------------------------------------------------------- */
+/* Foco visivel de botao e link                                               */
+/*                                                                            */
+/* `:focus-visible` so aparece para quem navega por teclado, entao o clique de */
+/* mouse continua sem anel — que e o que as pessoas esperam.                   */
+/* -------------------------------------------------------------------------- */
+
+.cz-form a:focus-visible,
+.cz-form button:focus-visible,
+.cz-form [role="radio"]:focus-visible,
+.cz-form input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--czf-marca);
+    outline-offset: 2px;
+    border-radius: 10px;
+}
+
+/* O campo ja tem anel proprio no `:focus`; o outline daria dois aneis. */
+.cz-form .cz-campo:focus-visible {
+    outline: none;
+}
+
+/* Digito de largura fixa: sem isso o valor "anda" enquanto a pessoa digita,
+   porque o "1" e mais estreito que o "8". Vale para CPF, CEP, telefone,
+   capital e contador. */
 .cz-form .cz-num {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
 }
 
-/* Trilha de passos: o passo atual e o unico laranja; o concluido e escuro.      */
-.cz-form .cz-passo-linha {
-    background-color: var(--cz-hairline-forte);
+.cz-form ::selection {
+    background-color: rgba(242, 98, 18, 0.18);
+    color: #7C2D12;
 }
 
 @media (prefers-reduced-motion: reduce) {
