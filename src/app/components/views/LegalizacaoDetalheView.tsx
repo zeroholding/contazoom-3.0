@@ -92,8 +92,6 @@ import {
   REGIME_LABEL,
   TIPO_PROCESSO,
   TIPO_PROCESSO_LABEL,
-  TRIBUTO_LOCAL,
-  TRIBUTO_LOCAL_LABEL,
 } from "@/lib/tarefa-etapas";
 import { useSessao } from "@/hooks/useSessao";
 
@@ -150,9 +148,7 @@ const OPCOES_REGIME: Opcao[] = (Object.values(REGIME) as string[]).map(
   (valor) => ({ valor, texto: REGIME_LABEL[valor] ?? valor })
 );
 
-const OPCOES_TRIBUTO: Opcao[] = (Object.values(TRIBUTO_LOCAL) as string[]).map(
-  (valor) => ({ valor, texto: TRIBUTO_LOCAL_LABEL[valor] ?? valor })
-);
+
 
 const OPCOES_BLOQUEIO: Opcao[] = [
   "CLIENTE",
@@ -695,7 +691,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
     razaoSocial: "",
     nomeFantasia: "",
     regime: REGIME.SIMPLES_NACIONAL as string,
-    tributoLocal: "",
+
     uf: "",
     municipio: "",
     inicioAtividade: "",
@@ -828,7 +824,8 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
           razaoSocial: nova.razaoSocial.trim(),
           regime: nova.regime,
           nomeFantasia: nova.nomeFantasia.trim() || undefined,
-          tributoLocal: nova.tributoLocal || undefined,
+          // `tributoLocal` não vai mais: o campo saiu da interface, e omitir deixa
+          // a rota aplicar o default do schema em vez de gravar vazio.
           uf: nova.uf.trim().toUpperCase() || undefined,
           municipio: nova.municipio.trim() || undefined,
           inicioAtividade: nova.inicioAtividade || undefined,
@@ -2024,16 +2021,8 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
                 />
               </div>
 
-              <Escolha
-                rotulo="Imposto local"
-                vazio="Definir depois"
-                opcoes={OPCOES_TRIBUTO}
-                value={nova.tributoLocal}
-                onChange={(e) =>
-                  setNova((atual) => ({ ...atual, tributoLocal: e.target.value }))
-                }
-                ajuda="Comércio e indústria apuram ICMS; serviço apura ISS. Ajusta o nome da etapa condicional do Lucro Presumido."
-              />
+              {/* Tributo local saiu da interface a pedido do escritório. Ver a
+                  nota em EmpresaDetalheView.tsx. */}
             </div>
           )}
         </div>

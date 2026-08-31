@@ -78,6 +78,7 @@ import {
   Modal,
   ModalMotivo,
 } from "@/app/components/views/ui/tarefas/Modal";
+import { ModalExclusao } from "@/app/components/views/ui/tarefas/ModalExclusao";
 import {
   SeloBloqueio,
   SeloPrazo,
@@ -536,6 +537,15 @@ function Conteudo() {
   });
   const [erroEdicao, setErroEdicao] = useState("");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  /**
+   * Competência marcada para exclusão, por id.
+   *
+   * Separado de `alvoEdicao` de propósito: o modal de exclusão abre EM CIMA do de
+   * edição, e os dois precisam existir ao mesmo tempo. Fechar a edição para abrir
+   * a exclusão faria a pessoa perder o que digitou se desistisse de apagar.
+   */
+  const [alvoExclusao, setAlvoExclusao] = useState<string | null>(null);
 
   const emEdicao = useMemo(
     () => tarefas.find((tarefa) => tarefa.id === alvoEdicao) ?? null,
@@ -1542,6 +1552,25 @@ function Conteudo() {
         onFechar={() => setAlvoEdicao(null)}
         rodape={
           <>
+            {/*
+              Excluir fica à ESQUERDA, longe de Salvar.
+
+              O rodapé alinha à direita, então `mr-auto` empurra este botão para o
+              canto oposto. É a única ação irreversível do modal: vizinha de
+              "Salvar alterações" ela seria clicada por engano, e não há desfazer.
+              Só admin vê.
+            */}
+            {permissoes.excluir && emEdicao && (
+              <Botao
+                variante="perigo"
+                icone="Trash2"
+                className="mr-auto"
+                onClick={() => setAlvoExclusao(emEdicao.id)}
+                disabled={salvandoEdicao}
+              >
+                Excluir competência
+              </Botao>
+            )}
             <Botao
               variante="secundario"
               onClick={() => setAlvoEdicao(null)}
@@ -1623,6 +1652,27 @@ function Conteudo() {
           </div>
         )}
       </Modal>
+
+      {/* ----------------------- Excluir competência ------------------------ */}
+
+      {alvoExclusao && (
+        <ModalExclusao
+          aberto
+          rotulo="competência"
+          urlPrevia={`/api/tarefas/apuracao/${alvoExclusao}/exclusao`}
+          urlExclusao={`/api/tarefas/apuracao/${alvoExclusao}`}
+          onFechar={() => setAlvoExclusao(null)}
+          onExcluido={(resultado) => {
+            setAlvoExclusao(null);
+            // Fecha a edição também: o registro que ela editava não existe mais.
+            setAlvoEdicao(null);
+            setMensagemOk(
+              `Competência ${resultado.descricao} foi excluída. Junto foram: ${resultado.arrastado}.`
+            );
+            setRecarga((n) => n + 1);
+          }}
+        />
+      )}
 
       <ModalMotivo
         aberto={!!alvoPendencia}

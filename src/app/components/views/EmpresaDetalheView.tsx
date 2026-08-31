@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   ErroApi,
@@ -63,6 +64,7 @@ import {
   type Opcao,
 } from "@/app/components/views/ui/tarefas/Campos";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
+import { ModalExclusao } from "@/app/components/views/ui/tarefas/ModalExclusao";
 import {
   SeloPlanoInterno,
   SeloRegime,
@@ -77,8 +79,6 @@ import {
   REGIME,
   REGIME_LABEL,
   TIPO_PROCESSO_LABEL,
-  TRIBUTO_LOCAL,
-  TRIBUTO_LOCAL_LABEL,
   totalEtapasApuracao,
 } from "@/lib/tarefa-etapas";
 import { useSessao } from "@/hooks/useSessao";
@@ -118,7 +118,24 @@ type UsuarioAdmin = {
 
 const REGIMES = Object.values(REGIME) as string[];
 const PLANOS = Object.values(PLANO_INTERNO) as string[];
-const TRIBUTOS = Object.values(TRIBUTO_LOCAL) as string[];
+
+/*
+ * TRIBUTO LOCAL SAIU DA INTERFACE, a pedido do escritório.
+ *
+ * Saiu da faixa de resumo, da ficha de cadastro e do formulário de edição desta
+ * tela; do cadastro de empresa e da ficha da competência; e do modal que cadastra
+ * empresa dentro do processo de legalização.
+ *
+ * A COLUNA continua no banco e `tituloEtapaAjustado` continua funcionando: a
+ * empresa que já tem ICMS ou ISS gravado segue vendo a etapa 6 do Lucro Presumido
+ * com o nome específico ("Apuração de ICMS"). O que muda é que ninguém define mais
+ * esse valor pela tela, então empresa nova nasce "AMBOS" e a etapa aparece com o
+ * nome genérico "Apuração de ICMS/ISS".
+ *
+ * Não apaguei a coluna nem a função: dropar coluna é irreversível, e a função
+ * ainda entrega valor para o dado que já existe. Se o escritório quiser aposentar
+ * de vez, o lugar é `tituloEtapaAjustado` em src/lib/tarefa-etapas.ts.
+ */
 
 /*
  * SITUAÇÃO SAIU DA INTERFACE, por completo.
@@ -141,10 +158,7 @@ const OPCOES_PLANO: Opcao[] = PLANOS.map((valor) => ({
   texto: PLANO_INTERNO_LABEL[valor] ?? valor,
 }));
 
-const OPCOES_TRIBUTO: Opcao[] = TRIBUTOS.map((valor) => ({
-  valor,
-  texto: TRIBUTO_LOCAL_LABEL[valor] ?? valor,
-}));
+
 
 /**
  * Total de etapas do regime, sem derrubar a tela.
@@ -198,7 +212,6 @@ type FormEdicao = {
   razaoSocial: string;
   nomeFantasia: string;
   planoInterno: string;
-  tributoLocal: string;
   inscricaoMunicipal: string;
   inscricaoEstadual: string;
   cep: string;
@@ -223,7 +236,6 @@ function formDe(empresa: EmpresaDetalhe): FormEdicao {
     razaoSocial: empresa.razaoSocial,
     nomeFantasia: empresa.nomeFantasia ?? "",
     planoInterno: empresa.planoInterno,
-    tributoLocal: empresa.tributoLocal,
     inscricaoMunicipal: empresa.inscricaoMunicipal ?? "",
     inscricaoEstadual: empresa.inscricaoEstadual ?? "",
     cep: empresa.cepFormatado ?? "",
@@ -248,6 +260,7 @@ function formDe(empresa: EmpresaDetalhe): FormEdicao {
 
 export default function EmpresaDetalheView({ id }: { id: string }) {
   const { permissoes } = useSessao();
+  const router = useRouter();
 
   const [empresa, setEmpresa] = useState<EmpresaDetalhe | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -444,9 +457,8 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
     if (form.planoInterno !== empresa.planoInterno) {
       payload.planoInterno = form.planoInterno;
     }
-    if (form.tributoLocal !== empresa.tributoLocal) {
-      payload.tributoLocal = form.tributoLocal;
-    }
+    // `tributoLocal` NÃO entra mais no payload: o campo saiu da interface a
+    // pedido do escritório. A coluna segue no banco com o valor que tiver.
 
     const im = form.inscricaoMunicipal.trim();
     if (im !== (empresa.inscricaoMunicipal ?? "")) {
@@ -626,6 +638,10 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
     }
   }
 
+  /* ------------------------------- Exclusão ------------------------------- */
+
+  const [modalExclusao, setModalExclusao] = useState(false);
+
   /* ------------------------------- Estados -------------------------------- */
 
   if (carregando && !empresa) {
@@ -730,6 +746,19 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
                 Alterar regime
               </Botao>
             )}
+            {/* Excluir fica por ÚLTIMO e em vermelho: é a única ação da barra que
+                não tem volta, e vizinha de "Editar" ela seria clicada por
+                engano. Só admin vê. */}
+            {permissoes.excluir && (
+              <Botao
+                variante="perigo"
+                icone="Trash2"
+                onClick={() => setModalExclusao(true)}
+                disabled={ocupado}
+              >
+                Excluir empresa
+              </Botao>
+            )}
           </>
         }
       />
@@ -758,10 +787,6 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
             operacional da empresa desde a mudança pedida pelo escritório. */}
         <SeloPlanoInterno plano={empresa.planoInterno} />
         <SeloRegime regime={empresa.regime} completo />
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-700">
-          <Icone nome="Landmark" className="h-3.5 w-3.5" />
-          {TRIBUTO_LOCAL_LABEL[empresa.tributoLocal] ?? empresa.tributoLocal}
-        </span>
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600">
           <Icone nome="Info" className="h-3.5 w-3.5 text-gray-400" />
           {empresa.uf || empresa.municipio
@@ -822,9 +847,6 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
           </Dado>
           <Dado rotulo="Regime vigente">
             <SeloRegime regime={empresa.regime} completo />
-          </Dado>
-          <Dado rotulo="Tributo local">
-            {TRIBUTO_LOCAL_LABEL[empresa.tributoLocal] ?? empresa.tributoLocal}
           </Dado>
           <Dado rotulo="Inscrição municipal">
             {empresa.inscricaoMunicipal ?? (
@@ -1460,14 +1482,6 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
                   ajuda="Simples e Presumido geram competência todo mês."
                   onChange={(e) => editar({ planoInterno: e.target.value })}
                 />
-                <Escolha
-                  rotulo="Tributo local"
-                  opcoes={OPCOES_TRIBUTO}
-                  value={form.tributoLocal}
-                  erro={erroDoCampo("tributoLocal")}
-                  ajuda="Nomeia a etapa de ICMS/ISS no Lucro Presumido."
-                  onChange={(e) => editar({ tributoLocal: e.target.value })}
-                />
               </div>
 
               <div className="rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5">
@@ -1607,6 +1621,30 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
           />
         </div>
       </Modal>
+
+      {/* ------------------------- Excluir empresa -------------------------- */}
+
+      {modalExclusao && (
+        <ModalExclusao
+          aberto
+          rotulo="empresa"
+          urlPrevia={`/api/empresas/${id}/exclusao`}
+          urlExclusao={`/api/empresas/${id}`}
+          onFechar={() => setModalExclusao(false)}
+          onExcluido={(resultado) => {
+            /**
+             * Volta para a lista, e não recarrega esta tela.
+             *
+             * O registro que esta página mostra deixou de existir: recarregar
+             * cairia no "empresa não encontrada", que o operador leria como erro
+             * em vez de confirmação. A mensagem do que foi levado vai na URL,
+             * porque este componente vai desmontar.
+             */
+            const aviso = `${resultado.descricao} foi excluída. Junto foram: ${resultado.arrastado}.`;
+            router.push(`/admin/empresas?excluida=${encodeURIComponent(aviso)}`);
+          }}
+        />
+      )}
     </div>
   );
 }

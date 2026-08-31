@@ -69,6 +69,7 @@ import {
   type Opcao,
 } from "@/app/components/views/ui/tarefas/Campos";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
+import { ModalExclusao } from "@/app/components/views/ui/tarefas/ModalExclusao";
 import {
   SeloPlanoInterno,
   SeloRegime,
@@ -588,6 +589,39 @@ function Conteudo() {
     [router]
   );
 
+  /**
+   * Empresa marcada para exclusão.
+   *
+   * Guardo o objeto e não só o id porque o modal precisa do nome no título antes
+   * de a prévia chegar do servidor — e um modal que abre sem dizer o que vai
+   * apagar é exatamente o que não se quer aqui. A prévia depois traz os números.
+   */
+  const [alvoExclusao, setAlvoExclusao] = useState<EmpresaLista | null>(null);
+
+  /**
+   * Mensagem de sucesso, que pode nascer aqui ou vir da tela de detalhe.
+   *
+   * Quando a empresa é excluída pelo detalhe, aquele componente desmonta e não
+   * tem como avisar esta tela por estado. O aviso vem em `?excluida=` na URL, é
+   * lido uma vez na montagem e o parâmetro é limpo em seguida — senão ele fica no
+   * endereço e a mensagem reaparece a cada recarga.
+   */
+  const [mensagemOk, setMensagemOk] = useState(
+    () => params?.get("excluida") ?? ""
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).has("excluida")) return;
+    const limpa = new URLSearchParams(window.location.search);
+    limpa.delete("excluida");
+    const busca = limpa.toString();
+    router.replace(`${pathname}${busca ? `?${busca}` : ""}`, { scroll: false });
+    // Só na montagem: `router.replace` mexe na URL, e reagir à mudança de URL
+    // aqui criaria laço com o efeito que espelha os filtros no endereço.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
       {/* O cabeçalho do admin já traz "Empresas" e o subtítulo da rota. */}
@@ -604,6 +638,14 @@ function Conteudo() {
           ) : undefined
         }
       />
+
+      {mensagemOk && (
+        <Aviso
+          tom="ok"
+          mensagem={mensagemOk}
+          onFechar={() => setMensagemOk("")}
+        />
+      )}
 
       {/* -------------------------------- KPIs ------------------------------ */}
 
@@ -877,9 +919,29 @@ function Conteudo() {
                       {dataCurta(empresa.createdAt)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-orange-600">
-                        Abrir
-                        <Icone nome="ChevronRight" className="h-3.5 w-3.5" />
+                      <span className="inline-flex items-center gap-2">
+                        {/* Só admin vê. Oferecer um botão que vai voltar 403 é
+                            pior que não oferecer. */}
+                        {permissoes.excluir && (
+                          <button
+                            type="button"
+                            title={`Excluir ${empresa.razaoSocial}`}
+                            aria-label={`Excluir ${empresa.razaoSocial}`}
+                            onClick={(evento) => {
+                              // A linha inteira navega no clique. Sem isto,
+                              // excluir levaria para o detalhe da empresa.
+                              evento.stopPropagation();
+                              setAlvoExclusao(empresa);
+                            }}
+                            className="rounded-[10px] p-1.5 text-gray-400 transition-colors hover:bg-[#FEF2F2] hover:text-[#B42318]"
+                          >
+                            <Icone nome="Trash2" className="h-4 w-4" />
+                          </button>
+                        )}
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-orange-600">
+                          Abrir
+                          <Icone nome="ChevronRight" className="h-3.5 w-3.5" />
+                        </span>
                       </span>
                     </td>
                   </tr>
@@ -1160,6 +1222,27 @@ function Conteudo() {
           </BlocoForm>
         </div>
       </Modal>
+
+      {/* ------------------------- Excluir empresa -------------------------- */}
+
+      {alvoExclusao && (
+        <ModalExclusao
+          aberto
+          rotulo="empresa"
+          urlPrevia={`/api/empresas/${alvoExclusao.id}/exclusao`}
+          urlExclusao={`/api/empresas/${alvoExclusao.id}`}
+          onFechar={() => setAlvoExclusao(null)}
+          onExcluido={(resultado) => {
+            setAlvoExclusao(null);
+            // A mensagem repete o que foi levado junto. Depois de apagar, é a
+            // última chance de a pessoa perceber que apagou mais do que queria.
+            setMensagemOk(
+              `${resultado.descricao} foi excluída. Junto foram: ${resultado.arrastado}.`
+            );
+            setRecarga((n) => n + 1);
+          }}
+        />
+      )}
     </div>
   );
 }

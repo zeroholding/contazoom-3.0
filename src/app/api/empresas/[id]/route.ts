@@ -1,10 +1,14 @@
 /**
- * Detalhe e edição cadastral de uma empresa.
+ * Detalhe, edição cadastral e exclusão de uma empresa.
  *
  * Especificação: NOVIDADES/MODULO_TAREFAS_CONTABEIS.md, seção 16.1.
  *
- * GET   — qualquer papel interno.
- * PATCH — ADMIN e COMERCIAL (`podeGerenciarEmpresa`).
+ * GET    — qualquer papel interno.
+ * PATCH  — ADMIN e COMERCIAL (`podeGerenciarEmpresa`).
+ * DELETE — SOMENTE ADMIN, e por um motivo de tamanho: o cascade leva o histórico
+ *          de regime, todas as competências, todos os processos, e de cada um
+ *          deles as etapas, o histórico e os anexos. Editar empresa é ato
+ *          comercial; destruir a carteira de um cliente não é.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,6 +16,7 @@ import prisma from "@/lib/prisma";
 import {
   negado,
   podeGerenciarEmpresa,
+  requireAdmin,
   requireInterno,
   requireSessao,
 } from "@/lib/api-guard";
@@ -22,6 +27,14 @@ import {
   validarAtualizacaoEmpresa,
 } from "@/lib/empresa";
 import { formatarCep, formatarCpf } from "@/lib/documento";
+import {
+  apagarArquivosDeAnexos,
+  confirmacaoConfere,
+  registrarExclusao,
+  resumirExclusaoEmpresa,
+  textoArrastado,
+  validarMotivo,
+} from "@/lib/exclusao";
 
 export const runtime = "nodejs";
 
@@ -294,6 +307,125 @@ export async function PATCH(
     console.error("Erro ao atualizar empresa:", error);
     return NextResponse.json(
       { error: "Erro interno ao atualizar empresa." },
+      { status: 500 }
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  DELETE                                    */
+/* -------------------------------------------------------------------------- */
+
+type CorpoExclusao = { motivo?: unknown; confirmacao?: unknown };
+
+/**
+ * Exclui a empresa e tudo que pende dela.
+ *
+ * SOMENTE ADMIN. Duas travas antes de apagar:
+ *
+ * 1. MOTIVO obrigatório. Vai para `registro_exclusao` e é a única coisa que
+ *    responde "por que essa empresa não está mais aqui" meses depois.
+ *
+ * 2. CONFIRMAÇÃO por digitação da razão social. Só a empresa exige isto, por
+ *    causa do tamanho do cascade — um clique pode levar mais de mil linhas. É o
+ *    mesmo recurso que o GitHub usa para apagar repositório, e serve para o erro
+ *    que de fato acontece: apagar a empresa errada da lista.
+ *
+ * A ordem das operações é o que importa:
+ *
+ *    contar  ->  [transação: registrar + apagar]  ->  apagar arquivos
+ *
+ * Registro e delete na MESMA transação, porque o pior jeito de errar é apagar sem
+ * registrar. Arquivos DEPOIS do commit: se a transação voltar atrás, os arquivos
+ * continuam lá.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const sessao = await requireAdmin(req);
+  if (sessao instanceof NextResponse) return sessao;
+
+  try {
+    const { id } = await params;
+
+    const corpo = (await req.json().catch(() => null)) as CorpoExclusao | null;
+    if (!corpo) {
+      return NextResponse.json(
+        {
+          error:
+            "Informe o motivo e a confirmação para excluir a empresa.",
+          code: "corpo_invalido",
+        },
+        { status: 400 }
+      );
+    }
+
+    const motivo = validarMotivo(corpo.motivo);
+    if (!motivo.ok) {
+      return NextResponse.json(
+        { error: motivo.erro, campo: "motivo" },
+        { status: 400 }
+      );
+    }
+
+    // A contagem vem ANTES de qualquer escrita: depois do cascade não há mais
+    // como saber o que existia, e é justamente o que o registro precisa guardar.
+    const resumo = await resumirExclusaoEmpresa(id);
+    if (!resumo) {
+      return NextResponse.json(
+        { error: "Empresa não encontrada.", code: "nao_encontrada" },
+        { status: 404 }
+      );
+    }
+
+    if (!confirmacaoConfere(corpo.confirmacao, resumo.descricao)) {
+      return NextResponse.json(
+        {
+          error: `Para confirmar, digite a razão social exatamente como está cadastrada: ${resumo.descricao}`,
+          code: "confirmacao_invalida",
+          campo: "confirmacao",
+        },
+        { status: 400 }
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await registrarExclusao(tx, {
+        resumo,
+        motivo: motivo.motivo,
+        sessao,
+      });
+      // Uma linha só: o banco cascateia o resto. Apagar filho por filho aqui
+      // seria reimplementar em TypeScript o que a FK já garante — e a cada tabela
+      // nova alguém esqueceria de acrescentar.
+      await tx.empresa.delete({ where: { id } });
+    });
+
+    // Fora da transação, de propósito. Ver a nota no topo.
+    const arquivos = await apagarArquivosDeAnexos(resumo.arquivos);
+    if (arquivos.falhas > 0) {
+      console.warn(
+        `[empresas][DELETE] ${arquivos.falhas} de ${resumo.arquivos.length} arquivos de anexo não foram removidos do disco (empresa ${id}).`
+      );
+    }
+
+    return NextResponse.json({
+      excluida: true,
+      id,
+      descricao: resumo.descricao,
+      arrastado: textoArrastado(resumo),
+    });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: "Corpo da requisição inválido." },
+        { status: 400 }
+      );
+    }
+    console.error("Erro ao excluir empresa:", error);
+    return NextResponse.json(
+      { error: "Erro interno ao excluir empresa." },
       { status: 500 }
     );
   }

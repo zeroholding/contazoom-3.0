@@ -246,6 +246,26 @@ export function podeReabrirTarefa(papel: string): boolean {
   return papel === PAPEL.ADMIN;
 }
 
+/**
+ * Excluir empresa, competência ou processo: SÓ ADMINISTRADOR.
+ *
+ * O critério é a escala do estrago. Todas as outras ações do módulo mexem em uma
+ * linha e deixam rastro no histórico; a exclusão apaga o registro E o histórico
+ * dele, porque `TarefaLog` é filho da tarefa com `onDelete: Cascade`. Apagar uma
+ * empresa leva o histórico de regime, todas as competências, todos os processos,
+ * e de cada um as etapas, o histórico e os anexos.
+ *
+ * Reabrir tarefa já era exclusivo de admin, e reabrir é reversível. Apagar não é.
+ * Seria incoerente exigir admin para desfazer um encerramento e aceitar que o
+ * assistente destruísse a competência inteira.
+ *
+ * O que sobrevive à exclusão é `RegistroExclusao`, gravado na mesma transação e
+ * fora do alcance do cascade.
+ */
+export function podeExcluir(papel: string): boolean {
+  return papel === PAPEL.ADMIN;
+}
+
 /** Registrar e resolver pendência é de todo mundo que trabalha no fluxo. */
 export function podeGerenciarBloqueio(papel: string): boolean {
   return PAPEIS_INTERNOS.includes(papel);

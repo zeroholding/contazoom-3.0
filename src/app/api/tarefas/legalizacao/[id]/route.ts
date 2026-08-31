@@ -1,13 +1,22 @@
 /**
- * Detalhe e edição de campos de um processo de legalização.
+ * Detalhe, edição e exclusão de um processo de legalização.
  *
- * Mover etapa, bloquear, encerrar e reabrir têm rotas próprias: aqui só entram
- * campos que não alteram a posição no fluxo.
+ * Mover etapa, bloquear, encerrar e reabrir têm rotas próprias: no PATCH daqui só
+ * entram campos que não alteram a posição no fluxo.
+ *
+ * DELETE é SOMENTE ADMIN, com motivo obrigatório.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { requireInterno } from "@/lib/api-guard";
+import { requireAdmin, requireInterno } from "@/lib/api-guard";
+import {
+  apagarArquivosDeAnexos,
+  registrarExclusao,
+  resumirExclusaoProcesso,
+  textoArrastado,
+  validarMotivo,
+} from "@/lib/exclusao";
 import {
   ACAO_LOG,
   TIPO_PROCESSO_LABEL,
@@ -313,5 +322,69 @@ export async function PATCH(
   } catch (e) {
     console.error("[legalizacao][PATCH] falha ao atualizar processo:", e);
     return erro("Erro ao atualizar o processo.", 500);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  DELETE                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Exclui o processo, com as etapas, o histórico e os anexos dele.
+ *
+ * SOMENTE ADMIN, mesmo critério da competência: apagar é mais grave que reabrir,
+ * e reabrir já era exclusivo de admin.
+ *
+ * O AVISO QUE IMPORTA AQUI é o protocolo em órgão externo. Um processo com
+ * protocolo na JUCESP pode ser apagado deste sistema e continuar existindo lá —
+ * apagar aqui não cancela nada. Por isso o número do protocolo entra no
+ * `detalhe` do registro de exclusão: é o que permite reencontrar o processo no
+ * órgão depois que a linha daqui não existe mais.
+ *
+ * Ordem: contar -> [transação: registrar + apagar] -> apagar arquivos.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  const sessao = await requireAdmin(req);
+  if (sessao instanceof NextResponse) return sessao;
+
+  const corpo = await lerCorpo(req);
+  if (!corpo) return erro("Corpo da requisição inválido.", 400, "CORPO_INVALIDO");
+
+  const motivo = validarMotivo(corpo.motivo);
+  if (!motivo.ok) return erro(motivo.erro, 400, "MOTIVO_INVALIDO");
+
+  try {
+    // Antes de qualquer escrita: depois do cascade não há mais o que contar.
+    const resumo = await resumirExclusaoProcesso(id);
+    if (!resumo) {
+      return erro("Processo não encontrado.", 404, "PROCESSO_NAO_ENCONTRADO");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await registrarExclusao(tx, { resumo, motivo: motivo.motivo, sessao });
+      await tx.processoLegalizacao.delete({ where: { id } });
+    });
+
+    const arquivos = await apagarArquivosDeAnexos(resumo.arquivos);
+    if (arquivos.falhas > 0) {
+      console.warn(
+        `[legalizacao][DELETE] ${arquivos.falhas} de ${resumo.arquivos.length} arquivos de anexo não foram removidos do disco (processo ${id}).`
+      );
+    }
+
+    return NextResponse.json({
+      excluido: true,
+      id,
+      descricao: resumo.descricao,
+      arrastado: textoArrastado(resumo),
+    });
+  } catch (e) {
+    console.error("[legalizacao][DELETE] falha ao excluir processo:", e);
+    return erro("Erro ao excluir o processo.", 500);
   }
 }

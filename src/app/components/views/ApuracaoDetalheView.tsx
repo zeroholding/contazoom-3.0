@@ -26,7 +26,6 @@ import {
   ACAO_LOG_LABEL,
   BLOQUEIO_RESPONSAVEL_LABEL,
   REGIME_LABEL,
-  TRIBUTO_LOCAL_LABEL,
 } from "@/lib/tarefa-etapas";
 import {
   apiDelete,
@@ -880,9 +879,8 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
           <Dado rotulo="Regime">
             <SeloRegime regime={tarefa.regime} completo />
           </Dado>
-          <Dado rotulo="Tributo local">
-            {TRIBUTO_LOCAL_LABEL[empresa.tributoLocal] ?? empresa.tributoLocal}
-          </Dado>
+          {/* Tributo local saiu da interface a pedido do escritório. Ver a nota
+              em EmpresaDetalheView.tsx. */}
           <Dado rotulo="UF / Município">
             {empresa.uf || empresa.municipio
               ? `${empresa.uf ?? "—"} / ${empresa.municipio ?? "—"}`

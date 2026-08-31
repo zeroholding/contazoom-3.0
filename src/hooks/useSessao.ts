@@ -26,6 +26,8 @@ export type Permissoes = {
   gerenciarEmpresa: boolean;
   alterarRegime: boolean;
   gerenciarUsuarios: boolean;
+  /** Excluir empresa, competência ou processo. Só administrador. */
+  excluir: boolean;
 };
 
 export type Sessao = {
@@ -54,6 +56,7 @@ export const SEM_PERMISSAO: Permissoes = {
   gerenciarEmpresa: false,
   alterarRegime: false,
   gerenciarUsuarios: false,
+  excluir: false,
 };
 
 const CACHE_MS = 30_000;

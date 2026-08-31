@@ -74,6 +74,7 @@ import {
   enviarAnexosPendentes,
 } from "@/app/components/views/ui/tarefas/Anexos";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
+import { ModalExclusao } from "@/app/components/views/ui/tarefas/ModalExclusao";
 import {
   SeloBloqueio,
   SeloPrazo,
@@ -444,6 +445,16 @@ function Conteudo() {
   });
   const [erroEdicao, setErroEdicao] = useState("");
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+  /**
+   * Processo marcado para exclusão, por id.
+   *
+   * Separado de `alvoEdicao`: o modal de exclusão abre EM CIMA do de edição, e os
+   * dois coexistem. Fechar a edição para abrir a exclusão faria a pessoa perder o
+   * que digitou se desistisse de apagar.
+   */
+  const [alvoExclusao, setAlvoExclusao] = useState<string | null>(null);
+  const [mensagemOk, setMensagemOk] = useState("");
 
   const emEdicao = useMemo(
     () => itens.find((item) => item.id === alvoEdicao) ?? null,
@@ -849,6 +860,14 @@ function Conteudo() {
 
       {/* ------------------------------ Estados ----------------------------- */}
 
+      {mensagemOk && (
+        <Aviso
+          tom="ok"
+          mensagem={mensagemOk}
+          onFechar={() => setMensagemOk("")}
+        />
+      )}
+
       {erro && (
         <div className="space-y-3">
           <Aviso mensagem={erro} onFechar={() => setErro("")} />
@@ -1102,6 +1121,19 @@ function Conteudo() {
         onFechar={() => setAlvoEdicao(null)}
         rodape={
           <>
+            {/* Excluir à esquerda, longe de Salvar: é a única ação sem volta do
+                modal. `mr-auto` empurra para o canto oposto. Só admin vê. */}
+            {permissoes.excluir && emEdicao && (
+              <Botao
+                variante="perigo"
+                icone="Trash2"
+                className="mr-auto"
+                onClick={() => setAlvoExclusao(emEdicao.id)}
+                disabled={salvandoEdicao}
+              >
+                Excluir processo
+              </Botao>
+            )}
             <Botao
               variante="secundario"
               onClick={() => setAlvoEdicao(null)}
@@ -1183,6 +1215,27 @@ function Conteudo() {
           </div>
         )}
       </Modal>
+
+      {/* ------------------------- Excluir processo -------------------------- */}
+
+      {alvoExclusao && (
+        <ModalExclusao
+          aberto
+          rotulo="processo"
+          urlPrevia={`/api/tarefas/legalizacao/${alvoExclusao}/exclusao`}
+          urlExclusao={`/api/tarefas/legalizacao/${alvoExclusao}`}
+          onFechar={() => setAlvoExclusao(null)}
+          onExcluido={(resultado) => {
+            setAlvoExclusao(null);
+            // Fecha a edição também: o registro que ela editava não existe mais.
+            setAlvoEdicao(null);
+            setMensagemOk(
+              `${resultado.descricao} foi excluído. Junto foram: ${resultado.arrastado}.`
+            );
+            setRecarga((n) => n + 1);
+          }}
+        />
+      )}
     </div>
   );
 }

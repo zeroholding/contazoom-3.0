@@ -1,15 +1,23 @@
 /**
- * Detalhe e edição de uma competência.
+ * Detalhe, edição e exclusão de uma competência.
  *
- * GET   /api/tarefas/apuracao/[id] — cabeçalho, etapas e histórico
- * PATCH /api/tarefas/apuracao/[id] — responsável, prazo e observações
+ * GET    /api/tarefas/apuracao/[id] — cabeçalho, etapas e histórico
+ * PATCH  /api/tarefas/apuracao/[id] — responsável, prazo e observações
+ * DELETE /api/tarefas/apuracao/[id] — SOMENTE ADMIN, com motivo obrigatório
  *
  * Especificação: NOVIDADES/MODULO_TAREFAS_CONTABEIS.md, seções 15.4 e 16.2.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { requireInterno } from "@/lib/api-guard";
+import { requireAdmin, requireInterno } from "@/lib/api-guard";
+import {
+  apagarArquivosDeAnexos,
+  registrarExclusao,
+  resumirExclusaoApuracao,
+  textoArrastado,
+  validarMotivo,
+} from "@/lib/exclusao";
 import { registrarLog } from "@/lib/tarefa-service";
 import { ACAO_LOG } from "@/lib/tarefa-etapas";
 import {
@@ -285,6 +293,88 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     console.error("Erro ao atualizar apuração:", error);
     return NextResponse.json(
       { error: "Erro interno no servidor." },
+      { status: 500 }
+    );
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  DELETE                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Exclui a competência, com as etapas, o histórico e os anexos dela.
+ *
+ * SOMENTE ADMIN. Reabrir competência encerrada já era exclusivo de admin, e
+ * apagar é mais grave que reabrir — quem não pode desfazer um encerramento não
+ * pode destruir a competência inteira.
+ *
+ * COMPETÊNCIA ENCERRADA NÃO É BLOQUEADA, e é uma escolha. Encerrada quer dizer
+ * que o resultado foi entregue ao cliente, então apagar apaga o registro do que
+ * foi entregue — mas exigir "reabra primeiro" seria um passo a mais para a única
+ * pessoa que já podia reabrir de todo jeito. O resumo devolvido pela prévia avisa
+ * em letras claras, e o motivo escrito fica no registro. Informar em vez de
+ * obstruir.
+ *
+ * Ordem: contar -> [transação: registrar + apagar] -> apagar arquivos.
+ */
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const sessao = await requireAdmin(req);
+  if (sessao instanceof NextResponse) return sessao;
+
+  try {
+    const { id } = await params;
+
+    const corpo = (await req.json().catch(() => null)) as {
+      motivo?: unknown;
+    } | null;
+
+    const motivo = validarMotivo(corpo?.motivo);
+    if (!motivo.ok) {
+      return NextResponse.json(
+        { error: motivo.erro, campo: "motivo" },
+        { status: 400 }
+      );
+    }
+
+    // Antes de qualquer escrita: depois do cascade não há mais o que contar, e é
+    // isso que o registro de exclusão precisa guardar.
+    const resumo = await resumirExclusaoApuracao(id);
+    if (!resumo) {
+      return NextResponse.json(
+        { error: "Competência não encontrada.", code: "nao_encontrada" },
+        { status: 404 }
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await registrarExclusao(tx, { resumo, motivo: motivo.motivo, sessao });
+      await tx.tarefaApuracao.delete({ where: { id } });
+    });
+
+    const arquivos = await apagarArquivosDeAnexos(resumo.arquivos);
+    if (arquivos.falhas > 0) {
+      console.warn(
+        `[apuracao][DELETE] ${arquivos.falhas} de ${resumo.arquivos.length} arquivos de anexo não foram removidos do disco (competência ${id}).`
+      );
+    }
+
+    return NextResponse.json({
+      excluida: true,
+      id,
+      descricao: resumo.descricao,
+      arrastado: textoArrastado(resumo),
+    });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: "Corpo da requisição inválido." },
+        { status: 400 }
+      );
+    }
+    console.error("Erro ao excluir competência:", error);
+    return NextResponse.json(
+      { error: "Erro interno ao excluir a competência." },
       { status: 500 }
     );
   }

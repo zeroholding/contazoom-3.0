@@ -939,3 +939,65 @@ model TarefaAnexo {
   @@index([enviadoPorId])
   @@map("tarefa_anexo")
 }
+
+/// O que foi EXCLUÍDO do módulo, por quem e por quê.
+///
+/// Existe por causa de um conflito real que a exclusão criou.
+///
+/// `TarefaLog` é declarado append-only ("log editável não é prova de nada"), mas
+/// os logs são filhos da tarefa por FK com `onDelete: Cascade` — então apagar uma
+/// competência apaga o histórico dela junto. Sem esta tabela, exclusão seria a
+/// única operação do módulo que não deixa rastro, e justamente a mais grave.
+///
+/// A escolha foi manter a exclusão FÍSICA (foi o que o escritório pediu: "poder
+/// excluir") e registrar o ato aqui fora, numa tabela que o cascade não alcança.
+/// O registro não substitui o histórico apagado — guarda o que importa depois:
+/// que existiu, o que era, quanta coisa foi junto, quem mandou e quando.
+///
+/// SEM FK para o registro excluído, de propósito. Uma FK obrigaria a linha a
+/// morrer junto com o alvo, que é exatamente o que se quer evitar; e uma FK
+/// opcional com SetNull perderia o id. `alvoId` é texto solto, e é assim que
+/// deve ser.
+///
+/// APPEND-ONLY, como `TarefaLog`: a aplicação nunca faz UPDATE nem DELETE aqui.
+model RegistroExclusao {
+  id String @id @default(cuid())
+
+  /// EMPRESA, APURACAO, PROCESSO_LEGALIZACAO
+  tipo String
+
+  /// Id do registro que deixou de existir. Texto solto, sem FK. Serve para
+  /// cruzar com print de tela, e-mail e link antigo que alguém guardou.
+  alvoId String @map("alvo_id")
+
+  /// Como o registro era identificado na tela: razão social, "Março/2026 —
+  /// Padaria Xpto", "Abertura de CNPJ — Empresa Xpto". É o que permite ler o
+  /// registro sem precisar do id.
+  descricao String
+
+  /// Contexto que sobrevive ao alvo: CNPJ da empresa, competência, tipo do
+  /// processo. Guardado como texto legível, não JSON, porque quem lê isto é
+  /// gente conferindo o que aconteceu.
+  detalhe String?
+
+  /// O que foi levado no cascade, em número: "24 competências, 3 processos, 251
+  /// etapas, 812 registros de histórico, 17 anexos". É a única resposta possível
+  /// para "o que eu perdi quando cliquei ali".
+  arrastado String?
+
+  /// Motivo escrito por quem excluiu. Obrigatório na rota.
+  motivo String
+
+  /// Congelados, como em TarefaLog: funcionário sai da empresa, registro fica.
+  excluidoPorId   String @map("excluido_por_id")
+  excluidoPorNome String @map("excluido_por_nome")
+  excluidoPorPapel String? @map("excluido_por_papel")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tipo, createdAt])
+  @@index([alvoId])
+  @@index([excluidoPorId])
+  @@index([createdAt])
+  @@map("registro_exclusao")
+}

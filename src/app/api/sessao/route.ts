@@ -27,6 +27,7 @@ import {
   podeConcluirEtapa,
   podeCriarProcesso,
   podeEncerrarTarefa,
+  podeExcluir,
   podeGerenciarBloqueio,
   podeGerenciarEmpresa,
   podeGerenciarUsuarios,
@@ -66,6 +67,9 @@ export async function GET(req: NextRequest) {
       gerenciarEmpresa: podeGerenciarEmpresa(papel),
       alterarRegime: podeAlterarRegime(papel),
       gerenciarUsuarios: podeGerenciarUsuarios(papel),
+      // Só admin. A tela usa isto para nem desenhar o botão de excluir: oferecer
+      // uma ação que vai voltar 403 é pior que não oferecer.
+      excluir: podeExcluir(papel),
     },
   });
 }

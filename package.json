@@ -13,7 +13,8 @@
     "test:dias-uteis": "node --experimental-strip-types scripts/test-dias-uteis.mjs",
     "test:documento": "node --experimental-strip-types scripts/test-documento.mjs",
     "test:anexo": "node --experimental-strip-types scripts/test-anexo.mjs",
-    "test:tarefas": "npm run test:dias-uteis && npm run test:documento && npm run test:anexo",
+    "test:exclusao": "node --experimental-strip-types scripts/test-exclusao.mjs",
+    "test:tarefas": "npm run test:dias-uteis && npm run test:documento && npm run test:anexo && npm run test:exclusao",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy"
   },
