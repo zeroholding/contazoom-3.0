@@ -277,9 +277,10 @@ export function CampoMoeda({
       inputMode="numeric"
       autoComplete="off"
       placeholder="0,00"
-      // O "R$" fixo dentro do campo, no lugar do ícone: assim a pessoa não
-      // precisa digitar o símbolo, e fica claro que o campo é dinheiro.
-      className="cz-num pl-[3.25rem]! font-semibold tracking-[0.01em]"
+      // O recuo do "R$" vem de `cz-campo-icone`, aplicado pelo `CampoTexto` por
+      // causa do `prefixoTexto`. Utilitária `pl-*` aqui perderia para o
+      // `padding-inline` do bloco global, que não está em `@layer`.
+      className="cz-num font-semibold tracking-[0.01em]"
       value={textoDeCentavos(centavos)}
       onChange={(e) => onMudar(centavosDeTexto(mascaraMoeda(e.target.value)))}
       prefixoTexto="R$"

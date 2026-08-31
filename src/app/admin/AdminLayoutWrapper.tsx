@@ -55,6 +55,7 @@ const ROTULO_ROTA: Record<string, string> = {
   "/admin/tarefas/apuracao": "Apuração fiscal",
   "/admin/tarefas/legalizacao": "Legalização",
   "/admin/tarefas/auditoria": "Auditoria",
+  "/admin/formulario": "Formulários de abertura",
   "/admin/empresas": "Empresas",
 };
 
@@ -74,6 +75,7 @@ const SUBTITULO_ROTA: Record<string, string> = {
   "/admin/tarefas/apuracao": "Competências por empresa, etapa e prazo",
   "/admin/tarefas/legalizacao": "Aberturas, alterações e encerramentos de CNPJ",
   "/admin/tarefas/auditoria": "Histórico de alterações com autor e horário",
+  "/admin/formulario": "Formulários enviados pelos clientes em /formulario",
   "/admin/empresas": "Carteira de empresas e regime tributário",
 };
 
@@ -87,6 +89,7 @@ const SUBTITULO_ROTA: Record<string, string> = {
 const ROTULO_ID_POR_PAI: Record<string, string> = {
   "/admin/tarefas/apuracao": "Competência",
   "/admin/tarefas/legalizacao": "Processo",
+  "/admin/formulario": "Formulário",
   "/admin/empresas": "Empresa",
 };
 

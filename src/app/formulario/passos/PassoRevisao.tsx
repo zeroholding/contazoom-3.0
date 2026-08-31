@@ -271,12 +271,15 @@ export function PassoRevisao({
           erros["confirmouVeracidade"] ? "border-[#FDA29B]! bg-[#FFFBFA]" : ""
         }`}
       >
-        <label className="flex cursor-pointer items-start gap-3">
+        {/* `cz-caixa-topo`: o texto tem duas linhas, então a caixa alinha pelo
+            topo. E `cz-caixa` porque o `label {}` global crava `display: block`
+            fora de `@layer` e derrota o `flex` do Tailwind. */}
+        <label className="cz-caixa cz-caixa-topo">
           <input
             type="checkbox"
+            className="cz-marca mt-0.5"
             checked={dados.confirmouVeracidade}
             onChange={(e) => onMudar({ confirmouVeracidade: e.target.checked })}
-            className="mt-0.5 h-5 w-5 shrink-0 accent-[#F26212]"
             aria-describedby="confirmacao-erro"
           />
           <span className="text-[0.9375rem] font-medium leading-[1.6] text-[#344054]">

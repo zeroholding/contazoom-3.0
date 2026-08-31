@@ -1001,3 +1001,142 @@ model RegistroExclusao {
   @@index([createdAt])
   @@map("registro_exclusao")
 }
+
+/// Formulário público de abertura de CNPJ, como o cliente enviou.
+///
+/// Substitui o Google Forms da legalização. A rota que grava aqui é PÚBLICA, sem
+/// login: o Forms exigia conta Google para anexar arquivo, e cliente sem Gmail
+/// não conseguia mandar documento nenhum.
+///
+/// POR QUE `dados` É JSON E NÃO TRINTA COLUNAS.
+///
+/// O conteúdo é uma árvore de tamanho variável: N sócios, cada um com endereço,
+/// estado civil, regime de bens e participação em outra empresa. Normalizar isso
+/// daria quatro tabelas para guardar algo que ninguém consulta por campo — o
+/// escritório abre um formulário e lê tudo. E o formulário é um DOCUMENTO
+/// RECEBIDO: o que valia no dia do envio tem de continuar legível mesmo depois
+/// de a tela mudar de perguntas, o que uma tabela normalizada quebraria na
+/// primeira alteração de campo. Por isso o JSON guarda o envio inteiro, e ao lado
+/// dele ficam só as colunas que a LISTA precisa para buscar e ordenar.
+///
+/// APPEND-ONLY na prática: não existe rota de UPDATE nem de DELETE para este
+/// model. Formulário recebido é declaração do cliente, e declaração que o
+/// escritório pode reescrever não prova nada. Correção vem de um envio novo, que
+/// gera protocolo novo.
+model FormularioAbertura {
+  id String @id @default(cuid())
+
+  /// Protocolo legível, o que o cliente lê no telefone: "CZ-7H2KQ4".
+  /// Sem 0/O e sem 1/I/L, que são o que faz a pessoa ditar errado.
+  protocolo String @unique
+
+  /// Segredo da URL de consulta pública (`/formulario/recibo/<token>`).
+  ///
+  /// Separado do protocolo de propósito: o protocolo é curto para ser ditado, e
+  /// curto o bastante para ser adivinhado por tentativa. Quem tem o token vê o
+  /// formulário; então ele é longo e aleatório, e o protocolo não abre nada.
+  token String @unique
+
+  /// Snapshot do envio inteiro. Formato em `src/lib/formulario-abertura.ts`.
+  dados Json
+
+  /// ---------------------------------------------------------------------------
+  /// Colunas desnormalizadas, só para a LISTA do admin buscar e ordenar.
+  ///
+  /// Duplicam informação que já está em `dados`. É deliberado: filtrar por campo
+  /// dentro de JSON no Postgres não usa índice comum, e a lista precisa de busca
+  /// por nome, CPF e CNPJ. A fonte da verdade continua sendo `dados`.
+  /// ---------------------------------------------------------------------------
+
+  /// 1ª opção de razão social. A empresa ainda não tem nome definitivo.
+  razaoSocialPretendida String @map("razao_social_pretendida")
+  nomeFantasia          String @map("nome_fantasia")
+
+  /// Sócio 1, que é quem o comercial procura.
+  socioPrincipalNome     String @map("socio_principal_nome")
+  socioPrincipalCpf      String @map("socio_principal_cpf")
+  socioPrincipalEmail    String @map("socio_principal_email")
+  socioPrincipalTelefone String @map("socio_principal_telefone")
+
+  quantidadeSocios     Int @map("quantidade_socios")
+  capitalTotalCentavos Int @map("capital_total_centavos")
+
+  /// RECEBIDO, EM_ANALISE, APROVADO, DEVOLVIDO
+  ///
+  /// Único campo que o escritório altera. Não contradiz o append-only do envio:
+  /// é o andamento DA ANÁLISE, não o conteúdo declarado pelo cliente.
+  situacao String @default("RECEBIDO")
+
+  /// Anotação interna do escritório. Nunca aparece para o cliente.
+  observacaoInterna String? @map("observacao_interna")
+
+  /// De onde veio o envio. Serve para achar abuso na rota pública, que não tem
+  /// login e aceita arquivo.
+  ipOrigem      String? @map("ip_origem")
+  navegadorInfo String? @map("navegador_info")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  documentos FormularioAberturaDocumento[]
+
+  @@index([createdAt])
+  @@index([situacao, createdAt])
+  @@index([socioPrincipalCpf])
+  @@index([socioPrincipalNome])
+  @@map("formulario_abertura")
+}
+
+/// Documento anexado pelo cliente no formulário de abertura.
+///
+/// NUNCA É EXCLUÍDO. Não existe rota de DELETE para este model, e a relação com
+/// o formulário é `onDelete: Restrict` de propósito: enquanto houver documento, o
+/// banco RECUSA apagar o formulário. É o oposto de `TarefaAnexo`, que é
+/// `onDelete: Cascade` e tem rota de remoção — lá o anexo é material de trabalho
+/// interno, aqui é documento de identidade e comprovante de residência que o
+/// cliente entregou uma vez, e que sustenta um contrato social.
+///
+/// `Restrict` em vez de confiar só na aplicação porque a garantia tem de
+/// sobreviver a um `prisma studio` aberto às onze da noite.
+///
+/// POR QUE TABELA PRÓPRIA E NÃO `TarefaAnexo`: aquele model exige `apuracaoId` ou
+/// `processoId` (CHECK no banco) e grava `enviadoPorId` de um usuário logado. Aqui
+/// não existe tarefa ainda — o formulário chega ANTES de o processo ser criado — e
+/// não existe usuário nenhum, porque a rota é pública.
+model FormularioAberturaDocumento {
+  id String @id @default(cuid())
+
+  formularioId String @map("formulario_id")
+
+  /// Chave do slot no formulário: `socio.0.identidade`, `socio.1.residencia`,
+  /// `empresa.iptu`. É o que amarra o arquivo à PESSOA certa.
+  slot String
+
+  /// Nome de quem entregou, congelado como texto.
+  ///
+  /// O JSON de `dados` também tem o nome, mas ler o dono a partir do índice do
+  /// slot exigiria abrir o JSON a cada linha da lista — e se um dia a ordem dos
+  /// sócios no JSON mudar, o arquivo trocaria de dono em silêncio. Que é
+  /// exactamente o defeito do Google Forms que esta tela existe para matar.
+  dono String
+
+  /// Rótulo do slot como o cliente viu: "RG ou CNH", "Comprovante de residência".
+  rotulo String
+
+  /// Nome que o arquivo tinha na máquina de quem enviou. É o que a tela mostra.
+  nomeOriginal String @map("nome_original")
+
+  /// Nome no disco: timestamp + aleatório + nome higienizado, com o dono no
+  /// prefixo. Nunca o original, senão dois "rg.pdf" se sobrescreveriam.
+  arquivo String @unique
+
+  tipoMime     String @map("tipo_mime")
+  tamanhoBytes Int    @map("tamanho_bytes")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  formulario FormularioAbertura @relation(fields: [formularioId], references: [id], onDelete: Restrict)
+
+  @@index([formularioId, slot])
+  @@map("formulario_abertura_documento")
+}

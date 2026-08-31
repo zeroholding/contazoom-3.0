@@ -306,16 +306,31 @@ export function BlocoSocio({
                 quase sempre moram juntos, e digitar o mesmo endereço duas vezes é
                 onde aparece divergência de um dígito. */}
             {indice > 0 && (
-              <label className="cz-campo-foco flex min-h-[3.25rem] cursor-pointer items-center gap-3 rounded-[12px] border border-[#D8DDE5] bg-[#F7F8FA] px-4 py-3 transition-colors hover:border-[#B4BCC9]">
+              // `cz-caixa` e não `flex`: o `label {}` global de `globals.css`
+              // está fora de `@layer` e crava `display: block`, que vence a
+              // utilitária do Tailwind. Era isso que colava a caixa no texto.
+              <label
+                className={`cz-caixa cz-campo-foco min-h-[3.25rem] rounded-[12px] border px-4 py-3 transition-colors ${
+                  socio.mesmoEnderecoDoPrimeiro
+                    ? "border-[#F26212] bg-[#FFF4EC]"
+                    : "border-[#D8DDE5] bg-[#F7F8FA] hover:border-[#B4BCC9]"
+                }`}
+              >
                 <input
                   type="checkbox"
+                  className="cz-marca"
                   checked={socio.mesmoEnderecoDoPrimeiro}
                   onChange={(e) =>
                     onMudar({ mesmoEnderecoDoPrimeiro: e.target.checked })
                   }
-                  className="h-5 w-5 shrink-0 accent-[#F26212]"
                 />
-                <span className="text-[0.9375rem] font-semibold leading-5 text-[#101828]">
+                <span
+                  className={`text-[0.9375rem] font-semibold leading-5 ${
+                    socio.mesmoEnderecoDoPrimeiro
+                      ? "text-[#C2410C]"
+                      : "text-[#101828]"
+                  }`}
+                >
                   Mora no mesmo endereço do Sócio 1
                 </span>
               </label>

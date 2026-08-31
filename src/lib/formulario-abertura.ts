@@ -120,6 +120,43 @@ export const UF_OPCOES: { valor: string; texto: string }[] = [
 /** Teto de sócios. Acima disso não é mais abertura simples de sociedade. */
 export const MAXIMO_SOCIOS = 10;
 
+/**
+ * Andamento da ANÁLISE do formulário, não do conteúdo declarado.
+ *
+ * É o único campo do formulário recebido que o escritório altera. O envio em si é
+ * append-only: declaração que o escritório pode reescrever não prova nada, e
+ * correção vem de um envio novo, com protocolo novo.
+ */
+export const SITUACAO_FORMULARIO = {
+  RECEBIDO: "RECEBIDO",
+  EM_ANALISE: "EM_ANALISE",
+  APROVADO: "APROVADO",
+  DEVOLVIDO: "DEVOLVIDO",
+} as const;
+export type SituacaoFormulario =
+  (typeof SITUACAO_FORMULARIO)[keyof typeof SITUACAO_FORMULARIO];
+
+export const SITUACAO_FORMULARIO_LABEL: Record<string, string> = {
+  RECEBIDO: "Recebido",
+  EM_ANALISE: "Em análise",
+  APROVADO: "Aprovado",
+  DEVOLVIDO: "Devolvido ao cliente",
+};
+
+/** Ícone lucide por situação. Nunca emoji. */
+export const SITUACAO_FORMULARIO_ICONE: Record<string, string> = {
+  RECEBIDO: "Send",
+  EM_ANALISE: "Search",
+  APROVADO: "CheckCircle2",
+  DEVOLVIDO: "RotateCcw",
+};
+
+export const SITUACAO_FORMULARIO_OPCOES: { valor: string; texto: string }[] =
+  Object.values(SITUACAO_FORMULARIO).map((v) => ({
+    valor: v,
+    texto: SITUACAO_FORMULARIO_LABEL[v],
+  }));
+
 /* -------------------------------------------------------------------------- */
 /*                                   Tipos                                    */
 /* -------------------------------------------------------------------------- */

@@ -10,6 +10,7 @@ import {
   FolderOpen,
   ClipboardList,
   Calculator,
+  ClipboardCheck,
   Landmark,
   Building2,
   History,
@@ -38,6 +39,10 @@ const OPERACAO: ItemNav[] = [
   { href: "/admin/tarefas/legalizacao", texto: "Legalização", icone: Landmark },
   { href: "/admin/empresas", texto: "Empresas", icone: Building2 },
   { href: "/admin/tarefas/auditoria", texto: "Auditoria", icone: History },
+  // Sem `exato`: a tela tem rota de detalhe (`/admin/formulario/<id>`), e com
+  // `exato` o item apagaria justamente quando a pessoa está dentro de um
+  // formulário.
+  { href: "/admin/formulario", texto: "Formulário", icone: ClipboardCheck },
 ];
 
 const GESTAO: ItemNav[] = [

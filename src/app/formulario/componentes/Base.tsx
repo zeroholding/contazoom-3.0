@@ -52,6 +52,25 @@ import {
  * Sem isso, os três divergem no primeiro ajuste — e campo com 1px de diferença
  * de borda na mesma fileira é o que faz um formulário parecer remendado.
  */
+/**
+ * QUASE NADA DE APARÊNCIA DO CAMPO VEM DE UTILITÁRIA DO TAILWIND, e o motivo é o
+ * bug que apareceu no primeiro teste em produção.
+ *
+ * `globals.css` tem um bloco `input[type=text], ..., textarea, select { @apply
+ * h-12 px-4 py-3 text-sm ... }` escrito FORA de `@layer`. O Tailwind v4 gera as
+ * utilitárias DENTRO de `@layer utilities`, e na cascata do CSS declaração sem
+ * camada vence declaração em camada — independente de especificidade e de ordem.
+ *
+ * Resultado: `pl-[2.875rem]` (o espaço do ícone) perdia para o `padding-inline:
+ * 1rem` do bloco global, e o ícone ficava POR CIMA do texto. `text-[1rem]`
+ * perdia para `text-sm`, e o campo ficava em 14px, altura em que o Safari do iOS
+ * amplia a página ao focar.
+ *
+ * Nenhum `!important` em classe utilitária resolveria: o problema é a camada, não
+ * a especificidade. Então padding, raio, tamanho de fonte e a cor do texto são
+ * declarados em `.cz-form .cz-campo` no `globals.css`, e aqui só sobra o que não
+ * colide: largura, fundo, placeholder e a borda de estado.
+ */
 function casca({
   erro,
   comIcone,
@@ -62,22 +81,18 @@ function casca({
   comSufixo?: boolean;
 }): string {
   return [
-    // A cor do texto NÃO vem por utilitária: `.cz-form .cz-campo` tem
-    // especificidade 0,2,0 contra 0,1,0 da classe do Tailwind, então a regra do
-    // CSS venceria e a utilitária aqui seria declaração morta.
-    "cz-campo w-full appearance-none bg-white text-[1rem] leading-6",
+    "cz-campo w-full appearance-none bg-white",
     "placeholder:text-[#A6ADBA]",
-    // 52px de altura. O painel usa 40px porque quem usa está com mouse e conhece
-    // a tela; aqui o alvo é o dedo.
-    "min-h-[3.25rem] rounded-[12px] border transition-colors duration-150",
-    comIcone ? "pl-[2.875rem]" : "pl-4",
-    comSufixo ? "pr-[2.875rem]" : "pr-4",
-    "py-3",
-    erro
-      ? "border-[#F04438] bg-[#FFFBFA]"
-      : "border-[#D8DDE5] hover:border-[#B4BCC9]",
+    // 52px de altura no repouso. O painel usa 40px porque quem usa está com
+    // mouse e conhece a tela; aqui o alvo é o dedo.
+    "min-h-[3.25rem] border",
+    comIcone && "cz-campo-icone",
+    comSufixo && "cz-campo-sufixo",
+    erro && "bg-[#FFFBFA]",
     "focus:outline-none",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /** Anel de foco por `box-shadow`, para não empurrar o layout como `outline` faz. */
@@ -246,7 +261,13 @@ export function CampoTexto({
           aria-describedby={
             erro ? `${id}-erro` : ajuda ? `${id}-ajuda` : undefined
           }
-          className={`${casca({ erro: !!erro, comIcone: !!icone, comSufixo: !!sufixo })} ${ANEL_FOCO} ${className}`}
+          className={`${casca({
+            erro: !!erro,
+            // O prefixo "R$" ocupa o mesmo lugar do ícone, então reserva o mesmo
+            // recuo. Sem isso o valor digitado começa em cima do símbolo.
+            comIcone: !!icone || !!prefixoTexto,
+            comSufixo: !!sufixo,
+          })} ${ANEL_FOCO} ${className}`}
           {...props}
         />
         {sufixo && (
@@ -294,7 +315,7 @@ export function CampoArea({
         required={required}
         aria-invalid={erro ? true : undefined}
         aria-describedby={erro ? `${id}-erro` : ajuda ? `${id}-ajuda` : undefined}
-        className={`mt-2 min-h-[8rem] resize-y leading-[1.6] ${casca({ erro: !!erro })} ${ANEL_FOCO} ${className}`}
+        className={`mt-2 ${casca({ erro: !!erro })} ${ANEL_FOCO} ${className}`}
         {...props}
       />
       <div className="flex items-start justify-between gap-4">

@@ -148,7 +148,9 @@ export function PassoSociedade({
                 {dados.socios.map((socio, i) => (
                   <label
                     key={i}
-                    className={`cz-campo-foco flex min-h-[3.25rem] cursor-pointer items-center gap-3 rounded-[12px] border px-4 py-3 transition-colors duration-150 ${
+                    // `cz-caixa` porque o `label {}` global, fora de `@layer`,
+                    // crava `display: block` e vence o `flex` do Tailwind.
+                    className={`cz-caixa cz-campo-foco min-h-[3.25rem] rounded-[12px] border px-4 py-3 transition-colors duration-150 ${
                       socio.administrador
                         ? "border-[#F26212] bg-[#FFF4EC] shadow-[inset_0_0_0_1px_#F26212]"
                         : "border-[#D8DDE5] bg-white hover:border-[#B4BCC9]"
@@ -156,11 +158,11 @@ export function PassoSociedade({
                   >
                     <input
                       type="checkbox"
+                      className="cz-marca"
                       checked={socio.administrador}
                       onChange={(e) =>
                         onMudarSocio(i, { administrador: e.target.checked })
                       }
-                      className="h-5 w-5 shrink-0 accent-[#F26212]"
                     />
                     <span
                       className={`min-w-0 flex-1 truncate text-[0.9375rem] font-semibold leading-5 ${

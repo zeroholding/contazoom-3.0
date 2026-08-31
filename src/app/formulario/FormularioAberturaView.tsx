@@ -34,7 +34,6 @@ import {
   TOTAL_PASSOS,
   formularioVazio,
   limparCondicionais,
-  payloadDeEnvio,
   socioVazio,
   validarPasso,
   type Erros,
@@ -46,7 +45,8 @@ import {
   limparRascunho,
   salvarRascunho,
 } from "@/lib/formulario-rascunho";
-import { BotaoForm, Cartao, Nota } from "./componentes/Base";
+import { BotaoForm, Nota } from "./componentes/Base";
+import { Concluido } from "./componentes/Concluido";
 import { PassoSocios } from "./passos/PassoSocios";
 import { PassoEmpresa } from "./passos/PassoEmpresa";
 import { PassoSociedade } from "./passos/PassoSociedade";
@@ -74,7 +74,21 @@ export default function FormularioAberturaView() {
     useState<ReturnType<typeof lerRascunho>>(null);
   const [confirmandoLimpeza, setConfirmandoLimpeza] = useState(false);
   const [removendo, setRemovendo] = useState<number | null>(null);
-  const [enviado, setEnviado] = useState(false);
+
+  /**
+   * Recibo do envio. `null` enquanto não enviou.
+   *
+   * Guardar o recibo em estado, e não só um booleano, é o que permite a tela de
+   * conclusão mostrar o protocolo e o link — que é o que a pessoa vai printar.
+   */
+  const [recibo, setRecibo] = useState<{
+    protocolo: string;
+    url: string;
+    documentos: number;
+  } | null>(null);
+
+  const [enviando, setEnviando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState("");
 
   const topo = useRef<HTMLDivElement>(null);
   const primeiraCarga = useRef(true);
@@ -226,7 +240,7 @@ export default function FormularioAberturaView() {
     }
 
     if (passo === TOTAL_PASSOS - 1) {
-      finalizar();
+      void enviar();
       return;
     }
 
@@ -256,40 +270,90 @@ export default function FormularioAberturaView() {
   /* -------------------------------- Envio -------------------------------- */
 
   /**
-   * Nesta fase o envio não sai do navegador.
+   * Envia de verdade.
    *
-   * Não existe rota nem persistência, e inventar um `POST` para um endpoint que
-   * não existe produziria erro de rede que a pessoa leria como "o formulário está
-   * quebrado". Em vez disso: valida tudo, mostra o resultado e oferece o resumo em
-   * arquivo, que é o que salva um preenchimento de teste.
+   * O slot vai no NOME DO CAMPO (`arquivo:socio.0.identidade`) e não num JSON
+   * paralelo: assim é impossível o arquivo e o dono chegarem dessincronizados no
+   * servidor, que é exatamente o defeito do Google Forms — cinco fotos numa caixa
+   * comum e ninguém sabendo de quem era cada uma.
+   *
+   * O rascunho só é apagado DEPOIS do 201. Se apagasse antes e a rede caísse, a
+   * pessoa perderia quarenta campos preenchidos por causa de um erro que não foi
+   * dela.
    */
-  function finalizar() {
-    setEnviado(true);
-    topo.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  async function enviar() {
+    if (enviando) return;
+    setEnviando(true);
+    setErroEnvio("");
 
-  function baixarResumo() {
-    const conteudo = JSON.stringify(
-      {
-        ...payloadDeEnvio(dados),
-        documentos: Object.fromEntries(
-          Object.entries(arquivos).map(([chave, lista]) => [
-            chave,
-            lista.map((a) => ({ nome: a.name, bytes: a.size })),
-          ])
-        ),
-      },
-      null,
-      2
-    );
-    const url = URL.createObjectURL(
-      new Blob([conteudo], { type: "application/json" })
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "abertura-cnpj.json";
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      const corpo = new FormData();
+      corpo.append("dados", JSON.stringify(dados));
+
+      let total = 0;
+      Object.entries(arquivos).forEach(([slot, lista]) => {
+        lista.forEach((arquivo) => {
+          corpo.append(`arquivo:${slot}`, arquivo, arquivo.name);
+          total += 1;
+        });
+      });
+
+      const resposta = await fetch("/api/formulario", {
+        method: "POST",
+        body: corpo,
+      });
+
+      const json = (await resposta.json().catch(() => null)) as
+        | {
+            protocolo?: string;
+            url?: string;
+            documentos?: number;
+            error?: string;
+            campos?: Erros;
+          }
+        | null;
+
+      if (!resposta.ok) {
+        // 422 traz o mapa de campos do servidor. Mostrar esses erros nos campos, e
+        // não só uma faixa genérica, é o que permite a pessoa consertar: "um campo
+        // precisa de correção" sem dizer qual é um beco sem saída.
+        if (resposta.status === 422 && json?.campos) {
+          setErros(json.campos);
+          setErroEnvio(
+            json.error ||
+              "Alguns campos precisam de correção. Use o Editar de cada bloco."
+          );
+        } else {
+          setErroEnvio(
+            json?.error ||
+              "Não conseguimos enviar agora. Confira sua conexão e tente novamente."
+          );
+        }
+        return;
+      }
+
+      if (!json?.protocolo || !json?.url) {
+        setErroEnvio("Resposta inesperada do servidor. Tente novamente.");
+        return;
+      }
+
+      // Agora sim: o envio está no banco, o rascunho local não serve mais e tem
+      // CPF e endereço em texto claro no aparelho.
+      limparRascunho();
+
+      setRecibo({
+        protocolo: json.protocolo,
+        url: json.url,
+        documentos: json.documentos ?? total,
+      });
+      topo.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {
+      setErroEnvio(
+        "Não conseguimos enviar agora. Confira sua conexão e tente novamente."
+      );
+    } finally {
+      setEnviando(false);
+    }
   }
 
   function recomecar() {
@@ -299,7 +363,8 @@ export default function FormularioAberturaView() {
     setErros({});
     setPasso(0);
     setLiberado(0);
-    setEnviado(false);
+    setRecibo(null);
+    setErroEnvio("");
     setConfirmandoLimpeza(false);
     setRascunhoEncontrado(null);
   }
@@ -352,7 +417,7 @@ export default function FormularioAberturaView() {
           passo={passo}
           liberado={liberado}
           onIr={irPara}
-          concluido={enviado}
+          concluido={!!recibo}
         />
       </header>
 
@@ -360,8 +425,13 @@ export default function FormularioAberturaView() {
         ref={topo}
         className="mx-auto max-w-[920px] scroll-mt-24 px-4 py-6 sm:px-8 sm:py-10"
       >
-        {enviado ? (
-          <Concluido onBaixar={baixarResumo} onRecomecar={recomecar} />
+        {recibo ? (
+          <Concluido
+            protocolo={recibo.protocolo}
+            url={recibo.url}
+            documentos={recibo.documentos}
+            onRecomecar={recomecar}
+          />
         ) : (
           <>
             {/* Resumo de erros no topo, em `role="alert"`: quem usa leitor de tela
@@ -372,6 +442,15 @@ export default function FormularioAberturaView() {
                   ? "Falta corrigir 1 campo neste passo."
                   : `Faltam corrigir ${quantosErros} campos neste passo.`}{" "}
                 Eles estão marcados em vermelho abaixo.
+              </Nota>
+            )}
+
+            {/* Falha de envio é separada da falha de validação: uma é "conserte o
+                campo", a outra é "tente de novo", e tratá-las com a mesma faixa
+                faria a pessoa procurar um campo errado que não existe. */}
+            {erroEnvio && (
+              <Nota tom="erro" className="mb-6">
+                {erroEnvio}
               </Nota>
             )}
 
@@ -413,12 +492,12 @@ export default function FormularioAberturaView() {
               />
             )}
 
-            {/* Aviso de homologação só na revisão, onde o botão de enviar está. No
-                passo 1 seria ruído sobre algo que ainda não vai acontecer. */}
+            {/* Aviso do que o botão faz, só na revisão. No passo 1 seria ruído
+                sobre algo que ainda não vai acontecer. */}
             {passo === 4 && (
-              <Nota tom="atencao" className="mt-5">
-                Esta tela está em homologação: o envio ao escritório ainda não está
-                ativo. Ao finalizar, você poderá baixar o resumo do preenchimento.
+              <Nota tom="info" className="mt-5">
+                Ao finalizar, os dados e os documentos são enviados ao escritório e
+                você recebe um protocolo e um link para consultar depois.
               </Nota>
             )}
 
@@ -437,7 +516,7 @@ export default function FormularioAberturaView() {
       </main>
 
       {/* ---------------------------- Navegação -------------------------------- */}
-      {!enviado && (
+      {!recibo && (
         // Fixa no rodapé no celular: sem isso, avançar exige rolar 40 campos até o
         // fim. No desktop volta a ser um bloco normal no fluxo.
         <nav
@@ -449,18 +528,32 @@ export default function FormularioAberturaView() {
               variante="secundario"
               icone="ArrowLeft"
               onClick={voltar}
-              disabled={passo === 0}
+              disabled={passo === 0 || enviando}
             >
               <span className="hidden sm:inline">Voltar</span>
             </BotaoForm>
             <BotaoForm
               variante="primario"
-              iconeDireita={passo === TOTAL_PASSOS - 1 ? "Send" : "ArrowRight"}
+              icone={enviando ? "Loader" : undefined}
+              iconeDireita={
+                enviando
+                  ? undefined
+                  : passo === TOTAL_PASSOS - 1
+                  ? "Send"
+                  : "ArrowRight"
+              }
               onClick={avancar}
+              // Desabilitar durante o envio é o que impede o envio dobrado: dois
+              // toques no botão criariam dois protocolos com os mesmos documentos.
+              disabled={enviando}
               larguraCheia
-              className="sm:w-auto! sm:min-w-[13rem]"
+              className={`sm:w-auto! sm:min-w-[13rem] ${enviando ? "[&>svg]:animate-spin" : ""}`}
             >
-              {passo === TOTAL_PASSOS - 1 ? "Finalizar" : "Continuar"}
+              {enviando
+                ? "Enviando…"
+                : passo === TOTAL_PASSOS - 1
+                ? "Enviar formulário"
+                : "Continuar"}
             </BotaoForm>
           </div>
         </nav>
@@ -678,48 +771,4 @@ function Trilha({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                 Concluído                                  */
-/* -------------------------------------------------------------------------- */
 
-function Concluido({
-  onBaixar,
-  onRecomecar,
-}: {
-  onBaixar: () => void;
-  onRecomecar: () => void;
-}) {
-  return (
-    <Cartao className="p-6 text-center sm:p-10">
-      <span
-        aria-hidden="true"
-        className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#FFDCC4] bg-[#FFF4EC] text-[#D9500A]"
-      >
-        <Icone nome="CheckCircle2" className="h-8 w-8" />
-      </span>
-
-      <h2 className="mt-6 text-[1.375rem] font-bold tracking-[-0.02em] text-[#101828]">
-        Preenchimento completo
-      </h2>
-      <p className="mx-auto mt-2.5 max-w-md text-[1rem] leading-[1.6] text-[#667085]">
-        Todos os campos obrigatórios foram validados e os documentos de cada sócio
-        estão anexados.
-      </p>
-
-      <Nota tom="atencao" className="mt-6 text-left">
-        O envio ao escritório ainda não está ativo nesta versão. Baixe o resumo
-        para guardar o que você preencheu — ao fechar a página, os arquivos
-        anexados são descartados.
-      </Nota>
-
-      <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <BotaoForm variante="primario" icone="Download" onClick={onBaixar}>
-          Baixar resumo
-        </BotaoForm>
-        <BotaoForm variante="secundario" icone="RotateCcw" onClick={onRecomecar}>
-          Preencher outro
-        </BotaoForm>
-      </div>
-    </Cartao>
-  );
-}

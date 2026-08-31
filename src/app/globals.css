@@ -907,16 +907,102 @@ select.error {
 /* !important e o valor mais especifico ja vence.                              */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* POR QUE O PADDING, O RAIO E O TAMANHO DE FONTE ESTAO AQUI E NAO EM CLASSE  */
+/* UTILITARIA DO TAILWIND                                                     */
+/*                                                                            */
+/* Este foi o bug de verdade da primeira versao, e vale escrever inteiro       */
+/* porque e uma armadilha que qualquer tela nova deste projeto vai encontrar.  */
+/*                                                                            */
+/* O Tailwind v4 poe as utilitarias dentro de `@layer utilities`. O CSS solto  */
+/* escrito neste arquivo (o bloco `input[type=text], ... { @apply h-12 px-4    */
+/* py-3 text-sm }` e o `label { @apply block ... }`) NAO esta em camada        */
+/* nenhuma. E na cascata do CSS, declaracao SEM camada vence declaracao EM     */
+/* camada — independente de especificidade e de ordem.                        */
+/*                                                                            */
+/* Consequencia observada em producao:                                        */
+/*                                                                            */
+/*   - `pl-[2.875rem]` (o espaco para o icone dentro do campo) perdia para o   */
+/*     `padding-inline: 1rem` do bloco global, e o icone ficava POR CIMA do    */
+/*     texto — foi o "Selecione" sobreposto no campo de estado civil;          */
+/*   - `text-[1rem]` perdia para `font-size: var(--text-sm)`, entao o campo    */
+/*     ficava em 14px. Em 14px o Safari do iOS amplia a pagina ao focar;       */
+/*   - `flex` no `<label>` da caixa de marcar perdia para `display: block` do  */
+/*     `label {}` global, e a caixa colava no texto sem alinhamento — foi o    */
+/*     "Mora no mesmo endereco do Socio 1" quebrado.                          */
+/*                                                                            */
+/* Ou seja: nao era especificidade, era CAMADA. Nenhum `!important` em classe  */
+/* utilitaria resolveria, porque o Tailwind gera a utilitaria dentro da camada */
+/* de qualquer jeito. A correcao e declarar aqui, fora de camada, toda         */
+/* propriedade que o bloco global tambem declara.                             */
+/* -------------------------------------------------------------------------- */
+
 .cz-form .cz-campo {
     height: auto;
     border-width: 1px;
     border-style: solid;
     border-color: var(--czf-borda-campo) !important;
-    /* Sem sombra. O que delimita o campo e a borda; sombra em campo de              
+    /* Sem sombra. O que delimita o campo e a borda; sombra em campo de
        formulario e o que datava a tela. */
     box-shadow: none !important;
     color: var(--czf-texto);
+    /* As quatro propriedades que o bloco global tambem declara. */
+    border-radius: 12px;
+    padding: 0.875rem 1rem;
+    font-size: 1rem;
+    line-height: 1.5rem;
     transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* Espaco para o icone dentro do campo. Classe propria em vez de `pl-*` porque
+   `pl-*` e utilitaria e perde para o `padding-inline` global. */
+.cz-form .cz-campo-icone {
+    padding-left: 2.875rem;
+}
+
+.cz-form .cz-campo-sufixo {
+    padding-right: 2.875rem;
+}
+
+.cz-form textarea.cz-campo {
+    min-height: 8rem;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Caixa de marcar em linha                                                   */
+/*                                                                            */
+/* `label { @apply block ... }` global, sem camada, derrota o `flex` do        */
+/* Tailwind. Entao a linha inteira (caixa + texto) e declarada aqui.           */
+/* -------------------------------------------------------------------------- */
+
+.cz-form label.cz-caixa {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0;
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit !important;
+    cursor: pointer;
+}
+
+/* Variante para texto de duas ou mais linhas: alinha pelo topo, senao a caixa
+   fica no meio vertical do paragrafo e parece solta. */
+.cz-form label.cz-caixa-topo {
+    align-items: flex-start;
+}
+
+/* A caixa em si. `accent-color` pinta o marcado com o laranja da marca sem
+   precisar de SVG proprio nem de esconder o controle nativo — o que preserva o
+   comportamento de teclado e de leitor de tela. */
+.cz-form input[type="checkbox"].cz-marca {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    accent-color: var(--czf-marca);
+    cursor: pointer;
 }
 
 .cz-form .cz-campo::placeholder {
@@ -953,12 +1039,14 @@ select.error {
     cursor: not-allowed;
 }
 
-/* 16px no toque impede o zoom automatico do Safari no iOS ao focar o campo.
-   Abaixo disso ele amplia a pagina, e a pessoa perde o resto do formulario de
-   vista junto com a barra de navegacao. */
+/* Alvo maior no toque. O `font-size: 1rem` ja e o padrao acima — e ele que
+   impede o zoom automatico do Safari no iOS ao focar o campo; abaixo de 16px o
+   iOS amplia a pagina e a pessoa perde de vista o resto do formulario junto com
+   a barra de navegacao. */
 @media (pointer: coarse) {
     .cz-form .cz-campo {
-        font-size: 1rem;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
     }
 }
 
