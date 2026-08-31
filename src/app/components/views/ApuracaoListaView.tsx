@@ -1207,6 +1207,11 @@ function Conteudo() {
                                   ? abrirEdicao
                                   : undefined
                               }
+                              onExcluir={
+                                permissoes.excluir
+                                  ? (t) => setAlvoExclusao(t.id)
+                                  : undefined
+                              }
                             />
                           ))
                         )}
@@ -1390,6 +1395,22 @@ function Conteudo() {
                                 >
                                   Editar
                                 </Botao>
+                              )}
+                              {permissoes.excluir && (
+                                <button
+                                  type="button"
+                                  title="Excluir competência"
+                                  aria-label={`Excluir competência de ${nomeEmpresa(
+                                    tarefa.empresa
+                                  )}`}
+                                  onClick={(evento) => {
+                                    evento.stopPropagation();
+                                    setAlvoExclusao(tarefa.id);
+                                  }}
+                                  className="rounded-[10px] p-1.5 text-gray-400 transition-colors hover:bg-[#FEF2F2] hover:text-[#B42318]"
+                                >
+                                  <Icone nome="Trash2" className="h-4 w-4" />
+                                </button>
                               )}
                               <Link
                                 href={destino}

@@ -926,6 +926,11 @@ function Conteudo() {
                   onEditar={
                     permissoes.gerenciarBloqueio ? abrirEdicao : undefined
                   }
+                  onExcluir={
+                    permissoes.excluir
+                      ? (alvo) => setAlvoExclusao(alvo.id)
+                      : undefined
+                  }
                 />
               </li>
             ))}
@@ -1247,10 +1252,13 @@ function Conteudo() {
 function CartaoProcesso({
   item,
   onEditar,
+  onExcluir,
 }: {
   item: ProcessoLista;
   /** Abre o formulário de edição (prazo, responsável, observações e anexos). */
   onEditar?: (item: ProcessoLista) => void;
+  /** Abre a confirmação de exclusão. Só passado para administrador. */
+  onExcluir?: (item: ProcessoLista) => void;
 }) {
   const encerrado = !!item.concluidoEm;
 
@@ -1460,22 +1468,44 @@ function CartaoProcesso({
       </div>
     </Link>
 
-    {onEditar && (
-      <button
-        type="button"
-        title="Editar prazo, responsável e anexos"
-        aria-label={`Editar processo de ${nome}`}
-        onClick={(evento) => {
-          // O cartão inteiro é uma âncora. Sem estas duas linhas, editar
-          // navegaria para o detalhe em vez de abrir o formulário.
-          evento.preventDefault();
-          evento.stopPropagation();
-          onEditar(item);
-        }}
-        className="absolute right-3 top-3 rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FFF2E9] hover:text-[#C2410C]"
-      >
-        <Icone nome="Pencil" className="h-4 w-4" />
-      </button>
+    {(onEditar || onExcluir) && (
+      <div className="absolute right-3 top-3 flex items-center gap-1">
+        {onEditar && (
+          <button
+            type="button"
+            title="Editar prazo, responsável e anexos"
+            aria-label={`Editar processo de ${nome}`}
+            onClick={(evento) => {
+              // O cartão inteiro é uma âncora. Sem estas duas linhas, editar
+              // navegaria para o detalhe em vez de abrir o formulário.
+              evento.preventDefault();
+              evento.stopPropagation();
+              onEditar(item);
+            }}
+            className="rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FFF2E9] hover:text-[#C2410C]"
+          >
+            <Icone nome="Pencil" className="h-4 w-4" />
+          </button>
+        )}
+        {/* Excluir por último, encostado na borda: é a única ação sem volta, e a
+            mais distante do centro do cartão é a que se clica menos por
+            acidente. */}
+        {onExcluir && (
+          <button
+            type="button"
+            title="Excluir processo"
+            aria-label={`Excluir processo de ${nome}`}
+            onClick={(evento) => {
+              evento.preventDefault();
+              evento.stopPropagation();
+              onExcluir(item);
+            }}
+            className="rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FEF2F2] hover:text-[#B42318]"
+          >
+            <Icone nome="Trash2" className="h-4 w-4" />
+          </button>
+        )}
+      </div>
     )}
     </div>
   );

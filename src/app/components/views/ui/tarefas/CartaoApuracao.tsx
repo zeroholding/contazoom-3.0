@@ -39,6 +39,8 @@ type CartaoApuracaoProps = {
   onRegistrarPendencia?: (tarefa: ApuracaoLista) => void;
   /** Abre o formulário de edição (prazo, responsável, observações e anexos). */
   onEditar?: (tarefa: ApuracaoLista) => void;
+  /** Abre a confirmação de exclusão. Só passado para administrador. */
+  onExcluir?: (tarefa: ApuracaoLista) => void;
 };
 
 export default function CartaoApuracao({
@@ -48,13 +50,16 @@ export default function CartaoApuracao({
   onArrastarInicio,
   onRegistrarPendencia,
   onEditar,
+  onExcluir,
 }: CartaoApuracaoProps) {
   const concluida = tarefa.status === STATUS.CONCLUIDO || !!tarefa.concluidaEm;
   const podeRegistrar =
     !!onRegistrarPendencia && !tarefa.bloqueada && !concluida;
   const podeEditar = !!onEditar;
+  const podeExcluir = !!onExcluir;
   /** Quantos botões sobrepostos existem no canto, para reservar o espaço certo. */
-  const botoesCanto = (podeRegistrar ? 1 : 0) + (podeEditar ? 1 : 0);
+  const botoesCanto =
+    (podeRegistrar ? 1 : 0) + (podeEditar ? 1 : 0) + (podeExcluir ? 1 : 0);
 
   const nome = nomeEmpresa(tarefa.empresa);
   const responsavel =
@@ -257,6 +262,24 @@ export default function CartaoApuracao({
               className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-[#FFFAEB] hover:text-[#B54708]"
             >
               <Icone nome="AlertTriangle" className="h-4 w-4" />
+            </button>
+          )}
+          {/* Excluir por ÚLTIMO na fileira, encostado na borda: é a única ação
+              sem volta, e a mais distante do centro do cartão é a que se clica
+              menos por acidente. */}
+          {podeExcluir && (
+            <button
+              type="button"
+              title="Excluir competência"
+              aria-label={`Excluir competência de ${nome}`}
+              onClick={(evento) => {
+                evento.preventDefault();
+                evento.stopPropagation();
+                onExcluir?.(tarefa);
+              }}
+              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-[#FEF2F2] hover:text-[#B42318]"
+            >
+              <Icone nome="Trash2" className="h-4 w-4" />
             </button>
           )}
         </div>
