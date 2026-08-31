@@ -17,6 +17,7 @@ import {
   AlarmClock,
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   BadgeCheck,
   Ban,
   Briefcase,
@@ -39,6 +40,7 @@ import {
   Download,
   ExternalLink,
   File,
+  FileCheck2,
   FileImage,
   FileSpreadsheet,
   FileText,
@@ -47,6 +49,8 @@ import {
   Hash,
   History,
   Hourglass,
+  House,
+  IdCard,
   Info,
   Landmark,
   Layers,
@@ -62,6 +66,8 @@ import {
   Paperclip,
   PauseCircle,
   Pencil,
+  Percent,
+  Phone,
   Play,
   Plus,
   RefreshCw,
@@ -73,6 +79,7 @@ import {
   Settings,
   Shield,
   ShieldCheck,
+  Store,
   Tag,
   Timer,
   Trash2,
@@ -83,6 +90,7 @@ import {
   UserCog,
   UserPlus,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 
@@ -165,6 +173,17 @@ const MAPA: Record<string, React.ComponentType<LucideProps>> = {
   File,
   FileImage,
   FileSpreadsheet,
+  // Formulário público de abertura de CNPJ (/formulario).
+  // `House` e não `Home`: no lucide 0.544 `Home` não existe mais, e importar o
+  // nome antigo quebra o build.
+  ArrowRight,
+  FileCheck2,
+  House,
+  IdCard,
+  Percent,
+  Phone,
+  Store,
+  Wallet,
 };
 
 type IconeProps = LucideProps & {

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import '@/lib/metadata';
-import { Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import { DM_Sans, Geist, Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "react-datepicker/dist/react-datepicker.css";
 import "../styles/datepicker-custom.css";
@@ -31,6 +31,26 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
+/**
+ * Fonte do formulário público de abertura de CNPJ (`/formulario`).
+ *
+ * Aplicada só dentro de `.cz-form` (ver globals.css), como a Jakarta é no
+ * painel. O formulário é lido por CLIENTE, não por operador: quem preenche está
+ * no celular, uma vez na vida, sem treino na interface. A DM Sans tem contraforma
+ * mais aberta e altura de x maior que a Jakarta, o que sustenta melhor o texto de
+ * ajuda longo que este formulário tem em quase todo campo.
+ *
+ * `latin-ext` além de `latin` porque razão social brasileira traz "ç" e vogal
+ * acentuada, e sem o subset estendido esses glifos caem no fallback — na mesma
+ * palavra, com outra fonte, o que aparece como letra de outro tamanho.
+ */
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Sistema de Gestão",
   description: "Sistema de gestão de vendas e finanças",
@@ -47,7 +67,7 @@ export default function RootLayout({
   return (
     <html lang="en" style={{ "--sidebar-w": "16rem" } as React.CSSProperties}>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} bg-[#F3F3F3] antialiased overflow-x-hidden`}
+        className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} ${dmSans.variable} bg-[#F3F3F3] antialiased overflow-x-hidden`}
       >
         <Providers>{children}</Providers>
       </body>

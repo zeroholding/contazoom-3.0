@@ -844,3 +844,94 @@ select.error {
     background-color: #EF4444;
     box-shadow: 0 0 0 2px var(--cz-superficie);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Formulario publico de abertura de CNPJ (/formulario)                       */
+/*                                                                            */
+/* Escopado em .cz-form, e usado JUNTO com .cz-tarefas: de la vem o estilo de  */
+/* campo, os tokens --cz-*, o foco laranja e a selecao de texto, tudo ja       */
+/* resolvido. Aqui fica so o que e diferente por esta tela ser preenchida por  */
+/* CLIENTE, no celular, uma vez na vida — nao por operador treinado.           */
+/*                                                                            */
+/* Este bloco vem no FIM do arquivo de proposito. `.cz-form input[type=text]`  */
+/* tem a mesma especificidade de `.cz-tarefas input[type=text]`, e na cascata  */
+/* o ultimo vence: e assim que a altura de campo daqui passa por cima da do    */
+/* painel sem precisar de !important novo.                                     */
+/* -------------------------------------------------------------------------- */
+
+.cz-form {
+    /* DM Sans. Carregada em layout.tsx via next/font, com latin-ext para "ç" e
+       vogal acentuada de razao social nao cairem no fallback no meio da palavra.
+       O painel usa Jakarta; esta tela nao e painel. */
+    font-family: var(--font-dm-sans), var(--font-geist-sans), ui-sans-serif,
+        system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* Tracking mais solto que o -0.011em do painel: o painel aperta para caber
+       densidade, e aqui o que se quer e leitura confortavel de texto de ajuda. */
+    letter-spacing: -0.006em;
+    background-color: var(--cz-fundo);
+    color: var(--cz-texto);
+}
+
+/* Campo de 44px em vez dos 40px do painel.                                    */
+/* 44px e o alvo minimo que a mao acerta sem mirar; no painel os 40px passam    */
+/* porque quem usa esta com mouse e conhece a tela.                             */
+.cz-form input[type="text"],
+.cz-form input[type="email"],
+.cz-form input[type="tel"],
+.cz-form input[type="number"],
+.cz-form textarea,
+.cz-form select {
+    min-height: 2.75rem;
+    border-radius: 10px;
+    font-size: 0.9375rem;
+    padding: 0.625rem 0.875rem;
+}
+
+/* No celular sobe para 48px. `pointer: coarse` pega dedo, nao tamanho de tela: */
+/* tablet grande com toque tambem precisa do alvo maior.                        */
+@media (pointer: coarse) {
+    .cz-form input[type="text"],
+    .cz-form input[type="email"],
+    .cz-form input[type="tel"],
+    .cz-form input[type="number"],
+    .cz-form textarea,
+    .cz-form select {
+        min-height: 3rem;
+        /* 16px impede o zoom automatico do Safari no iOS ao focar o campo. Abaixo
+           disso ele amplia a pagina e a pessoa perde o resto do formulario de
+           vista, com a barra de navegacao saindo da area visivel. */
+        font-size: 1rem;
+    }
+}
+
+.cz-form textarea {
+    min-height: 6.5rem;
+    line-height: 1.55;
+}
+
+/* Rotulo um pouco maior e mais escuro que no painel: aqui ele e a unica         */
+/* instrucao que a pessoa tem, e nao ha treino nem tela vizinha para comparar.  */
+.cz-form label {
+    margin-bottom: 0.4375rem;
+    font-size: 0.875rem;
+    color: #1F2430 !important;
+}
+
+/* Numero de sócio, contador de documento e capital: digito de largura fixa para */
+/* a coluna nao dançar enquanto a pessoa digita o valor.                         */
+.cz-form .cz-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+/* Trilha de passos: o passo atual e o unico laranja; o concluido e escuro.      */
+.cz-form .cz-passo-linha {
+    background-color: var(--cz-hairline-forte);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cz-form * {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
