@@ -297,17 +297,54 @@ export function ModalExclusao({
               lista, porque os nomes são parecidos.
             */}
             {exigeDigitacao && (
-              <Entrada
-                rotulo="Digite a razão social para confirmar"
-                required
-                autoComplete="off"
-                value={confirmacao}
-                erro={erroConfirmacao}
-                placeholder={previa.confirmacaoEsperada}
-                ajuda="Maiúsculas e espaço em excesso não importam."
-                onChange={(e) => setConfirmacao(e.target.value)}
-                onBlur={() => setTocado(true)}
-              />
+              <div>
+                {/*
+                  O texto a digitar aparece FORA do campo, num bloco próprio.
+
+                  A primeira versão usava a razão social como `placeholder`, e isso
+                  era um defeito: placeholder é cinza e ocupa o interior do campo,
+                  então o campo VAZIO parecia preenchido. Quem abria o modal lia
+                  "EMPRESA X" dentro da caixa, concluía que estava tudo certo, e o
+                  botão ficava travado sem explicar nada.
+                */}
+                <p className="mb-1.5 flex flex-wrap items-baseline gap-x-1.5 text-xs leading-5 text-[#6B7280]">
+                  <span>Copie ou digite exatamente:</span>
+                  <strong className="font-mono text-[0.8125rem] font-bold text-[#14161B]">
+                    {previa.confirmacaoEsperada}
+                  </strong>
+                </p>
+                <Entrada
+                  rotulo="Razão social, para confirmar"
+                  required
+                  autoComplete="off"
+                  value={confirmacao}
+                  erro={erroConfirmacao}
+                  placeholder="Digite aqui"
+                  ajuda="Maiúsculas e espaço em excesso não importam."
+                  onChange={(e) => setConfirmacao(e.target.value)}
+                  onBlur={() => setTocado(true)}
+                />
+              </div>
+            )}
+
+            {/*
+              Por que o botão está travado.
+              
+              Botão desabilitado sem explicação é o pior estado possível numa tela
+              destrutiva: a pessoa não sabe se falta preencher algo ou se o sistema
+              quebrou. Este aviso só aparece quando de fato falta alguma coisa.
+            */}
+            {!podeExcluir && (
+              <p className="flex items-start gap-1.5 rounded-[10px] border border-[#FEDF89] bg-[#FFFAEB] px-3 py-2.5 text-xs leading-5 font-semibold text-[#B54708]">
+                <Icone nome="Info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {motivoCurto && !digitacaoConfere
+                    ? "Para liberar o botão: escreva o motivo e digite a razão social."
+                    : motivoCurto
+                      ? "Para liberar o botão: escreva o motivo da exclusão."
+                      : "Para liberar o botão: digite a razão social exatamente como está acima."}
+                </span>
+              </p>
             )}
           </>
         ) : null}

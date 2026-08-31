@@ -59,12 +59,22 @@ export async function GET(
       /**
        * O texto que a pessoa vai ter de digitar para confirmar.
        *
-       * Vem do servidor porque é o servidor que compara. Se a tela montasse esse
-       * texto por conta própria — juntando nome fantasia, aparando espaço de um
-       * jeito diferente — a confirmação passaria a falhar por divergência de
-       * formatação, e o operador leria isso como sistema quebrado.
+       * SÓ EXIGIDO QUANDO A EMPRESA TEM ALGO PENDURADO. Empresa recém-cadastrada
+       * por engano, sem competência e sem processo, não perde nada além de si
+       * mesma — obrigar a digitar a razão social ali é atrito sem contrapartida, e
+       * "cadastrei errado, quero apagar" é justamente o caso mais comum.
+       *
+       * Com competência ou processo atrelado, a digitação volta: aí o clique leva
+       * histórico fiscal, etapas e anexos, e o que se quer é forçar a LEITURA do
+       * nome — porque o erro real é apagar a empresa errada da lista.
+       *
+       * Vem do servidor porque é o servidor que compara, e é o servidor que
+       * decide se exige. Se a tela montasse esse texto por conta própria —
+       * juntando nome fantasia, aparando espaço de outro jeito — a confirmação
+       * falharia por divergência de formatação e o operador leria isso como
+       * sistema quebrado.
        */
-      confirmacaoEsperada: resumo.descricao,
+      confirmacaoEsperada: temDependentes(resumo) ? resumo.descricao : undefined,
     });
   } catch (error) {
     console.error("Erro ao resumir exclusão de empresa:", error);

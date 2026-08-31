@@ -32,6 +32,7 @@ import {
   confirmacaoConfere,
   registrarExclusao,
   resumirExclusaoEmpresa,
+  temDependentes,
   textoArrastado,
   validarMotivo,
 } from "@/lib/exclusao";
@@ -379,7 +380,19 @@ export async function DELETE(
       );
     }
 
-    if (!confirmacaoConfere(corpo.confirmacao, resumo.descricao)) {
+    /**
+     * A digitação da razão social só é exigida quando há o que perder além da
+     * própria empresa.
+     *
+     * Mesma regra da prévia (`temDependentes`), e derivada da MESMA função, para
+     * as duas nunca discordarem: se a prévia não pedisse e o DELETE pedisse, a
+     * tela liberaria o botão e a rota devolveria 400 sem a pessoa entender.
+     *
+     * Sem competência e sem processo, o motivo escrito já basta: "cadastrei
+     * errado" é o caso comum e não justifica atrito. Com histórico atrelado, a
+     * digitação volta, porque o erro que ela evita é apagar a empresa errada.
+     */
+    if (temDependentes(resumo) && !confirmacaoConfere(corpo.confirmacao, resumo.descricao)) {
       return NextResponse.json(
         {
           error: `Para confirmar, digite a razão social exatamente como está cadastrada: ${resumo.descricao}`,
