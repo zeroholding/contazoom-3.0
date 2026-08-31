@@ -18,6 +18,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  Aviso,
   Cabecalho,
   Carregando,
   Paginacao,
@@ -103,6 +104,13 @@ function Conteudo() {
 
   useEffect(() => setBusca(buscaUrl), [buscaUrl]);
 
+  const filtroAtivo = !!buscaUrl || !!situacaoUrl;
+
+  function limpar() {
+    setBusca("");
+    router.push("/admin/formulario");
+  }
+
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro("");
@@ -140,12 +148,20 @@ function Conteudo() {
 
   const lista = dados?.formularios ?? [];
 
+  /** Vai na descrição do painel de filtros, como nas outras telas do módulo. */
+  const resumoLista = dados
+    ? `${dados.total} ${dados.total === 1 ? "formulário recebido" : "formulários recebidos"}`
+    : "Carregando";
+
   return (
     <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      {/* `compacto`: o cabeçalho do admin já escreve "Formulários de abertura" e
+          o subtítulo da rota. Repetir aqui gastaria a área mais visível da tela
+          com a informação que a pessoa acabou de ler. */}
       <Cabecalho
         compacto
         titulo="Formulários de abertura"
-        descricao="O que os clientes enviaram pela tela pública /formulario. Nada aqui pode ser excluído."
+        descricao="O que os clientes enviaram pela tela pública /formulario. Nada aqui pode ser excluído, nem por administrador."
         acoes={
           <Botao
             variante="secundario"
@@ -158,10 +174,24 @@ function Conteudo() {
         }
       />
 
-      {/* ------------------------------- Filtros ------------------------------- */}
-      <Painel denso>
+      {/* ------------------------------- Filtros -------------------------------
+          Mesma forma do painel de filtros das outras telas do módulo (`Painel`
+          com título, `acoes` para limpar, e grade de campos no corpo). A primeira
+          versão inventava um `<form>` em linha com `flex`, e o resultado era uma
+          barra que não se parecia com nenhuma outra tela do admin. */}
+      <Painel
+        titulo="Filtros"
+        descricao={resumoLista}
+        acoes={
+          filtroAtivo ? (
+            <Botao variante="secundario" icone="X" onClick={limpar}>
+              Limpar filtros
+            </Botao>
+          ) : undefined
+        }
+      >
         <form
-          className="flex flex-col gap-3 p-4 sm:flex-row sm:items-end"
+          className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3"
           onSubmit={(e) => {
             e.preventDefault();
             navegar({ busca });
@@ -169,80 +199,65 @@ function Conteudo() {
         >
           <Entrada
             rotulo="Buscar"
-            wrapperClassName="flex-1"
+            type="search"
+            wrapperClassName="lg:col-span-2"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Protocolo, nome do sócio, CPF, telefone, razão social ou e-mail"
-            ajuda="O protocolo pode ser digitado com ou sem o CZ-."
+            ajuda="O protocolo pode ser digitado com ou sem o CZ-. Enter para buscar."
           />
           <Escolha
             rotulo="Situação"
-            wrapperClassName="sm:w-56"
-            vazio="Todas"
+            vazio="Todas as situações"
             opcoes={SITUACAO_FORMULARIO_OPCOES}
             value={situacaoUrl}
             onChange={(e) => navegar({ situacao: e.target.value })}
+            ajuda="Andamento da análise do escritório."
           />
-          <div className="flex gap-2">
-            <Botao type="submit" variante="primario" icone="Search">
-              Buscar
-            </Botao>
-            {(buscaUrl || situacaoUrl) && (
-              <Botao
-                variante="fantasma"
-                icone="X"
-                onClick={() => {
-                  setBusca("");
-                  router.push("/admin/formulario");
-                }}
-              >
-                Limpar
-              </Botao>
-            )}
-          </div>
+          {/* O submit existe para o Enter funcionar; o botão fica escondido do
+              layout porque a busca também dispara ao trocar a situação, e dois
+              gatilhos visíveis para a mesma coisa confundem. */}
+          <button type="submit" className="sr-only">
+            Buscar
+          </button>
         </form>
       </Painel>
 
-      {/* -------------------------------- Lista -------------------------------- */}
+      {/* ------------------------------ Estados -------------------------------- */}
       {erro && (
-        <Painel>
-          <div className="p-6">
-            <Vazio
-              icone="AlertTriangle"
-              titulo="Não conseguimos carregar"
-              descricao={erro}
-              acao={
-                <Botao variante="primario" icone="RefreshCw" onClick={carregar}>
-                  Tentar de novo
-                </Botao>
-              }
-            />
-          </div>
-        </Painel>
+        <div className="space-y-3">
+          <Aviso mensagem={erro} onFechar={() => setErro("")} />
+          <Botao variante="secundario" icone="RefreshCw" onClick={carregar}>
+            Tentar novamente
+          </Botao>
+        </div>
       )}
 
       {!erro && carregando && !dados && (
         <Carregando texto="Carregando formulários" />
       )}
 
+      {/* `Vazio` solto, sem `Painel` em volta: ele já traz a moldura e o respiro,
+          e envolver dava borda dentro de borda — foi o quadro duplo do teste. */}
       {!erro && dados && lista.length === 0 && (
-        <Painel>
-          <div className="p-6">
-            <Vazio
-              icone="ClipboardCheck"
-              titulo={
-                buscaUrl || situacaoUrl
-                  ? "Nenhum formulário com esse filtro"
-                  : "Nenhum formulário recebido ainda"
-              }
-              descricao={
-                buscaUrl || situacaoUrl
-                  ? "Ajuste a busca ou limpe os filtros."
-                  : "Envie o link app.contazoom.com.br/formulario para o cliente preencher."
-              }
-            />
-          </div>
-        </Painel>
+        filtroAtivo ? (
+          <Vazio
+            icone="Filter"
+            titulo="Nenhum formulário encontrado com os filtros atuais."
+            descricao="Os filtros aplicados não retornaram nenhum formulário. Ajuste ou limpe para ver o restante."
+            acao={
+              <Botao variante="secundario" icone="X" onClick={limpar}>
+                Limpar filtros
+              </Botao>
+            }
+          />
+        ) : (
+          <Vazio
+            icone="ClipboardCheck"
+            titulo="Nenhum formulário recebido ainda."
+            descricao="Envie o endereço app.contazoom.com.br/formulario para o cliente preencher. O que ele mandar aparece aqui, com os documentos de cada sócio."
+          />
+        )
       )}
 
       {!erro && lista.length > 0 && (

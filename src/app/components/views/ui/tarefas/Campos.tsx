@@ -138,6 +138,26 @@ export function Entrada({
   required,
   wrapperClassName,
   className = "",
+  /**
+   * `type="text"` COMO PADRÃO, e isto conserta uma armadilha real.
+   *
+   * Todo o estilo de campo do projeto é escrito por seletor de ATRIBUTO —
+   * `input[type="text"]`, `input[type="search"]` etc., tanto no bloco global de
+   * `globals.css` quanto na camada `.cz-tarefas`. Um `<input>` SEM o atributo
+   * `type` se comporta como texto, mas não casa com nenhum desses seletores:
+   * sai sem borda, sem altura e sem foco, parecendo campo quebrado.
+   *
+   * Aconteceu na busca da tela de formulários, que eu escrevi sem `type`. Todos
+   * os outros chamadores do projeto passam `type` explícito, então o defeito
+   * nunca tinha aparecido — o que só quer dizer que a armadilha estava armada
+   * esperando o próximo. O padrão aqui fecha a classe do problema em vez de
+   * consertar um uso.
+   *
+   * Quem passa `type` continua ganhando: o valor do chamador é capturado nesta
+   * desestruturação, então o `{...props}` abaixo não tem mais `type` para
+   * sobrescrever.
+   */
+  type = "text",
   ...props
 }: EntradaProps) {
   const id = useId();
@@ -152,6 +172,7 @@ export function Entrada({
     >
       <input
         id={id}
+        type={type}
         required={required}
         aria-invalid={erro ? true : undefined}
         aria-describedby={erro ? `${id}-erro` : ajuda ? `${id}-ajuda` : undefined}
