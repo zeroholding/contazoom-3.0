@@ -68,6 +68,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "prisma": "^6.19.0",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

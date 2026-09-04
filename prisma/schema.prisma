@@ -158,6 +158,19 @@ model MeliVenda {
   isMargemReal       Boolean     @default(false) @map("is_margem_real")
   titulo             String
   sku                String?
+
+  /// MLB do anúncio (order_items[0].item.id).
+  ///
+  /// Coluna ADITIVA (migrations/20260903120000), nullable. O dado sempre
+  /// chegou dentro de `rawData` e era descartado — só título e SKU eram
+  /// persistidos. Sem ele não há como agrupar vendas por ANÚNCIO, que é o eixo
+  /// da tela de Anúncios Mais Vendidos e Mortos: SKU não serve, porque um SKU
+  /// vive em vários anúncios e um anúncio com variações tem vários SKUs.
+  ///
+  /// Linha antiga fica NULL até o backfill rodar (`src/lib/anuncios-backfill.ts`),
+  /// e as consultas caem no JSON como reserva enquanto isso, para nenhuma venda
+  /// ficar invisível no meio do preenchimento.
+  itemId             String?     @map("item_id") @db.VarChar(32)
   comprador          String
   logisticType       String?     @map("logistic_type")
   envioMode          String?     @map("envio_mode")
@@ -191,6 +204,7 @@ model MeliVenda {
   @@index([userId, dataVenda(sort: Desc)]) // Índice composto para queries principais
   @@index([sku]) // Índice para busca por SKU
   @@index([status]) // Índice para filtros de status
+  @@index([userId, itemId, dataVenda(sort: Desc)]) // Ranking por anúncio
   @@map("meli_venda")
 }
 

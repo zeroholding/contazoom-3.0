@@ -410,6 +410,11 @@ async function saveSingleSale(userId: string, sale: QueuedSale): Promise<void> {
     const buyerNickname = truncateString(o.buyer?.nickname, 255);
     const titulo = truncateString(o.order_items?.[0]?.item?.title, 500);
     const sku = truncateString(o.order_items?.[0]?.item?.seller_sku, 255);
+    // MLB do anúncio. Já estava aqui e era descartado — só título e SKU eram
+    // persistidos. Sem ele não há como agrupar vendas por anúncio, e SKU não
+    // substitui: um SKU vive em vários anúncios, e anúncio com variação tem
+    // vários SKUs. Gravar agora é o que impede o backfill de virar permanente.
+    const itemId = truncateString(o.order_items?.[0]?.item?.id, 32);
 
     // Get SKU data from cache
     const skuData = sku ? skuCache.get(sku) : null;
@@ -444,6 +449,7 @@ async function saveSingleSale(userId: string, sale: QueuedSale): Promise<void> {
         conta: accountNickname || `ML ${mlUserId}`,
         titulo: titulo || 'Sem título',
         sku: sku || null,
+        itemId: itemId || null,
         comprador: buyerNickname || 'Desconhecido',
         valorTotal: new Decimal(valorTotal),
         quantidade, // Int type in schema

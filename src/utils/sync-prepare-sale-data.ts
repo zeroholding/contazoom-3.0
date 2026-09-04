@@ -221,6 +221,19 @@ export async function prepareSaleData(
       isMargemReal,
       titulo: truncateString(firstItemTitle, 500) || "Produto sem titulo",
       sku: skuVenda,
+      // MLB do anuncio. Ja chegava aqui dentro de `itemData` e era descartado:
+      // so titulo e SKU eram persistidos. Sem ele nao ha como agrupar vendas
+      // por ANUNCIO, e SKU nao substitui -- um SKU vive em varios anuncios, e
+      // anuncio com variacao tem varios SKUs.
+      itemId:
+        truncateString(
+          String(
+            itemData?.id ??
+              orderItems.find((entry: any) => entry?.item?.id)?.item?.id ??
+              "",
+          ),
+          32,
+        ) || null,
       comprador: truncateString(buyerName, 255) || "Comprador",
       logisticType: truncateString(freight.logisticType, 100) || null,
       envioMode: truncateString(freight.shippingMode, 100) || null,

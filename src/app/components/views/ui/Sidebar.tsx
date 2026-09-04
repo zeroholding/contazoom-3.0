@@ -17,7 +17,7 @@ import gsap from "gsap";
 
 type Leaf = { href: string; label: string };
 type Branch = {
-  slug: "sales" | "finance";
+  slug: "sales" | "ads" | "finance";
   label: string;
   icon?: React.ReactNode;
   href?: string;
@@ -97,6 +97,24 @@ const TicketIcon = () => (
     <path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-3a2 2 0 0 0 0 -4v-3a2 2 0 0 1 2 -2" />
   </svg>
 );
+const MegaphoneIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className="h-5 w-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M18 8a3 3 0 0 1 0 6" />
+    <path d="M10 8v11a1 1 0 0 1 -1 1h-1a1 1 0 0 1 -1 -1v-5" />
+    <path d="M12 8h0l4.524 -3.77a0.9 .9 0 0 1 1.476 .692v12.156a0.9 .9 0 0 1 -1.476 .692l-4.524 -3.77h-8a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h8" />
+  </svg>
+);
 const UsersIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -165,6 +183,16 @@ const NAV_ITEMS: Item[] = [
       { href: "/vendas/geral", label: "Vendas Geral" },
       { href: "/vendas/mercado-livre", label: "Vendas Mercado Livre" },
       { href: "/vendas/shopee", label: "Vendas Shopee" },
+    ],
+  },
+  {
+    slug: "ads",
+    label: "Gestão de Anúncios",
+    icon: <MegaphoneIcon />,
+    href: "/anuncios",
+    children: [
+      { href: "/anuncios/mais-vendidos", label: "Anúncios Mais Vendidos" },
+      { href: "/anuncios/mortos", label: "Anúncios Mortos" },
     ],
   },
   { href: "/sku", label: "Gestão de SKU", icon: <TicketIcon /> },
@@ -391,6 +419,7 @@ export default function Sidebar({
 
   const [open, setOpen] = useState<Record<string, boolean>>({
     sales: false,
+    ads: false,
     finance: false,
   });
   const submenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -433,8 +462,14 @@ export default function Sidebar({
   // abre branch correspondente ao path (modo expandido)
   useEffect(() => {
     const salesActive = pathname?.startsWith("/vendas");
+    const adsActive = pathname?.startsWith("/anuncios");
     const financeActive = pathname?.startsWith("/financeiro");
-    setOpen((s) => ({ ...s, sales: !!salesActive, finance: !!financeActive }));
+    setOpen((s) => ({
+      ...s,
+      sales: !!salesActive,
+      ads: !!adsActive,
+      finance: !!financeActive,
+    }));
   }, [pathname]);
 
   // estado inicial dos submenus (expandido)
