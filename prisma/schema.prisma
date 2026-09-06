@@ -25,6 +25,7 @@ model User {
   meliAccounts        MeliAccount[]
   meliOauthStates     MeliOauthState[]
   meliVendas          MeliVenda[]
+  meliFullStock       MeliFullStock[]
   shopeeAccounts      ShopeeAccount[]
   shopeeOauthStates   ShopeeOauthState[]
   shopeeVendas        ShopeeVenda[]
@@ -61,8 +62,9 @@ model MeliAccount {
   refresh_token_invalid_until DateTime?
   created_at                  DateTime    @default(now())
   updated_at                  DateTime    @updatedAt
-  user                        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   meliVendas                  MeliVenda[]
+  fullStock                   MeliFullStock[]
 
   @@unique([userId, ml_user_id], name: "userId_ml_user_id")
   @@map("meli_account")
@@ -171,6 +173,20 @@ model MeliVenda {
   /// e as consultas caem no JSON como reserva enquanto isso, para nenhuma venda
   /// ficar invisível no meio do preenchimento.
   itemId             String?     @map("item_id") @db.VarChar(32)
+
+  /// Variação do anúncio (order_items[0].item.variation_id), como texto.
+  ///
+  /// Coluna ADITIVA (migrations/20260905100000), nullable. Existe para a
+  /// cobertura de estoque do módulo Estoque Full: no Mercado Livre um anúncio
+  /// com variações tem estoque SEPARADO por variação, então comparar o estoque
+  /// da variação P com as vendas do anúncio inteiro multiplicaria a venda diária
+  /// e a tela diria "repor" em tudo ao mesmo tempo.
+  ///
+  /// `"-"` significa "olhei o pedido e não havia variação" (anúncio simples), e
+  /// é diferente de NULL, que significa "ainda não preenchido". Sem essa
+  /// distinção o backfill releria o mesmo JSON para sempre e nunca convergiria.
+  /// Ver `src/lib/estoque-full-backfill.ts`.
+  variationId        String?     @map("variation_id") @db.VarChar(32)
   comprador          String
   logisticType       String?     @map("logistic_type")
   envioMode          String?     @map("envio_mode")
@@ -205,7 +221,87 @@ model MeliVenda {
   @@index([sku]) // Índice para busca por SKU
   @@index([status]) // Índice para filtros de status
   @@index([userId, itemId, dataVenda(sort: Desc)]) // Ranking por anúncio
+  @@index([userId, itemId, variationId]) // Vendas 30d por variação (Estoque Full)
   @@map("meli_venda")
+}
+
+// ---------------------------------------------------------------------
+// Estoque Full (Mercado Envíos Full / fulfillment)
+//
+// Snapshot do estoque que está nos centros de distribuição do Mercado Livre,
+// vindo da API oficial. Duas tabelas: o estado atual por inventário e uma linha
+// por dia para calcular o "estoque médio" dos últimos 30 dias.
+//
+// Estoque NÃO é derivável de venda: unidade pode entrar por reposição, sair por
+// devolução, ficar retida por avaria. Só a API do ML sabe o número, e por isso
+// existe snapshot em vez de cálculo.
+//
+// DIFERENÇA DELIBERADA EM RELAÇÃO AO NEXUS V2: lá a chave primária é o próprio
+// `inventory_id`, porque o sistema tem um único usuário. Aqui a chave é sintética
+// e a unicidade real é `(meliAccountId, inventoryId)` — o CONTAZOOM é
+// multiusuário e a mesma conta do Mercado Livre pode estar ligada a usuários
+// diferentes, então `inventory_id` sozinho faria o sync de um sobrescrever a
+// linha do outro.
+// ---------------------------------------------------------------------
+
+model MeliFullStock {
+  id            String @id @default(cuid())
+  userId        String @map("user_id")
+  meliAccountId String @map("meli_account_id")
+
+  /// Chave do estoque no ML. Um anúncio com variações tem um por variação.
+  inventoryId String  @map("inventory_id")
+  itemId      String? @map("item_id") @db.VarChar(32)
+  variationId String? @map("variation_id") @db.VarChar(32)
+  /// Modelo novo de estoque do ML. É por aqui que se busca o SKU quando o
+  /// `/items` não traz (ver `estoque-full-sync.ts`).
+  userProductId String? @map("user_product_id")
+
+  sku           String?
+  titulo        String?
+  thumbnail     String?
+  logisticType  String? @map("logistic_type")
+
+  total             Int @default(0)
+  /// Unidades prontas para venda. É o número que a tela destaca.
+  availableQuantity Int @default(0) @map("available_quantity")
+  /// Não aptas, JÁ LÍQUIDO das unidades em transferência — o ML devolve as duas
+  /// coisas somadas em `not_available_quantity`, mas o painel dele separa.
+  notAvailableQuantity Int @default(0) @map("not_available_quantity")
+  /// "A caminho": unidades em transferência para o centro de distribuição.
+  transferQuantity     Int @default(0) @map("transfer_quantity")
+  /// O array cru de `not_available_detail`. Guardado inteiro porque os outros
+  /// motivos (avaria, extravio, retirada) não têm coluna própria e um dia vão
+  /// precisar de tela.
+  notAvailableDetail Json? @map("not_available_detail")
+
+  sincronizadoEm DateTime @default(now()) @map("sincronizado_em")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meliAccount MeliAccount @relation(fields: [meliAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([meliAccountId, inventoryId])
+  @@index([userId])
+  @@index([userId, itemId, variationId])
+  @@index([sku])
+  @@map("meli_full_stock")
+}
+
+model MeliFullStockHistory {
+  id                String   @id @default(cuid())
+  userId            String   @map("user_id")
+  inventoryId       String   @map("inventory_id")
+  dia               DateTime @db.Date
+  availableQuantity Int      @map("available_quantity")
+  total             Int      @default(0)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Sem relação com MeliFullStock de propósito: o sync apaga o inventário que
+  // saiu do Full, e uma cascata levaria a série histórica junto. A média de 30
+  // dias precisa sobreviver a um produto sair e voltar.
+  @@unique([userId, inventoryId, dia])
+  @@index([inventoryId])
+  @@map("meli_full_stock_history")
 }
 
 model ShopeeVenda {

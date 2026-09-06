@@ -97,6 +97,24 @@ const TicketIcon = () => (
     <path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-3a2 2 0 0 0 0 -4v-3a2 2 0 0 1 2 -2" />
   </svg>
 );
+const CaixasIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className="h-5 w-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M7 8v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2 -2v-8" />
+    <path d="M5 8h14a1 1 0 0 0 1 -1v-2a1 1 0 0 0 -1 -1h-14a1 1 0 0 0 -1 1v2a1 1 0 0 0 1 1" />
+    <path d="M10 12h4" />
+  </svg>
+);
 const MegaphoneIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -195,6 +213,7 @@ const NAV_ITEMS: Item[] = [
       { href: "/anuncios/mortos", label: "Anúncios Mortos" },
     ],
   },
+  { href: "/estoque-full", label: "Estoque Full", icon: <CaixasIcon /> },
   { href: "/sku", label: "Gestão de SKU", icon: <TicketIcon /> },
   { href: "/documentos", label: "Documentos", icon: <DocumentsIcon /> },
   { href: "/contas", label: "Contas de plataforma", icon: <UsersIcon /> },
