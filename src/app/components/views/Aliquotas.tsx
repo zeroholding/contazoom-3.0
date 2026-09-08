@@ -487,7 +487,7 @@ export default function Aliquotas() {
         onMobileMenu={() => setIsSidebarMobileOpen(true)}
       />
 
-      <main className={`relative z-20 pt-16 px-3 pb-3 sm:px-6 sm:pb-6 ${mdMlVar}`}>
+      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
         <section className="p-3 sm:p-6">
           {/* Header */}
           <div className="mb-6">

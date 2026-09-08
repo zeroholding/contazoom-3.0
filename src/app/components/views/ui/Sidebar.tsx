@@ -341,17 +341,20 @@ const RailFlyoutCard = forwardRef<
   return (
     <div
       ref={elRef}
-      className="fixed z-[60] w-72 rounded-2xl border border-gray-200/80 bg-white/70 shadow-xl backdrop-blur-md ring-1 ring-black/5"
+      className="fixed z-[60] w-72 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-3)]"
       style={{ top, left }}
       role="dialog"
       aria-label={label}
     >
-      <div className="absolute -left-2 top-3 h-4 w-4 rotate-45 rounded-sm bg-white/70 border-l border-t border-gray-200/80 backdrop-blur-md" />
+      {/* Bico apontando para o item de origem. Herda a mesma borda e o mesmo
+          fundo do cartao — antes era translucido com blur, o que fazia o texto
+          por baixo aparecer atraves do menu. */}
+      <div className="absolute -left-[5px] top-4 h-2.5 w-2.5 rotate-45 border-b border-l border-[var(--cz-hairline)] bg-[var(--cz-superficie)]" />
       <div className="p-2">
-        <div className="px-3 pb-1 text-xs font-medium text-gray-500">
+        <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)]">
           {label}
         </div>
-        <div className="space-y-1 py-1">
+        <div className="space-y-0.5">
           {items.map((leaf) => {
             const active =
               activePath === leaf.href ||
@@ -362,11 +365,12 @@ const RailFlyoutCard = forwardRef<
                 href={leaf.href}
                 data-item
                 onClick={onLinkClick}
+                aria-current={active ? "page" : undefined}
                 className={[
-                  "block rounded-lg px-3 py-2 text-sm transition-colors",
+                  "block rounded-lg px-2.5 py-2 text-[13px] transition-colors",
                   active
-                    ? "bg-gray-100 text-gray-900 font-medium"
-                    : "text-gray-700 hover:bg-gray-50",
+                    ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
+                    : "text-[var(--cz-texto-suave)] hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]",
                 ].join(" ")}
               >
                 {leaf.label}
@@ -637,16 +641,32 @@ export default function Sidebar({
         />
       )}
 
+      {/* A barra e SUPERFICIE branca com um fio a direita, e nao um bloco cinza.
+          Era `bg-[#F3F3F3]`, do mesmo cinza do fundo, entao a barra e o conteudo
+          eram a mesma mancha e nada dizia onde uma terminava. Quem separa e o fio
+          de 1px — a mesma decisao do login e do painel admin. */}
       <aside
         ref={asideRef}
         className={[
-          "fixed inset-y-0 left-0 z-50 transform bg-[#F3F3F3] transition-transform duration-200 ease-in-out",
+          // `width` entra na transicao junto com `transform`: a largura vem de
+          // `--sidebar-w`, e trocar o valor da variavel anima a barra sem
+          // precisar de GSAP. Antes so `transform` transicionava, e a largura
+          // saltava de 16rem para 4rem num quadro.
+          "fixed inset-y-0 left-0 z-50 flex transform flex-col border-r border-[var(--cz-hairline)] bg-[var(--cz-superficie)] transition-[transform,width] duration-200 ease-in-out",
           "w-64 md:w-[var(--sidebar-w,16rem)]",
           mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         ].join(" ")}
         aria-label="Barra lateral de navegação"
       >
-        <div className="flex h-14 px-3 items-center justify-center">
+        {/* A altura casa com a da barra superior (mesmo token) para os dois fios
+            virarem uma linha unica atravessando a tela. Com alturas diferentes,
+            aparecia um degrau de poucos pixels exatamente no canto que o olho
+            usa para alinhar a interface. */}
+        <div
+          className={`flex h-[var(--cz-topbar-h)] shrink-0 items-center border-b border-[var(--cz-hairline)] ${
+            collapsed ? "justify-center px-0" : "px-4"
+          }`}
+        >
           <Image
             src="/logopng.webp"
             alt="ContaZoom"
@@ -691,33 +711,43 @@ export default function Sidebar({
           </div>
         )}
 
-        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-2">
+        {/* `px-4` NAO e arbitrario: o tracinho laranja do item ativo e posicionado
+            em `left: -1rem` pela folha global, exatamente para cair na borda DA
+            BARRA e nao na borda da pastilha. Com o `px-2` que estava aqui, o
+            traco caia fora do aside e simplesmente nao aparecia.
+
+            `cz-nav-recolhida` centra os icones e reposiciona o traco quando a
+            barra esta estreita — sem ela, o traco ficaria fora da tela. */}
+        <nav
+          aria-label="Navegação principal"
+          // `collapsed && !mobileOpen` e a mesma condicao que o flyout usa, e o
+          // motivo e o mesmo: "recolhida" e um estado de DESKTOP. Na gaveta do
+          // celular a barra aparece inteira, com os rotulos, mesmo com
+          // `collapsed` ligado — centrar os icones ali esconderia os nomes sem
+          // que ninguem tenha pedido. E `md:` nao serve aqui: o prefixo de
+          // breakpoint do Tailwind so funciona nas utilitarias dele, e esta e uma
+          // classe da folha global.
+          className={`flex-1 space-y-1 overflow-y-auto px-4 py-4 ${
+            collapsed && !mobileOpen ? "cz-nav-recolhida" : ""
+          }`}
+        >
           {visibleItems.map((item) => {
             if ("href" in item && !("children" in item)) {
               const active =
                 pathname === item.href || pathname?.startsWith(item.href + "/");
               return (
+                // Toda a aparencia vem de `.cz-nav-item`: pastilha laranja clara
+                // no ativo, icone e texto laranja, e o traco na borda da barra.
+                // Antes era `bg-gray-100 text-gray-900`, que nao dizia nada sobre
+                // a marca e deixava o item ativo com o mesmo peso de um hover.
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={[
-                    "group flex items-center gap-3 rounded-md px-3 py-2 text-base transition-colors",
-                    collapsed ? "md:justify-center" : "",
-                    active
-                      ? "bg-gray-100 text-gray-900 font-medium"
-                      : "text-gray-700 hover:bg-gray-50",
-                  ].filter(Boolean).join(" ")}
+                  title={collapsed ? item.label : undefined}
+                  aria-current={active ? "page" : undefined}
+                  className="cz-nav-item"
                 >
-                  <span
-                    className={[
-                      "shrink-0",
-                      active
-                        ? "text-gray-700"
-                        : "text-gray-500 group-hover:text-gray-600",
-                    ].join(" ")}
-                  >
-                    {item.icon}
-                  </span>
+                  <span className="shrink-0">{item.icon}</span>
                   <span
                     className={[
                       "truncate sidebar-label",
@@ -760,26 +790,27 @@ export default function Sidebar({
                       }));
                     }
                   }}
-                  className={[
-                    "group flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-base transition-colors",
-                    collapsed ? "md:justify-center" : "",
-                    activeBranch
-                      ? "bg-gray-100 text-gray-900 font-medium"
-                      : "text-gray-700 hover:bg-gray-50",
-                  ].filter(Boolean).join(" ")}
+                  // `w-full` e `text-left` porque `.cz-nav-item` foi escrito para
+                  // um `<a>`, que ja e do tamanho do conteudo; num `<button>` sem
+                  // isto o alvo de clique fica menor que a pastilha.
+                  //
+                  // A pastilha laranja marca UM lugar na tela, nunca dois.
+                  //
+                  // Grupo FECHADO com um filho ativo: o grupo recebe a pastilha,
+                  // porque ele e o unico sinal visivel de onde a pessoa esta.
+                  // Grupo ABERTO: a pastilha vai para o filho, e o grupo fica so
+                  // com o texto laranja. Marcar os dois daria duas pastilhas
+                  // acesas ao mesmo tempo, e aí nenhuma das duas informa nada.
+                  className={`cz-nav-item w-full text-left ${
+                    activeBranch && isOpen
+                      ? "text-[var(--cz-laranja-forte)] font-semibold"
+                      : ""
+                  }`}
+                  aria-current={activeBranch && !isOpen ? "page" : undefined}
                   aria-expanded={isOpen}
                   aria-controls={`submenu-${branch.slug}`}
                 >
-                  <span
-                    className={[
-                      "shrink-0",
-                      activeBranch
-                        ? "text-gray-700"
-                        : "text-gray-500 group-hover:text-gray-600",
-                    ].join(" ")}
-                  >
-                    {branch.icon}
-                  </span>
+                  <span className="shrink-0">{branch.icon}</span>
                   <span
                     className={[
                       "truncate sidebar-label",
@@ -790,7 +821,7 @@ export default function Sidebar({
                   </span>
                   <span
                     className={[
-                      "ml-auto text-gray-500 group-hover:text-gray-600",
+                      "ml-auto opacity-60",
                       collapsed ? "md:hidden" : "",
                     ].filter(Boolean).join(" ")}
                   >
@@ -814,7 +845,10 @@ export default function Sidebar({
                     filter: "blur(8px)",
                   }}
                 >
-                  <div className="pl-9 pr-3 pb-2 pt-0.5 space-y-1">
+                  {/* Guia vertical na altura dos filhos: sem ela, uma lista
+                      indentada solta no branco nao diz a quem pertence. O fio
+                      substitui o recuo exagerado que existia (`pl-9`). */}
+                  <div className="ml-[1.4rem] space-y-0.5 border-l border-[var(--cz-hairline)] py-1 pl-3">
                     {branch.children.map((leaf) => {
                       const active =
                         pathname === leaf.href ||
@@ -823,11 +857,12 @@ export default function Sidebar({
                         <Link
                           key={leaf.href}
                           href={leaf.href}
+                          aria-current={active ? "page" : undefined}
                           className={[
-                            "block rounded-md px-2 py-1.5 text-sm",
+                            "block rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
                             active
-                              ? "bg-gray-100 text-gray-900 font-medium"
-                              : "text-gray-700 hover:bg-gray-50",
+                              ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
+                              : "text-[var(--cz-texto-suave)] hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]",
                           ].join(" ")}
                         >
                           {leaf.label}

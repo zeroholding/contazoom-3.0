@@ -532,13 +532,13 @@ export default function GestaoSKU() {
 
       {/* Plano de fundo da área de conteúdo */}
       <div
-        className={`fixed top-16 bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[#F3F3F3]`}
+        className={`fixed top-[var(--cz-topbar-h)] bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[var(--cz-fundo)]`}
       >
-        <div className="h-full w-full rounded-tl-none md:rounded-tl-2xl border border-gray-200 bg-white" />
+        <div className="h-full w-full rounded-tl-none border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:rounded-tl-2xl" />
       </div>
 
       {/* Conteúdo */}
-      <main className={`relative z-20 pt-16 px-3 pb-3 sm:px-6 sm:pb-6 ${mdMlVar}`}>
+      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
         <section className="p-3 sm:p-6">
           <HeaderGestaoSKU 
             selectedCategory={selectedCategory || undefined}

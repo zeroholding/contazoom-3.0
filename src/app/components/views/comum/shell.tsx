@@ -9,7 +9,7 @@
  * estoque não precise importar de uma pasta chamada `anuncios/`.
  */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import Sidebar from "../ui/Sidebar";
 import Topbar from "../ui/Topbar";
@@ -19,21 +19,79 @@ import { inteiro } from "./formato";
 /*                                  Moldura                                   */
 /* -------------------------------------------------------------------------- */
 
+/** Barra aberta e barra recolhida. Valores iguais aos das telas antigas. */
+const LARGURA_ABERTA = "16rem";
+const LARGURA_RECOLHIDA = "4rem";
+
 /**
- * Sidebar, Topbar e o fundo da área de conteúdo.
+ * Chave da preferência de barra recolhida.
  *
- * Segue o padrão de `GestaoSKU`, que é como todas as telas do projeto se montam.
- * Fica aqui porque são ~25 linhas de estrutura que nenhuma tela deveria repetir.
+ * É a MESMA das telas antigas (`cz_sidebar_collapsed`) de propósito: cada tela
+ * monta a sua própria moldura, então sem uma chave compartilhada a barra voltaria
+ * a abrir sozinha a cada navegação, desfazendo o que a pessoa acabou de escolher.
+ */
+const CHAVE_RECOLHIDA = "cz_sidebar_collapsed";
+
+/**
+ * Sidebar, Topbar e a área de conteúdo.
+ *
+ * Estrutura única do painel. Antes cada tela repetia estas ~25 linhas, e a cópia
+ * saía diferente em cada arquivo — altura da barra, cor de fundo e raio do canto
+ * divergiam de tela para tela.
+ *
+ * A composição é a mesma do painel administrativo, que é a linguagem da tela de
+ * login: barra lateral e cabeçalho em superfície branca separados por um fio de
+ * 1px, e o conteúdo sobre um cinza muito claro para os cartões brancos terem de
+ * onde se destacar. Antes daqui, o conteúdo ficava sobre um painel BRANCO com
+ * canto arredondado, então cartão branco sobre fundo branco não tinha
+ * separação nenhuma.
  */
 export function MolduraTela({ children }: { children: ReactNode }) {
   const [colapsada, setColapsada] = useState(false);
   const [menuMobile, setMenuMobile] = useState(false);
 
-  const mdLeftVar = "md:left-[var(--sidebar-w,16rem)]";
-  const mdMlVar = "md:ml-[var(--sidebar-w,16rem)]";
+  // Lê a preferência depois da montagem, e não no `useState` inicial: o servidor
+  // não tem `localStorage`, e ler ali faria o HTML do servidor divergir do
+  // primeiro render do cliente.
+  useEffect(() => {
+    try {
+      setColapsada(localStorage.getItem(CHAVE_RECOLHIDA) === "1");
+    } catch {
+      // Navegador com armazenamento bloqueado: segue com a barra aberta.
+    }
+  }, []);
+
+  function alternar() {
+    setColapsada((v) => {
+      const proxima = !v;
+      try {
+        localStorage.setItem(CHAVE_RECOLHIDA, proxima ? "1" : "0");
+      } catch {
+        // Sem persistência, mas a tela continua respondendo ao clique.
+      }
+      return proxima;
+    });
+  }
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
+    // `--sidebar-w` é declarada AQUI, no container, e não animada por GSAP como
+    // nas telas antigas. A barra e o conteúdo têm `transition` de largura e de
+    // margem, então trocar o valor da variável já anima os dois — `width` e
+    // `margin` são propriedades animáveis mesmo quando o valor vem de uma
+    // variável. Isso tira uma dependência de animação do shell e elimina o
+    // `useRef` + dois `useEffect` que cada tela repetia.
+    //
+    // Sem esta linha, recolher só escondia os rótulos e a barra continuava com
+    // 16rem — sobrava uma coluna branca vazia, que era o comportamento das três
+    // telas que já usavam esta moldura.
+    <div
+      className="min-h-screen overflow-x-hidden bg-[var(--cz-fundo)]"
+      style={
+        {
+          "--sidebar-w": colapsada ? LARGURA_RECOLHIDA : LARGURA_ABERTA,
+        } as CSSProperties
+      }
+    >
       <Sidebar
         collapsed={colapsada}
         mobileOpen={menuMobile}
@@ -41,21 +99,25 @@ export function MolduraTela({ children }: { children: ReactNode }) {
       />
       <Topbar
         collapsed={colapsada}
-        onToggleCollapse={() => setColapsada((v) => !v)}
+        onToggleCollapse={alternar}
         onMobileMenu={() => setMenuMobile(true)}
       />
 
-      <div className={`fixed top-16 bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[#F3F3F3]`}>
-        <div className="h-full w-full rounded-tl-none md:rounded-tl-2xl border border-gray-200 bg-white" />
-      </div>
-
-      <main className={`relative z-20 pt-16 px-3 pb-3 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">{children}</section>
+      <main className="pt-[var(--cz-topbar-h)] transition-[margin] duration-200 ease-out md:ml-[var(--sidebar-w,16rem)]">
+        <div className="px-4 py-5 sm:px-6 sm:py-6">{children}</div>
       </main>
     </div>
   );
 }
 
+/**
+ * Cabeçalho de tela: título, uma linha de explicação e a ação principal.
+ *
+ * `cz-titulo` em vez de `font-bold tracking-tight` na mão — a classe carrega o
+ * tracking negativo e a cor ancorada da tipografia do painel, e é a mesma que o
+ * login e o admin usam. Escrever peso e tracking à mão em cada tela é como os
+ * títulos acabaram com três tamanhos diferentes.
+ */
 export function Cabecalho({
   titulo,
   descricao,
@@ -68,8 +130,10 @@ export function Cabecalho({
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-gray-900">{titulo}</h1>
-        <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-500">{descricao}</p>
+        <h1 className="cz-titulo text-[22px] leading-7">{titulo}</h1>
+        <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
+          {descricao}
+        </p>
       </div>
       {acao}
     </header>
@@ -99,14 +163,18 @@ export function BotaoAtualizar({
       onClick={onClick}
       disabled={atualizando || desabilitado}
       aria-live="polite"
-      className="relative inline-flex h-10 items-center gap-2 overflow-hidden rounded-xl bg-emerald-600 px-4 text-[13px] font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-100"
+      // Laranja da marca, e não verde: laranja é a cor de AÇÃO em todo o produto
+      // (é o botão do login, o item ativo do menu, o anel de foco). Verde aqui
+      // competia com o verde SEMÂNTICO das próprias tabelas, onde ele significa
+      // "saudável" — a mesma cor dizendo duas coisas na mesma tela.
+      className="relative inline-flex h-11 items-center gap-2 overflow-hidden rounded-[var(--cz-raio)] border border-transparent bg-[var(--cz-laranja)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--cz-laranja-forte)] active:bg-[#C34706] disabled:cursor-not-allowed disabled:opacity-100"
     >
       {/* A barra é o próprio botão, e não uma barra separada: durante um sync de
           minutos, um botão desabilitado sem sinal de vida parece travado. Por isso
           `disabled:opacity-100` — apagar o botão apagaria a barra junto. */}
       {atualizando && pct !== null && (
         <span
-          className="absolute inset-y-0 left-0 bg-emerald-800/70 transition-[width] duration-300 ease-out"
+          className="absolute inset-y-0 left-0 bg-black/20 transition-[width] duration-300 ease-out"
           style={{ width: `${Math.max(pct, 3)}%` }}
           aria-hidden
         />
@@ -140,7 +208,7 @@ export function BotaoAtualizar({
 
 export function PainelFiltros({ children, nota }: { children: ReactNode; nota?: ReactNode }) {
   return (
-    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+    <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)]">
       <div className="grid gap-3 lg:grid-cols-12">{children}</div>
       {nota}
     </div>
@@ -158,7 +226,7 @@ export function Campo({
 }) {
   return (
     <label className={className}>
-      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400">
+      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)]">
         {rotulo}
       </span>
       {children}
@@ -183,6 +251,9 @@ export function Kpi({
   destaque?: boolean;
   tom?: "alerta" | "critico";
 }) {
+  // Vermelho, âmbar e verde continuam SEMÂNTICOS e não viraram laranja: aqui eles
+  // significam ruim, atenção e bom. Trocá-los pela cor da marca apagaria a única
+  // informação que a cor carrega nesta tela.
   const casca =
     tom === "critico"
       ? "border-rose-200 bg-rose-50"
@@ -190,7 +261,7 @@ export function Kpi({
         ? "border-amber-200 bg-amber-50"
         : destaque
           ? "border-emerald-200 bg-emerald-50"
-          : "border-gray-200 bg-white";
+          : "border-[var(--cz-hairline)] bg-[var(--cz-superficie)]";
   const cor =
     tom === "critico"
       ? "text-rose-800"
@@ -198,16 +269,83 @@ export function Kpi({
         ? "text-amber-800"
         : destaque
           ? "text-emerald-800"
-          : "text-gray-900";
+          : "text-[var(--cz-texto)]";
 
   return (
-    <div className={`rounded-2xl border p-4 ${casca}`}>
-      <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-gray-500">
+    <div className={`rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] ${casca}`}>
+      <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--cz-texto-suave)]">
         {rotulo}
       </span>
-      <strong className={`mt-1 block text-[19px] font-bold tabular-nums ${cor}`}>{valor}</strong>
-      {nota && <span className="mt-0.5 block text-[10.5px] text-gray-500">{nota}</span>}
+      {/* `cz-valor` carrega peso 800 e o tracking apertado dos números grandes do
+          painel — o mesmo tratamento do login e do admin. */}
+      <strong className={`cz-valor mt-1 block text-[21px] ${cor}`}>{valor}</strong>
+      {nota && (
+        <span className="mt-0.5 block text-[10.5px] text-[var(--cz-texto-suave)]">{nota}</span>
+      )}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Botões                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Botão primário do produto — o MESMO do login.
+ *
+ * Existe para as telas pararem de escrever a mão. Cada tela tinha o seu: altura
+ * de 8 a 12, raio de `rounded-md` a `rounded-xl`, e cor entre emerald, blue e
+ * laranja. Como só existe uma ação principal por tela, só precisa existir um
+ * botão assim.
+ */
+export function BotaoPrimario({
+  children,
+  onClick,
+  type = "button",
+  desabilitado = false,
+  className = "",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  desabilitado?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={desabilitado}
+      className={`inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border border-transparent bg-[var(--cz-laranja)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--cz-laranja-forte)] active:bg-[#C34706] disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Ação secundária: superfície branca com fio, sem competir com a primária. */
+export function BotaoSecundario({
+  children,
+  onClick,
+  type = "button",
+  desabilitado = false,
+  className = "",
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  desabilitado?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={desabilitado}
+      className={`inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-4 text-sm font-semibold text-[var(--cz-texto)] transition-colors hover:bg-[#F4F5F7] disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -237,7 +375,7 @@ export function Th({
 export function CabecalhoTabela({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-gray-200 bg-gray-50/80 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-500">
+      <tr className="border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-suave)]">
         {children}
       </tr>
     </thead>
@@ -280,9 +418,12 @@ export function ThOrdenavel<C extends string>({
         type="button"
         onClick={() => onOrdenar(campo, proxima)}
         title={`Ordenar por ${rotulo}`}
-        className={`inline-flex items-center gap-1 transition-colors hover:text-emerald-700 ${
+        // Laranja marca a coluna ordenada porque ordenar é uma AÇÃO da pessoa,
+        // não um estado do dado. Verde aqui disputava significado com o verde
+        // semântico das próprias células.
+        className={`inline-flex items-center gap-1 transition-colors hover:text-[var(--cz-laranja-forte)] ${
           align === "right" ? "flex-row-reverse" : ""
-        } ${ativo ? "text-emerald-700" : ""}`}
+        } ${ativo ? "text-[var(--cz-laranja-forte)]" : ""}`}
       >
         <span aria-hidden className="text-[11px] leading-none">
           {ativo ? (direcaoAtual === "desc" ? "▼" : "▲") : "⇅"}
@@ -310,7 +451,7 @@ export function Miniatura({
     return (
       <span
         style={lado}
-        className="grid shrink-0 place-items-center rounded-lg border border-gray-200 bg-gray-50 text-gray-300"
+        className="grid shrink-0 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)]"
       >
         <svg
           className="h-4 w-4"
@@ -337,7 +478,7 @@ export function Miniatura({
       decoding="async"
       onError={() => setFalhou(true)}
       style={lado}
-      className="shrink-0 rounded-lg border border-gray-200 bg-white object-contain"
+      className="shrink-0 rounded-lg border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] object-contain"
     />
   );
 }
@@ -357,8 +498,10 @@ export function Aviso({
 }) {
   return (
     <div className="flex flex-col items-center px-5 py-16 text-center">
-      <h3 className="text-[14px] font-semibold text-gray-900">{titulo}</h3>
-      <p className="mt-1 max-w-md text-[12.5px] leading-relaxed text-gray-500">{texto}</p>
+      <h3 className="cz-titulo text-[14px]">{titulo}</h3>
+      <p className="mt-1 max-w-md text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+        {texto}
+      </p>
       {acao && <div className="mt-4">{acao}</div>}
     </div>
   );
@@ -366,16 +509,16 @@ export function Aviso({
 
 export function Esqueleto({ linhas = 6 }: { linhas?: number }) {
   return (
-    <div className="animate-pulse divide-y divide-gray-100">
+    <div className="animate-pulse divide-y divide-[var(--cz-hairline)]">
       {Array.from({ length: linhas }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-5 py-4">
-          <div className="size-11 shrink-0 rounded-lg bg-gray-100" />
+          <div className="size-11 shrink-0 rounded-lg bg-[var(--cz-fundo)]" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 w-2/5 rounded bg-gray-100" />
-            <div className="h-2.5 w-1/4 rounded bg-gray-100" />
+            <div className="h-3 w-2/5 rounded bg-[var(--cz-fundo)]" />
+            <div className="h-2.5 w-1/4 rounded bg-[var(--cz-fundo)]" />
           </div>
-          <div className="h-3 w-16 rounded bg-gray-100" />
-          <div className="h-3 w-20 rounded bg-gray-100" />
+          <div className="h-3 w-16 rounded bg-[var(--cz-fundo)]" />
+          <div className="h-3 w-20 rounded bg-[var(--cz-fundo)]" />
         </div>
       ))}
     </div>
@@ -405,7 +548,7 @@ export function Paginacao({
   const ate = Math.min(pagina * porPagina, total);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-5 py-3 text-[12px] text-gray-600">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] px-5 py-3 text-[12px] text-[var(--cz-texto-suave)]">
       <span>
         Mostrando <strong>{inteiro(de)}</strong> a <strong>{inteiro(ate)}</strong> de{" "}
         <strong>{inteiro(total)}</strong> {rotulo}
@@ -416,7 +559,7 @@ export function Paginacao({
           <select
             value={porPagina}
             onChange={(e) => onPorPagina(Number(e.target.value))}
-            className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[12px]"
+            className="h-8 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2 text-[12px]"
           >
             {opcoesPorPagina.map((n) => (
               <option key={n} value={n}>
@@ -430,7 +573,7 @@ export function Paginacao({
             type="button"
             onClick={() => onPagina(pagina - 1)}
             disabled={pagina <= 1}
-            className="h-8 rounded-lg border border-gray-300 px-2.5 font-semibold transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-8 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Anterior
           </button>
@@ -441,7 +584,7 @@ export function Paginacao({
             type="button"
             onClick={() => onPagina(pagina + 1)}
             disabled={pagina >= totalPaginas}
-            className="h-8 rounded-lg border border-gray-300 px-2.5 font-semibold transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-8 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Próxima
           </button>

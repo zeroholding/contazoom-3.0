@@ -13,13 +13,18 @@ const geistMono = Geist_Mono({
 });
 
 /**
- * Fonte do painel.
+ * Fonte do produto INTEIRO.
  *
- * Carregada aqui para o `next/font` fazer o preload e evitar salto de texto,
- * mas APLICADA só dentro de `.cz-admin` e `.cz-auth` (ver globals.css). O resto
- * do app continua na fonte que já usava: trocar a fonte de dezenas de telas de
- * uma vez muda espaçamento e quebra de linha em todas elas, e isso é uma decisão
- * separada desta. Quando quiser rodar para o app inteiro, é mudar o seletor.
+ * Aplicada no `body` (ver `globals.css`), não mais só dentro de `.cz-admin` e
+ * `.cz-auth`. Antes o login vestia a classe e ganhava esta fonte enquanto o
+ * painel caía no `Arial` do navegador — era o que fazia a tela de login parecer
+ * de outro produto. A troca desloca alguns pixels de quebra de linha em todas as
+ * telas, e é o preço de ter uma fonte só em vez de duas.
+ *
+ * A única tela que legitimamente foge daqui é o formulário público
+ * (`/formulario`), que usa DM Sans: quem preenche é o cliente final, uma vez na
+ * vida, no celular, e aquele texto de ajuda longo pede outra fonte. Ver
+ * `.cz-form`.
  *
  * Os pesos são declarados explicitamente porque o painel usa 800 nos números
  * grandes; sem pedir, o navegador simularia o negrito e o número sairia borrado.
@@ -67,7 +72,7 @@ export default function RootLayout({
   return (
     <html lang="en" style={{ "--sidebar-w": "16rem" } as React.CSSProperties}>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} ${dmSans.variable} bg-[#F3F3F3] antialiased overflow-x-hidden`}
+        className={`${geistSans.variable} ${geistMono.variable} ${jakarta.variable} ${dmSans.variable} bg-[var(--cz-fundo)] antialiased overflow-x-hidden`}
       >
         <Providers>{children}</Providers>
       </body>

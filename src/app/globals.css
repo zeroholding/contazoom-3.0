@@ -28,6 +28,66 @@
     --input: 0 0% 89.8%;
     --ring: 0 0% 3.9%;
     --radius: 0.5rem;
+
+    /* ---------------------------------------------------------------------- */
+    /* Sistema de design do painel — AGORA GLOBAL                             */
+    /*                                                                        */
+    /* Estes tokens existiam so dentro de `.cz-admin`, `.cz-auth` e            */
+    /* `.cz-tarefas`. O resultado pratico e que a tela de login e a area       */
+    /* administrativa tinham uma linguagem visual, e as telas do painel        */
+    /* (dashboard, vendas, anuncios, estoque, SKU, documentos, contas,         */
+    /* financeiro) tinham outra: Arial, cinza chapado e verde, sem relacao com */
+    /* a marca. Duas linguagens no mesmo produto.                             */
+    /*                                                                        */
+    /* Subir para `:root` e o que permite qualquer tela usar o mesmo           */
+    /* vocabulario sem se lembrar de vestir uma classe no container. Os blocos */
+    /* `.cz-*` mais abaixo continuam declarando os MESMOS valores — ficaram    */
+    /* de proposito, porque removê-los mudaria a especificidade de regras que  */
+    /* dependem deles e o ganho seria estetico, nao funcional.                 */
+    /*                                                                        */
+    /* Laranja e a cor de ACAO (botao primario, foco, link, item ativo do      */
+    /* menu). Verde, vermelho e ambar seguem SEMANTICOS (bom, ruim, atencao) e */
+    /* nao foram tocados: trocar o verde de "Aptas p/ venda" por laranja       */
+    /* destruiria a leitura da tela em troca de nada.                          */
+    /* ---------------------------------------------------------------------- */
+
+    /* Sombras quase inexistentes: quem separa e a borda, nao a sombra.
+       Sombra empilhada em cada cartao suja o painel e faz tudo parecer
+       flutuando. */
+    --cz-elev-1: 0 1px 2px rgba(16, 24, 40, 0.03);
+    --cz-elev-2: 0 1px 3px rgba(16, 24, 40, 0.05), 0 1px 2px rgba(16, 24, 40, 0.03);
+    --cz-elev-3: 0 12px 32px rgba(16, 24, 40, 0.10), 0 4px 8px rgba(16, 24, 40, 0.04);
+
+    --cz-hairline: #EDEFF3;
+    --cz-hairline-forte: #DCE0E7;
+
+    --cz-laranja: #F26212;
+    --cz-laranja-forte: #D9500A;
+    --cz-laranja-suave: #FFF2E9;
+    --cz-laranja-borda: #FFD9BF;
+
+    --cz-fundo: #F8F9FB;
+    --cz-superficie: #FFFFFF;
+
+    --cz-texto: #14161B;
+    --cz-texto-suave: #6B7280;
+    --cz-texto-fraco: #9AA1AC;
+
+    /* Raio padrao das superficies do painel. Existe como token porque cartao,
+       campo e botao tinham raios diferentes por tela — de `rounded-md` a
+       `rounded-2xl` — e isso e o tipo de inconsistencia que ninguem sabe
+       nomear mas todo mundo percebe. */
+    --cz-raio: 0.625rem;
+    --cz-raio-cartao: 0.875rem;
+
+    /* Altura da barra superior.
+       E token porque TRES lugares dependem dela ao mesmo tempo: a altura do
+       cabecalho, o bloco da marca no topo da barra lateral (que precisa ter a
+       MESMA altura para as duas linhas finas virarem uma linha continua
+       atravessando a tela) e o `padding-top` do conteudo. Antes eram tres
+       numeros escritos a mao em tres arquivos, e bastava mexer num para a linha
+       do cabecalho desalinhar da linha da barra por alguns pixels. */
+    --cz-topbar-h: 4.5rem;
 }
 
 html,
@@ -38,8 +98,43 @@ body {
 @theme inline {
     --color-background: var(--background);
     --color-foreground: var(--foreground);
-    --font-sans: var(--font-geist-sans);
+
+    /* A fonte do painel passa a ser a fonte PADRAO do Tailwind.
+       Antes era Geist aqui e Arial no body, enquanto o login usava Jakarta —
+       tres fontes no mesmo produto. */
+    --font-sans: var(--font-jakarta);
     --font-mono: var(--font-geist-mono);
+
+    /* ---------------------------------------------------------------------- */
+    /* Tokens do painel como utilitarias do Tailwind                          */
+    /*                                                                        */
+    /* Sem isto, usar o sistema de design exigiria escrever                    */
+    /* `bg-[var(--cz-superficie)]` em cada elemento — verboso o suficiente para */
+    /* as pessoas voltarem a escrever `bg-white` e `border-gray-200` na mao, que */
+    /* e exatamente como a inconsistencia comecou. Com os tokens registrados,    */
+    /* `bg-superficie` e `border-hairline` sao mais curtos que o hardcode.       */
+    /* ---------------------------------------------------------------------- */
+    --color-marca: var(--cz-laranja);
+    --color-marca-forte: var(--cz-laranja-forte);
+    --color-marca-suave: var(--cz-laranja-suave);
+    --color-marca-borda: var(--cz-laranja-borda);
+
+    --color-fundo: var(--cz-fundo);
+    --color-superficie: var(--cz-superficie);
+
+    --color-hairline: var(--cz-hairline);
+    --color-hairline-forte: var(--cz-hairline-forte);
+
+    --color-tinta: var(--cz-texto);
+    --color-tinta-suave: var(--cz-texto-suave);
+    --color-tinta-fraca: var(--cz-texto-fraco);
+
+    --radius-cz: var(--cz-raio);
+    --radius-cartao: var(--cz-raio-cartao);
+
+    --shadow-cz-1: var(--cz-elev-1);
+    --shadow-cz-2: var(--cz-elev-2);
+    --shadow-cz-3: var(--cz-elev-3);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -68,10 +163,30 @@ body {
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Tipografia e cor de texto do produto INTEIRO                               */
+/*                                                                            */
+/* Era `font-family: Arial, Helvetica, sans-serif`. Isso e o que fazia a tela  */
+/* de login parecer de outro produto: ela vestia `.cz-auth`, que aplica Plus   */
+/* Jakarta Sans, e todo o resto do painel caia no Arial do navegador. Nao era  */
+/* uma escolha de design, era o default nunca revisado.                        */
+/*                                                                            */
+/* A troca muda metrica de texto em todas as telas — largura de coluna e       */
+/* quebra de linha se deslocam alguns pixels. Isso e esperado e e o preco de   */
+/* ter uma fonte so; o alternativo era manter duas.                            */
+/*                                                                            */
+/* `color` ancorado em valor fixo, e nao em `var(--foreground)`: aquele token  */
+/* vira `#ededed` dentro do `@media (prefers-color-scheme: dark)` mais abaixo, */
+/* e como este produto e de fundo claro fixo, quem estivesse com o sistema no  */
+/* tema escuro lia texto quase branco sobre branco. Os containers `.cz-*` ja   */
+/* corrigiam isso para login e admin; o painel ficava de fora.                 */
+/* -------------------------------------------------------------------------- */
 body {
     background: var(--background);
-    color: var(--foreground);
-    font-family: Arial, Helvetica, sans-serif;
+    color: var(--cz-texto, #14161B);
+    font-family: var(--font-jakarta), var(--font-geist-sans), ui-sans-serif,
+        system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.011em;
 }
 
 /* Global Input Styles - Padronização de todos os inputs */
@@ -89,15 +204,34 @@ input[type="month"],
 input[type="week"],
 textarea,
 select {
-    @apply flex h-12 w-full rounded-xl border-2 bg-white px-4 py-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-300;
-    --tw-ring-color: #C5837B;
-    color: #000000;
-    border-color: #E5E7EB !important;
-    /* Efeito de borda dupla refinado - similar ao Figma */
-    box-shadow: 
-        0 0 0 1px rgba(229, 231, 235, 0.8),
-        0 2px 4px rgba(229, 231, 235, 0.6),
-        0 4px 8px rgba(0, 0, 0, 0.12) !important;
+    /* ---------------------------------------------------------------------- */
+    /* Acabamento de campo do produto — o mesmo da tela de login.             */
+    /*                                                                        */
+    /* Era `h-12`, `border-2` e uma sombra de TRES camadas, com foco em        */
+    /* #C5837B — um rosa que nao existe na paleta (laranja, preto, branco).   */
+    /* A sombra tripla e o que dava ao campo cara de caixa flutuante e fazia   */
+    /* os formularios do painel parecerem datados ao lado do login.           */
+    /*                                                                        */
+    /* O login ja tinha o acabamento certo, mas escopado em `.cz-auth`, com    */
+    /* um comentario dizendo que nao dava para mexer no global sem mudar       */
+    /* dezenas de telas. Mudar dezenas de telas passou a ser o objetivo: a     */
+    /* sobrescrita subiu para ca e virou o padrao.                            */
+    /*                                                                        */
+    /* Campo alto e chapado com borda de 1px em hairline forte; quem delimita  */
+    /* e a borda, nao a sombra. `!important` na borda continua necessario      */
+    /* porque `.cz-tarefas` e `.cz-form` ja sobrescrevem com !important, e     */
+    /* tirar daqui inverteria a briga de especificidade que aqueles blocos     */
+    /* assumem ganhar.                                                        */
+    /* ---------------------------------------------------------------------- */
+    @apply flex w-full bg-white text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:cursor-not-allowed disabled:opacity-50;
+    height: 2.75rem;
+    border-radius: var(--cz-raio);
+    border-width: 1px;
+    padding: 0.625rem 0.875rem;
+    color: var(--cz-texto);
+    border-color: var(--cz-hairline-forte) !important;
+    box-shadow: none !important;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 /* Efeito hover removido - mantém apenas o estado padrão */
@@ -118,7 +252,11 @@ textarea::placeholder {
     color: #ACACAC;
 }
 
-/* Estados de foco para inputs globais */
+/* Foco: borda laranja da marca com anel fino, igual ao login.
+   O anel de 3px substitui a sombra de tres camadas do `:active` que existia
+   aqui — duas regras diferentes pintando o mesmo campo em dois laranjas
+   diferentes (#FF8C00 no active, #C5837B no focus) e como o formulario acabava
+   mudando de cor conforme a pessoa clicava ou tabulava até ele. */
 input[type="text"]:focus,
 input[type="email"]:focus,
 input[type="password"]:focus,
@@ -133,29 +271,9 @@ input[type="month"]:focus,
 input[type="week"]:focus,
 textarea:focus,
 select:focus {
-    border-color: #C5837B !important;
-}
-
-/* Estados ativos para inputs globais - laranja */
-input[type="text"]:active,
-input[type="email"]:active,
-input[type="password"]:active,
-input[type="number"]:active,
-input[type="tel"]:active,
-input[type="url"]:active,
-input[type="search"]:active,
-input[type="date"]:active,
-input[type="time"]:active,
-input[type="datetime-local"]:active,
-input[type="month"]:active,
-input[type="week"]:active,
-textarea:active,
-select:active {
-    border-color: #FF8C00 !important;
-    box-shadow: 
-        0 0 0 1px rgba(255, 140, 0, 0.8),
-        0 2px 4px rgba(255, 140, 0, 0.6),
-        0 4px 8px rgba(0, 0, 0, 0.15) !important;
+    border-color: var(--cz-laranja) !important;
+    box-shadow: 0 0 0 3px rgba(242, 98, 18, 0.13) !important;
+    outline: none;
 }
 
 /* Estilo especial para textarea */
@@ -168,10 +286,22 @@ select {
     @apply cursor-pointer;
 }
 
-/* Labels padrão */
+/* -------------------------------------------------------------------------- */
+/* Rotulos                                                                    */
+/*                                                                            */
+/* O `!important` que estava aqui e citado tres vezes nos comentarios desta    */
+/* folha como armadilha: ele vencia qualquer cor que uma tela tentasse dar ao  */
+/* proprio rotulo, e foi por isso que `.cz-auth` e `.cz-form` precisaram de     */
+/* blocos de contorno. Sem ele, a tela que declara a cor do rotulo ganha —     */
+/* que e o que ela sempre pretendeu.                                          */
+/*                                                                            */
+/* A margem cai de 8px para 7px, alinhando com o login: rotulo colado no campo */
+/* le como um par; rotulo solto le como dois elementos.                        */
+/* -------------------------------------------------------------------------- */
 label {
-    @apply block text-sm font-medium mb-2;
-    color: #373737 !important;
+    @apply block text-sm font-medium;
+    margin-bottom: 0.4375rem;
+    color: var(--cz-texto-suave);
 }
 
 /* Required indicator */

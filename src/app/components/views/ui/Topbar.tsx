@@ -60,18 +60,24 @@ export default function Topbar({
 
   return (
     <>
+      {/* Superficie branca com um fio embaixo, na mesma altura do bloco da marca
+          na barra lateral — os dois fios formam uma linha continua atravessando a
+          tela. Era `bg-[#F3F3F3]` sem borda, do mesmo cinza do fundo, entao o
+          cabecalho nao existia visualmente: o breadcrumb parecia flutuar solto
+          acima do conteudo. */}
       <header
         className={[
-          "fixed top-0 right-0 left-0 z-40 h-16 bg-[#F3F3F3] flex items-center",
+          "fixed top-0 right-0 left-0 z-40 flex h-[var(--cz-topbar-h)] items-center",
+          "border-b border-[var(--cz-hairline)] bg-[var(--cz-superficie)]",
           "left-0 md:left-[var(--sidebar-w)]", // acompanha a var no desktop
         ].join(" ")}
       >
-        <div className="w-full px-3">
+        <div className="w-full px-3 sm:px-5">
           <div className="flex items-center gap-2">
             {/* Botão mobile (hambúrguer) */}
             <button
               type="button"
-              className="md:hidden inline-flex items-center justify-center rounded-md px-3 py-2 text-sm text-gray-900"
+              className="md:hidden inline-flex items-center justify-center rounded-lg p-2 text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]"
               onClick={onMobileMenu}
               aria-label="Abrir menu"
             >
@@ -93,7 +99,7 @@ export default function Topbar({
             >
               <Link
                 href="/dashboard"
-                className="text-gray-600 hover:text-gray-900 truncate"
+                className="truncate text-[var(--cz-texto-suave)] transition-colors hover:text-[var(--cz-texto)]"
               >
                 Dashboard
               </Link>
@@ -106,17 +112,19 @@ export default function Topbar({
                       key={c.href}
                       className="flex items-center gap-2 min-w-0"
                     >
-                      <span aria-hidden className="text-gray-400">
+                      <span aria-hidden className="text-[var(--cz-texto-fraco)]">
                         ›
                       </span>
                       {isLast ? (
-                        <span className="font-semibold text-gray-900 truncate">
+                        // O ultimo item e onde a pessoa esta: peso e tinta cheia.
+                        // Os anteriores sao caminho de volta, em tinta suave.
+                        <span className="cz-titulo truncate text-[14px]">
                           {c.label}
                         </span>
                       ) : (
                         <Link
                           href={c.href}
-                          className="text-gray-600 hover:text-gray-900 truncate"
+                          className="truncate text-[var(--cz-texto-suave)] transition-colors hover:text-[var(--cz-texto)]"
                         >
                           {c.label}
                         </Link>
@@ -134,25 +142,35 @@ export default function Topbar({
         </div>
       </header>
 
-      {/* Botão de collapse “meio a meio” (sem background), centralizado verticalmente */}
+      {/* Botao de recolher a barra lateral.
+          Ficava solto sobre a divisa das duas areas, em
+          `left: calc(var(--sidebar-w) - 14px)`, sem fundo — um alvo de 28px
+          pairando sobre o nada, que sumia quando a barra tinha a mesma cor do
+          fundo. Agora fica ancorado DENTRO do cabecalho, encostado na divisa,
+          com area de clique e estado de hover. */}
       <div
-        className="hidden md:flex fixed top-0 z-50 h-16 items-center"
-        style={{ left: "calc(var(--sidebar-w) - 14px)" }}
+        className="fixed top-0 z-50 hidden h-[var(--cz-topbar-h)] items-center md:flex"
+        style={{ left: "calc(var(--sidebar-w) + 0.375rem)" }}
       >
         <button
           onClick={onToggleCollapse}
-          aria-label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
-          title={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
-          className="h-7 w-7 rounded-full flex items-center justify-center focus:outline-none"
+          aria-label={collapsed ? "Expandir o menu lateral" : "Recolher o menu lateral"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expandir o menu lateral" : "Recolher o menu lateral"}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]"
         >
-          {/* ícone/chevron controlado por GSAP */}
+          {/* Chevron girado por GSAP: 0° aponta para a esquerda (recolher), 180°
+              para a direita (expandir). */}
           <svg
             ref={arrowRef}
             viewBox="0 0 24 24"
-            className="h-5 w-5 text-black"
+            className="h-[18px] w-[18px]"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
           >
             <path d="M15 6l-6 6 6 6" />
           </svg>

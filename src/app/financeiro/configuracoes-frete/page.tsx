@@ -140,7 +140,7 @@ export default function ConfiguracaoFretePage() {
   const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
-    <div ref={containerRef} className="flex h-screen bg-[#F3F3F3] font-sans">
+    <div ref={containerRef} className="flex h-screen bg-[var(--cz-fundo)] font-sans">
       <Sidebar
         collapsed={isSidebarCollapsed}
         mobileOpen={isSidebarMobileOpen}
@@ -152,7 +152,7 @@ export default function ConfiguracaoFretePage() {
           onToggleCollapse={handleToggleSidebar}
           onMobileMenu={() => setIsSidebarMobileOpen(true)}
         />
-        <main className="flex-1 overflow-auto pt-16">
+        <main className="flex-1 overflow-auto pt-[var(--cz-topbar-h)]">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Header */}
             <div className="mb-8">
