@@ -117,7 +117,7 @@ export default function TopProdutosFaturamento({
       const percFat = totalFaturamento > 0 ? (data.faturamento / totalFaturamento) * 100 : 0;
       const percQtd = totalQuantidade > 0 ? (data.quantidade / totalQuantidade) * 100 : 0;
       return (
-        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+        <div className="bg-white p-3 border border-[var(--cz-hairline)] rounded-lg shadow-lg">
           <p className="font-medium text-gray-900 mb-2">{`${label}`}</p>
           <p className="text-sm text-blue-600">
             {`Faturamento: ${formatCurrency(data.faturamento)} (${percFat.toFixed(1)}%)`}
@@ -136,7 +136,7 @@ export default function TopProdutosFaturamento({
 
   if (loading) {
     return (
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]">
         <div className="flex items-center mb-4">
           <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
             <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,7 +157,7 @@ export default function TopProdutosFaturamento({
 
   if (dados.length === 0) {
     return (
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]">
         <div className="flex items-center mb-4">
           <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
             <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +184,7 @@ export default function TopProdutosFaturamento({
   }
 
   return (
-    <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm flex flex-col h-full">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)] flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center">
           <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">

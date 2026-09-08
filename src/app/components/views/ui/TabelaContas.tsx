@@ -122,7 +122,7 @@ function TokenReveal({ token, label }: { token: string; label: string }) {
 
 function TabelaContasSkeleton() {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -675,7 +675,7 @@ export default function TabelaContas({
 
   if (dados.length === 0) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] overflow-hidden">
         <EmptyState
           title="Nenhuma conta conectada"
           description={`Conecte sua primeira conta ${platform} e visualize seus resultados aqui.`}
@@ -690,7 +690,7 @@ export default function TabelaContas({
   return (
     <div
       ref={tableRef}
-      className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+      className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] overflow-hidden"
     >
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -839,7 +839,7 @@ export default function TabelaContas({
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 sm:px-6 sm:py-4 border-t border-gray-200 bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="px-3 py-2 sm:px-6 sm:py-4 border-t border-[var(--cz-hairline)] bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <button
             onClick={handleConnectAccount}

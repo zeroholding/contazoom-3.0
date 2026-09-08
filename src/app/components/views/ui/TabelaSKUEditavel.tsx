@@ -204,7 +204,7 @@ export default function TabelaSKUEditavel({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -237,7 +237,7 @@ export default function TabelaSKUEditavel({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {/* Linha para adicionar novo item - sempre visível */}
-            <tr className="bg-white border-b border-gray-200">
+            <tr className="bg-white border-b border-[var(--cz-hairline)]">
               <td className="px-6 py-4">
                 <input
                   type="text"

@@ -91,7 +91,7 @@ export default function AuditoriaDocumentos() {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-100px)]">
+    <div className="bg-white rounded-xl border border-[var(--cz-hairline)] shadow-sm overflow-hidden flex flex-col h-[calc(100vh-100px)]">
       {/* Header */}
       <div className="p-6 border-b border-gray-100 bg-white shrink-0">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -122,7 +122,7 @@ export default function AuditoriaDocumentos() {
               placeholder="Buscar por nome do arquivo..." 
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
             />
           </div>
 
@@ -133,7 +133,7 @@ export default function AuditoriaDocumentos() {
             <select 
               value={selectedAction}
               onChange={(e) => { setSelectedAction(e.target.value); setPage(1); }}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all appearance-none"
+              className="w-full px-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all appearance-none"
             >
               <option value="">Todas as Ações</option>
               <option value="CREATED">Uploads</option>
@@ -150,7 +150,7 @@ export default function AuditoriaDocumentos() {
               type="date" 
               value={startDate}
               onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
               title="Data Inicial"
             />
           </div>
@@ -163,7 +163,7 @@ export default function AuditoriaDocumentos() {
               type="date" 
               value={endDate}
               onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              className="w-full px-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
               title="Data Final"
             />
           </div>
@@ -189,10 +189,10 @@ export default function AuditoriaDocumentos() {
             <p className="text-sm text-gray-400 mt-1">Tente ajustar os filtros de busca.</p>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-[var(--cz-hairline)] rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-[11px] uppercase tracking-wider text-gray-500 font-bold">
+                <tr className="bg-gray-50 border-b border-[var(--cz-hairline)] text-[11px] uppercase tracking-wider text-gray-500 font-bold">
                   <th className="px-5 py-4"><div className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> Data / Hora</div></th>
                   <th className="px-5 py-4"><div className="flex items-center gap-1.5"><Activity className="w-4 h-4" /> Ação</div></th>
                   <th className="px-5 py-4"><div className="flex items-center gap-1.5"><UserCheck className="w-4 h-4" /> Autor da Ação</div></th>
@@ -276,14 +276,14 @@ export default function AuditoriaDocumentos() {
             <button 
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 border border-[var(--cz-hairline)] rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Anterior
             </button>
             <button 
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 border border-[var(--cz-hairline)] rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Próxima
             </button>

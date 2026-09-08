@@ -151,7 +151,7 @@ function SKUPagination({
   onPageChange: (page: number) => void; 
 }) {
   return (
-    <div className="flex items-center justify-between px-6 py-3 bg-white border-t border-gray-200">
+    <div className="flex items-center justify-between px-6 py-3 bg-white border-t border-[var(--cz-hairline)]">
       <div className="flex items-center">
         <p className="text-sm text-gray-700">
           Página {currentPage} de {totalPages}
@@ -221,7 +221,7 @@ export default function TabelaSKU({
   const skusPaginados = skus.slice(startIndex, endIndex);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)]">
       {skus.length === 0 ? (
         <div className="relative">
           <EmptyState
@@ -246,7 +246,7 @@ export default function TabelaSKU({
               onDeleteSKU={onDeleteSKU}
             />
           </div>
-          <div className="border-t border-gray-200 bg-white">
+          <div className="border-t border-[var(--cz-hairline)] bg-white">
             <SKUPagination
               currentPage={currentPage}
               totalPages={totalPages}

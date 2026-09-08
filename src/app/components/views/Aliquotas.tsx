@@ -527,7 +527,7 @@ export default function Aliquotas() {
           {/* Conteúdo */}
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-orange-500"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-[var(--cz-hairline)] border-t-orange-500"></div>
             </div>
           ) : aliquotas.length === 0 ? (
             <EmptyState
@@ -570,7 +570,7 @@ export default function Aliquotas() {
               }}
             />
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">

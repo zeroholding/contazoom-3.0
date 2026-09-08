@@ -284,7 +284,7 @@ export default function SKUsPendentesModal({
         </p>
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+          <div className="rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3">
             <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
               Pendentes
             </p>
@@ -333,7 +333,7 @@ export default function SKUsPendentesModal({
         )}
 
         {/* Conteúdo */}
-        <div className="min-h-0 flex-1 border border-gray-200 rounded-lg overflow-hidden">
+        <div className="min-h-0 flex-1 border border-[var(--cz-hairline)] rounded-lg overflow-hidden">
           {isLoading ? (
             <div className="flex h-full min-h-64 items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
@@ -438,7 +438,7 @@ export default function SKUsPendentesModal({
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[var(--cz-hairline)]">
           <div className="text-sm text-gray-600">
             {skusPendentes.length} SKU(s) pendente(s)
           </div>

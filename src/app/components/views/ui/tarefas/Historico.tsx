@@ -137,7 +137,7 @@ export default function Historico({
       </ol>
 
       {truncado && (
-        <p className="flex items-center justify-center gap-1.5 border-t border-gray-200 bg-gray-50 px-5 py-3 text-xs text-gray-500">
+        <p className="flex items-center justify-center gap-1.5 border-t border-[var(--cz-hairline)] bg-gray-50 px-5 py-3 text-xs text-gray-500">
           <Icone nome="Info" className="h-3.5 w-3.5" />
           Mostrando as 100 alterações mais recentes. Use a Auditoria para o
           histórico completo.

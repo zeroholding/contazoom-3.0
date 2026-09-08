@@ -292,9 +292,9 @@ function corSituacaoEtapa(situacao: string, peso: PesoSelo): string {
     case "CONCLUIDA":
       return tom(peso, "border-[#ABEFC6]", "bg-[#ECFDF3]", "text-[#027A48]");
     case "NAO_APLICAVEL":
-      return tom(peso, "border-gray-200", "bg-gray-50", "text-gray-500");
+      return tom(peso, "border-[var(--cz-hairline)]", "bg-gray-50", "text-gray-500");
     default:
-      return tom(peso, "border-gray-200", "bg-gray-100", "text-gray-600");
+      return tom(peso, "border-[var(--cz-hairline)]", "bg-gray-100", "text-gray-600");
   }
 }
 

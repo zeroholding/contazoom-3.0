@@ -19,7 +19,7 @@ export default function VendasPagination({
 }: VendasPaginationProps) {
   const formatNumber = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
   return (
-    <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="px-6 py-4 border-t border-[var(--cz-hairline)] bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="text-sm text-gray-600">
         <div>
           Mostrando
@@ -58,7 +58,7 @@ export default function VendasPagination({
       <div className="flex items-center justify-center gap-2">
         <button
           onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
-          className="px-3 py-2 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:text-gray-800 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-2 text-sm font-medium rounded border border-[var(--cz-hairline)] text-gray-600 hover:text-gray-800 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={currentPage === 1}
         >
           Anterior
@@ -84,7 +84,7 @@ export default function VendasPagination({
                   className={`h-8 w-8 rounded-full text-sm font-medium flex items-center justify-center transition-colors ${
                     isActive
                       ? "bg-orange-500 text-white"
-                      : "border border-gray-200 text-gray-600 hover:text-gray-800 hover:border-gray-300"
+                      : "border border-[var(--cz-hairline)] text-gray-600 hover:text-gray-800 hover:border-gray-300"
                   }`}
                 >
                   {pageNumber}
@@ -95,7 +95,7 @@ export default function VendasPagination({
         </div>
         <button
           onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
-          className="px-3 py-2 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:text-gray-800 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-2 text-sm font-medium rounded border border-[var(--cz-hairline)] text-gray-600 hover:text-gray-800 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={currentPage === totalPages}
         >
           Próxima

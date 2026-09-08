@@ -655,7 +655,7 @@ function Conteudo() {
 
       {/* ---------------------- Por que o autor é congelado ----------------- */}
 
-      <div className="flex items-start gap-2.5 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+      <div className="flex items-start gap-2.5 rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3">
         <Icone
           nome="Info"
           className="mt-0.5 h-4 w-4 shrink-0 text-gray-400"
@@ -894,7 +894,7 @@ function Conteudo() {
               <section key={grupo.chave}>
                 {/* Cabeçalho aderente: num log longo, sem a data fixa a pessoa
                     perde a noção de quando as coisas aconteceram. */}
-                <h3 className="sticky top-0 z-10 flex items-center gap-2 border-y border-gray-200 bg-gray-50/95 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 backdrop-blur">
+                <h3 className="sticky top-0 z-10 flex items-center gap-2 border-y border-[var(--cz-hairline)] bg-gray-50/95 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600 backdrop-blur">
                   <Icone nome="Calendar" className="h-3.5 w-3.5 text-gray-400" />
                   {grupo.rotulo}
                   <span className="font-normal normal-case tracking-normal text-gray-400">

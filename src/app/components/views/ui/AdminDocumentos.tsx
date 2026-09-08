@@ -285,7 +285,7 @@ export default function AdminDocumentos() {
       <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
       
       {/* ═══ COL 1 — CLIENT LIST ═══ */}
-      <aside className={`w-full lg:w-72 xl:w-80 bg-white border-r border-gray-200 flex flex-col shrink-0 ${selectedUser ? 'hidden lg:flex' : 'flex'}`}>
+      <aside className={`w-full lg:w-72 xl:w-80 bg-white border-r border-[var(--cz-hairline)] flex flex-col shrink-0 ${selectedUser ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-5 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-gray-900 flex items-center">
@@ -298,7 +298,7 @@ export default function AdminDocumentos() {
             <input 
               type="text" placeholder="Buscar cliente..." value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              className="w-full pl-10 pr-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
             />
           </div>
         </div>
@@ -350,7 +350,7 @@ export default function AdminDocumentos() {
       {/* ═══ COL 2 — DOCUMENTS ═══ */}
       <main className={`flex-1 flex flex-col min-w-0 overflow-hidden ${!selectedUser ? 'hidden lg:flex' : 'flex'}`}>
         {/* Header */}
-        <header className="px-6 py-4 bg-white border-b border-gray-200 shrink-0">
+        <header className="px-6 py-4 bg-white border-b border-[var(--cz-hairline)] shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {selectedUser && (
@@ -418,7 +418,7 @@ export default function AdminDocumentos() {
                 const stores = getStoreBadges(doc);
                 
                 return (
-                  <div key={doc.id} className="bg-white rounded-xl border border-gray-200 hover:shadow-lg hover:border-orange-200 transition-all flex flex-col overflow-hidden group">
+                  <div key={doc.id} className="bg-white rounded-xl border border-[var(--cz-hairline)] hover:shadow-lg hover:border-orange-200 transition-all flex flex-col overflow-hidden group">
                     <div className={`h-1 w-full ${isPdf ? 'bg-gradient-to-r from-red-400 to-red-500' : 'bg-gradient-to-r from-blue-400 to-blue-500'}`} />
                     <div className="p-5 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-3">
@@ -503,7 +503,7 @@ export default function AdminDocumentos() {
 
       {/* ═══ COL 3 — UPLOAD PANEL ═══ */}
       {activeUser && (
-        <aside className="w-72 xl:w-80 bg-white border-l border-gray-200 flex flex-col shrink-0">
+        <aside className="w-72 xl:w-80 bg-white border-l border-[var(--cz-hairline)] flex flex-col shrink-0">
           <div className="p-5 border-b border-gray-100">
             <h2 className="text-base font-bold text-gray-900 flex items-center">
               <UploadCloud className="w-4 h-4 mr-2 text-orange-500" /> Novo Upload
@@ -524,7 +524,7 @@ export default function AdminDocumentos() {
                       return (
                         <button key={i} type="button" onClick={() => handleToggleStore(acc.label)}
                           className={`flex items-center text-[11px] px-2.5 py-1.5 rounded-full border transition-all font-medium ${
-                            sel ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                            sel ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-white border-[var(--cz-hairline)] text-gray-500 hover:bg-gray-50'
                           }`}
                         >
                           {acc.provider === 'shopee' 
@@ -557,7 +557,7 @@ export default function AdminDocumentos() {
                           <div className={`w-full flex items-center justify-between text-left text-[11px] px-3 py-2.5 rounded-lg border transition-all group ${
                             selectedFolderId === f.id
                               ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-300/50'
-                              : 'bg-white border-gray-200 hover:bg-gray-50'
+                              : 'bg-white border-[var(--cz-hairline)] hover:bg-gray-50'
                           }`} style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
                             <button type="button" onClick={() => setSelectedFolderId(f.id)} className="flex items-center flex-1 min-w-0">
                               {hasChildren && (
@@ -605,13 +605,13 @@ export default function AdminDocumentos() {
                 <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <div>
                     <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Mês</label>
-                    <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full border-gray-200 rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
+                    <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full border-[var(--cz-hairline)] rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
                       {MONTHS.map(m => <option key={m} value={m}>{m.split(' - ')[0]}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Ano</label>
-                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="w-full border-gray-200 rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
+                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="w-full border-[var(--cz-hairline)] rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
                       {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
@@ -753,7 +753,7 @@ export default function AdminDocumentos() {
             <form onSubmit={handleSaveFolder} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Nome da Pasta</label>
-                <input type="text" autoFocus required value={folderNameInput} onChange={e => setFolderNameInput(e.target.value)} placeholder="Ex: Contratos 2026" className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                <input type="text" autoFocus required value={folderNameInput} onChange={e => setFolderNameInput(e.target.value)} placeholder="Ex: Contratos 2026" className="w-full px-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
               </div>
               {!editingFolder && (
                 <div>
@@ -761,7 +761,7 @@ export default function AdminDocumentos() {
                   <select
                     value={folderParentId}
                     onChange={e => setFolderParentId(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                    className="w-full px-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   >
                     <option value="">📁 Raiz (pasta principal)</option>
                     {userFolders.map(f => (

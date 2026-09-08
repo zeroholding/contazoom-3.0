@@ -138,7 +138,7 @@ export default function HistoricoCustosModal({
                       </svg>
                     </span>
 
-                    <div className="rounded-xl border border-gray-200 bg-white p-3 hover:border-gray-300 transition-colors">
+                    <div className="rounded-xl border border-[var(--cz-hairline)] bg-white p-3 hover:border-gray-300 transition-colors">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

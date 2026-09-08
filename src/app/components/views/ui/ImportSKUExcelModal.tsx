@@ -68,7 +68,7 @@ const actionConfig: Record<
   },
   skip: {
     label: 'Sem ação',
-    className: 'bg-gray-100 text-gray-700 border-gray-200',
+    className: 'bg-gray-100 text-gray-700 border-[var(--cz-hairline)]',
     description: 'Nada será gravado',
   },
   error: {
@@ -407,7 +407,7 @@ export function ImportSKUExcelModal({
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-gray-200">
+            <div className="overflow-hidden rounded-lg border border-[var(--cz-hairline)]">
               <div className="max-h-[52vh] overflow-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="sticky top-0 z-10 bg-gray-50">
@@ -487,7 +487,7 @@ export function ImportSKUExcelModal({
         )}
 
         {importResults && (
-          <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="space-y-3 rounded-lg border border-[var(--cz-hairline)] bg-gray-50 p-4">
             <h3 className="text-sm font-semibold text-gray-900">Resultado aplicado</h3>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               {[
@@ -504,7 +504,7 @@ export function ImportSKUExcelModal({
               ))}
             </div>
             {(importResults.errorDetails.length > 0 || importResults.warningDetails.length > 0) && (
-              <div className="max-h-40 overflow-y-auto rounded border border-gray-200 bg-white">
+              <div className="max-h-40 overflow-y-auto rounded border border-[var(--cz-hairline)] bg-white">
                 {importResults.errorDetails.map((detail, index) => (
                   <div key={`error-${index}`} className="border-b border-red-100 px-3 py-2 text-xs text-red-800">
                     <strong>Linha {detail.row}:</strong> {detail.message}

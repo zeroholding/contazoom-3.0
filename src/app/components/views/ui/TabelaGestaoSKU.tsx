@@ -659,7 +659,7 @@ export default function TabelaGestaoSKU({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] overflow-hidden">
       {/* Barra de ações em lote */}
       {isMultiSelect && selectedSKUs.length > 0 && (
         <div className="bg-blue-50 border-b border-blue-200 px-3 py-2 sm:px-6 sm:py-3">
@@ -800,7 +800,7 @@ export default function TabelaGestaoSKU({
                           <img
                             src={img}
                             alt={sku.sku}
-                            className="h-10 w-10 shrink-0 rounded-md object-cover border border-gray-200 bg-white"
+                            className="h-10 w-10 shrink-0 rounded-md object-cover border border-[var(--cz-hairline)] bg-white"
                             loading="lazy"
                           />
                         ) : (
@@ -1090,7 +1090,7 @@ export default function TabelaGestaoSKU({
               className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
                 novoSku.tipo === 'filho'
                   ? 'border-orange-500 bg-orange-50'
-                  : 'border-gray-200 hover:border-gray-300 bg-white'
+                  : 'border-[var(--cz-hairline)] hover:border-gray-300 bg-white'
               }`}
               disabled={isSaving}
             >
@@ -1108,7 +1108,7 @@ export default function TabelaGestaoSKU({
               className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
                 novoSku.tipo === 'pai'
                   ? 'border-orange-500 bg-orange-50'
-                  : 'border-gray-200 hover:border-gray-300 bg-white'
+                  : 'border-[var(--cz-hairline)] hover:border-gray-300 bg-white'
               }`}
               disabled={isSaving}
             >
@@ -1262,7 +1262,7 @@ export default function TabelaGestaoSKU({
                   <svg className="ml-auto w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"/></svg>
                 </div>
                 {isOpenFilhos && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg">
+                  <div className="absolute z-50 mt-1 w-full bg-white border border-[var(--cz-hairline)] rounded-lg shadow-lg">
                     <div className="p-1 border-b sticky top-0 bg-white">
                       <input
                         type="text"

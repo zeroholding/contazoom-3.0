@@ -320,7 +320,7 @@ export default function AnunciosMortos() {
         </p>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--cz-hairline)] bg-white">
         {carregando ? (
           <Esqueleto />
         ) : erro ? (

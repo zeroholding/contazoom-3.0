@@ -449,7 +449,7 @@ export default function TabelaVendasV2({
   const syncStatusText = mergedSync.message;
 
   return (
-    <div className="relative w-full overflow-hidden rounded-lg border border-gray-200 bg-white">
+    <div className="relative w-full overflow-hidden rounded-lg border border-[var(--cz-hairline)] bg-white">
       {syncErrors.length > 0 && (
         <div className="border-b border-orange-100 bg-orange-50 px-6 py-3 text-sm text-orange-700">
           <p className="font-medium">
@@ -521,7 +521,7 @@ export default function TabelaVendasV2({
               platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
             />
           </div>
-          <div className="border-t border-gray-200 bg-white">
+          <div className="border-t border-[var(--cz-hairline)] bg-white">
             <VendasPagination
               currentPage={pagination.page}
               totalPages={totalPages}

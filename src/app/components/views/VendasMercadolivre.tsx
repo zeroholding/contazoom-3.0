@@ -168,14 +168,14 @@ const HeaderVendasMercadolivre = ({
                     {backendUrl && (
                       <div className="pt-2 border-t border-gray-100/80">
                         <p className="text-xs text-gray-600 mb-2">🔗 Backend em uso:</p>
-                        <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                        <div className="bg-gray-50 rounded p-2 border border-[var(--cz-hairline)]">
                           <p className="text-xs font-semibold text-gray-800 mb-1">
                             {backendUrl.split(' - ')[0]} {backendUrl.split(' - ')[1] || ""}
                           </p>
                           <p className="text-xs font-mono text-gray-600 break-all bg-white rounded p-1 border border-gray-100">
                             {backendUrl.split(' - ')[2] || backendUrl}
                           </p>
-                          <div className="mt-2 pt-2 border-t border-gray-200">
+                          <div className="mt-2 pt-2 border-t border-[var(--cz-hairline)]">
                             <p className="text-xs text-gray-500">
                               {backendUrl.includes("Vercel")
                                 ? "ℹ️ Usando backend no Vercel (Frontend)"
@@ -486,7 +486,10 @@ export default function VendasMercadolivre() {
       <div
         className={`fixed top-[var(--cz-topbar-h)] bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[var(--cz-fundo)]`}
       >
-        <div className="h-full w-full rounded-tl-none border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:rounded-tl-2xl" />
+        {/* O painel BRANCO que ficava aqui foi removido: com ele, cartao branco
+            sobre painel branco nao tinha separacao nenhuma, e era por isso que os
+            cartoes desta tela eram cinza. Agora o conteudo assenta no fundo claro
+            e os cartoes brancos se destacam dele. */}
       </div>
 
       {/* Conteúdo */}

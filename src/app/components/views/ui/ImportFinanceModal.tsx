@@ -52,7 +52,7 @@ const actionConfig: Record<PreviewAction, { label: string; className: string; de
   },
   skip: {
     label: 'Duplicado',
-    className: 'bg-gray-100 text-gray-700 border-gray-200',
+    className: 'bg-gray-100 text-gray-700 border-[var(--cz-hairline)]',
     description: 'Nada será gravado',
   },
   error: {
@@ -405,7 +405,7 @@ export function ImportFinanceModal({
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-gray-200">
+            <div className="overflow-hidden rounded-lg border border-[var(--cz-hairline)]">
               <div className="max-h-[52vh] overflow-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="sticky top-0 z-10 bg-gray-50">
@@ -469,7 +469,7 @@ export function ImportFinanceModal({
         )}
 
         {importResults && (
-          <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <div className="space-y-3 rounded-lg border border-[var(--cz-hairline)] bg-gray-50 p-4">
             <h3 className="text-sm font-semibold text-gray-900">Resultado aplicado</h3>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               {[

@@ -197,9 +197,9 @@ export default function MapaCalorBrasil({
   const hoveredData = hoveredUF ? estados.find(e => e.uf === hoveredUF) : null;
 
   return (
-    <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-[var(--cz-elev-1)] overflow-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border-b border-[var(--cz-hairline)] px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start md:items-center gap-3">
           <div className="w-8 h-8 md:w-7 md:h-7 shrink-0 bg-orange-100 rounded-lg flex items-center justify-center mt-0.5 md:mt-0">
             <svg className="w-5 h-5 md:w-4 md:h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +217,7 @@ export default function MapaCalorBrasil({
               key={m}
               onClick={() => setMetricMode(m)}
               className={`flex-1 md:flex-none px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
-                metricMode === m ? "bg-orange-500 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
+                metricMode === m ? "bg-orange-500 text-white shadow-[var(--cz-elev-1)]" : "text-gray-500 hover:text-gray-700"
               }`}
             >{m === "vendas" ? "Qtd. Vendas" : "Faturamento"}</button>
           ))}
@@ -327,7 +327,7 @@ export default function MapaCalorBrasil({
               className="fixed z-[60] pointer-events-none"
               style={{ left: tooltipPos.x + 16, top: tooltipPos.y - 20 }}
             >
-              <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-3" style={{ minWidth: 200 }}>
+              <div className="bg-white border border-[var(--cz-hairline)] rounded-xl shadow-xl p-3" style={{ minWidth: 200 }}>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-orange-500"/>
                   <span className="font-bold text-gray-800 text-sm">{hoveredData.nome}</span>
@@ -351,7 +351,7 @@ export default function MapaCalorBrasil({
           )}
 
           {/* Legenda gradiente no canto */}
-          <div className="absolute bottom-2 left-2 md:bottom-5 md:left-5 bg-white border border-gray-200 rounded-xl p-2 md:p-3 shadow-sm max-w-[120px] md:max-w-none scale-90 md:scale-100 origin-bottom-left">
+          <div className="absolute bottom-2 left-2 md:bottom-5 md:left-5 bg-white border border-[var(--cz-hairline)] rounded-xl p-2 md:p-3 shadow-[var(--cz-elev-1)] max-w-[120px] md:max-w-none scale-90 md:scale-100 origin-bottom-left">
             <div className="text-[10px] md:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 hidden md:block">
               {metricMode === "vendas" ? "Intensidade de Vendas" : "Intensidade de Faturamento"}
             </div>
@@ -372,7 +372,7 @@ export default function MapaCalorBrasil({
         </div>
 
         {/* Sidebar */}
-        <div className="w-full lg:w-64 lg:border-l border-t lg:border-t-0 border-gray-200 bg-white flex flex-col sm:flex-row lg:flex-col">
+        <div className="w-full lg:w-64 lg:border-l border-t lg:border-t-0 border-[var(--cz-hairline)] bg-white flex flex-col sm:flex-row lg:flex-col">
           {/* Por Região */}
           <div className="p-4 border-b sm:border-b-0 sm:border-r lg:border-r-0 lg:border-b border-gray-100 flex-1">
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Por Região</h4>

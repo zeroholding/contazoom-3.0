@@ -148,7 +148,7 @@ function ToastViewport({
                   t.variant === "success" && "border-green-200",
                   t.variant === "error" && "border-red-200",
                   t.variant === "warning" && "border-yellow-200",
-                  t.variant === "info" && "border-gray-200",
+                  t.variant === "info" && "border-[var(--cz-hairline)]",
                 )}
                 style={{ pointerEvents: isTop ? "auto" : "none" }}
               >

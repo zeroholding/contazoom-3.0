@@ -177,7 +177,7 @@ const HeaderFinancas = ({
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-[var(--cz-hairline)]">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="overflow-x-auto scrollbar-hidden">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
@@ -1757,7 +1757,10 @@ export default function Financas() {
       <div
         className={`fixed top-[var(--cz-topbar-h)] bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[var(--cz-fundo)]`}
       >
-        <div className="h-full w-full rounded-tl-none border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:rounded-tl-2xl" />
+        {/* O painel BRANCO que ficava aqui foi removido: com ele, cartao branco
+            sobre painel branco nao tinha separacao nenhuma, e era por isso que os
+            cartoes desta tela eram cinza. Agora o conteudo assenta no fundo claro
+            e os cartoes brancos se destacam dele. */}
       </div>
 
       <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
@@ -1811,7 +1814,7 @@ export default function Financas() {
 
           {/* Conteúdo da Tab */}
           {activeTab === "formas_pagamento" ? (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
               {isLoading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
@@ -1915,7 +1918,7 @@ export default function Financas() {
               )}
             </div>
           ) : activeTab === "categorias" ? (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
               {isLoading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
@@ -2001,7 +2004,7 @@ export default function Financas() {
               )}
             </div>
           ) : activeTab === "contas_pagar" ? (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
               {isLoading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
@@ -2145,7 +2148,7 @@ export default function Financas() {
               )}
             </div>
           ) : activeTab === "contas_receber" ? (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
               {isLoading ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
@@ -2276,7 +2279,7 @@ export default function Financas() {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
               <EmptyState
                 title="Nenhum registro encontrado"
                 description={`Comece adicionando ${getTabDescription()}.`}

@@ -147,7 +147,7 @@ const DashboardStats = memo(function DashboardStats({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
       {/* Faturamento Total */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Valor total das vendas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor total das vendas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -172,7 +172,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Impostos s/ Faturamento */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Valor de impostos sobre o faturamento baseado nas alíquotas cadastradas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor de impostos sobre o faturamento baseado nas alíquotas cadastradas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -201,7 +201,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Taxas das Plataformas */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Total de taxas pagas às plataformas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Total de taxas pagas às plataformas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -239,7 +239,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Custo de Frete */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Total gasto com frete">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Total gasto com frete">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -277,7 +277,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Margem de Contribuição (Receita líquida) */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Após taxas e frete">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Após taxas e frete">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -304,10 +304,10 @@ const DashboardStats = memo(function DashboardStats({
 
       {/* CMV */}
       <div
-        className={`rounded-lg border p-3 shadow-sm ${
+        className={`rounded-lg border p-3 shadow-[var(--cz-elev-1)] ${
           stats.skusSemCusto > 0
             ? "border-orange-200 bg-orange-50"
-            : "border-gray-200 bg-[#F3F3F3]"
+            : "border-[var(--cz-hairline)] bg-[var(--cz-fundo)]"
         }`}
         title={
           stats.skusSemCusto > 0
@@ -345,7 +345,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Lucro Bruto */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Receita líquida - Impostos - CMV">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Receita líquida - Impostos - CMV">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -371,7 +371,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Vendas Realizadas */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Número total de vendas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Número total de vendas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -391,7 +391,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Ticket Médio (Venda) */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Valor médio por venda">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor médio por venda">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -411,7 +411,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Unidades Vendidas */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Quantidade total de produtos vendidos">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Quantidade total de produtos vendidos">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -431,7 +431,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* Ticket Médio (Unid.) */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Valor médio por unidade vendida">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor médio por unidade vendida">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -451,7 +451,7 @@ const DashboardStats = memo(function DashboardStats({
       </div>
 
       {/* SKUs Pendentes */}
-      <a href="/sku" className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm hover:border-orange-300 hover:bg-orange-50/40 transition-colors" title="SKUs pendentes de cadastro ou custo">
+      <a href="/sku" className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)] hover:border-orange-300 hover:bg-orange-50/40 transition-colors" title="SKUs pendentes de cadastro ou custo">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">

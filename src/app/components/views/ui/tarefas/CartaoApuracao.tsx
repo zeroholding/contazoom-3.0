@@ -92,7 +92,7 @@ export default function CartaoApuracao({
       <Link
         href={`/admin/tarefas/apuracao/${tarefa.id}`}
         draggable={false}
-        className={`block rounded-xl border border-gray-200 bg-white p-3 shadow-sm transition-colors hover:border-orange-400 hover:bg-orange-50/30 ${
+        className={`block rounded-xl border border-[var(--cz-hairline)] bg-white p-3 shadow-sm transition-colors hover:border-orange-400 hover:bg-orange-50/30 ${
           arrastavel ? "cursor-grab active:cursor-grabbing" : ""
         }`}
       >
@@ -129,7 +129,7 @@ export default function CartaoApuracao({
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <SeloRegime regime={tarefa.regime} />
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[var(--cz-hairline)] bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600">
             <Icone nome="Calendar" className="h-3.5 w-3.5 shrink-0" />
             {competenciaCurta(tarefa.ano, tarefa.mes)}
           </span>
@@ -168,7 +168,7 @@ export default function CartaoApuracao({
               title={`${tarefa.anexos} ${
                 tarefa.anexos === 1 ? "anexo" : "anexos"
               }`}
-              className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600"
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[var(--cz-hairline)] bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600"
             >
               <Icone nome="Paperclip" className="h-3.5 w-3.5 shrink-0" />
               <span className="cz-num">{tarefa.anexos}</span>

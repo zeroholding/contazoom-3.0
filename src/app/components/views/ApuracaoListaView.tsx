@@ -1150,7 +1150,7 @@ function Conteudo() {
                       className={`flex w-[19.5rem] shrink-0 flex-col overflow-hidden rounded-xl border bg-gray-50 transition-all ${
                         destacada
                           ? "border-orange-400 bg-orange-50 ring-2 ring-orange-300"
-                          : "border-gray-200"
+                          : "border-[var(--cz-hairline)]"
                       } ${
                         arrastandoAgora && !aceita
                           ? "cursor-not-allowed opacity-50"
@@ -1162,7 +1162,7 @@ function Conteudo() {
                         style={{ backgroundColor: cor.solida }}
                         aria-hidden="true"
                       />
-                      <header className="flex items-center gap-2 border-b border-gray-200 bg-white px-3 py-2.5">
+                      <header className="flex items-center gap-2 border-b border-[var(--cz-hairline)] bg-white px-3 py-2.5">
                         <Icone
                           nome={cor.icone}
                           className="h-4 w-4 shrink-0 text-gray-500"
@@ -1228,7 +1228,7 @@ function Conteudo() {
             <Painel>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1180px] text-sm">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-gray-500">
+                  <thead className="border-b border-[var(--cz-hairline)] bg-gray-50 text-gray-500">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">
                         Empresa

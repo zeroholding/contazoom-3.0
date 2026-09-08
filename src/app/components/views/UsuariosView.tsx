@@ -196,7 +196,7 @@ function DescricaoPapel({
  */
 function SemPermissao() {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white px-6 py-14 text-center shadow-sm">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--cz-hairline)] bg-white px-6 py-14 text-center shadow-sm">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100">
         <Lock className="h-7 w-7 text-gray-500" aria-hidden="true" />
       </div>
@@ -259,7 +259,7 @@ function PainelPerfis({
             return (
               <div
                 key={papel}
-                className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50/60 p-4"
+                className="flex flex-col gap-3 rounded-xl border border-[var(--cz-hairline)] bg-gray-50/60 p-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
@@ -384,7 +384,7 @@ function ModalAlterarPapel({
           />
         )}
 
-        <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-center gap-3 rounded-xl border border-[var(--cz-hairline)] bg-gray-50 p-4">
           <CirculoIniciais nome={usuario.name} />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-gray-900">
@@ -427,7 +427,7 @@ function ModalAlterarPapel({
 
         {/* A descrição aparece ANTES de confirmar: a decisão de dar acesso não
             deveria depender de o administrador lembrar o que cada papel faz. */}
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="rounded-xl border border-[var(--cz-hairline)] bg-white p-4">
           <div className="mb-2 flex items-center gap-2">
             <Icone
               nome={PAPEL_ICONE[papel] ?? "User"}
@@ -583,7 +583,7 @@ function ModalNovoUsuario({
           ajuda="Cliente é o padrão: acessa o próprio painel e nada do módulo de tarefas."
         />
 
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div className="rounded-xl border border-[var(--cz-hairline)] bg-gray-50 p-4">
           <div className="mb-2 flex items-center gap-2">
             <Icone
               nome={PAPEL_ICONE[papel] ?? "User"}
@@ -850,7 +850,7 @@ export default function UsuariosView() {
                 : plural(usuarios.length, "usuário", "usuários")
             }
           >
-            <div className="flex flex-col gap-3 border-b border-gray-200 p-5 lg:flex-row lg:items-end">
+            <div className="flex flex-col gap-3 border-b border-[var(--cz-hairline)] p-5 lg:flex-row lg:items-end">
               <Escolha
                 rotulo="Perfil"
                 vazio="Todos os perfis"
@@ -918,7 +918,7 @@ export default function UsuariosView() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[900px] text-left text-sm">
-                  <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <thead className="border-b border-[var(--cz-hairline)] bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                     <tr>
                       <th scope="col" className="px-5 py-3">
                         Usuário

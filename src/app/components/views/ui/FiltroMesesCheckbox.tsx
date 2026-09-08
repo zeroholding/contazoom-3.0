@@ -121,7 +121,7 @@ export default function FiltroMesesCheckbox({
         >
           <div className="p-2">
             {/* Ações rápidas */}
-            <div className="grid grid-cols-2 gap-2 pb-3 border-b border-gray-200">
+            <div className="grid grid-cols-2 gap-2 pb-3 border-b border-[var(--cz-hairline)]">
               <button
                 onClick={selecionarMesAtual}
                 className="text-xs px-2 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium"

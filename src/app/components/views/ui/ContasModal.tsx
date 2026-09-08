@@ -96,7 +96,7 @@ export default function ContasModal({ isOpen, onClose }: ContasModalProps) {
             <div className="text-sm text-gray-600">Nenhuma conta conectada.</div>
           ) : (
             contasMLOrdenadas.map((conta) => (
-              <div key={conta.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 bg-white">
+              <div key={conta.id} className="flex items-center justify-between rounded-lg border border-[var(--cz-hairline)] px-3 py-2 bg-white">
                 <div className="flex items-center gap-3">
                   <AvatarConta conta={conta} />
                   <div className="text-sm text-gray-900">

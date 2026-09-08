@@ -100,7 +100,7 @@ export default function AdminPanel() {
 
       {/* Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center">
+        <div className="bg-white border border-[var(--cz-hairline)] rounded-xl p-5 shadow-sm flex items-center">
           <div className="bg-orange-100 p-3 rounded-lg mr-4">
             <Users className="w-6 h-6 text-orange-600" />
           </div>
@@ -109,7 +109,7 @@ export default function AdminPanel() {
             <p className="text-2xl font-bold text-gray-900">{totalUsers}</p>
           </div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center">
+        <div className="bg-white border border-[var(--cz-hairline)] rounded-xl p-5 shadow-sm flex items-center">
           <div className="bg-yellow-100 p-3 rounded-lg mr-4">
             <Store className="w-6 h-6 text-yellow-600" />
           </div>
@@ -118,7 +118,7 @@ export default function AdminPanel() {
             <p className="text-2xl font-bold text-gray-900">{totalMeli}</p>
           </div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center">
+        <div className="bg-white border border-[var(--cz-hairline)] rounded-xl p-5 shadow-sm flex items-center">
           <div className="bg-orange-50 p-3 rounded-lg mr-4">
             <ShoppingBag className="w-6 h-6 text-orange-600" />
           </div>
@@ -130,11 +130,11 @@ export default function AdminPanel() {
       </div>
 
       {/* Tabela de Usuários */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-[var(--cz-hairline)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+              <tr className="bg-gray-50 border-b border-[var(--cz-hairline)] text-sm text-gray-500">
                 <th className="p-4 font-medium">Nome / E-mail</th>
                 <th className="p-4 font-medium">Data de Cadastro</th>
                 <th className="p-4 font-medium">Permissão</th>
@@ -152,7 +152,7 @@ export default function AdminPanel() {
                     {new Date(user.createdAt).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="p-4">
-                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${user.role === 'ADMIN' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${user.role === 'ADMIN' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-700 border-[var(--cz-hairline)]'}`}>
                       {user.role}
                     </span>
                   </td>
@@ -162,7 +162,7 @@ export default function AdminPanel() {
                         <span className="text-sm text-gray-400 italic">Nenhuma conta</span>
                       ) : (
                         user.connectedAccounts.map((acc, i) => (
-                          <div key={i} className="flex items-center text-xs px-2.5 py-1.5 rounded-md border bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors">
+                          <div key={i} className="flex items-center text-xs px-2.5 py-1.5 rounded-md border bg-gray-50 border-[var(--cz-hairline)] text-gray-700 hover:bg-gray-100 transition-colors">
                             {acc.provider === 'shopee' ? (
                               <ShopeeIcon className="w-4 h-4 mr-2" />
                             ) : (

@@ -153,7 +153,7 @@ export default function FiltrosGestaoSKU({
     
     if (isActive) {
       const colorClasses = {
-        gray: "bg-gray-100 text-gray-900 border border-gray-200",
+        gray: "bg-gray-100 text-gray-900 border border-[var(--cz-hairline)]",
         green: "bg-green-100 text-green-900 border border-green-200",
         red: "bg-red-100 text-red-900 border border-red-200",
         yellow: "bg-yellow-100 text-yellow-900 border border-yellow-200",
@@ -161,7 +161,7 @@ export default function FiltrosGestaoSKU({
       return `${baseClasses} ${colorClasses[filtro.color as keyof typeof colorClasses]}`;
     }
     
-    return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-gray-200 border border-transparent`;
+    return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-[var(--cz-hairline)] border border-transparent`;
   };
 
   return (
@@ -218,7 +218,7 @@ export default function FiltrosGestaoSKU({
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Filtros de Status */}
-        <div className="flex flex-wrap items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-200">
+        <div className="flex flex-wrap items-center gap-2 p-1 bg-gray-50 rounded-xl border border-[var(--cz-hairline)]">
           {filtrosStatus.map((filtro) => {
             const isActive = filtro.id === filtroAtivo;
             
@@ -543,7 +543,7 @@ export default function FiltrosGestaoSKU({
         </div>
 
                   {!isEditMode && (
-                    <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
+                    <div className="mt-2 p-2 bg-gray-50 border border-[var(--cz-hairline)] rounded text-xs text-gray-600">
                       💡 Ative o Modo Edição primeiro
               </div>
                   )}

@@ -87,7 +87,7 @@ export default function FaturamentoPorConta({
   // Skeleton
   if (isLoading) {
     return (
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm animate-pulse">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)] animate-pulse">
         <div className="h-4 bg-gray-200 rounded w-1/3 mb-3" />
         <div className="flex gap-6">
           <div className="flex-1 h-72 bg-gray-100 rounded" />
@@ -101,7 +101,7 @@ export default function FaturamentoPorConta({
 
   if (contas.length === 0) {
     return (
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-6 h-6 bg-orange-100 rounded-lg flex items-center justify-center">
             <svg className="w-3.5 h-3.5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
@@ -123,7 +123,7 @@ export default function FaturamentoPorConta({
   const BAR_HEIGHT = 420; // px da barra empilhada
 
   return (
-    <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]">
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <div className="w-6 h-6 bg-orange-100 rounded-lg flex items-center justify-center">

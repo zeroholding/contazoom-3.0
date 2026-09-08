@@ -421,9 +421,9 @@ export default function ModalSyncVendas({
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[var(--cz-hairline)]/50 overflow-hidden">
           {/* Header */}
-          <div className="border-b border-gray-200/70 bg-gradient-to-r from-orange-50/50 to-white/50 px-6 py-4">
+          <div className="border-b border-[var(--cz-hairline)]/70 bg-gradient-to-r from-orange-50/50 to-white/50 px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
@@ -549,7 +549,7 @@ export default function ModalSyncVendas({
 
                     {/* Log de verificação em tempo real */}
                     {isChecking && verificationLog && (
-                      <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gradient-to-r from-gray-50 to-white p-4 shadow-sm">
+                      <div className="relative overflow-hidden rounded-lg border border-[var(--cz-hairline)] bg-gradient-to-r from-gray-50 to-white p-4 shadow-sm">
                         <div className="flex items-center gap-3">
                           <div className="flex-shrink-0">
                             <div className="relative h-5 w-5">
@@ -698,7 +698,7 @@ export default function ModalSyncVendas({
                           className={`relative flex items-center gap-3 cursor-pointer p-3 rounded-lg transition-all duration-200 ${
                             isSelected
                               ? "bg-orange-100 border-2 border-orange-500 shadow-sm ring-2 ring-orange-200"
-                              : "bg-white border-2 border-gray-200 hover:border-orange-300 hover:bg-orange-50/50"
+                              : "bg-white border-2 border-[var(--cz-hairline)] hover:border-orange-300 hover:bg-orange-50/50"
                           }`}
                         >
 
@@ -873,7 +873,7 @@ export default function ModalSyncVendas({
                                   ? 'bg-red-50 border-red-300'
                                   : isProcessing
                                   ? 'bg-orange-50 border-orange-300'
-                                  : 'bg-gray-50 border-gray-200'
+                                  : 'bg-gray-50 border-[var(--cz-hairline)]'
                               }`}
                             >
                               {/* Header do card */}

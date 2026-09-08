@@ -55,7 +55,7 @@ export function CardsContasSkeleton() {
       {[...Array(3)].map((_, index) => (
         <div
           key={index}
-          className="bg-white rounded-lg border border-gray-200 p-4 h-28 flex items-center space-x-4"
+          className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 h-28 flex items-center space-x-4"
         >
           <div className="flex-shrink-0">
             <div className="w-6 h-6 bg-gray-200 rounded animate-pulse"></div>
@@ -146,7 +146,7 @@ const IconContainer = memo(
         theme === "neutral" &&
           "bg-stone-100 border border-stone-200 group-hover:shadow-xl group-hover:border-stone-300",
         (!theme || theme === "light") &&
-          "bg-white border border-gray-200 group-hover:shadow-xl group-hover:border-gray-300",
+          "bg-white border border-[var(--cz-hairline)] group-hover:shadow-xl group-hover:border-gray-300",
         className,
       )}
     >
@@ -445,7 +445,7 @@ export default function CardsContas({
     >
       {/* Mercado Livre Card */}
       <div
-        className="card-item bg-white rounded-lg border border-gray-200 p-4 transition-all duration-300 h-28 flex items-center space-x-4 hover:border-orange-400 cursor-pointer"
+        className="card-item bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 transition-all duration-300 h-28 flex items-center space-x-4 hover:border-orange-400 cursor-pointer"
         onClick={() => onCardClick?.("Mercado Livre")}
       >
         <div className="flex-shrink-0">
@@ -477,7 +477,7 @@ export default function CardsContas({
 
       {/* Shopee Card */}
       <div
-        className="card-item bg-white rounded-lg border border-gray-200 p-4 transition-all duration-300 h-28 flex items-center space-x-4 hover:border-orange-400 cursor-pointer"
+        className="card-item bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 transition-all duration-300 h-28 flex items-center space-x-4 hover:border-orange-400 cursor-pointer"
         onClick={() => onCardClick?.("Shopee")}
       >
         <div className="flex-shrink-0">
@@ -507,7 +507,7 @@ export default function CardsContas({
 
       {/* Bling Card */}
       <div
-        className="card-item bg-white rounded-lg border border-gray-200 p-4 transition-all duration-300 h-28 flex items-center space-x-4 hover:border-orange-400 cursor-pointer"
+        className="card-item bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 transition-all duration-300 h-28 flex items-center space-x-4 hover:border-orange-400 cursor-pointer"
         onClick={() => onCardClick?.("Bling")}
       >
         <div className="flex-shrink-0">

@@ -783,7 +783,7 @@ function Conteudo() {
                 esconder coluna faria a mesma tela mostrar dados diferentes
                 dependendo do monitor. */}
             <table className="w-full min-w-[1340px] text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <thead className="border-b border-[var(--cz-hairline)] bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
                   <th scope="col" className="px-5 py-3">
                     Razão social

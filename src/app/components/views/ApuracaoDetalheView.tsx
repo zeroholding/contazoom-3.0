@@ -901,7 +901,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
         </dl>
 
         {tarefa.observacoes && (
-          <div className="border-t border-gray-200 px-5 py-4">
+          <div className="border-t border-[var(--cz-hairline)] px-5 py-4">
             <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
               Observações
             </p>
@@ -1199,7 +1199,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
         <div className="space-y-4">
           {erroModal && <Aviso tom="erro" mensagem={erroModal} />}
 
-          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm">
+          <div className="rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3 text-sm">
             <p className="flex items-start gap-2 text-gray-700">
               <Icone
                 nome="CheckCircle2"
@@ -1260,7 +1260,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
         onConfirmar={voltarEtapa}
         extra={
           etapaAlvo ? (
-            <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            <p className="rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3 text-sm text-gray-700">
               Etapa em curso:{" "}
               <span className="font-semibold text-gray-900">
                 {etapaAlvo.numero} — {etapaAlvo.titulo}
@@ -1287,7 +1287,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
         onConfirmar={dispensarEtapa}
         extra={
           etapaAlvo ? (
-            <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            <p className="rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3 text-sm text-gray-700">
               Etapa:{" "}
               <span className="font-semibold text-gray-900">
                 {etapaAlvo.numero} — {etapaAlvo.titulo}
@@ -1445,7 +1445,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
         onFechar={fecharModal}
         onConfirmar={reabrirCompetencia}
         extra={
-          <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          <p className="rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3 text-sm text-gray-700">
             Encerrada em{" "}
             <span className="font-semibold text-gray-900">
               {dataHora(tarefa.concluidaEm)}

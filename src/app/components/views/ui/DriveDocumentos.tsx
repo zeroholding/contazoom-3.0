@@ -258,14 +258,14 @@ export default function DriveDocumentos() {
 
                   {/* Subpastas reais (parentId) */}
                   {hasChildren && isExpanded && (
-                    <div className="ml-2 mt-1 space-y-1 border-l-2 border-gray-200 pl-1">
+                    <div className="ml-2 mt-1 space-y-1 border-l-2 border-[var(--cz-hairline)] pl-1">
                       {children.map(child => renderFolder(child, depth + 1))}
                     </div>
                   )}
 
                   {/* Subpastas de Impostos (Anos/Meses) */}
                   {isImpostos && isExpanded && !hasChildren && (
-                    <div className="ml-6 mt-1 space-y-1 border-l-2 border-gray-200 pl-2">
+                    <div className="ml-6 mt-1 space-y-1 border-l-2 border-[var(--cz-hairline)] pl-2">
                       {availYears.map(year => {
                         const isYearActive = currentFolderId === folder.id && currentYear === year && !currentMonth;
                         const isYearExpanded = expandedYears[year];
@@ -377,7 +377,7 @@ export default function DriveDocumentos() {
                 return (
                   <div 
                     key={doc.id} 
-                    className="flex flex-col p-4 bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-400 transition-all group cursor-pointer"
+                    className="flex flex-col p-4 bg-white border border-[var(--cz-hairline)] rounded-xl hover:shadow-md hover:border-blue-400 transition-all group cursor-pointer"
                     onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')}
                   >
                     <div className="flex items-start">
@@ -395,7 +395,7 @@ export default function DriveDocumentos() {
                         {storeLabel && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {storeLabel.split(",").map((s, idx) => (
-                              <div key={idx} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200 text-gray-600 font-medium">
+                              <div key={idx} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-[var(--cz-hairline)] text-gray-600 font-medium">
                                 <Store className="w-3 h-3 mr-1" />
                                 <span className="truncate max-w-[120px]">{s}</span>
                               </div>

@@ -1285,8 +1285,8 @@ function CartaoProcesso({
       href={`/admin/tarefas/legalizacao/${item.id}`}
       className={`block rounded-xl border p-5 shadow-sm transition-colors ${
         encerrado
-          ? "border-gray-200 bg-gray-50 hover:border-gray-300"
-          : "border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50/30"
+          ? "border-[var(--cz-hairline)] bg-gray-50 hover:border-gray-300"
+          : "border-[var(--cz-hairline)] bg-white hover:border-orange-300 hover:bg-orange-50/30"
       }`}
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1361,7 +1361,7 @@ function CartaoProcesso({
                 title={`${item.anexos} ${
                   item.anexos === 1 ? "anexo" : "anexos"
                 }`}
-                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-600"
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[var(--cz-hairline)] bg-gray-50 px-2.5 py-1 text-xs font-semibold text-gray-600"
               >
                 <Icone nome="Paperclip" className="h-3.5 w-3.5 shrink-0" />
                 <span className="cz-num">{item.anexos}</span>

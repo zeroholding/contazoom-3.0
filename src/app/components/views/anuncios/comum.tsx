@@ -50,7 +50,10 @@ export function MolduraTela({ children }: { children: ReactNode }) {
       />
 
       <div className={`fixed top-[var(--cz-topbar-h)] bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[var(--cz-fundo)]`}>
-        <div className="h-full w-full rounded-tl-none border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:rounded-tl-2xl" />
+        {/* O painel BRANCO que ficava aqui foi removido: com ele, cartao branco
+            sobre painel branco nao tinha separacao nenhuma, e era por isso que os
+            cartoes desta tela eram cinza. Agora o conteudo assenta no fundo claro
+            e os cartoes brancos se destacam dele. */}
       </div>
 
       <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
@@ -121,7 +124,7 @@ export function BotaoAtualizar({
 
 export function PainelFiltros({ children, nota }: { children: ReactNode; nota?: ReactNode }) {
   return (
-    <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+    <div className="mt-4 rounded-2xl border border-[var(--cz-hairline)] bg-white p-4">
       <div className="grid gap-3 lg:grid-cols-12">{children}</div>
       {nota}
     </div>
@@ -182,7 +185,7 @@ export function Kpi({
           ? "border-amber-200 bg-amber-50"
           : destaque
             ? "border-emerald-200 bg-emerald-50"
-            : "border-gray-200 bg-white"
+            : "border-[var(--cz-hairline)] bg-white"
       }`}
     >
       <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-gray-500">
@@ -226,7 +229,7 @@ export function Th({
 export function CabecalhoTabela({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-gray-200 bg-gray-50/80 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-500">
+      <tr className="border-b border-[var(--cz-hairline)] bg-gray-50/80 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-500">
         {children}
       </tr>
     </thead>
@@ -315,7 +318,7 @@ export function CelulaAbrir({ l }: { l: Linha }) {
           target="_blank"
           rel="noreferrer"
           title={`Abrir ${l.titulo} no Mercado Livre`}
-          className="inline-grid size-9 place-items-center rounded-xl border border-gray-200 text-gray-500 transition hover:border-emerald-400 hover:text-emerald-700"
+          className="inline-grid size-9 place-items-center rounded-xl border border-[var(--cz-hairline)] text-gray-500 transition hover:border-emerald-400 hover:text-emerald-700"
         >
           <svg
             className="h-4 w-4"
@@ -351,7 +354,7 @@ export function Miniatura({ src, alt }: { src: string | null; alt: string }) {
   const [falhou, setFalhou] = useState(false);
   if (!src || falhou) {
     return (
-      <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-gray-200 bg-gray-50 text-gray-300">
+      <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-gray-50 text-gray-300">
         <svg
           className="h-4 w-4"
           viewBox="0 0 24 24"
@@ -376,7 +379,7 @@ export function Miniatura({ src, alt }: { src: string | null; alt: string }) {
       loading="lazy"
       decoding="async"
       onError={() => setFalhou(true)}
-      className="size-11 shrink-0 rounded-lg border border-gray-200 bg-white object-contain"
+      className="size-11 shrink-0 rounded-lg border border-[var(--cz-hairline)] bg-white object-contain"
     />
   );
 }
@@ -502,7 +505,7 @@ export function Paginacao({
   const de = (pagina - 1) * porPagina + 1;
   const ate = Math.min(pagina * porPagina, total);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-5 py-3 text-[12px] text-gray-600">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] px-5 py-3 text-[12px] text-gray-600">
       <span>
         Mostrando <strong>{inteiro(de)}</strong> a <strong>{inteiro(ate)}</strong> de{" "}
         <strong>{inteiro(total)}</strong> {rotulo}

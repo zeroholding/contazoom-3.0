@@ -433,9 +433,9 @@ export default function ModalSyncVendasDashboard({
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[var(--cz-hairline)]/50 overflow-hidden max-h-[90vh] flex flex-col">
             {/* Header */}
-            <div className="border-b border-gray-200/70 bg-gradient-to-r from-orange-50/50 to-white/50 px-6 py-4">
+            <div className="border-b border-[var(--cz-hairline)]/70 bg-gradient-to-r from-orange-50/50 to-white/50 px-6 py-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500">
@@ -558,7 +558,7 @@ export default function ModalSyncVendasDashboard({
                       </button>
 
                       {isVerifying && verificationLog && (
-                        <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gradient-to-r from-gray-50 to-white p-4 shadow-sm">
+                        <div className="relative overflow-hidden rounded-lg border border-[var(--cz-hairline)] bg-gradient-to-r from-gray-50 to-white p-4 shadow-sm">
                           <div className="flex items-center gap-3">
                             <div className="flex-shrink-0">
                               <div className="relative h-5 w-5">
@@ -603,7 +603,7 @@ export default function ModalSyncVendasDashboard({
                       {contas.map((conta) => (
                         <label
                           key={conta.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors"
+                          className="flex items-center gap-3 p-3 rounded-lg border border-[var(--cz-hairline)] hover:bg-gray-50 cursor-pointer transition-colors"
                         >
                           <input
                             type="checkbox"
@@ -686,7 +686,7 @@ export default function ModalSyncVendasDashboard({
                     {syncSteps.map((syncStep, index) => (
                       <div
                         key={syncStep.accountId}
-                        className="rounded-lg border border-gray-200 p-4 bg-white"
+                        className="rounded-lg border border-[var(--cz-hairline)] p-4 bg-white"
                       >
                         <div className="flex items-center gap-3 mb-2">
                           {getStepStatusIcon(syncStep.status)}

@@ -381,7 +381,7 @@ export default function FiltrosVendas({
     
     if (isActive) {
       const colorClasses = {
-        gray: "bg-gray-100 text-gray-900 border border-gray-200",
+        gray: "bg-gray-100 text-gray-900 border border-[var(--cz-hairline)]",
         yellow: "bg-yellow-100 text-yellow-900 border border-yellow-200",
         green: "bg-green-100 text-green-900 border border-green-200",
         red: "bg-red-100 text-red-900 border border-red-200",
@@ -389,7 +389,7 @@ export default function FiltrosVendas({
       return `${baseClasses} ${colorClasses[filtro.color as keyof typeof colorClasses]}`;
     }
     
-    return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-gray-200 border border-transparent`;
+    return `${baseClasses} text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-[var(--cz-hairline)] border border-transparent`;
   };
 
   const getBadgeClasses = (filtro: typeof filtros[0], isActive: boolean) => {
@@ -413,7 +413,7 @@ export default function FiltrosVendas({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Filtros de Status */}
         <div className="overflow-x-auto flex-nowrap hide-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
-          <div className="inline-flex items-center gap-2 p-1 bg-gray-50 rounded-xl border border-gray-200 min-w-max">
+          <div className="inline-flex items-center gap-2 p-1 bg-gray-50 rounded-xl border border-[var(--cz-hairline)] min-w-max">
             {filtros.map((filtro) => {
               const isActive = filtro.id === filtroAtivo;
               
@@ -1174,7 +1174,7 @@ export default function FiltrosVendas({
                     </div>
 
                     {/* Botões de ação */}
-                    <div className="flex gap-1.5 pt-2 border-t border-gray-200 mt-2">
+                    <div className="flex gap-1.5 pt-2 border-t border-[var(--cz-hairline)] mt-2">
                       <button
                         onClick={handleSelecionarTodas}
                         className="flex-1 px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"

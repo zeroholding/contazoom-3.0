@@ -147,7 +147,7 @@ export default function FinanceiroStats({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
       {/* Faturamento Bruto */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Valor total das vendas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor total das vendas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -166,7 +166,7 @@ export default function FinanceiroStats({
       </div>
 
       {/* Taxas de Marketplaces */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Total de taxas pagas às plataformas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Total de taxas pagas às plataformas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -192,7 +192,7 @@ export default function FinanceiroStats({
       </div>
 
       {/* Custo com Frete */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Total gasto com frete">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Total gasto com frete">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -218,7 +218,7 @@ export default function FinanceiroStats({
       </div>
 
       {/* Receita Líquida */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Receita bruta menos devoluções/cancelamentos">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Receita bruta menos devoluções/cancelamentos">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -244,7 +244,7 @@ export default function FinanceiroStats({
       </div>
 
       {/* CMV */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Custo das mercadorias vendidas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Custo das mercadorias vendidas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -270,7 +270,7 @@ export default function FinanceiroStats({
       </div>
 
       {/* Lucro Bruto */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Receita líquida - taxas - frete - CMV">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Receita líquida - taxas - frete - CMV">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -296,7 +296,7 @@ export default function FinanceiroStats({
       </div>
 
       {/* Despesas Operacionais */}
-      <div className="bg-red-50 rounded-lg border border-red-200 p-3 shadow-sm" title="Soma das despesas operacionais">
+      <div className="bg-red-50 rounded-lg border border-red-200 p-3 shadow-[var(--cz-elev-1)]" title="Soma das despesas operacionais">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-red-100 rounded-lg flex items-center justify-center mr-2">
@@ -316,7 +316,7 @@ export default function FinanceiroStats({
       </div>
 
       {/* Lucro Líquido */}
-      <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-3 shadow-sm" title="Lucro após todas as despesas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Lucro após todas as despesas">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">

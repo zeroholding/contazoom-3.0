@@ -455,7 +455,7 @@ export default function VendasTable({
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                           {venda.sku ? (
-                            <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold font-mono rounded bg-gray-100 text-gray-700 border border-gray-200">
+                            <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold font-mono rounded bg-gray-100 text-gray-700 border border-[var(--cz-hairline)]">
                               {venda.sku}
                             </span>
                           ) : (
@@ -539,7 +539,7 @@ export default function VendasTable({
                                 );
                               } else if (logistic) {
                                 return (
-                                  <span className="inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded bg-gray-100 text-gray-800 border border-gray-200 capitalize">
+                                  <span className="inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded bg-gray-100 text-gray-800 border border-[var(--cz-hairline)] capitalize">
                                     {venda.logisticType || venda.envioMode}
                                   </span>
                                 );

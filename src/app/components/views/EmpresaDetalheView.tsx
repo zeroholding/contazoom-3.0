@@ -782,7 +782,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
       {/* ---------------------------- Faixa resumo -------------------------- */}
 
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--cz-hairline)] bg-white px-5 py-4 shadow-sm">
         {/* Plano interno onde antes ficava a situação: é ele que diz o estado
             operacional da empresa desde a mudança pedida pelo escritório. */}
         <SeloPlanoInterno plano={empresa.planoInterno} />
@@ -1266,7 +1266,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
             >
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {empresa.cnpj ? (
-                  <div className="rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5">
+                  <div className="rounded-[10px] border border-[var(--cz-hairline)] bg-gray-50 px-3 py-2.5">
                     <p className="text-[0.8125rem] font-semibold leading-5 text-[#14161B]">
                       CNPJ
                     </p>
@@ -1441,7 +1441,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
                   onChange={(e) => editar({ responsavelId: e.target.value })}
                 />
                 {semAcessoClientes ? (
-                  <p className="flex items-start gap-1.5 self-end rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
+                  <p className="flex items-start gap-1.5 self-end rounded-[10px] border border-[var(--cz-hairline)] bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
                     <Icone nome="Lock" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
                       Somente administrador vincula ou desvincula o login do
@@ -1484,7 +1484,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
                 />
               </div>
 
-              <div className="rounded-[10px] border border-gray-200 bg-gray-50 px-3 py-2.5">
+              <div className="rounded-[10px] border border-[var(--cz-hairline)] bg-gray-50 px-3 py-2.5">
                 <p className="text-[0.8125rem] font-semibold leading-5 text-[#14161B]">
                   Regime tributário
                 </p>

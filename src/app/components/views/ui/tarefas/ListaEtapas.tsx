@@ -163,7 +163,7 @@ export default function ListaEtapas({
                         Etapa {etapa.numero}
                       </span>
                       {etapa.opcional && (
-                        <span className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+                        <span className="rounded border border-[var(--cz-hairline)] bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
                           Opcional
                         </span>
                       )}
@@ -198,7 +198,7 @@ export default function ListaEtapas({
                 )}
 
                 {etapa.observacao && (
-                  <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                  <p className="mt-2 rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-3 py-2 text-xs text-gray-600">
                     {etapa.observacao}
                   </p>
                 )}

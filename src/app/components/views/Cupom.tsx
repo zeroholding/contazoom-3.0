@@ -124,14 +124,17 @@ export default function Cupom() {
       />
 
       <div className={`fixed top-[var(--cz-topbar-h)] bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[var(--cz-fundo)]`}>
-        <div className="h-full w-full rounded-tl-none border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:rounded-tl-2xl" />
+        {/* O painel BRANCO que ficava aqui foi removido: com ele, cartao branco
+            sobre painel branco nao tinha separacao nenhuma, e era por isso que os
+            cartoes desta tela eram cinza. Agora o conteudo assenta no fundo claro
+            e os cartoes brancos se destacam dele. */}
       </div>
 
       <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
         <section className="p-3 sm:p-6">
           <HeaderCupom onNew={handleOpenModal} />
 
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
+          <div className="rounded-xl border border-[var(--cz-hairline)] bg-white p-6">
             <p className="text-sm text-gray-600">
               Crie e gerencie cupons para oferecer descontos em compras de créditos. Esta página está oculta do menu e acessível diretamente pela rota {"/cupom"}.
             </p>

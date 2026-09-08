@@ -341,7 +341,10 @@ export default function DRE() {
       <div
         className={`fixed top-[var(--cz-topbar-h)] bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[var(--cz-fundo)]`}
       >
-        <div className="h-full w-full rounded-tl-none border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:rounded-tl-2xl" />
+        {/* O painel BRANCO que ficava aqui foi removido: com ele, cartao branco
+            sobre painel branco nao tinha separacao nenhuma, e era por isso que os
+            cartoes desta tela eram cinza. Agora o conteudo assenta no fundo claro
+            e os cartoes brancos se destacam dele. */}
       </div>
 
       <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
@@ -357,7 +360,7 @@ export default function DRE() {
           />
 
           {/* Demonstrativo */}
-          <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
+          <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 shadow-[var(--cz-elev-1)]">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h3 className="text-sm font-semibold text-gray-900">
                 Demonstrativo de Resultado do Exercicio
@@ -525,11 +528,11 @@ export default function DRE() {
                       <h4 className="text-xs font-medium text-gray-700">Receitas e Deducoes por Mes</h4>
                     </div>
                   </div>
-                  <div className="overflow-auto rounded-lg border border-gray-200 bg-white">
+                  <div className="overflow-auto rounded-lg border border-[var(--cz-hairline)] bg-white">
                     <table className="w-full min-w-[600px] text-sm">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="sticky left-0 z-10 bg-gray-50 py-2 px-3 text-left text-xs font-medium text-gray-700 border-r border-gray-200">
+                          <th className="sticky left-0 z-10 bg-gray-50 py-2 px-3 text-left text-xs font-medium text-gray-700 border-r border-[var(--cz-hairline)]">
                             Indicador
                           </th>
                           {(dreData.months || []).map((m) => (
@@ -541,8 +544,8 @@ export default function DRE() {
                       </thead>
                       <tbody>
                         {/* (+) RECEITA BRUTA TOTAL */}
-                        <tr className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-gray-200">
+                        <tr className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (+) RECEITA BRUTA TOTAL
                           </td>
                           {dreData.months.map((m) => {
@@ -556,7 +559,7 @@ export default function DRE() {
                         </tr>
                         {/* → Receita Bruta Mercado Livre */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             → Receita Bruta Mercado Livre
                           </td>
                           {dreData.months.map((m) => {
@@ -570,7 +573,7 @@ export default function DRE() {
                         </tr>
                         {/* → Receita Bruta Shopee */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             → Receita Bruta Shopee
                           </td>
                           {dreData.months.map((m) => {
@@ -583,8 +586,8 @@ export default function DRE() {
                           })}
                         </tr>
                         {/* (-) DEDU├ç├òES */}
-                        <tr className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-medium text-gray-900 border-r border-gray-200">
+                        <tr className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-medium text-gray-900 border-r border-[var(--cz-hairline)]">
                             (-) Deducoes da Receita Bruta
                           </td>
                           {dreData.months.map((m) => {
@@ -598,7 +601,7 @@ export default function DRE() {
                         </tr>
                         {/* VENDAS CANCELADAS MERCADO LIVRE */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             VENDAS CANCELADAS MERCADO LIVRE
                           </td>
                           {dreData.months.map((m) => {
@@ -612,7 +615,7 @@ export default function DRE() {
                         </tr>
                         {/* VENDAS CANCELADAS SHOPEE */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             VENDAS CANCELADAS SHOPEE
                           </td>
                           {dreData.months.map((m) => {
@@ -625,8 +628,8 @@ export default function DRE() {
                           })}
                         </tr>
                         {/* (=) RECEITA L├ìQUIDA */}
-                        <tr className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-gray-200">
+                        <tr className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (=) Receita Liquida
                           </td>
                           {dreData.months.map((m) => {
@@ -641,8 +644,8 @@ export default function DRE() {
                           })}
                         </tr>
                         {/* (-) TAXAS/COMISS├òES */}
-                        <tr className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-gray-200">
+                        <tr className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (-) TAXA E COMISSÕES DE MARKETPLACES
                           </td>
                           {dreData.months.map((m) => {
@@ -656,7 +659,7 @@ export default function DRE() {
                         </tr>
                         {/* → Taxas Mercado Livre */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             → Taxas Mercado Livre
                           </td>
                           {dreData.months.map((m) => {
@@ -670,7 +673,7 @@ export default function DRE() {
                         </tr>
                         {/* → Taxas Shopee */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             → Taxas Shopee
                           </td>
                           {dreData.months.map((m) => {
@@ -683,8 +686,8 @@ export default function DRE() {
                           })}
                         </tr>
                         {/* (-) CUSTO DE FRETE MARKETPLACE */}
-                        <tr className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-gray-200">
+                        <tr className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (-) CUSTO DE FRETE MARKETPLACE
                           </td>
                           {dreData.months.map((m) => {
@@ -698,7 +701,7 @@ export default function DRE() {
                         </tr>
                         {/* → Frete Mercado Livre */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             → Frete Mercado Livre
                           </td>
                           {dreData.months.map((m) => {
@@ -712,7 +715,7 @@ export default function DRE() {
                         </tr>
                         {/* → Frete Shopee */}
                         <tr className="border-t border-gray-100">
-                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             → Frete Shopee
                           </td>
                           {dreData.months.map((m) => {
@@ -726,7 +729,7 @@ export default function DRE() {
                         </tr>
                         {/* (=) RECEITA OPERACIONAL LÍQUIDA */}
                         <tr className="border-t border-gray-300">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-bold text-gray-900 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-bold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (=) RECEITA OPERACIONAL LÍQUIDA
                           </td>
                           {dreData.months.map((m) => {
@@ -744,8 +747,8 @@ export default function DRE() {
                           })}
                         </tr>
                         {/* (-) CUSTO (CMV / CPV / CSP) */}
-                        <tr className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-gray-200">
+                        <tr className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (-) CUSTO (CMV / CPV / CSP)
                           </td>
                           {dreData.months.map((m) => {
@@ -759,7 +762,7 @@ export default function DRE() {
                         </tr>
                         {/* (=) LUCRO BRUTO / MARGEM DE CONTRIBUIÇÃO */}
                         <tr className="border-t border-gray-300">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-bold text-gray-900 border-r border-gray-200">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-bold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (=) LUCRO BRUTO / MARGEM DE CONTRIBUIÇÃO
                           </td>
                           {dreData.months.map((m) => {
@@ -779,8 +782,8 @@ export default function DRE() {
                           })}
                         </tr>
                         {/* (-) DESPESAS OPERACIONAIS */}
-                        <tr className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-gray-200">
+                        <tr className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (-) DESPESAS OPERACIONAIS
                           </td>
                           {dreData.months.map((m) => {
@@ -800,7 +803,7 @@ export default function DRE() {
           </div>
 
           {/* Categorias listadas por meses */}
-          <div className="mt-6 bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
+          <div className="mt-6 bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 shadow-[var(--cz-elev-1)]">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center">
                 <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -883,7 +886,7 @@ export default function DRE() {
               <table className="min-w-full text-xs">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 z-10 bg-[#F3F3F3] text-left text-gray-700 font-medium py-2 pr-4 whitespace-nowrap border-r border-gray-200">
+                    <th className="sticky left-0 z-10 bg-[var(--cz-fundo)] text-left text-gray-700 font-medium py-2 pr-4 whitespace-nowrap border-r border-[var(--cz-hairline)]">
                       Categoria
                     </th>
                     {(dreData?.months || []).map((m, idx) => (
@@ -901,7 +904,7 @@ export default function DRE() {
                   {/* Total de Despesas (todas as categorias do m├¬s) */}
                   {dreData && (
                     <tr className="border-t border-gray-300 bg-white/70">
-                      <td className="sticky left-0 z-10 bg-white/70 py-2 pr-4 text-gray-900 whitespace-nowrap border-r border-gray-200 font-semibold">
+                      <td className="sticky left-0 z-10 bg-white/70 py-2 pr-4 text-gray-900 whitespace-nowrap border-r border-[var(--cz-hairline)] font-semibold">
                         Total de Despesas
                       </td>
                       {dreData.months.map((m) => {
@@ -928,8 +931,8 @@ export default function DRE() {
                       const row = dreData.valoresPorCategoriaMes[c.id] || {};
                       const isVisible = categoriasVisiveis.has(c.id);
                       return (
-                        <tr key={c.id} className="border-t border-gray-200">
-                          <td className="sticky left-0 z-10 bg-[#F3F3F3] py-2 pr-4 text-gray-900 whitespace-nowrap border-r border-gray-200">
+                        <tr key={c.id} className="border-t border-[var(--cz-hairline)]">
+                          <td className="sticky left-0 z-10 bg-[var(--cz-fundo)] py-2 pr-4 text-gray-900 whitespace-nowrap border-r border-[var(--cz-hairline)]">
                             <div className="flex items-center gap-2">
                               <input
                                 type="checkbox"
@@ -972,7 +975,7 @@ export default function DRE() {
 
           {/* KPIs finais */}
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 shadow-[var(--cz-elev-1)]">
               <div className="text-xs text-gray-600 mb-1">(=) EBITDA</div>
               <div
                 className={`text-lg font-semibold ${ebitda >= 0 ? "text-green-600" : "text-red-600"}`}
@@ -980,7 +983,7 @@ export default function DRE() {
                 {currency(ebitda)}
               </div>
             </div>
-            <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 shadow-[var(--cz-elev-1)]">
               <div className="text-xs text-gray-600 mb-1">
                 (=) RESULTADO LIQUIDO DO EXERCICIO
               </div>
@@ -990,7 +993,7 @@ export default function DRE() {
                 {currency(resultadoLiquido)}
               </div>
             </div>
-            <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 shadow-[var(--cz-elev-1)]">
               <div className="text-xs text-gray-600 mb-1">
                 Margem de Contribuição
               </div>
@@ -1000,7 +1003,7 @@ export default function DRE() {
                 {currency(margemContribuicao)}
               </div>
             </div>
-            <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 shadow-[var(--cz-elev-1)]">
               <div className="text-xs text-gray-600 mb-1">
                 Lucratividade (%)
               </div>
@@ -1010,7 +1013,7 @@ export default function DRE() {
                 {(lucratividadePct * 100).toFixed(1)}%
               </div>
             </div>
-            <div className="bg-[#F3F3F3] rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-4 shadow-[var(--cz-elev-1)]">
               <div className="text-xs text-gray-600 mb-1">
                 Ponto de Equilibrio (Periodo)
               </div>

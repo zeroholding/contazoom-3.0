@@ -1462,7 +1462,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
               <h3 className="mb-2 text-sm font-semibold text-gray-900">
                 Pendências já registradas
               </h3>
-              <div className="rounded-lg border border-gray-200">
+              <div className="rounded-lg border border-[var(--cz-hairline)]">
                 <Historico
                   logs={processo.logs.filter(
                     (log) =>

@@ -75,7 +75,7 @@ export default function FormularioSKUInline({ onAddSKU }: FormularioSKUInlinePro
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-6 mb-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Adicionar Novo SKU</h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -214,7 +214,7 @@ export default function FormularioSKUInline({ onAddSKU }: FormularioSKUInlinePro
         </div>
 
         {/* Botão Adicionar */}
-        <div className="flex justify-end pt-4 border-t border-gray-200">
+        <div className="flex justify-end pt-4 border-t border-[var(--cz-hairline)]">
           <button
             type="submit"
             className="px-6 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
