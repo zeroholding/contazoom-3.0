@@ -261,8 +261,8 @@ export default function HeaderFinanceiro({
     <div className="mb-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="text-left">
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Dashboard Financeiro</h1>
-          <p className="mt-1 text-sm text-gray-600">KPIs financeiros com filtros por período, portador e categoria.</p>
+          <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">Dashboard Financeiro</h1>
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">KPIs financeiros com filtros por período, portador e categoria.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">

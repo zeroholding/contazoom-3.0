@@ -36,7 +36,7 @@ export default function HeaderGestaoSKU({
     return (
       <div className="mb-6 text-left">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">
             SKUs - {selectedCategory}
           </h1>
           <button
@@ -62,7 +62,7 @@ export default function HeaderGestaoSKU({
             Voltar
           </button>
         </div>
-        <p className="mt-1 text-sm text-gray-600 text-left">
+        <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)] text-left">
           Gerencie os SKUs da categoria {selectedCategory}.
         </p>
       </div>
@@ -73,8 +73,8 @@ export default function HeaderGestaoSKU({
     <div className="mb-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="text-left">
-          <h1 className="text-2xl font-semibold text-gray-900">Gestão de SKU</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">Gestão de SKU</h1>
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
             Gerencie seus produtos e SKUs de forma centralizada.
           </p>
         </div>

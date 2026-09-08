@@ -6,7 +6,7 @@ export default function HeaderCupom({ onNew }: HeaderCupomProps) {
   return (
     <div className="mb-6 text-left">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
-        <h1 className="text-2xl font-semibold text-gray-900">Cupons</h1>
+        <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">Cupons</h1>
         <button
           onClick={onNew}
           className="inline-flex items-center justify-center gap-2 px-3 py-2 h-10 rounded-md bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 active:bg-orange-800 transition-colors"
@@ -29,7 +29,7 @@ export default function HeaderCupom({ onNew }: HeaderCupomProps) {
           Criar cupom
         </button>
       </div>
-      <p className="mt-1 text-sm text-gray-600">
+      <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
         Gerencie e crie cupons válidos para compras de créditos.
       </p>
     </div>

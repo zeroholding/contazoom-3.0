@@ -95,12 +95,12 @@ export default function HeaderDRE({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="text-left">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">DRE</h1>
+            <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">DRE</h1>
             <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
               {getPeriodoTexto()}
             </span>
           </div>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
             Demonstrativo de Resultado do Exercício com filtros por meses e categorias de despesas.
           </p>
         </div>

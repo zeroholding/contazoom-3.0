@@ -107,7 +107,7 @@ export default function HistoricoCustosModal({
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-400 mb-3">
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <p className="text-sm font-medium text-gray-700">Nenhuma alteração registrada</p>
@@ -175,7 +175,7 @@ export default function HistoricoCustosModal({
                             }`}
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d={delta.tipo === "subiu" ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={delta.tipo === "subiu" ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
                             </svg>
                             {Math.abs(delta.pct).toFixed(1)}%
                           </span>

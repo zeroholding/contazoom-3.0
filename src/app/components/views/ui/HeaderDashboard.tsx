@@ -112,8 +112,8 @@ export default function HeaderDashboard({
     <div className="mb-6">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
         <div className="text-left w-full sm:flex-1">
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="mt-1 text-xs sm:text-sm text-gray-600">
+          <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">Dashboard</h1>
+          <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
             Visão geral das estatísticas e métricas do negócio.
           </p>
         </div>
