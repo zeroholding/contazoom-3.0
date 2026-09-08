@@ -1,154 +1,81 @@
 "use client";
 
 /**
- * Peças visuais comuns às duas telas de anúncios.
+ * Peças específicas das telas de ANÚNCIOS.
  *
- * As telas são separadas porque respondem perguntas diferentes, mas a moldura, a
- * miniatura, os selos, a paginação e os avisos são os mesmos. Duplicar isso
- * faria as duas telas divergirem no acabamento com o tempo — e a divergência
- * apareceria justamente no detalhe que ninguém aponta e todo mundo sente.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ESTE ARQUIVO ERA UM SEGUNDO SHELL, E ELE JÁ HAVIA DIVERGIDO
  *
- * O que NÃO mora aqui, de propósito: as colunas da tabela, os indicadores e os
- * filtros. Cada tela decide os seus, porque é ali que elas realmente diferem.
+ * Antes daqui, este arquivo tinha a própria `MolduraTela`, o próprio `Cabecalho`,
+ * o próprio `Kpi`, a própria `Paginacao` — cópias do que vive em
+ * `views/comum/shell.tsx`. O comentário original dizia que duplicar faria as
+ * telas divergirem "no detalhe que ninguém aponta e todo mundo sente". Foi
+ * exatamente o que aconteceu: quando o painel inteiro passou para a linguagem da
+ * tela de login, esta cópia ficou atrás e as duas telas de anúncios saíram
+ * diferentes de todas as outras —
+ *
+ *   • botão "Atualizar estoque" VERDE, enquanto o resto do app é laranja;
+ *   • título em `text-xl font-bold`, menor e sem o tracking de `.cz-titulo`;
+ *   • recolher o menu não encolhia a barra, porque esta cópia da moldura nunca
+ *     atualizava `--sidebar-w` (o defeito já corrigido no shell compartilhado);
+ *   • a preferência de menu recolhido se perdia ao navegar para cá, porque esta
+ *     cópia não lia o `localStorage`;
+ *   • cabeçalho de tabela, paginação e miniatura em cinza fora dos tokens.
+ *
+ * Agora a moldura e as peças genéricas são REEXPORTADAS do shell compartilhado.
+ * As duas telas continuam importando os mesmos nomes deste arquivo, então nada
+ * mudou para elas — mas passa a existir um só lugar onde a moldura é definida.
+ *
+ * O que fica aqui é o que é de anúncios de verdade: as células da tabela, os
+ * selos de situação e de envio, e os avisos próprios do módulo.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { useState, type ReactNode } from "react";
-
-import Sidebar from "../ui/Sidebar";
-import Topbar from "../ui/Topbar";
+import { Miniatura, Paginacao as PaginacaoBase } from "../comum/shell";
 import { brl, inteiro, type Linha } from "./tipos";
 
 /* -------------------------------------------------------------------------- */
-/*                                  Moldura                                   */
+/*                  Moldura e peças genéricas: vêm do shell                   */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Sidebar, Topbar e o fundo da área de conteúdo.
+ * Reexportado, não recriado.
  *
- * Copiado do padrão de `GestaoSKU`, que é como todas as telas do projeto se
- * montam. Fica aqui e não em cada tela porque são ~25 linhas de estrutura que
- * não têm nada a ver com anúncios.
+ * As telas de anúncios importam estes nomes deste arquivo desde que foram
+ * escritas. Reexportar mantém o import delas intacto e ao mesmo tempo garante
+ * que elas recebam a mesma moldura, o mesmo botão e o mesmo indicador que todas
+ * as outras telas — inclusive as correções futuras.
  */
-export function MolduraTela({ children }: { children: ReactNode }) {
-  const [colapsada, setColapsada] = useState(false);
-  const [menuMobile, setMenuMobile] = useState(false);
+export {
+  Aviso,
+  BotaoAtualizar,
+  Cabecalho,
+  CabecalhoTabela,
+  Campo,
+  Esqueleto,
+  Kpi,
+  MolduraTela,
+  PainelFiltros,
+  Th,
+} from "../comum/shell";
 
-  const mdLeftVar = "md:left-[var(--sidebar-w,16rem)]";
-  const mdMlVar = "md:ml-[var(--sidebar-w,16rem)]";
-
-  return (
-    <div className="min-h-screen overflow-x-hidden">
-      <Sidebar
-        collapsed={colapsada}
-        mobileOpen={menuMobile}
-        onMobileClose={() => setMenuMobile(false)}
-      />
-      <Topbar
-        collapsed={colapsada}
-        onToggleCollapse={() => setColapsada((v) => !v)}
-        onMobileMenu={() => setMenuMobile(true)}
-      />
-
-      <div className={`fixed top-[var(--cz-topbar-h)] bottom-0 left-0 right-0 ${mdLeftVar} z-10 bg-[var(--cz-fundo)]`}>
-        {/* O painel BRANCO que ficava aqui foi removido: com ele, cartao branco
-            sobre painel branco nao tinha separacao nenhuma, e era por isso que os
-            cartoes desta tela eram cinza. Agora o conteudo assenta no fundo claro
-            e os cartoes brancos se destacam dele. */}
-      </div>
-
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">{children}</section>
-      </main>
-    </div>
-  );
-}
-
-export function Cabecalho({
-  titulo,
-  descricao,
-  acao,
-}: {
-  titulo: string;
-  descricao: string;
-  acao?: ReactNode;
-}) {
-  return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-gray-900">{titulo}</h1>
-        <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-500">
-          {descricao}
-        </p>
-      </div>
-      {acao}
-    </header>
-  );
-}
-
-export function BotaoAtualizar({
-  onClick,
-  atualizando,
-  desabilitado,
-}: {
-  onClick: () => void;
-  atualizando: boolean;
-  desabilitado: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={atualizando || desabilitado}
-      className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-[13px] font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      <svg
-        className={`h-4 w-4 ${atualizando ? "animate-spin" : ""}`}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        aria-hidden
-      >
-        <path d="M21 12a9 9 0 1 1-3-6.7" />
-        <path d="M21 3v6h-6" />
-      </svg>
-      {atualizando ? "Atualizando…" : "Atualizar estoque"}
-    </button>
-  );
+/**
+ * Paginação com o rótulo padrão desta área.
+ *
+ * O invólucro existe por um motivo pequeno e real: o shell tem
+ * `rotulo = "registros"` e `AnunciosMaisVendidos` nunca passa esse prop, porque
+ * a cópia antiga daqui tinha `"anúncios"` como padrão. Reexportar direto trocaria
+ * "1 a 20 de 340 anúncios" por "…340 registros" sem ninguém pedir.
+ */
+export function Paginacao(
+  props: Omit<Parameters<typeof PaginacaoBase>[0], "rotulo"> & { rotulo?: string },
+) {
+  return <PaginacaoBase rotulo="anúncios" {...props} />;
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  Filtros                                   */
+/*                          Avisos próprios do módulo                         */
 /* -------------------------------------------------------------------------- */
-
-export function PainelFiltros({ children, nota }: { children: ReactNode; nota?: ReactNode }) {
-  return (
-    <div className="mt-4 rounded-2xl border border-[var(--cz-hairline)] bg-white p-4">
-      <div className="grid gap-3 lg:grid-cols-12">{children}</div>
-      {nota}
-    </div>
-  );
-}
-
-export function Campo({
-  rotulo,
-  className = "",
-  children,
-}: {
-  rotulo: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className={className}>
-      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400">
-        {rotulo}
-      </span>
-      {children}
-    </label>
-  );
-}
 
 /** Aviso de que o filtro escolhido obriga a consultar a API em tudo. */
 export function NotaFiltroCaro({ visivel }: { visivel: boolean }) {
@@ -161,80 +88,39 @@ export function NotaFiltroCaro({ visivel }: { visivel: boolean }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                Indicadores                                 */
-/* -------------------------------------------------------------------------- */
-
-export function Kpi({
-  rotulo,
-  valor,
-  nota,
-  destaque = false,
-  tom,
-}: {
-  rotulo: string;
-  valor: string;
-  nota?: string;
-  destaque?: boolean;
-  tom?: "alerta";
-}) {
+/**
+ * Aviso do backfill do `item_id`.
+ *
+ * Enquanto as vendas antigas não estão associadas ao anúncio, o ranking pode
+ * estar incompleto. Mostrar número incompleto sem avisar é pior que demorar:
+ * alguém decidiria compra com base num "mais vendido" que não é o verdadeiro.
+ */
+export function AvisoBackfill({ pendentes }: { pendentes: number }) {
+  if (pendentes === 0) return null;
   return (
-    <div
-      className={`rounded-2xl border p-4 ${
-        tom === "alerta"
-          ? "border-amber-200 bg-amber-50"
-          : destaque
-            ? "border-emerald-200 bg-emerald-50"
-            : "border-[var(--cz-hairline)] bg-white"
-      }`}
-    >
-      <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-gray-500">
-        {rotulo}
-      </span>
-      <strong
-        className={`mt-1 block text-[19px] font-bold tabular-nums ${
-          tom === "alerta" ? "text-amber-800" : destaque ? "text-emerald-800" : "text-gray-900"
-        }`}
-      >
-        {valor}
-      </strong>
-      {nota && <span className="mt-0.5 block text-[10.5px] text-gray-500">{nota}</span>}
+    <div className="mt-4 rounded-[var(--cz-raio)] border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] leading-relaxed text-sky-900">
+      <strong>{inteiro(pendentes)} venda(s)</strong> ainda estão sendo associadas ao
+      anúncio de origem. O ranking já funciona, mas fica mais completo a cada
+      carregamento desta tela — o preenchimento é automático e não consome a API do
+      Mercado Livre.
     </div>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                  Tabela                                    */
-/* -------------------------------------------------------------------------- */
-
-export function Th({
-  children,
-  align = "left",
-  className = "",
-}: {
-  children: ReactNode;
-  align?: "left" | "right";
-  className?: string;
-}) {
+export function RodapeFonte() {
   return (
-    <th
-      scope="col"
-      className={`px-3 py-2.5 font-bold ${align === "right" ? "text-right" : "text-left"} ${className}`}
-    >
-      {children}
-    </th>
+    <p className="mt-4 text-[11.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+      Estoque, preço e situação são lidos no Mercado Livre a cada carregamento — não
+      ficam guardados no banco, porque mudam a cada venda. Estoque em branco significa
+      que a API não respondeu para aquele anúncio, e não que ele está zerado. A lista
+      só inclui anúncios que já venderam ao menos uma vez.
+    </p>
   );
 }
 
-export function CabecalhoTabela({ children }: { children: ReactNode }) {
-  return (
-    <thead>
-      <tr className="border-b border-[var(--cz-hairline)] bg-gray-50/80 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-500">
-        {children}
-      </tr>
-    </thead>
-  );
-}
+/* -------------------------------------------------------------------------- */
+/*                          Células da tabela de anúncios                     */
+/* -------------------------------------------------------------------------- */
 
 /** A célula do anúncio: miniatura, título, MLB, conta, SKU e modalidade. */
 export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
@@ -242,9 +128,11 @@ export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
     <td className="py-3 pl-5 pr-3">
       <div className="flex items-center gap-3">
         {posicao !== undefined && (
+          // Verde no pódio é SEMÂNTICO (é o topo do ranking), então não virou
+          // laranja junto com as cores de ação.
           <span
             className={`w-6 shrink-0 text-center text-[13px] font-bold tabular-nums ${
-              posicao <= 3 ? "text-emerald-700" : "text-gray-400"
+              posicao <= 3 ? "text-emerald-700" : "text-[var(--cz-texto-fraco)]"
             }`}
             aria-label={`Posição ${posicao}`}
           >
@@ -253,18 +141,27 @@ export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
         )}
         <Miniatura src={l.thumbnailUrl} alt={l.titulo} />
         <div className="min-w-0">
-          <span className="block truncate font-semibold text-gray-900" title={l.titulo}>
+          <span
+            className="block truncate font-semibold text-[var(--cz-texto)]"
+            title={l.titulo}
+          >
             {l.titulo}
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-600">
+            <span className="rounded bg-[var(--cz-fundo)] px-1.5 py-0.5 font-mono text-[var(--cz-texto-suave)]">
               {l.itemId}
             </span>
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+            {/* A conta era uma pastilha VERDE. Nome de conta é identidade, não
+                estado: pintá-la de verde disputava significado com o verde que
+                nesta mesma tela quer dizer "bom". Agora é neutra com fio. */}
+            <span className="rounded-full bg-[var(--cz-fundo)] px-2 py-0.5 font-semibold text-[var(--cz-texto-suave)] ring-1 ring-inset ring-[var(--cz-hairline-forte)]">
               {l.conta}
             </span>
             {l.skus.length > 0 && (
-              <span className="truncate font-mono text-gray-500" title={l.skus.join(" · ")}>
+              <span
+                className="truncate font-mono text-[var(--cz-texto-suave)]"
+                title={l.skus.join(" · ")}
+              >
                 {l.skus.length <= 2
                   ? l.skus.join(" · ")
                   : `${l.skus.slice(0, 2).join(" · ")} +${l.skus.length - 2}`}
@@ -289,7 +186,10 @@ export function CelulaEstoque({ estoque }: { estoque: number | null }) {
   if (estoque === null) {
     return (
       <td className="px-3 py-3 text-right">
-        <span className="text-gray-400" title="A API do Mercado Livre não respondeu">
+        <span
+          className="text-[var(--cz-texto-fraco)]"
+          title="A API do Mercado Livre não respondeu"
+        >
           —
         </span>
       </td>
@@ -299,11 +199,13 @@ export function CelulaEstoque({ estoque }: { estoque: number | null }) {
     <td className="px-3 py-3 text-right">
       <span
         className={`font-semibold tabular-nums ${
-          estoque === 0 ? "text-rose-700" : "text-gray-900"
+          estoque === 0 ? "text-rose-700" : "text-[var(--cz-texto)]"
         }`}
       >
         {inteiro(estoque)}
-        <span className="ml-1 text-[10.5px] font-medium text-gray-400">un.</span>
+        <span className="ml-1 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
+          un.
+        </span>
       </span>
     </td>
   );
@@ -313,12 +215,14 @@ export function CelulaAbrir({ l }: { l: Linha }) {
   return (
     <td className="py-3 pl-3 pr-5 text-right">
       {l.permalink ? (
+        // Abrir no ML é uma AÇÃO, então o realce de hover é laranja. Era verde,
+        // que nesta tela já significa "estoque saudável" e "pódio".
         <a
           href={l.permalink}
           target="_blank"
           rel="noreferrer"
           title={`Abrir ${l.titulo} no Mercado Livre`}
-          className="inline-grid size-9 place-items-center rounded-xl border border-[var(--cz-hairline)] text-gray-500 transition hover:border-emerald-400 hover:text-emerald-700"
+          className="inline-grid size-9 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
         >
           <svg
             className="h-4 w-4"
@@ -335,7 +239,7 @@ export function CelulaAbrir({ l }: { l: Linha }) {
           </svg>
         </a>
       ) : (
-        <span className="text-gray-300">—</span>
+        <span className="text-[var(--cz-texto-fraco)]">—</span>
       )}
     </td>
   );
@@ -343,46 +247,15 @@ export function CelulaAbrir({ l }: { l: Linha }) {
 
 export function CelulaPreco({ preco }: { preco: number | null }) {
   return (
-    <td className="px-3 py-3 text-right tabular-nums text-gray-700">
+    <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
       {preco === null ? "—" : brl(preco)}
     </td>
   );
 }
 
-/** Miniatura com fallback: `onError` cobre link expirado do CDN do ML. */
-export function Miniatura({ src, alt }: { src: string | null; alt: string }) {
-  const [falhou, setFalhou] = useState(false);
-  if (!src || falhou) {
-    return (
-      <span className="grid size-11 shrink-0 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-gray-50 text-gray-300">
-        <svg
-          className="h-4 w-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden
-        >
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <path d="m3 16 5-5 4 4 3-3 6 6" />
-        </svg>
-      </span>
-    );
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={alt}
-      width={44}
-      height={44}
-      loading="lazy"
-      decoding="async"
-      onError={() => setFalhou(true)}
-      className="size-11 shrink-0 rounded-lg border border-[var(--cz-hairline)] bg-white object-contain"
-    />
-  );
-}
+/* -------------------------------------------------------------------------- */
+/*                                   Selos                                    */
+/* -------------------------------------------------------------------------- */
 
 export function SeloStatus({ status }: { status: string | null }) {
   const mapa: Record<string, { texto: string; casca: string }> = {
@@ -395,7 +268,7 @@ export function SeloStatus({ status }: { status: string | null }) {
   if (!m) {
     return (
       <span
-        className="rounded-full bg-gray-100 px-2 py-0.5 text-[10.5px] font-semibold text-gray-500"
+        className="rounded-full bg-[var(--cz-fundo)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--cz-texto-suave)]"
         title="A API do Mercado Livre não respondeu para este anúncio"
       >
         Não consultado
@@ -409,6 +282,14 @@ export function SeloStatus({ status }: { status: string | null }) {
   );
 }
 
+/**
+ * Modalidade de envio.
+ *
+ * Mantida em índigo de propósito, mesmo sendo cor fora da paleta: é o único
+ * lugar da linha onde a modalidade aparece, e é o que o operador varre com o
+ * olho. Neutralizar o selo para ficar "na paleta" tornaria FULL e FLEX difíceis
+ * de distinguir num relance, o que é perder informação para ganhar coerência.
+ */
 export function SeloEnvio({ tipo }: { tipo: string }) {
   const mapa: Record<string, string> = {
     fulfillment: "FULL",
@@ -424,127 +305,4 @@ export function SeloEnvio({ tipo }: { tipo: string }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                            Estados e avisos                                */
-/* -------------------------------------------------------------------------- */
 
-/**
- * Aviso do backfill do `item_id`.
- *
- * Enquanto as vendas antigas não estão associadas ao anúncio, o ranking pode
- * estar incompleto. Mostrar número incompleto sem avisar é pior que demorar:
- * alguém decidiria compra com base num "mais vendido" que não é o verdadeiro.
- */
-export function AvisoBackfill({ pendentes }: { pendentes: number }) {
-  if (pendentes === 0) return null;
-  return (
-    <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] leading-relaxed text-sky-900">
-      <strong>{inteiro(pendentes)} venda(s)</strong> ainda estão sendo associadas ao
-      anúncio de origem. O ranking já funciona, mas fica mais completo a cada
-      carregamento desta tela — o preenchimento é automático e não consome a API do
-      Mercado Livre.
-    </div>
-  );
-}
-
-export function Aviso({ titulo, texto }: { titulo: string; texto: string }) {
-  return (
-    <div className="flex flex-col items-center px-5 py-16 text-center">
-      <h3 className="text-[14px] font-semibold text-gray-900">{titulo}</h3>
-      <p className="mt-1 max-w-md text-[12.5px] leading-relaxed text-gray-500">{texto}</p>
-    </div>
-  );
-}
-
-export function Esqueleto() {
-  return (
-    <div className="animate-pulse divide-y divide-gray-100">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 px-5 py-4">
-          <div className="size-11 shrink-0 rounded-lg bg-gray-100" />
-          <div className="flex-1 space-y-2">
-            <div className="h-3 w-2/5 rounded bg-gray-100" />
-            <div className="h-2.5 w-1/4 rounded bg-gray-100" />
-          </div>
-          <div className="h-3 w-16 rounded bg-gray-100" />
-          <div className="h-3 w-20 rounded bg-gray-100" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function RodapeFonte() {
-  return (
-    <p className="mt-4 text-[11.5px] leading-relaxed text-gray-500">
-      Estoque, preço e situação são lidos no Mercado Livre a cada carregamento — não
-      ficam guardados no banco, porque mudam a cada venda. Estoque em branco significa
-      que a API não respondeu para aquele anúncio, e não que ele está zerado. A lista
-      só inclui anúncios que já venderam ao menos uma vez.
-    </p>
-  );
-}
-
-export function Paginacao({
-  pagina,
-  totalPaginas,
-  total,
-  porPagina,
-  onPagina,
-  onPorPagina,
-  rotulo = "anúncios",
-}: {
-  pagina: number;
-  totalPaginas: number;
-  total: number;
-  porPagina: number;
-  onPagina: (p: number) => void;
-  onPorPagina: (v: number) => void;
-  rotulo?: string;
-}) {
-  const de = (pagina - 1) * porPagina + 1;
-  const ate = Math.min(pagina * porPagina, total);
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] px-5 py-3 text-[12px] text-gray-600">
-      <span>
-        Mostrando <strong>{inteiro(de)}</strong> a <strong>{inteiro(ate)}</strong> de{" "}
-        <strong>{inteiro(total)}</strong> {rotulo}
-      </span>
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-1.5">
-          Por página
-          <select
-            value={porPagina}
-            onChange={(e) => onPorPagina(Number(e.target.value))}
-            className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-[12px]"
-          >
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </label>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onPagina(pagina - 1)}
-            disabled={pagina <= 1}
-            className="h-8 rounded-lg border border-gray-300 px-2.5 font-semibold transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Anterior
-          </button>
-          <span className="px-2 tabular-nums">
-            {pagina} / {totalPaginas}
-          </span>
-          <button
-            type="button"
-            onClick={() => onPagina(pagina + 1)}
-            disabled={pagina >= totalPaginas}
-            className="h-8 rounded-lg border border-gray-300 px-2.5 font-semibold transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Próxima
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
