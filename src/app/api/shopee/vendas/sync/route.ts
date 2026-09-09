@@ -20,6 +20,7 @@ import {
   calculateShopeeFinancials,
   SHOPEE_FINANCIAL_RULE_VERSION,
 } from "@/lib/shopee-finance";
+import { extrairPrazoDespachoShopee } from "@/lib/prazo-despacho";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -292,6 +293,13 @@ async function batchUpsertVendas(vendaRecords: any[], userId: string, accountId:
                 comprador: record.comprador,
                 shippingId: record.shippingId,
                 shippingStatus: record.shippingStatus,
+                // Precisa estar AQUI, e não só no `create`: este `update` lista os
+                // campos um a um, então campo ausente da lista nunca é atualizado
+                // em pedido que já existe. Como a Shopee move o `ship_by_date`
+                // quando o pedido muda de estado, ficar só no `create` congelaria
+                // o prazo no valor do primeiro sync.
+                prazoDespacho: record.prazoDespacho,
+                prazoDespachoOrigem: record.prazoDespachoOrigem,
                 plataforma: record.plataforma,
                 canal: record.canal,
                 rawData: record.rawData,
@@ -649,6 +657,7 @@ export async function POST(req: NextRequest) {
           const sku = skuRaw ? truncateString(String(skuRaw), 255) : null;
           
           const comprador = truncateString(order.buyer_username, 255) || "Comprador";
+          const prazoDespacho = extrairPrazoDespachoShopee(order);
           const trackingNumber = truncateString(order.package_list?.[0]?.tracking_number, 255) || null;
           const packageInfo = order.package_list?.[0] || {};
           const parcelWeight = toFiniteNumber(packageInfo.parcel_chargeable_weight_gram) || 0;
@@ -714,6 +723,12 @@ export async function POST(req: NextRequest) {
             comprador,
             shippingId: trackingNumber,
             shippingStatus: shippingCarrier,
+            // Prazo para DESPACHAR (`ship_by_date`). Ver `src/lib/prazo-despacho.ts`:
+            // é campo padrão de `get_order_detail`, então nada muda em
+            // `response_optional_fields` — pedir um nome que a Shopee não
+            // reconhece como opcional derrubaria a chamada inteira.
+            prazoDespacho: prazoDespacho.prazo,
+            prazoDespachoOrigem: prazoDespacho.origem,
             plataforma: "Shopee",
             canal: "SP",
             rawData: order,

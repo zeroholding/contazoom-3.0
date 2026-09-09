@@ -60,6 +60,7 @@ import { toFiniteNumber } from "@/utils/numeric-functions";
 import { roundCurrency, truncateJsonData, truncateString } from "@/utils/string-utils";
 import { calculateMargemContribuicao } from "@/utils/calc-margem-contribuicao";
 import { adsTags, mapListingTypeToExposure } from "@/utils/meli-functions";
+import { extrairPrazoDespachoMeli } from "@/lib/prazo-despacho";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 60 segundos (Vercel Pro)
@@ -1795,6 +1796,8 @@ async function prepareVendaData(
     const shippingId =
       (order.shipment as any)?.id?.toString() || o?.shipping?.id?.toString();
 
+    const prazoDespacho = extrairPrazoDespachoMeli(order.shipment, o);
+
     const receiverAddress =
       (order.shipment as any)?.receiver_address ??
       (o?.shipping && typeof o.shipping === "object"
@@ -1882,6 +1885,12 @@ async function prepareVendaData(
       envioMode: truncateString(freight.shippingMode, 100) || null,
       shippingStatus: truncateString(shippingStatus, 100) || null,
       shippingId: truncateString(shippingId, 255) || null,
+      // Igual ao `prepareSaleData` de `src/utils/sync-prepare-sale-data.ts`: os
+      // dois mapeadores do ML seguem vivos (este é o caminho sem Redis), e a
+      // regra do prazo mora em `src/lib/prazo-despacho.ts` justamente para não
+      // divergir entre eles como o cálculo do frete já divergiu.
+      prazoDespacho: prazoDespacho.prazo,
+      prazoDespachoOrigem: prazoDespacho.origem,
       exposicao: (() => {
         const listingTypeId =
           orderItem?.listing_type_id ?? itemData?.listing_type_id ?? null;

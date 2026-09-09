@@ -192,6 +192,38 @@ model MeliVenda {
   envioMode          String?     @map("envio_mode")
   shippingStatus     String?     @map("shipping_status")
   shippingId         String?     @map("shipping_id")
+
+  /// Prazo para o vendedor DESPACHAR o pedido (não é o prazo de entrega).
+  ///
+  /// Coluna ADITIVA (migrations/20260909120000), nullable. É o eixo da tela de
+  /// Expedição: a ordem da fila é o prazo, não a data da venda — uma venda de
+  /// ontem com prazo hoje é mais urgente que uma de hoje com prazo na semana que
+  /// vem, e ordenar por `dataVenda` inverte exatamente as duas.
+  ///
+  /// Vem do `/shipments/{id}` que o sync de vendas já chama, em
+  /// `shipping_option.estimated_handling_limit.date`, com `sla.expected_date`
+  /// como reserva. O dado sempre chegou e era descartado; para as vendas antigas
+  /// ele está em `rawData.shipment` e é recuperado sem API por
+  /// `src/lib/prazo-despacho-backfill.ts`.
+  ///
+  /// `Timestamptz` e não `Timestamp` como o resto da tabela: a urgência é uma
+  /// comparação de data civil em São Paulo, e com `Timestamp` o
+  /// `AT TIME ZONE 'America/Sao_Paulo'` desloca tudo em 3h, jogando todo prazo
+  /// entre 21h e meia-noite para o dia seguinte.
+  prazoDespacho      DateTime?   @map("prazo_despacho") @db.Timestamptz(3)
+
+  /// De onde o prazo saiu — e o marcador de "já olhei esta linha".
+  ///
+  /// NULL significa "ainda não processada". `'ausente'` significa "processada e o
+  /// JSON não tinha prazo". Sem essa distinção, toda venda sem prazo (FULL,
+  /// retirada em agência, cancelada antes de gerar envio) voltaria à fila do
+  /// backfill em cada rodada e ele nunca chegaria a zero. Mesmo papel do
+  /// marcador `"-"` de `variationId`, que não cabe numa coluna temporal.
+  ///
+  /// Valores: `ml_handling_limit`, `ml_sla_expected`, `ml_shipping_limit`,
+  /// `ausente`. Ver `src/lib/prazo-despacho.ts`.
+  prazoDespachoOrigem String?    @map("prazo_despacho_origem") @db.VarChar(32)
+
   exposicao          String?
   tipoAnuncio        String?     @map("tipo_anuncio")
   ads                String?
@@ -222,6 +254,7 @@ model MeliVenda {
   @@index([status]) // Índice para filtros de status
   @@index([userId, itemId, dataVenda(sort: Desc)]) // Ranking por anúncio
   @@index([userId, itemId, variationId]) // Vendas 30d por variação (Estoque Full)
+  @@index([userId, prazoDespacho]) // Fila da tela de Expedição, ordenada por prazo
   @@map("meli_venda")
 }
 
@@ -328,6 +361,21 @@ model ShopeeVenda {
   envioMode          String?       @map("envio_mode")
   shippingStatus     String?       @map("shipping_status")
   shippingId         String?       @map("shipping_id")
+
+  /// Prazo para despachar o pedido. Contraparte do campo de mesmo nome em
+  /// `MeliVenda` — ver o docblock completo lá.
+  ///
+  /// Na Shopee vem de `ship_by_date` do `get_order_detail` (campo padrão da
+  /// resposta, não precisa ser pedido em `response_optional_fields`), como epoch
+  /// em SEGUNDOS. O valor `0` é o "não se aplica" da Shopee e tem de virar NULL:
+  /// convertido literalmente, `to_timestamp(0)` dá 1970 e a tela anuncia
+  /// "atrasado há 20 mil dias".
+  prazoDespacho      DateTime?     @map("prazo_despacho") @db.Timestamptz(3)
+
+  /// Origem do prazo e marcador de "já olhei". Ver `MeliVenda.prazoDespachoOrigem`.
+  /// Valores: `sp_ship_by_date`, `sp_package_ship_by_date`, `ausente`.
+  prazoDespachoOrigem String?      @map("prazo_despacho_origem") @db.VarChar(32)
+
   paymentMethod      String?       @map("payment_method")
   paymentStatus      String?       @map("payment_status")
   latitude           Decimal?      @db.Decimal(10, 7)
@@ -356,6 +404,7 @@ model ShopeeVenda {
   @@index([userId, dataVenda(sort: Desc)]) // Índice composto para queries principais
   @@index([sku]) // Índice para busca por SKU
   @@index([status]) // Índice para filtros de status
+  @@index([userId, prazoDespacho]) // Fila da tela de Expedição, ordenada por prazo
   @@map("shopee_venda")
 }
 

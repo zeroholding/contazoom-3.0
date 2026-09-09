@@ -3,6 +3,7 @@ import { toFiniteNumber } from "./numeric-functions";
 import { roundCurrency, truncateJsonData, truncateString } from "./string-utils";
 import { calculateMargemContribuicao } from "./calc-margem-contribuicao";
 import { adsTags, mapListingTypeToExposure } from "./meli-functions";
+import { extrairPrazoDespachoMeli } from "@/lib/prazo-despacho";
 
 type SkuCacheEntry = {
   custoUnitario: number | null;
@@ -132,6 +133,8 @@ export async function prepareSaleData(
     const shippingId =
       (order.shipment as any)?.id?.toString() || o?.shipping?.id?.toString();
 
+    const prazoDespacho = extrairPrazoDespachoMeli(order.shipment, o);
+
     const receiverAddress =
       (order.shipment as any)?.receiver_address ??
       (o?.shipping && typeof o.shipping === "object"
@@ -239,6 +242,11 @@ export async function prepareSaleData(
       envioMode: truncateString(freight.shippingMode, 100) || null,
       shippingStatus: truncateString(shippingStatus, 100) || null,
       shippingId: truncateString(shippingId, 255) || null,
+      // Prazo para DESPACHAR. O envio completo já está em mãos aqui (`order.shipment`,
+      // vindo do `/shipments/{id}` que o sync chama), e este dado era descartado.
+      // Sem ele a tela de Expedição não tem por onde ordenar a fila.
+      prazoDespacho: prazoDespacho.prazo,
+      prazoDespachoOrigem: prazoDespacho.origem,
       exposicao: (() => {
         const listingTypeId =
           orderItem?.listing_type_id ?? itemData?.listing_type_id ?? null;

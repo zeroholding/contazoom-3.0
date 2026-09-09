@@ -115,6 +115,27 @@ const CaixasIcon = () => (
     <path d="M10 12h4" />
   </svg>
 );
+// Caminhão de entrega. Distinto do CaixasIcon (caixa fechada, que é o Estoque
+// Full) de propósito: as duas telas falam de pacote, e ícones parecidos fariam
+// o menu recolhido — onde só o ícone aparece — virar adivinhação.
+const CaminhaoIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    className="h-5 w-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M7 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+    <path d="M17 17m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+    <path d="M5 17h-2v-11a1 1 0 0 1 1 -1h9v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5" />
+  </svg>
+);
 const MegaphoneIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -203,6 +224,11 @@ const NAV_ITEMS: Item[] = [
       { href: "/vendas/shopee", label: "Vendas Shopee" },
     ],
   },
+  // Logo abaixo da Central de Vendas, e não no fim da lista: expedição é o passo
+  // seguinte à venda, e é a tela que se abre todos os dias de manhã. Item simples
+  // porque não tem submenu — a fila já é unificada entre ML e Shopee, e separá-la
+  // em duas páginas obrigaria a conferir prazo em dois lugares.
+  { href: "/expedicao", label: "Expedição", icon: <CaminhaoIcon /> },
   {
     slug: "ads",
     label: "Gestão de Anúncios",
