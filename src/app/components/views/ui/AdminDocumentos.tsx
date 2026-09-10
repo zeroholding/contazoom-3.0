@@ -763,7 +763,10 @@ export default function AdminDocumentos() {
                     onChange={e => setFolderParentId(e.target.value)}
                     className="w-full px-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                   >
-                    <option value="">📁 Raiz (pasta principal)</option>
+                    {/* Sem emoji: `<option>` é elemento nativo e não aceita SVG,
+                        então o ícone aqui seria o único emoji do produto — e o
+                        texto já diz tudo. */}
+                    <option value="">Raiz (pasta principal)</option>
                     {userFolders.map(f => (
                       <option key={f.id} value={f.id}>{'└ '}{f.name}</option>
                     ))}

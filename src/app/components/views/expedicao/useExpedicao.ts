@@ -25,7 +25,29 @@ export function paraQuery(filtros: FiltrosExpedicao): URLSearchParams {
   if (filtros.contas.length) p.set("contas", filtros.contas.join(","));
   if (filtros.urgencias.length) p.set("urgencias", filtros.urgencias.join(","));
   if (filtros.modalidades.length) p.set("modalidades", filtros.modalidades.join(","));
+  if (filtros.hierarquias1.length) p.set("hierarquias1", filtros.hierarquias1.join(","));
+  if (filtros.hierarquias2.length) p.set("hierarquias2", filtros.hierarquias2.join(","));
   if (filtros.busca.trim()) p.set("busca", filtros.busca.trim());
+
+  if (filtros.prazoPreset !== FILTROS_PADRAO.prazoPreset) {
+    p.set("prazoPreset", filtros.prazoPreset);
+  }
+  // As datas só vão junto no modo personalizado. Nos atalhos elas são DERIVADAS
+  // no servidor, e mandá-las na URL congelaria a faixa: um link de "vencem hoje"
+  // salvo ontem abriria mostrando ontem, o que é o oposto do que o atalho promete.
+  if (filtros.prazoPreset === "personalizado") {
+    if (filtros.prazoDe) p.set("prazoDe", filtros.prazoDe);
+    if (filtros.prazoAte) p.set("prazoAte", filtros.prazoAte);
+  }
+
+  if (filtros.vendaDe) p.set("vendaDe", filtros.vendaDe);
+  if (filtros.vendaAte) p.set("vendaAte", filtros.vendaAte);
+
+  if (filtros.statusVenda !== FILTROS_PADRAO.statusVenda) {
+    p.set("statusVenda", filtros.statusVenda);
+  }
+  if (filtros.temPrazo !== FILTROS_PADRAO.temPrazo) p.set("temPrazo", filtros.temPrazo);
+
   if (filtros.janelaDias !== FILTROS_PADRAO.janelaDias) {
     p.set("janelaDias", String(filtros.janelaDias));
   }

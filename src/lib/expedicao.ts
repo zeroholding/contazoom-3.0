@@ -248,6 +248,161 @@ export type PacoteExpedicao = {
   itens: ItemPacote[];
 };
 
+/* -------------------------------------------------------------------------- */
+/*                            Recorte por prazo                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Atalhos de faixa de prazo.
+ *
+ * Existem porque a pergunta real nunca é "de 12/09 a 14/09": é "o que vence
+ * hoje", "o que já venceu", "o que sai amanhã". Obrigar a digitar duas datas para
+ * responder isso é transformar uma decisão de um clique em quatro.
+ *
+ * Vale junto com as fichas de urgência, e não em vez delas: o atalho estreita a
+ * FAIXA consultada (e é o que protege a consulta), enquanto a ficha classifica o
+ * que já veio. Quem escolhe "Próximos 7 dias" e clica em "Atrasado" está pedindo
+ * uma interseção vazia de propósito — e a tela responde vazio, que é correto.
+ */
+export type PrazoPreset =
+  | "personalizado"
+  | "atrasados"
+  | "hoje"
+  | "amanha"
+  | "proximos3"
+  | "proximos7"
+  | "esteMes"
+  | "todas";
+
+export const PRAZO_PRESETS: { chave: PrazoPreset; rotulo: string }[] = [
+  { chave: "atrasados", rotulo: "Atrasados" },
+  { chave: "hoje", rotulo: "Vencem hoje" },
+  { chave: "amanha", rotulo: "Vencem amanhã" },
+  { chave: "proximos3", rotulo: "Próximos 3 dias" },
+  { chave: "proximos7", rotulo: "Próximos 7 dias" },
+  { chave: "esteMes", rotulo: "Este mês" },
+  { chave: "todas", rotulo: "Todos os prazos" },
+  { chave: "personalizado", rotulo: "Período personalizado" },
+];
+
+export function ehPrazoPreset(valor: string): valor is PrazoPreset {
+  return PRAZO_PRESETS.some((p) => p.chave === valor);
+}
+
+/**
+ * Soma dias a uma data `YYYY-MM-DD` sem passar por fuso.
+ *
+ * Aritmética em UTC de propósito. `new Date("2026-09-09")` é meia-noite UTC; num
+ * servidor em São Paulo (UTC-3) formatar isso de volta para data local devolve
+ * 08/09 — um dia a menos, em silêncio. Este foi um defeito real do projeto irmão,
+ * e é a razão de a conta ser feita nos getters UTC e a string ser remontada à mão
+ * em vez de usar `toISOString` sobre um `Date` local.
+ */
+function somarDias(iso: string, dias: number): string {
+  const [a, m, d] = iso.split("-").map(Number);
+  const base = Date.UTC(a, (m ?? 1) - 1, d ?? 1);
+  const alvo = new Date(base + dias * 86_400_000);
+  const mm = String(alvo.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(alvo.getUTCDate()).padStart(2, "0");
+  return `${alvo.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+/**
+ * Resolve o atalho em faixa de datas (`YYYY-MM-DD`), no calendário de São Paulo.
+ *
+ * `null` em qualquer ponta significa "sem limite desse lado" — é o que faz
+ * "Atrasados" pegar tudo o que venceu, sem inventar um piso arbitrário, e
+ * "Todos os prazos" não filtrar nada.
+ */
+export function resolverPrazo(
+  preset: PrazoPreset,
+  de: string | null,
+  ate: string | null,
+): { de: string | null; ate: string | null } {
+  const hoje = hojeSP();
+
+  switch (preset) {
+    // Sem piso: um pacote parado há três meses continua sendo trabalho, e cortar
+    // em 30 dias esconderia justamente o caso mais grave.
+    case "atrasados":
+      return { de: null, ate: somarDias(hoje, -1) };
+    case "hoje":
+      return { de: hoje, ate: hoje };
+    case "amanha":
+      return { de: somarDias(hoje, 1), ate: somarDias(hoje, 1) };
+    // Inclui hoje: quem pergunta "próximos 3 dias" está planejando o trabalho, e
+    // o que vence hoje é a primeira coisa desse plano.
+    case "proximos3":
+      return { de: hoje, ate: somarDias(hoje, 3) };
+    case "proximos7":
+      return { de: hoje, ate: somarDias(hoje, 7) };
+    // O último dia é calculado, não fixado em 31: `2026-09-31` e `2026-02-31`
+    // passam por qualquer validação de FORMATO e são recusados pelo Postgres na
+    // conversão para `date`, derrubando a consulta com 500. Dia 0 do mês seguinte
+    // é o último dia deste, sem tabela de meses e sem regra de ano bissexto.
+    case "esteMes": {
+      const primeiro = `${hoje.slice(0, 7)}-01`;
+      const [a, m] = hoje.split("-").map(Number);
+      const ultimo = new Date(Date.UTC(a, m, 0));
+      const dd = String(ultimo.getUTCDate()).padStart(2, "0");
+      return { de: primeiro, ate: `${hoje.slice(0, 7)}-${dd}` };
+    }
+    case "todas":
+      return { de: null, ate: null };
+    case "personalizado":
+    default: {
+      // Datas invertidas são erro de digitação, não pedido de lista vazia.
+      if (de && ate && de > ate) return { de: ate, ate: de };
+      return { de: de ?? null, ate: ate ?? null };
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Outros recortes                               */
+/* -------------------------------------------------------------------------- */
+
+/** Situação da VENDA, que é diferente da situação do ENVIO. */
+export type StatusVenda = "pago" | "cancelado" | "todos";
+
+export const STATUS_VENDA: { chave: StatusVenda; rotulo: string }[] = [
+  { chave: "pago", rotulo: "Pagas" },
+  { chave: "cancelado", rotulo: "Canceladas" },
+  { chave: "todos", rotulo: "Todas" },
+];
+
+export function ehStatusVenda(valor: string): valor is StatusVenda {
+  return STATUS_VENDA.some((s) => s.chave === valor);
+}
+
+/**
+ * Tem ou não prazo registrado.
+ *
+ * Serve para os dois lados do problema: "só o que tem prazo" é a fila confiável
+ * para trabalhar, e "só o que NÃO tem" é a lista de conferência de quem quer
+ * descobrir por que uma venda ficou sem prazo — que é uma pergunta de manutenção,
+ * não de galpão, e por isso não é o padrão.
+ */
+export type TemPrazo = "com" | "sem" | "todos";
+
+export const TEM_PRAZO: { chave: TemPrazo; rotulo: string }[] = [
+  { chave: "todos", rotulo: "Com e sem prazo" },
+  { chave: "com", rotulo: "Só com prazo" },
+  { chave: "sem", rotulo: "Só sem prazo" },
+];
+
+export function ehTemPrazo(valor: string): valor is TemPrazo {
+  return TEM_PRAZO.some((t) => t.chave === valor);
+}
+
+/** Uma linha dos resumos do rodapé. */
+export type LinhaResumo = {
+  rotulo: string;
+  pacotes: number;
+  unidades: number;
+  valorTotal: number;
+};
+
 export type OrdemExpedicao = "prazo" | "venda" | "valor" | "unidades";
 
 export const ORDENS: OrdemExpedicao[] = ["prazo", "venda", "valor", "unidades"];
@@ -265,7 +420,30 @@ export type FiltrosExpedicao = {
   urgencias: Urgencia[];
   /** Modalidade/transportadora já normalizada. Vazio = todas. */
   modalidades: string[];
+  /** Categorias do cadastro de SKU. Vazio = todas. */
+  hierarquias1: string[];
+  hierarquias2: string[];
   busca: string;
+
+  /** Atalho de faixa de prazo. `personalizado` usa `prazoDe`/`prazoAte`. */
+  prazoPreset: PrazoPreset;
+  /** Faixa de PRAZO DE DESPACHO, em data civil de São Paulo. */
+  prazoDe: string | null;
+  prazoAte: string | null;
+
+  /**
+   * Faixa da DATA DA VENDA. Recorte OPCIONAL dentro da janela.
+   *
+   * Não substitui `janelaDias`: a janela é o teto de segurança que impede a
+   * consulta de varrer a tabela inteira, e vale sempre. Estas duas datas
+   * estreitam ainda mais, quando alguém quer conferir um lote específico.
+   */
+  vendaDe: string | null;
+  vendaAte: string | null;
+
+  statusVenda: StatusVenda;
+  temPrazo: TemPrazo;
+
   /** Janela sobre a DATA DA VENDA, em dias. Ver `expedicao-data.ts`. */
   janelaDias: number;
   ordem: OrdemExpedicao;
@@ -279,7 +457,21 @@ export const FILTROS_PADRAO: FiltrosExpedicao = {
   contas: [],
   urgencias: [],
   modalidades: [],
+  hierarquias1: [],
+  hierarquias2: [],
   busca: "",
+  // Sem recorte de prazo por padrão: a tela abre com a FILA INTEIRA, e as fichas
+  // de urgência já mostram como ela se distribui. Abrir filtrada em "hoje" (como
+  // faz o projeto irmão) esconde os atrasados justamente de quem abre a tela pela
+  // primeira vez no dia — que é quando eles mais importam.
+  prazoPreset: "todas",
+  prazoDe: null,
+  prazoAte: null,
+  vendaDe: null,
+  vendaAte: null,
+  // Pagas: venda cancelada não é trabalho de expedição.
+  statusVenda: "pago",
+  temPrazo: "todos",
   janelaDias: 60,
   // Prazo crescente: o que vence primeiro aparece primeiro. É a única ordenação
   // que serve para começar o dia nesta tela.
@@ -308,6 +500,19 @@ export type ResultadoExpedicao = {
   valorTotal: number;
   contas: ContaExpedicao[];
   modalidades: string[];
+  /** Opções de hierarquia disponíveis, para os filtros. */
+  opcoesHierarquia1: string[];
+  opcoesHierarquia2: string[];
+  /**
+   * Resumos do rodapé: onde o trabalho está concentrado.
+   *
+   * A lista responde "o que despachar"; os resumos respondem "por onde começar".
+   * Trinta pacotes espalhados em dez categorias é um dia de trabalho diferente de
+   * trinta pacotes na mesma prateleira, e a lista paginada não mostra isso.
+   */
+  resumoHierarquia1: LinhaResumo[];
+  resumoHierarquia2: LinhaResumo[];
+  resumoModalidade: LinhaResumo[];
   /** Quantas vendas ainda não passaram pelo backfill de prazo. */
   prazoPendente: number;
 };

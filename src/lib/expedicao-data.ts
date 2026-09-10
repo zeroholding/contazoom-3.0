@@ -22,9 +22,12 @@ import {
   type ContaExpedicao,
   type FiltrosExpedicao,
   type ItemPacote,
+  type LinhaResumo,
   type OrdemExpedicao,
   type PacoteExpedicao,
   type ResultadoExpedicao,
+  type StatusVenda,
+  type TemPrazo,
   type Urgencia,
 } from "@/lib/expedicao";
 
@@ -72,6 +75,16 @@ const ML_STATUS_MORTO = ["cancelled", "canceled", "cancelado", "invalid"];
  * INVOICE_PENDING entrarem na fila — pedido que ainda não pode ser despachado.
  */
 const SP_STATUS_FILA = ["READY_TO_SHIP", "PROCESSED", "RETRY_SHIP"];
+
+/**
+ * Estados de cancelamento da Shopee.
+ *
+ * `TO_RETURN` entra junto porque, para o galpão, é o mesmo problema dos outros
+ * dois: um pacote que talvez já esteja separado e NÃO deve sair. Não é
+ * cancelamento no sentido contábil, e é por isso que a lista tem nome próprio em
+ * vez de ser chamada de "cancelados".
+ */
+const SP_STATUS_CANCELADO = ["CANCELLED", "IN_CANCEL", "TO_RETURN"];
 
 /**
  * FULL nunca entra na fila.
@@ -230,6 +243,119 @@ function fragmentoContas(coluna: string, contas: string[]): Prisma.Sql {
   return Prisma.sql`AND ${Prisma.raw(`v.${coluna}`)} IN (${Prisma.join(contas)})`;
 }
 
+/**
+ * Recorte pela DATA DA VENDA, dentro da janela.
+ *
+ * `< data + 1 dia` no limite superior, e não `<= data`: `data_venda` é um
+ * INSTANTE, não uma data. Com `<=`, uma venda das 14h do próprio dia escolhido
+ * ficaria de fora, porque `2026-09-09 14:00` é maior que `2026-09-09 00:00`. É o
+ * erro clássico de faixa de data em coluna de timestamp.
+ */
+function fragmentoVenda(de: string | null, ate: string | null): Prisma.Sql {
+  const partes: Prisma.Sql[] = [];
+  if (de) partes.push(Prisma.sql`AND v.data_venda >= ${de}::date`);
+  if (ate) partes.push(Prisma.sql`AND v.data_venda < (${ate}::date + INTERVAL '1 day')`);
+  return partes.length === 0 ? Prisma.empty : Prisma.join(partes, " ");
+}
+
+/**
+ * Recorte pelo PRAZO DE DESPACHO, em data civil de São Paulo.
+ *
+ * `prazo_despacho` é `timestamptz`, então `AT TIME ZONE 'America/Sao_Paulo'`
+ * devolve o horário local e `::date` o dia local — a mesma expressão usada para
+ * classificar a urgência. Comparar a data civil, e não o instante, é o que faz
+ * "vence hoje" significar o dia inteiro, inclusive um prazo às 23h.
+ *
+ * Vendas SEM prazo saem da lista quando existe qualquer recorte de prazo: elas
+ * não têm como satisfazer a condição. Quem quer vê-las usa `temPrazo = "sem"`.
+ */
+function fragmentoPrazo(de: string | null, ate: string | null): Prisma.Sql {
+  const dia = Prisma.raw(`(v.prazo_despacho AT TIME ZONE 'America/Sao_Paulo')::date`);
+  const partes: Prisma.Sql[] = [];
+  if (de) partes.push(Prisma.sql`AND ${dia} >= ${de}::date`);
+  if (ate) partes.push(Prisma.sql`AND ${dia} <= ${ate}::date`);
+  return partes.length === 0 ? Prisma.empty : Prisma.join(partes, " ");
+}
+
+/**
+ * Tem ou não prazo registrado.
+ *
+ * Independente do recorte de faixa: `sem` só faz sentido quando não há faixa, e a
+ * combinação das duas devolve vazio de propósito em vez de escolher uma delas em
+ * silêncio — adivinhar a intenção aqui daria uma lista que não corresponde a
+ * nenhum dos dois filtros que estão visíveis na tela.
+ */
+function fragmentoTemPrazo(valor: TemPrazo): Prisma.Sql {
+  if (valor === "com") return Prisma.sql`AND v.prazo_despacho IS NOT NULL`;
+  if (valor === "sem") return Prisma.sql`AND v.prazo_despacho IS NULL`;
+  return Prisma.empty;
+}
+
+/**
+ * O PORTÃO da fila: quais vendas do Mercado Livre existem, para dado recorte de
+ * situação.
+ *
+ * É aqui, e não num filtro somado depois, porque `statusVenda` não estreita a
+ * fila — ele TROCA o conjunto. "Canceladas" pedido como filtro adicional sobre a
+ * fila normal devolveria SEMPRE zero, já que a fila normal exclui venda morta e
+ * envio encerrado por definição: seriam duas condições que se anulam, e o
+ * controle na tela só poderia dar lista vazia.
+ *
+ * E "Canceladas" é uma pergunta REAL de galpão, não de contabilidade: pedido que
+ * caiu depois de alguém já ter separado a caixa não pode sair, e descobrir isso
+ * na fila é mais barato que descobrir na transportadora.
+ *
+ * O `REPLACE` de espaço por underscore existe porque o sync do ML grava o status
+ * da venda com o underscore trocado por espaço (`payment_in_process` vira
+ * `payment in process`). Sem ele, "pago" funcionaria por acaso (`paid` não tem
+ * underscore) e todo status composto escaparia da comparação.
+ */
+function portaoMeli(status: StatusVenda): Prisma.Sql {
+  const venda = Prisma.raw(`REPLACE(LOWER(COALESCE(v.status, '')), ' ', '_')`);
+  const envio = Prisma.raw(`REPLACE(LOWER(COALESCE(v.shipping_status, '')), ' ', '_')`);
+
+  // Cancelado inverte o portão: nenhuma das duas exclusões da fila normal se
+  // aplica, senão o resultado seria vazio por construção.
+  if (status === "cancelado") {
+    return Prisma.sql`AND ${venda} IN (${lista(ML_STATUS_MORTO)})`;
+  }
+
+  const partes: Prisma.Sql[] = [
+    Prisma.sql`AND ${venda} NOT IN (${lista(ML_STATUS_MORTO)})`,
+    Prisma.sql`AND ${envio} NOT IN (${lista(ML_ENVIO_ENCERRADO)})`,
+  ];
+
+  // `todos` deixa entrar `payment_required`, `payment_in_process` e
+  // `invoice_pending` — vendas que não são canceladas nem pagas. É o recorte de
+  // quem procura por que um pedido não aparece na fila normal.
+  if (status === "pago") partes.push(Prisma.sql`AND ${venda} IN ('paid', 'pago')`);
+
+  return Prisma.join(partes, " ");
+}
+
+/**
+ * O portão da Shopee.
+ *
+ * `pago` e `todos` dão o MESMO conjunto, e isso é correto: a fila da Shopee é uma
+ * lista branca de três estados de despacho, e todos os três pressupõem pedido
+ * pago. Alargar `todos` para o enum inteiro traria `COMPLETED` e `SHIPPED` — o
+ * que não é fila de expedição, é histórico de vendas, e essa tela já existe.
+ */
+function portaoShopee(status: StatusVenda): Prisma.Sql {
+  const venda = Prisma.raw(`UPPER(COALESCE(v.status, ''))`);
+
+  if (status === "cancelado") {
+    return Prisma.sql`AND ${venda} IN (${lista(SP_STATUS_CANCELADO)})`;
+  }
+  return Prisma.sql`AND ${venda} IN (${lista(SP_STATUS_FILA)})`;
+}
+
+/** Filtro de hierarquia. Aplicado na coluna já vinda da junção com o cadastro. */
+function fragmentoHierarquia(coluna: Prisma.Sql, valores: string[]): Prisma.Sql {
+  if (valores.length === 0) return Prisma.empty;
+  return Prisma.sql`AND ${coluna} IN (${lista(valores)})`;
+}
+
 /** Lista de textos para comparação em minúsculas/maiúsculas. */
 function lista(valores: string[]): Prisma.Sql {
   return Prisma.join(valores.map((v) => Prisma.sql`${v}`));
@@ -257,10 +383,20 @@ function baseMeli(
   filtros: FiltrosExpedicao,
   opcoes: OpcoesBase,
 ): Prisma.Sql {
-  const contas = opcoes.aplicarFiltros
-    ? fragmentoContas("meli_account_id", filtros.contas)
+  const extras = opcoes.aplicarFiltros
+    ? Prisma.join(
+        [
+          fragmentoContas("meli_account_id", filtros.contas),
+          fragmentoBusca(filtros.busca),
+          fragmentoVenda(filtros.vendaDe, filtros.vendaAte),
+          fragmentoPrazo(filtros.prazoDe, filtros.prazoAte),
+          fragmentoTemPrazo(filtros.temPrazo),
+          fragmentoHierarquia(HIERARQUIA_1, filtros.hierarquias1),
+          fragmentoHierarquia(HIERARQUIA_2, filtros.hierarquias2),
+        ],
+        " ",
+      )
     : Prisma.empty;
-  const busca = opcoes.aplicarFiltros ? fragmentoBusca(filtros.busca) : Prisma.empty;
 
   return Prisma.sql`
     SELECT
@@ -292,12 +428,13 @@ function baseMeli(
     ${JUNCAO_SKU}
     WHERE v.user_id = ${userId}
       ${fragmentoJanela(filtros.janelaDias)}
+      -- FULL sai sempre, em qualquer recorte de situacao: quem despacha e o
+      -- proprio Mercado Livre, e nao ha nada a fazer no galpao nem quando a venda
+      -- e cancelada.
       AND LOWER(COALESCE(v.logistic_type, '')) NOT IN (${lista(MODALIDADE_FULL)})
       AND LOWER(COALESCE(v.envio_mode, ''))    NOT IN (${lista(MODALIDADE_FULL)})
-      AND REPLACE(LOWER(COALESCE(v.status, '')), ' ', '_') NOT IN (${lista(ML_STATUS_MORTO)})
-      AND REPLACE(LOWER(COALESCE(v.shipping_status, '')), ' ', '_') NOT IN (${lista(ML_ENVIO_ENCERRADO)})
-      ${contas}
-      ${busca}
+      ${portaoMeli(filtros.statusVenda)}
+      ${extras}
   `;
 }
 
@@ -307,10 +444,20 @@ function baseShopee(
   filtros: FiltrosExpedicao,
   opcoes: OpcoesBase,
 ): Prisma.Sql {
-  const contas = opcoes.aplicarFiltros
-    ? fragmentoContas("shopee_account_id", filtros.contas)
+  const extras = opcoes.aplicarFiltros
+    ? Prisma.join(
+        [
+          fragmentoContas("shopee_account_id", filtros.contas),
+          fragmentoBusca(filtros.busca),
+          fragmentoVenda(filtros.vendaDe, filtros.vendaAte),
+          fragmentoPrazo(filtros.prazoDe, filtros.prazoAte),
+          fragmentoTemPrazo(filtros.temPrazo),
+          fragmentoHierarquia(HIERARQUIA_1, filtros.hierarquias1),
+          fragmentoHierarquia(HIERARQUIA_2, filtros.hierarquias2),
+        ],
+        " ",
+      )
     : Prisma.empty;
-  const busca = opcoes.aplicarFiltros ? fragmentoBusca(filtros.busca) : Prisma.empty;
 
   return Prisma.sql`
     SELECT
@@ -341,9 +488,8 @@ function baseShopee(
     ${JUNCAO_SKU}
     WHERE v.user_id = ${userId}
       ${fragmentoJanela(filtros.janelaDias)}
-      AND UPPER(COALESCE(v.status, '')) IN (${lista(SP_STATUS_FILA)})
-      ${contas}
-      ${busca}
+      ${portaoShopee(filtros.statusVenda)}
+      ${extras}
   `;
 }
 
@@ -546,10 +692,75 @@ function itens(valor: unknown): ItemPacote[] {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  Consulta                                  */
+/*                                  Resumos                                   */
 /* -------------------------------------------------------------------------- */
 
 type LinhaPacote = Record<string, unknown>;
+
+/**
+ * Colunas agrupáveis do resumo, por nome fixo.
+ *
+ * Mapa fechado pelo mesmo motivo de `COLUNA_ORDEM`: o nome entra na consulta como
+ * texto, e não como parâmetro (`GROUP BY $1` não existe em SQL). Nenhuma destas
+ * chaves vem da query string hoje, mas a tranca fica no lugar onde o dano
+ * aconteceria, e não no lugar onde a validação está.
+ */
+const COLUNA_RESUMO = {
+  hierarquia1: "hierarquia1",
+  hierarquia2: "hierarquia2",
+  modalidade: "modalidade",
+} as const;
+
+type ChaveResumo = keyof typeof COLUNA_RESUMO;
+
+/**
+ * "Onde o trabalho está concentrado", para o rodapé.
+ *
+ * Roda sobre a CTE JÁ FILTRADA, ao contrário das opções de filtro: a lista
+ * responde "o que despachar" e o resumo responde "por onde começar", e as duas
+ * perguntas têm de falar do mesmo conjunto. Um resumo que ignorasse os filtros
+ * somaria pacotes que não estão na tela, e a conferência nunca fecharia.
+ *
+ * Ordena por PACOTES e não alfabeticamente: a maior pilha primeiro é a ordem em
+ * que o galpão realmente ataca o dia. `LIMIT 30` porque isto é um resumo — cem
+ * linhas de uma categoria com um pacote cada não ajudam ninguém a decidir nada.
+ */
+async function buscarResumo(
+  cte: Prisma.Sql,
+  chave: ChaveResumo,
+  recortes: Prisma.Sql,
+): Promise<LinhaResumo[]> {
+  const coluna = Prisma.raw(COLUNA_RESUMO[chave]);
+
+  const linhas = await prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
+    ${cte}
+    SELECT
+      ${coluna}        AS rotulo,
+      COUNT(*)         AS pacotes,
+      SUM(unidades)    AS unidades,
+      SUM(valor_total) AS valor_total
+    FROM fila
+    WHERE TRUE ${recortes}
+    GROUP BY ${coluna}
+    ORDER BY COUNT(*) DESC, ${coluna} ASC NULLS LAST
+    LIMIT 30
+  `);
+
+  return linhas.map((linha) => ({
+    // NULL vira rótulo explícito em vez de linha em branco: SKU sem cadastro é
+    // trabalho de verdade e precisa ser somado em algum lugar visível. Some-lo
+    // numa linha vazia faria a conta do rodapé não fechar com o total do topo,
+    // sem dizer por quê.
+    rotulo: linha.rotulo ? texto(linha.rotulo) : "Sem categoria",
+    pacotes: numero(linha.pacotes),
+    unidades: numero(linha.unidades),
+    valorTotal: numero(linha.valor_total),
+  }));
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Consulta                                  */
+/* -------------------------------------------------------------------------- */
 
 export async function buscarExpedicao(
   userId: string,
@@ -577,28 +788,36 @@ export async function buscarExpedicao(
   const ordem = fragmentoOrdem(filtros.ordem, filtros.direcao);
   const deslocamento = (pagina - 1) * porPagina;
 
-  const [linhas, resumo] = await Promise.all([
-    prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
-      ${cte}
-      SELECT * FROM fila
-      WHERE TRUE ${filtroUrgencia} ${filtroModalidade}
-      ${ordem}
-      LIMIT ${porPagina} OFFSET ${deslocamento}
-    `),
-    // Uma consulta só devolve as fichas E os totais. Agrupar por urgência e somar
-    // no Node evita uma terceira ida ao banco para calcular o total da paginação.
-    prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
-      ${cte}
-      SELECT
-        urgencia,
-        COUNT(*)           AS pacotes,
-        SUM(unidades)      AS unidades,
-        SUM(valor_total)   AS valor_total
-      FROM fila
-      WHERE TRUE ${filtroModalidade}
-      GROUP BY urgencia
-    `),
-  ]);
+  // Os dois recortes que ficam fora da CTE, juntos. Os resumos do rodapé usam
+  // exatamente estes, para somarem o mesmo conjunto que a lista mostra.
+  const recortes = Prisma.sql`${filtroUrgencia} ${filtroModalidade}`;
+
+  const [linhas, resumo, resumoHierarquia1, resumoHierarquia2, resumoModalidade] =
+    await Promise.all([
+      prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
+        ${cte}
+        SELECT * FROM fila
+        WHERE TRUE ${recortes}
+        ${ordem}
+        LIMIT ${porPagina} OFFSET ${deslocamento}
+      `),
+      // Uma consulta só devolve as fichas E os totais. Agrupar por urgência e
+      // somar no Node evita uma terceira ida ao banco para o total da paginação.
+      prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
+        ${cte}
+        SELECT
+          urgencia,
+          COUNT(*)           AS pacotes,
+          SUM(unidades)      AS unidades,
+          SUM(valor_total)   AS valor_total
+        FROM fila
+        WHERE TRUE ${filtroModalidade}
+        GROUP BY urgencia
+      `),
+      buscarResumo(cte, "hierarquia1", recortes),
+      buscarResumo(cte, "hierarquia2", recortes),
+      buscarResumo(cte, "modalidade", recortes),
+    ]);
 
   const porUrgencia = Object.fromEntries(
     URGENCIAS.map((u) => [u, 0]),
@@ -664,6 +883,9 @@ export async function buscarExpedicao(
     porUrgencia,
     unidades,
     valorTotal,
+    resumoHierarquia1,
+    resumoHierarquia2,
+    resumoModalidade,
     ...facetas,
   };
 }
@@ -674,25 +896,57 @@ export async function buscarExpedicao(
  * Calculadas SEM os filtros de canal, conta, modalidade e busca — só com as
  * regras da fila e a janela. Se respeitassem os filtros, selecionar uma conta
  * apagaria as outras da lista e não haveria como voltar atrás sem limpar tudo.
+ *
+ * `statusVenda` é a EXCEÇÃO, e de propósito: ele não é um filtro, é o portão que
+ * define QUAL conjunto está sendo consultado (ver `portaoMeli`). Sob
+ * "Canceladas", a lista de contas tem de ser a das contas que têm cancelamento —
+ * oferecer uma conta sem nenhum devolveria zero sem explicação.
  */
 async function buscarFacetas(
   userId: string,
   filtros: FiltrosExpedicao,
-): Promise<Pick<ResultadoExpedicao, "contas" | "modalidades" | "prazoPendente">> {
+): Promise<
+  Pick<
+    ResultadoExpedicao,
+    | "contas"
+    | "modalidades"
+    | "opcoesHierarquia1"
+    | "opcoesHierarquia2"
+    | "prazoPendente"
+  >
+> {
   const cte = montarCte(userId, filtros, { aplicarFiltros: false });
 
-  const [linhas, pendentes] = await Promise.all([
+  const [linhas, hierarquias, pendentes] = await Promise.all([
     prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
       ${cte}
       SELECT canal, account_id, MIN(conta) AS conta, modalidade, COUNT(*) AS pacotes
       FROM fila
       GROUP BY canal, account_id, modalidade
     `),
+    // As duas hierarquias numa consulta so, em vez de duas: o custo aqui e a
+    // CTE, nao o GROUP BY, e montar a CTE duas vezes dobraria a leitura das
+    // tabelas de venda para responder uma pergunta de preenchimento de select.
+    prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
+      ${cte}
+      SELECT DISTINCT 1 AS nivel, hierarquia1 AS valor FROM fila WHERE hierarquia1 IS NOT NULL
+      UNION
+      SELECT DISTINCT 2 AS nivel, hierarquia2 AS valor FROM fila WHERE hierarquia2 IS NOT NULL
+    `),
     contarPrazoPendenteRapido(userId),
   ]);
 
   const contas = new Map<string, ContaExpedicao>();
   const modalidades = new Set<string>();
+  const opcoes1 = new Set<string>();
+  const opcoes2 = new Set<string>();
+
+  for (const linha of hierarquias) {
+    const valor = texto(linha.valor);
+    if (valor === "") continue;
+    if (numero(linha.nivel) === 1) opcoes1.add(valor);
+    else opcoes2.add(valor);
+  }
 
   for (const linha of linhas) {
     const canal = (texto(linha.canal) === "SP" ? "SP" : "ML") as Canal;
@@ -718,6 +972,11 @@ async function buscarFacetas(
   return {
     contas: [...contas.values()].sort((a, b) => a.conta.localeCompare(b.conta, "pt-BR")),
     modalidades: [...modalidades].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    // Alfabético, ao contrário dos resumos: aqui a pessoa está PROCURANDO uma
+    // categoria que já tem em mente, e ordem por volume faria a busca visual
+    // depender de quanto se vendeu naquele dia.
+    opcoesHierarquia1: [...opcoes1].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    opcoesHierarquia2: [...opcoes2].sort((a, b) => a.localeCompare(b, "pt-BR")),
     prazoPendente: pendentes,
   };
 }

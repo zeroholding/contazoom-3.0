@@ -20,8 +20,10 @@ import {
   CabecalhoTabela,
   Cabecalho,
   Campo,
+  CampoBusca,
   Esqueleto,
   Faixa,
+  GrupoRecorte,
   Kpi,
   Miniatura,
   MolduraTela,
@@ -38,20 +40,25 @@ import {
   IconeAlerta,
   IconeAmpulheta,
   IconeBaixar,
-  IconeBusca,
   IconeCaixa,
+  IconeCaixas,
+  IconeCalendario,
   IconeCamadas,
   IconeCaminhao,
   IconeDinheiro,
   IconeEtiqueta,
   IconePessoa,
   IconeRelogio,
+  IconeSku,
 } from "./comum/icones";
 import {
   CANAIS,
   CANAL_ROTULO,
   FILTROS_PADRAO,
+  PRAZO_PRESETS,
   rotuloPrazo,
+  STATUS_VENDA,
+  TEM_PRAZO,
   URGENCIA_BARRA,
   URGENCIA_CLASSE,
   URGENCIA_ROTULO,
@@ -59,10 +66,16 @@ import {
   URGENCIAS,
   type Canal,
   type FiltrosExpedicao,
+  type LinhaResumo,
   type OrdemExpedicao,
   type PacoteExpedicao,
+  type PrazoPreset,
+  type StatusVenda,
+  type TemPrazo,
   type Urgencia,
 } from "@/lib/expedicao";
+import { statusEnvio, transportadoraShopee } from "@/lib/expedicao-status";
+import BotaoEtiqueta from "./expedicao/BotaoEtiqueta";
 import { baixarCsv, useExpedicao } from "./expedicao/useExpedicao";
 
 /**
@@ -74,6 +87,25 @@ import { baixarCsv, useExpedicao } from "./expedicao/useExpedicao";
  * preso precisa poder alargar a janela e enxergá-lo.
  */
 const JANELAS = [15, 30, 60, 90, 180, 365];
+
+/**
+ * A frase de apoio de cada atalho de prazo, mostrada só para o que está aceso.
+ *
+ * Existe porque os atalhos parecem óbvios e não são: "Próximos 3 dias" INCLUI o
+ * que vence hoje, e "Atrasados" não tem piso — pega o pacote parado há três meses.
+ * Sem a frase, a pessoa descobre isso pela contagem que não fecha.
+ */
+const EXPLICACAO_PRAZO: Partial<Record<PrazoPreset, string>> = {
+  atrasados: "Tudo cujo prazo já passou, sem limite de quanto tempo atrás.",
+  hoje: "Prazo de despacho caindo hoje, no fuso de São Paulo — o dia inteiro, inclusive um prazo às 23h.",
+  amanha: "Prazo caindo amanhã. Serve para adiantar o que já pode ser separado hoje.",
+  proximos3: "De hoje até três dias à frente. Inclui o que vence hoje, porque é a primeira coisa do plano.",
+  proximos7: "De hoje até sete dias à frente. A semana de trabalho inteira.",
+  esteMes: "Do primeiro ao último dia do mês corrente.",
+  todas:
+    "Sem recorte de prazo: a fila inteira dentro da janela. As fichas de urgência abaixo mostram como ela se distribui.",
+  personalizado: "Escolha as datas de prazo nos campos abaixo.",
+};
 
 /** Prazo em "09/09 às 18:00", no fuso de São Paulo. */
 function prazoCurto(iso: string | null): string {
@@ -107,18 +139,15 @@ const ICONE_URGENCIA: Record<Urgencia, React.ReactNode> = {
   atrasado: <IconeAlerta className="h-3.5 w-3.5" />,
   hoje: <IconeAmpulheta className="h-3.5 w-3.5" />,
   amanha: <IconeRelogio className="h-3.5 w-3.5" />,
-  proximo: <IconeCalendarioCurto />,
-  futuro: <IconeCalendarioCurto />,
-  semPrazo: <IconeRelogioVazio />,
+  // Calendário nas duas faixas com folga: elas são de PLANEJAMENTO, não de
+  // pressa, e o relógio (que é o ícone da urgência) daria a elas a mesma
+  // linguagem visual do que vence amanhã.
+  proximo: <IconeCalendario className="h-3.5 w-3.5" />,
+  futuro: <IconeCalendario className="h-3.5 w-3.5" />,
+  // Meio apagado: é ausência de informação, não gravidade. Mesmo raciocínio do
+  // cinza em `URGENCIA_CLASSE`.
+  semPrazo: <IconeRelogio className="h-3.5 w-3.5 opacity-50" />,
 };
-
-/** Envolvem os ícones do conjunto só para fixar o tamanho usado no selo. */
-function IconeCalendarioCurto() {
-  return <IconeRelogio className="h-3.5 w-3.5" />;
-}
-function IconeRelogioVazio() {
-  return <IconeRelogio className="h-3.5 w-3.5 opacity-60" />;
-}
 
 function SeloUrgencia({ urgencia, dias }: { urgencia: Urgencia; dias: number | null }) {
   return (
@@ -137,6 +166,9 @@ function SeloUrgencia({ urgencia, dias }: { urgencia: Urgencia; dias: number | n
 /* -------------------------------------------------------------------------- */
 
 function Linha({ pacote }: { pacote: PacoteExpedicao }) {
+  const estado = statusEnvio(pacote.canal, pacote.shippingStatus, pacote.status);
+  const transportadora = transportadoraShopee(pacote.shippingStatus);
+
   return (
     // A barra de urgência é uma BORDA ESQUERDA de 4px na própria linha, não um
     // elemento posicionado. Numa `<tr>`, um `absolute` precisaria de um
@@ -261,18 +293,147 @@ function Linha({ pacote }: { pacote: PacoteExpedicao }) {
       </td>
 
       <td className="px-3 py-3">
-        <div className="flex flex-col gap-0.5">
+        {/* O estado do pacote vem TRADUZIDO por `statusEnvio`, que sabe qual
+            coluna vale em cada canal. No ML vale `shipping_status`; na Shopee
+            aquela coluna guarda a TRANSPORTADORA e o estado real está em
+            `status` — ver a armadilha no topo de `expedicao-status.ts`. */}
+        <div className="flex flex-col items-start gap-1">
+          {/* Sem `titulo` no selo: a explicação já aparece por extenso abaixo, e
+              repetir a mesma frase num tooltip só cria um segundo lugar para ela
+              divergir. */}
+          <Selo tom={estado.tom}>{estado.rotulo}</Selo>
           <span className="text-[11.5px] font-semibold text-[var(--cz-texto)]">
             {pacote.modalidade}
           </span>
-          {pacote.shippingStatus && (
-            <span className="text-[10.5px] text-[var(--cz-texto-suave)]">
-              {pacote.shippingStatus}
+          {/* Só na Shopee: no ML esta linha repetiria a modalidade, que já está
+              logo acima. */}
+          {pacote.canal === "SP" && transportadora && (
+            <span className="flex items-center gap-1 text-[10.5px] text-[var(--cz-texto-suave)]">
+              <IconeCaminhao className="h-3 w-3 shrink-0" />
+              {transportadora}
+            </span>
+          )}
+          {estado.explicacao && (
+            <span className="text-[10.5px] leading-snug text-[var(--cz-texto-suave)]">
+              {estado.explicacao}
             </span>
           )}
         </div>
       </td>
+
+      <td className="px-3 py-3">
+        {/* Etiqueta só no Mercado Livre. A Shopee não expõe a etiqueta pelos
+            endpoints que este projeto usa, e desenhar um botão desabilitado em
+            toda linha da Shopee prometeria um recurso que não existe. O texto no
+            lugar dele diz onde imprimir de fato. */}
+        {pacote.canal === "ML" ? (
+          <div className="flex flex-wrap gap-1.5">
+            <BotaoEtiqueta
+              shippingId={pacote.shippingId}
+              contaId={pacote.accountId}
+              tipo="pdf"
+            />
+            <BotaoEtiqueta
+              shippingId={pacote.shippingId}
+              contaId={pacote.accountId}
+              tipo="zpl"
+            />
+          </div>
+        ) : (
+          <span className="text-[10.5px] leading-snug text-[var(--cz-texto-fraco)]">
+            Etiqueta no painel da Shopee
+          </span>
+        )}
+      </td>
     </tr>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Resumos do rodapé                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * "Onde o trabalho está concentrado".
+ *
+ * A lista de cima responde O QUE despachar; isto responde POR ONDE COMEÇAR.
+ * Trinta pacotes espalhados em dez categorias é um dia de trabalho diferente de
+ * trinta pacotes na mesma prateleira, e a lista paginada não mostra essa
+ * diferença — a página 1 parece igual nos dois casos.
+ *
+ * Fica no RODAPÉ, e não no topo: é informação de planejamento, e acima da fila
+ * empurraria para baixo a única coisa que precisa estar visível ao abrir a tela.
+ *
+ * Some quando há uma linha só. Um resumo de um item não resume nada — repete o
+ * total que já está no cartão de indicadores, com mais tinta.
+ */
+function TabelaResumo({
+  titulo,
+  nota,
+  icone,
+  linhas,
+}: {
+  titulo: string;
+  nota: string;
+  icone: React.ReactNode;
+  linhas: LinhaResumo[];
+}) {
+  if (linhas.length < 2) return null;
+
+  const totalPacotes = linhas.reduce((s, l) => s + l.pacotes, 0);
+
+  return (
+    <section className="overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-1)]">
+      <header className="flex items-start gap-2 border-b border-[var(--cz-hairline)] px-3.5 py-3">
+        <span className="mt-0.5 text-[var(--cz-texto-fraco)]">{icone}</span>
+        <span className="min-w-0">
+          <h3 className="text-[13px] font-bold text-[var(--cz-texto)]">{titulo}</h3>
+          <p className="text-[11px] leading-snug text-[var(--cz-texto-suave)]">{nota}</p>
+        </span>
+      </header>
+
+      <table className="w-full border-collapse text-left">
+        <tbody>
+          {linhas.map((linha) => {
+            // Barra de proporção no fundo da célula do rótulo. É o que transforma
+            // uma coluna de números numa distribuição legível de relance — sem
+            // ela, achar a maior pilha exige comparar sete números.
+            const fatia =
+              totalPacotes > 0 ? Math.round((linha.pacotes / totalPacotes) * 100) : 0;
+
+            return (
+              <tr
+                key={linha.rotulo}
+                className="border-b border-[var(--cz-hairline)] last:border-b-0"
+              >
+                <td className="relative px-3.5 py-2">
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 bg-[var(--cz-laranja-suave)]"
+                    style={{ width: `${fatia}%` }}
+                  />
+                  <span
+                    className="relative block truncate text-[12px] font-semibold text-[var(--cz-texto)]"
+                    title={linha.rotulo}
+                  >
+                    {linha.rotulo}
+                  </span>
+                </td>
+                <td className="relative px-2 py-2 text-right text-[12px] font-bold tabular-nums text-[var(--cz-texto)]">
+                  {inteiro(linha.pacotes)}
+                </td>
+                <td className="relative px-2 py-2 text-right text-[11px] tabular-nums text-[var(--cz-texto-suave)]">
+                  {inteiro(linha.unidades)} un.
+                </td>
+                <td className="relative px-3.5 py-2 text-right text-[11.5px] font-semibold tabular-nums text-[var(--cz-texto)]">
+                  {brl(linha.valorTotal)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
   );
 }
 
@@ -367,6 +528,8 @@ export default function Expedicao({
 
   const porUrgencia = dados?.porUrgencia;
   const modalidades = dados?.modalidades ?? [];
+  const opcoes1 = dados?.opcoesHierarquia1 ?? [];
+  const opcoes2 = dados?.opcoesHierarquia2 ?? [];
 
   const vazio = !carregando && (dados?.pacotes.length ?? 0) === 0;
 
@@ -381,7 +544,17 @@ export default function Expedicao({
       filtros.contas.length === 0 &&
       filtros.urgencias.length === 0 &&
       filtros.modalidades.length === 0 &&
-      filtros.busca.trim() === "",
+      filtros.hierarquias1.length === 0 &&
+      filtros.hierarquias2.length === 0 &&
+      filtros.busca.trim() === "" &&
+      // O recorte de prazo conta como filtro. Sem esta linha, a Expedição aberta
+      // em "Atrasados" e sem atrasado nenhum diria "Nada a despachar" — mentira,
+      // e a pior possível nesta tela.
+      filtros.prazoPreset === FILTROS_PADRAO.prazoPreset &&
+      filtros.vendaDe === null &&
+      filtros.vendaAte === null &&
+      filtros.statusVenda === FILTROS_PADRAO.statusVenda &&
+      filtros.temPrazo === FILTROS_PADRAO.temPrazo,
     [filtros, canalFixo],
   );
 
@@ -508,30 +681,36 @@ export default function Expedicao({
         })}
       </div>
 
+      {/* O RECORTE DE PRAZO fica acima do painel porque muda a PERGUNTA, e não
+          só estreita a resposta: "o que já venceu" e "o que sai na semana" são
+          duas telas diferentes. Vale junto com as fichas de urgência — o atalho
+          escolhe a FAIXA que o banco lê, a ficha classifica o que voltou. */}
+      <GrupoRecorte
+        opcoes={PRAZO_PRESETS.map((p) => ({
+          chave: p.chave,
+          rotulo: p.rotulo,
+          explicacao: EXPLICACAO_PRAZO[p.chave],
+        }))}
+        valor={filtros.prazoPreset}
+        onMudar={(chave: PrazoPreset) => mudar({ prazoPreset: chave })}
+      />
+
       <PainelFiltros
         nota={
-          <p className="mt-3 text-[11px] text-[var(--cz-texto-suave)]">
+          <p className="mt-3 text-[11px] leading-relaxed text-[var(--cz-texto-suave)]">
             A janela limita a busca pela data da venda e existe para a consulta não
             varrer a base inteira. Se um pedido antigo estiver preso sem despachar,
-            alargue a janela para vê-lo.
+            alargue a janela para vê-lo. As categorias vêm do cadastro de SKU — venda
+            de SKU não cadastrado continua na fila, sob <em>Sem categoria</em>.
           </p>
         }
       >
-        <Campo rotulo="Buscar" className="lg:col-span-4">
-          {/* Lupa dentro do campo. O `pl-9` abre o espaço dela; sem isso o ícone
-              fica por cima do texto digitado — o mesmo defeito da seta do menu
-              sobre o breadcrumb. */}
-          <span className="relative block">
-            <IconeBusca className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--cz-texto-fraco)]" />
-            <input
-              type="search"
-              value={filtros.busca}
-              onChange={(e) => mudar({ busca: e.target.value })}
-              placeholder="Pedido, etiqueta, SKU, produto ou comprador"
-              className={`${ENTRADA} pl-9`}
-            />
-          </span>
-        </Campo>
+        <CampoBusca
+          className="lg:col-span-4"
+          valor={filtros.busca}
+          onMudar={(v) => mudar({ busca: v })}
+          placeholder="Pedido, etiqueta, SKU, produto ou comprador"
+        />
 
         {!canalFixo && (
           <Campo rotulo="Canal" className="lg:col-span-2">
@@ -552,7 +731,7 @@ export default function Expedicao({
           </Campo>
         )}
 
-        <Campo rotulo="Conta" className="lg:col-span-2">
+        <Campo rotulo="Conta" className="lg:col-span-3">
           <select
             value={filtros.contas[0] ?? ""}
             onChange={(e) => mudar({ contas: e.target.value ? [e.target.value] : [] })}
@@ -567,7 +746,7 @@ export default function Expedicao({
           </select>
         </Campo>
 
-        <Campo rotulo="Envio" className="lg:col-span-2">
+        <Campo rotulo="Envio" className="lg:col-span-3">
           <select
             value={filtros.modalidades[0] ?? ""}
             onChange={(e) =>
@@ -579,6 +758,68 @@ export default function Expedicao({
             {modalidades.map((m) => (
               <option key={m} value={m}>
                 {m}
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <Campo rotulo="Categoria" className="lg:col-span-3">
+          <select
+            value={filtros.hierarquias1[0] ?? ""}
+            onChange={(e) =>
+              mudar({ hierarquias1: e.target.value ? [e.target.value] : [] })
+            }
+            className={ENTRADA}
+          >
+            <option value="">Todas</option>
+            {opcoes1.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <Campo rotulo="Subcategoria" className="lg:col-span-3">
+          <select
+            value={filtros.hierarquias2[0] ?? ""}
+            onChange={(e) =>
+              mudar({ hierarquias2: e.target.value ? [e.target.value] : [] })
+            }
+            className={ENTRADA}
+          >
+            <option value="">Todas</option>
+            {opcoes2.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <Campo rotulo="Situação da venda" className="lg:col-span-2">
+          <select
+            value={filtros.statusVenda}
+            onChange={(e) => mudar({ statusVenda: e.target.value as StatusVenda })}
+            className={ENTRADA}
+          >
+            {STATUS_VENDA.map((s) => (
+              <option key={s.chave} value={s.chave}>
+                {s.rotulo}
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <Campo rotulo="Prazo" className="lg:col-span-2">
+          <select
+            value={filtros.temPrazo}
+            onChange={(e) => mudar({ temPrazo: e.target.value as TemPrazo })}
+            className={ENTRADA}
+          >
+            {TEM_PRAZO.map((t) => (
+              <option key={t.chave} value={t.chave}>
+                {t.rotulo}
               </option>
             ))}
           </select>
@@ -596,6 +837,51 @@ export default function Expedicao({
               </option>
             ))}
           </select>
+        </Campo>
+
+        {/* As datas de PRAZO só aparecem no recorte personalizado. Nos atalhos
+            elas são derivadas no servidor, e mostrá-las preenchidas convidaria a
+            editá-las — o que contradiria a pastilha acesa logo acima. */}
+        {filtros.prazoPreset === "personalizado" && (
+          <>
+            <Campo rotulo="Prazo de" className="lg:col-span-3">
+              <input
+                type="date"
+                value={filtros.prazoDe ?? ""}
+                onChange={(e) => mudar({ prazoDe: e.target.value || null })}
+                className={ENTRADA}
+              />
+            </Campo>
+            <Campo rotulo="Prazo até" className="lg:col-span-3">
+              <input
+                type="date"
+                value={filtros.prazoAte ?? ""}
+                onChange={(e) => mudar({ prazoAte: e.target.value || null })}
+                className={ENTRADA}
+              />
+            </Campo>
+          </>
+        )}
+
+        {/* Data da VENDA, não do prazo. São perguntas diferentes: "o que vence
+            hoje" é a fila de trabalho; "o que foi vendido no dia 3" é
+            conferência de lote. Manter as duas faixas separadas é o que permite
+            cruzá-las. */}
+        <Campo rotulo="Venda de" className="lg:col-span-3">
+          <input
+            type="date"
+            value={filtros.vendaDe ?? ""}
+            onChange={(e) => mudar({ vendaDe: e.target.value || null })}
+            className={ENTRADA}
+          />
+        </Campo>
+        <Campo rotulo="Venda até" className="lg:col-span-3">
+          <input
+            type="date"
+            value={filtros.vendaAte ?? ""}
+            onChange={(e) => mudar({ vendaAte: e.target.value || null })}
+            className={ENTRADA}
+          />
         </Campo>
       </PainelFiltros>
 
@@ -622,7 +908,7 @@ export default function Expedicao({
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] border-collapse text-left">
+              <table className="w-full min-w-[1280px] border-collapse text-left">
                 <CabecalhoTabela>
                   <ThOrdenavel
                     campo="prazo"
@@ -657,6 +943,7 @@ export default function Expedicao({
                     onOrdenar={ordenar}
                   />
                   <Th>Envio</Th>
+                  <Th>Etiqueta</Th>
                 </CabecalhoTabela>
                 <tbody>
                   {dados?.pacotes.map((pacote) => (
@@ -679,6 +966,32 @@ export default function Expedicao({
           </>
         )}
       </section>
+
+      {/* Os três resumos somam o CONJUNTO FILTRADO INTEIRO, não a página. É por
+          isso que eles fecham com os cartões do topo e não com a tabela acima —
+          e é o que os torna úteis: a página 1 de 40 não diz nada sobre o dia. */}
+      {dados && !carregando && !vazio && (
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          <TabelaResumo
+            titulo="Por categoria"
+            nota="Onde estão as pilhas. Vem do cadastro de SKU."
+            icone={<IconeCamadas className="h-4 w-4" />}
+            linhas={dados.resumoHierarquia1}
+          />
+          <TabelaResumo
+            titulo="Por subcategoria"
+            nota="O segundo nível do cadastro, para separar dentro da prateleira."
+            icone={<IconeSku className="h-4 w-4" />}
+            linhas={dados.resumoHierarquia2}
+          />
+          <TabelaResumo
+            titulo="Por envio"
+            nota="Modalidade no Mercado Livre, transportadora na Shopee. Define o corte do dia."
+            icone={<IconeCaixas className="h-4 w-4" />}
+            linhas={dados.resumoModalidade}
+          />
+        </div>
+      )}
     </MolduraTela>
   );
 }

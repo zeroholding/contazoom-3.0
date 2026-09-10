@@ -157,8 +157,11 @@ export default function DashboardFinanceiro() {
                   </svg>
                 </div>
                 <div className="flex-1">
+                  {/* Sem o emoji de alerta no título: o ícone de triângulo já
+                      está no círculo à esquerda, e repetir o mesmo sinal duas
+                      vezes na mesma linha só dilui os dois. */}
                   <h3 className="text-sm font-bold text-red-800">
-                    ⚠️ Alerta Crítico na DRE (Lucratividade Mascarada)
+                    Alerta crítico na DRE: lucratividade mascarada
                   </h3>
                   <p className="mt-1 text-sm text-red-700">
                     Você possui <strong>{pendingSkusCount} SKU(s)</strong> vinculados a vendas recentes que não possuem o custo unitário cadastrado.

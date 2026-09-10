@@ -14,14 +14,21 @@ import { buscarExpedicao } from "@/lib/expedicao-data";
 import {
   ehCanal,
   ehOrdem,
+  ehPrazoPreset,
+  ehStatusVenda,
+  ehTemPrazo,
   ehUrgencia,
   FILTROS_PADRAO,
   hojeSP,
+  resolverPrazo,
   URGENCIA_ROTULO,
   type Canal,
   type FiltrosExpedicao,
   type OrdemExpedicao,
+  type PrazoPreset,
   type ResultadoExpedicao,
+  type StatusVenda,
+  type TemPrazo,
   type Urgencia,
 } from "@/lib/expedicao";
 import { backfillPrazoAte } from "@/lib/prazo-despacho-backfill";
@@ -63,6 +70,31 @@ function lista(v: string | null, max = 50): string[] {
 }
 
 /**
+ * Data `YYYY-MM-DD`, ou `null`.
+ *
+ * Valida o FORMATO e o calendário, e não só o formato: `2026-02-31` casa com a
+ * expressão regular, e mandado ao Postgres como `::date` levanta erro e derruba a
+ * consulta inteira com 500. Remontar a data e comparar com a entrada é o que pega
+ * o dia que não existe, e a resposta a isso é ignorar o parâmetro — o mesmo
+ * critério do resto de `lerFiltros`.
+ */
+function data(v: string | null): string | null {
+  const s = (v ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+
+  const [a, m, d] = s.split("-").map(Number);
+  const teste = new Date(Date.UTC(a, m - 1, d));
+  if (
+    teste.getUTCFullYear() !== a ||
+    teste.getUTCMonth() !== m - 1 ||
+    teste.getUTCDate() !== d
+  ) {
+    return null;
+  }
+  return s;
+}
+
+/**
  * Query string -> filtros, com tudo saneado.
  *
  * Valor inválido cai no padrão em SILÊNCIO, sem 400. É deliberado: os parâmetros
@@ -77,12 +109,52 @@ function lerFiltros(url: URL): FiltrosExpedicao {
   const ordemBruta = texto(p.get("ordem"), 20);
   const direcaoBruta = texto(p.get("direcao"), 4);
 
+  const presetBruto = texto(p.get("prazoPreset"), 20);
+  const prazoPreset: PrazoPreset = ehPrazoPreset(presetBruto)
+    ? presetBruto
+    : FILTROS_PADRAO.prazoPreset;
+
+  // O atalho é RESOLVIDO aqui, e não no SQL: a camada de dados recebe só duas
+  // datas e não precisa saber que "hoje" existe. Isso também mantém a chave de
+  // cache honesta — ela guarda as datas concretas, então a resposta de "vencem
+  // hoje" calculada ontem não é reaproveitada hoje.
+  const { de: prazoDe, ate: prazoAte } = resolverPrazo(
+    prazoPreset,
+    data(p.get("prazoDe")),
+    data(p.get("prazoAte")),
+  );
+
+  const statusBruto = texto(p.get("statusVenda"), 20);
+  const temPrazoBruto = texto(p.get("temPrazo"), 20);
+
+  // Datas de venda invertidas trocam de lugar, mesmo critério do `personalizado`
+  // em `resolverPrazo`: é erro de digitação, não pedido de lista vazia.
+  let vendaDe = data(p.get("vendaDe"));
+  let vendaAte = data(p.get("vendaAte"));
+  if (vendaDe && vendaAte && vendaDe > vendaAte) [vendaDe, vendaAte] = [vendaAte, vendaDe];
+
   return {
     canais: lista(p.get("canais"), 2).filter((c): c is Canal => ehCanal(c)),
     contas: lista(p.get("contas"), 50),
     urgencias: lista(p.get("urgencias"), 6).filter((u): u is Urgencia => ehUrgencia(u)),
     modalidades: lista(p.get("modalidades"), 30).map((m) => m.toUpperCase()),
+    // Hierarquia NÃO é passada para maiúsculas: ela é comparada com o valor
+    // gravado no cadastro de SKU, e o SQL compara texto exato. Normalizar aqui
+    // faria todo filtro de categoria devolver vazio.
+    hierarquias1: lista(p.get("hierarquias1"), 50),
+    hierarquias2: lista(p.get("hierarquias2"), 50),
     busca: texto(p.get("busca")),
+    prazoPreset,
+    prazoDe,
+    prazoAte,
+    vendaDe,
+    vendaAte,
+    statusVenda: (ehStatusVenda(statusBruto)
+      ? statusBruto
+      : FILTROS_PADRAO.statusVenda) as StatusVenda,
+    temPrazo: (ehTemPrazo(temPrazoBruto)
+      ? temPrazoBruto
+      : FILTROS_PADRAO.temPrazo) as TemPrazo,
     janelaDias: inteiro(p.get("janelaDias"), FILTROS_PADRAO.janelaDias, 1, 365),
     ordem: (ehOrdem(ordemBruta) ? ordemBruta : FILTROS_PADRAO.ordem) as OrdemExpedicao,
     direcao: direcaoBruta === "desc" ? "desc" : "asc",
@@ -172,6 +244,12 @@ function montarCsv(resultado: ResultadoExpedicao): string {
     "Pedido",
     "SKU",
     "Produto",
+    // Categoria e subcategoria vêm ANTES da quantidade de propósito: quem imprime
+    // esta lista costuma ordenar a planilha por elas para andar o galpão uma
+    // prateleira por vez, e coluna de agrupamento à esquerda é a convenção que
+    // todo mundo já espera numa planilha.
+    "Categoria",
+    "Subcategoria",
     "Qtd",
     "Valor",
     "Comprador",
@@ -225,6 +303,11 @@ function montarCsv(resultado: ResultadoExpedicao): string {
           escapar(item.orderId),
           escapar(item.sku ?? ""),
           escapar(item.titulo),
+          // Do ITEM e não do pacote: o pacote carrega a categoria do primeiro
+          // item (ver o SQL), e num pacote misto isso mandaria quem separa para a
+          // prateleira errada nas outras linhas.
+          escapar(item.hierarquia1 ?? ""),
+          escapar(item.hierarquia2 ?? ""),
           escapar(item.quantidade),
           escapar(dinheiro(item.valorTotal)),
           escapar(pacote.comprador),
@@ -275,7 +358,20 @@ export async function GET(req: NextRequest) {
       filtros.contas.join("|"),
       filtros.urgencias.join("|"),
       filtros.modalidades.join("|"),
+      filtros.hierarquias1.join("|"),
+      filtros.hierarquias2.join("|"),
       filtros.busca,
+      // As datas JÁ RESOLVIDAS, não o nome do atalho: dois pedidos com o mesmo
+      // `prazoPreset` em dias diferentes descrevem faixas diferentes, e guardar só
+      // "hoje" na chave serviria a resposta de ontem. O `hojeSP()` acima já cobre
+      // isso, mas depender de dois mecanismos para a mesma garantia é o tipo de
+      // acoplamento que quebra quando um deles muda.
+      filtros.prazoDe ?? "",
+      filtros.prazoAte ?? "",
+      filtros.vendaDe ?? "",
+      filtros.vendaAte ?? "",
+      filtros.statusVenda,
+      filtros.temPrazo,
       String(filtros.janelaDias),
       filtros.ordem,
       filtros.direcao,
