@@ -23,6 +23,7 @@ import {
   Esqueleto,
   Faixa,
   Kpi,
+  Miniatura,
   MolduraTela,
   Paginacao,
   PainelFiltros,
@@ -33,11 +34,13 @@ import {
 import { brl, ENTRADA, inteiro } from "./comum/formato";
 import { SeloCanal } from "./comum/logos";
 import {
+  IconeAbrirFora,
   IconeAlerta,
   IconeAmpulheta,
   IconeBaixar,
   IconeBusca,
   IconeCaixa,
+  IconeCamadas,
   IconeCaminhao,
   IconeDinheiro,
   IconeEtiqueta,
@@ -49,6 +52,7 @@ import {
   CANAL_ROTULO,
   FILTROS_PADRAO,
   rotuloPrazo,
+  URGENCIA_BARRA,
   URGENCIA_CLASSE,
   URGENCIA_ROTULO,
   URGENCIA_TOM,
@@ -134,7 +138,13 @@ function SeloUrgencia({ urgencia, dias }: { urgencia: Urgencia; dias: number | n
 
 function Linha({ pacote }: { pacote: PacoteExpedicao }) {
   return (
-    <tr className="border-b border-[var(--cz-hairline)] align-top last:border-0 hover:bg-[var(--cz-fundo)]">
+    // A barra de urgência é uma BORDA ESQUERDA de 4px na própria linha, não um
+    // elemento posicionado. Numa `<tr>`, um `absolute` precisaria de um
+    // `relative` na célula e o navegador ainda pode recolher a altura; a borda
+    // acompanha a linha inteira de graça, mesmo quando o pacote tem cinco itens.
+    <tr
+      className={`border-b border-l-4 border-[var(--cz-hairline)] align-top last:border-b-0 hover:bg-[var(--cz-fundo)] ${URGENCIA_BARRA[pacote.urgencia]}`}
+    >
       <td className="px-3 py-3">
         <div className="flex flex-col gap-1">
           <SeloUrgencia urgencia={pacote.urgencia} dias={pacote.diasRestantes} />
@@ -191,18 +201,50 @@ function Linha({ pacote }: { pacote: PacoteExpedicao }) {
         {/* Todos os itens, sem expandir. Esta coluna É a lista de separação: quem
             olha a tela precisa saber o que buscar na prateleira, e esconder isso
             atrás de um clique transformaria a tarefa em dois passos. */}
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-2">
           {pacote.itens.map((item) => (
-            <li key={item.orderId} className="flex gap-2">
-              <span className="mt-0.5 inline-flex h-5 min-w-[1.5rem] shrink-0 items-center justify-center rounded-md border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] px-1 text-[11px] font-bold tabular-nums">
-                {item.quantidade}
-              </span>
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[12px] text-[var(--cz-texto)]" title={item.titulo}>
-                  {item.titulo}
+            <li key={item.orderId} className="flex items-start gap-2.5">
+              {/* A FOTO da variação vendida, não a capa do anúncio. Quem separa
+                  confere cor e tamanho pela imagem antes de fechar a caixa; num
+                  anúncio de seis cores a capa é a mesma para as seis e a foto
+                  deixaria de ajudar exatamente onde mais importa. */}
+              <Miniatura src={item.thumbnailUrl} alt={item.titulo} tamanho={44} />
+
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="flex items-start gap-1.5">
+                  <span className="inline-flex h-5 min-w-[1.5rem] shrink-0 items-center justify-center rounded-md border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] px-1 text-[11px] font-bold tabular-nums">
+                    {item.quantidade}
+                  </span>
+                  {item.permalink ? (
+                    <a
+                      href={item.permalink}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Abrir "${item.titulo}" no Mercado Livre`}
+                      className="inline-flex min-w-0 items-center gap-1 text-[12px] font-semibold text-[var(--cz-texto)] transition-colors hover:text-[var(--cz-laranja-forte)]"
+                    >
+                      <span className="truncate">{item.titulo}</span>
+                      <IconeAbrirFora className="h-3 w-3 shrink-0 opacity-60" />
+                    </a>
+                  ) : (
+                    <span
+                      className="truncate text-[12px] font-semibold text-[var(--cz-texto)]"
+                      title={item.titulo}
+                    >
+                      {item.titulo}
+                    </span>
+                  )}
                 </span>
-                <span className="font-mono text-[10.5px] text-[var(--cz-texto-suave)]">
-                  {item.sku ?? "sem SKU"} · {item.orderId}
+
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[calc(1.5rem+0.375rem)] text-[10.5px] text-[var(--cz-texto-suave)]">
+                  <span className="font-mono">{item.sku ?? "sem SKU"}</span>
+                  <span className="font-mono opacity-70">#{item.orderId}</span>
+                  {item.hierarquia1 && (
+                    <Selo tom="neutro" titulo="Categoria do cadastro de SKU">
+                      <IconeCamadas className="h-3 w-3" />
+                      {item.hierarquia1}
+                    </Selo>
+                  )}
                 </span>
               </span>
             </li>
@@ -238,9 +280,63 @@ function Linha({ pacote }: { pacote: PacoteExpedicao }) {
 /*                                   Tela                                     */
 /* -------------------------------------------------------------------------- */
 
-export default function Expedicao() {
-  const [filtros, setFiltros] = useState<FiltrosExpedicao>({ ...FILTROS_PADRAO });
+/**
+ * Textos de cada uma das três telas.
+ *
+ * Três rotas, UM componente. A alternativa seria copiar a tela três vezes e
+ * trocar o filtro de canal — e é assim que a correção de amanhã entra em uma das
+ * cópias e não nas outras. O que muda entre elas é literalmente o título, a
+ * descrição, e se o filtro de canal aparece.
+ */
+const TEXTOS: Record<
+  "geral" | "ML" | "SP",
+  { titulo: string; descricao: string }
+> = {
+  geral: {
+    titulo: "Expedição Geral",
+    descricao:
+      "Pacotes a despachar no Mercado Livre e na Shopee juntos, na ordem em que o prazo vence. Vendas FULL não aparecem: nelas quem despacha é o próprio Mercado Livre.",
+  },
+  ML: {
+    titulo: "Expedição Mercado Livre",
+    descricao:
+      "Pacotes do Mercado Livre a despachar, na ordem em que o prazo vence. Vendas FULL não aparecem: nelas quem despacha é o próprio Mercado Livre.",
+  },
+  SP: {
+    titulo: "Expedição Shopee",
+    descricao:
+      "Pacotes da Shopee a despachar, na ordem em que o prazo vence. Entram os pedidos prontos para envio, processados e em nova tentativa.",
+  },
+};
+
+export default function Expedicao({
+  /**
+   * Quando informado, a tela é de UM canal e o filtro de canal desaparece.
+   *
+   * Some em vez de ficar travado num valor: um select desabilitado mostrando
+   * "Shopee" numa tela chamada "Expedição Shopee" é um controle que só pode fazer
+   * uma coisa — ruído com aparência de opção.
+   */
+  canalFixo,
+}: {
+  canalFixo?: Canal;
+} = {}) {
+  const [filtros, setFiltros] = useState<FiltrosExpedicao>({
+    ...FILTROS_PADRAO,
+    canais: canalFixo ? [canalFixo] : [],
+  });
   const { dados, carregando, atualizando, erro, atualizar } = useExpedicao(filtros);
+  const textos = TEXTOS[canalFixo ?? "geral"];
+
+  /**
+   * O padrão desta tela. Em tela de canal único o canal faz parte do padrão, e
+   * não de um filtro que a pessoa escolheu — senão "Limpar filtros" na tela da
+   * Shopee traria pacotes do Mercado Livre.
+   */
+  const padrao = useMemo<FiltrosExpedicao>(
+    () => ({ ...FILTROS_PADRAO, canais: canalFixo ? [canalFixo] : [] }),
+    [canalFixo],
+  );
 
   /**
    * Toda alteração de filtro volta para a página 1.
@@ -270,26 +366,44 @@ export default function Expedicao() {
   }, []);
 
   const porUrgencia = dados?.porUrgencia;
-  const contas = dados?.contas ?? [];
   const modalidades = dados?.modalidades ?? [];
 
   const vazio = !carregando && (dados?.pacotes.length ?? 0) === 0;
 
+  /**
+   * "Sem filtro" ignora o canal quando ele é fixo da tela: na Expedição Shopee o
+   * canal não é escolha, então a lista vazia ali significa "nada a despachar" e
+   * não "seus filtros não acharam nada".
+   */
   const semFiltro = useMemo(
     () =>
-      filtros.canais.length === 0 &&
+      (canalFixo ? true : filtros.canais.length === 0) &&
       filtros.contas.length === 0 &&
       filtros.urgencias.length === 0 &&
       filtros.modalidades.length === 0 &&
       filtros.busca.trim() === "",
-    [filtros],
+    [filtros, canalFixo],
   );
+
+  /**
+   * O select de conta só oferece contas DO canal da tela.
+   *
+   * Sem isso, a Expedição Shopee listaria as contas do Mercado Livre no filtro, e
+   * escolher uma delas devolveria zero pacotes sem explicar por quê.
+   */
+  const contasDoCanal = useMemo(() => {
+    // `dados?.contas` lido AQUI DENTRO, e não de uma variável de fora: `?? []`
+    // cria um array novo a cada render, o que faria este `useMemo` recalcular
+    // sempre e deixaria de ser memo nenhum.
+    const todas = dados?.contas ?? [];
+    return canalFixo ? todas.filter((c) => c.canal === canalFixo) : todas;
+  }, [dados?.contas, canalFixo]);
 
   return (
     <MolduraTela>
       <Cabecalho
-        titulo="Expedição"
-        descricao="Pacotes a despachar no Mercado Livre e na Shopee, na ordem em que o prazo vence. Vendas FULL não aparecem: nelas quem despacha é o próprio Mercado Livre."
+        titulo={textos.titulo}
+        descricao={textos.descricao}
         acao={
           <div className="flex flex-wrap items-center gap-2">
             <BotaoSecundario
@@ -419,22 +533,24 @@ export default function Expedicao() {
           </span>
         </Campo>
 
-        <Campo rotulo="Canal" className="lg:col-span-2">
-          <select
-            value={filtros.canais[0] ?? ""}
-            onChange={(e) =>
-              mudar({ canais: e.target.value ? [e.target.value as Canal] : [] })
-            }
-            className={ENTRADA}
-          >
-            <option value="">Todos</option>
-            {CANAIS.map((c) => (
-              <option key={c} value={c}>
-                {CANAL_ROTULO[c]}
-              </option>
-            ))}
-          </select>
-        </Campo>
+        {!canalFixo && (
+          <Campo rotulo="Canal" className="lg:col-span-2">
+            <select
+              value={filtros.canais[0] ?? ""}
+              onChange={(e) =>
+                mudar({ canais: e.target.value ? [e.target.value as Canal] : [] })
+              }
+              className={ENTRADA}
+            >
+              <option value="">Todos</option>
+              {CANAIS.map((c) => (
+                <option key={c} value={c}>
+                  {CANAL_ROTULO[c]}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        )}
 
         <Campo rotulo="Conta" className="lg:col-span-2">
           <select
@@ -443,7 +559,7 @@ export default function Expedicao() {
             className={ENTRADA}
           >
             <option value="">Todas</option>
-            {contas.map((c) => (
+            {contasDoCanal.map((c) => (
               <option key={c.accountId} value={c.accountId}>
                 {c.conta} ({inteiro(c.pacotes)})
               </option>
@@ -497,7 +613,7 @@ export default function Expedicao() {
             }
             acao={
               !semFiltro ? (
-                <BotaoSecundario onClick={() => setFiltros({ ...FILTROS_PADRAO })}>
+                <BotaoSecundario onClick={() => setFiltros(padrao)}>
                   Limpar filtros
                 </BotaoSecundario>
               ) : undefined

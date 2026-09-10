@@ -49,8 +49,19 @@ const TTL_ERRO_MS = 60 * 1000;
 export type AnuncioInfo = {
   itemId: string;
   titulo?: string;
+  /** Capa do anúncio. Para a foto da VARIAÇÃO use `resolverMiniatura`. */
   thumbnailUrl?: string;
   permalink?: string;
+  /**
+   * Fotos por variação, e o índice de SKU -> variação.
+   *
+   * Existe para a tela de Expedição: quem separa mercadoria precisa ver a COR e
+   * o TAMANHO que vai na caixa, não a capa do anúncio. Num anúncio de camiseta
+   * com seis cores, a capa é a mesma para as seis, e a foto deixa de ajudar
+   * exatamente onde mais importa — na conferência antes de fechar o pacote.
+   */
+  fotoPorVariacao?: Map<string, string>;
+  fotoPorSku?: Map<string, string>;
   /** `active`, `paused`, `closed`, `under_review`. */
   status?: string;
   /** `out_of_stock`, `deleted`, ... Ver observação 2 no topo do arquivo. */
@@ -83,6 +94,16 @@ type EntradaMultiGet = {
     health?: number;
     catalog_listing?: boolean;
     shipping?: { logistic_type?: string };
+    /** Catálogo de fotos do anúncio: `id` -> url. As variações referenciam por id. */
+    pictures?: Array<{ id?: string; secure_url?: string; url?: string }>;
+    variations?: Array<{
+      id?: number | string;
+      picture_ids?: string[];
+      seller_sku?: string;
+      seller_custom_field?: string;
+      attributes?: Array<{ id?: string; value_name?: string }>;
+      attribute_combinations?: Array<{ value_name?: string }>;
+    }>;
   };
 };
 
@@ -138,7 +159,90 @@ const ATRIBUTOS = [
   "health",
   "catalog_listing",
   "shipping",
+  // Para a foto da variação. `pictures` é o catálogo de imagens do anúncio e
+  // `variations` traz só os IDs — os dois são necessários juntos, porque a
+  // variação não carrega a URL, apenas a referência.
+  "pictures",
+  "variations",
 ].join(",");
+
+/** Normaliza SKU para comparação: sem espaços nas pontas, maiúsculas. */
+function normalizarSku(sku: string | null | undefined): string | null {
+  const limpo = sku?.trim().toUpperCase();
+  return limpo ? limpo : null;
+}
+
+/**
+ * Monta os dois índices de foto de variação a partir do corpo do anúncio.
+ *
+ * Dois índices e não um: o casamento por `variation_id` é o exato, mas ele só
+ * existe se a venda registrou a variação. Quando não registrou, o SKU é a única
+ * pista — e é uma pista boa, porque num anúncio com variações o SKU costuma ser
+ * justamente o que distingue uma da outra.
+ */
+function indexarVariacoes(corpo: NonNullable<EntradaMultiGet["body"]>): {
+  fotoPorVariacao: Map<string, string>;
+  fotoPorSku: Map<string, string>;
+} {
+  const fotoPorVariacao = new Map<string, string>();
+  const fotoPorSku = new Map<string, string>();
+
+  const catalogo = new Map<string, string>();
+  for (const foto of corpo.pictures ?? []) {
+    const url = miniatura(foto.secure_url ?? foto.url);
+    if (foto.id && url) catalogo.set(foto.id, url);
+  }
+
+  for (const variacao of corpo.variations ?? []) {
+    const primeiroId = variacao.picture_ids?.[0];
+    const url = primeiroId ? catalogo.get(primeiroId) : undefined;
+    if (!url) continue;
+
+    if (variacao.id !== undefined && variacao.id !== null) {
+      fotoPorVariacao.set(String(variacao.id), url);
+    }
+
+    // A ordem segue a do ML: `seller_sku` é o campo novo, `seller_custom_field`
+    // o legado, e o atributo `SELLER_SKU` cobre quem cadastrou por atributo.
+    const sku = normalizarSku(
+      variacao.seller_sku ??
+        variacao.seller_custom_field ??
+        variacao.attributes?.find((a) => a.id === "SELLER_SKU")?.value_name,
+    );
+    if (sku && !fotoPorSku.has(sku)) fotoPorSku.set(sku, url);
+  }
+
+  return { fotoPorVariacao, fotoPorSku };
+}
+
+/**
+ * A foto certa para uma linha de venda: variação, senão SKU, senão a capa.
+ *
+ * `"-"` é o marcador que o backfill do CONTAZOOM grava em `variation_id` para
+ * dizer "olhei o pedido e não havia variação" (ver o docblock do campo no
+ * schema). Tratá-lo como um id de variação de verdade faria a busca falhar em
+ * todo anúncio simples e cair na capa por um caminho errado.
+ */
+export function resolverMiniatura(
+  info: AnuncioInfo | undefined,
+  variationId: string | null,
+  sku: string | null,
+): string | null {
+  if (!info) return null;
+
+  if (variationId && variationId !== "-" && variationId !== "0") {
+    const porVariacao = info.fotoPorVariacao?.get(String(variationId));
+    if (porVariacao) return porVariacao;
+  }
+
+  const skuNormalizado = normalizarSku(sku);
+  if (skuNormalizado) {
+    const porSku = info.fotoPorSku?.get(skuNormalizado);
+    if (porSku) return porSku;
+  }
+
+  return info.thumbnailUrl ?? null;
+}
 
 async function buscarLote(ids: string[], token: string): Promise<void> {
   const acertos = new Set<string>();
@@ -167,10 +271,13 @@ async function buscarLote(ids: string[], token: string): Promise<void> {
     for (const entrada of entradas) {
       const corpo = entrada.body;
       if (entrada.code !== 200 || !corpo?.id) continue;
+      const { fotoPorVariacao, fotoPorSku } = indexarVariacoes(corpo);
       guardar(corpo.id, {
         itemId: corpo.id,
         titulo: corpo.title,
         thumbnailUrl: miniatura(corpo.secure_thumbnail ?? corpo.thumbnail),
+        fotoPorVariacao,
+        fotoPorSku,
         permalink: https(corpo.permalink),
         status: corpo.status,
         subStatus: Array.isArray(corpo.sub_status) ? corpo.sub_status : [],

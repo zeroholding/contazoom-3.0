@@ -406,6 +406,16 @@ export function IconeDocumento(p: PropsIcone) {
   );
 }
 
+/** Camadas. Hierarquia, categoria. */
+export function IconeCamadas(p: PropsIcone) {
+  return (
+    <Icone {...p}>
+      <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 13 9 5 9-5" />
+    </Icone>
+  );
+}
+
 /** Código de barras. SKU, cadastro de produto. */
 export function IconeSku(p: PropsIcone) {
   return (

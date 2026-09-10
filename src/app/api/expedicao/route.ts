@@ -25,6 +25,7 @@ import {
   type Urgencia,
 } from "@/lib/expedicao";
 import { backfillPrazoAte } from "@/lib/prazo-despacho-backfill";
+import { buscarAnuncioInfo, resolverMiniatura } from "@/lib/meli-anuncio-info";
 
 export const runtime = "nodejs";
 
@@ -91,6 +92,64 @@ function lerFiltros(url: URL): FiltrosExpedicao {
     // por 50 em silêncio. O teto é a proteção que importa.
     porPagina: inteiro(p.get("porPagina"), FILTROS_PADRAO.porPagina, 1, 500),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          Foto e link do anúncio                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Resolve a foto da variação e o link do anúncio, item por item.
+ *
+ * FICA NA ROTA, E NÃO NO SQL, de propósito: a camada de dados não fala com API
+ * externa. Assim a fila continua sendo uma consulta pura — testável, e imune a
+ * uma indisponibilidade do Mercado Livre.
+ *
+ * BEST-EFFORT DE VERDADE: se o ML não responder, cada item fica com
+ * `thumbnailUrl: null` e a tela mostra o quadro de imagem ausente. A fila é
+ * informação operacional — atrasar ou derrubar a lista inteira porque uma foto
+ * não veio seria trocar o essencial pelo acessório.
+ *
+ * Só Mercado Livre. A Shopee não expõe a imagem do anúncio pelos endpoints que
+ * este projeto usa, então aqueles itens ficam sem foto por ora.
+ */
+async function preencherFotos(
+  userId: string,
+  resultado: ResultadoExpedicao,
+): Promise<void> {
+  // Uma referência por (anúncio, conta): o multiget precisa do token do DONO do
+  // anúncio, e é o que `buscarAnuncioInfo` usa para agrupar as chamadas.
+  const refs = new Map<string, { itemId: string; meliAccountId: string }>();
+  for (const pacote of resultado.pacotes) {
+    if (pacote.canal !== "ML") continue;
+    for (const item of pacote.itens) {
+      if (!item.itemId) continue;
+      refs.set(`${item.itemId}:${pacote.accountId}`, {
+        itemId: item.itemId,
+        meliAccountId: pacote.accountId,
+      });
+    }
+  }
+
+  if (refs.size === 0) return;
+
+  try {
+    const infos = await buscarAnuncioInfo(userId, [...refs.values()]);
+
+    for (const pacote of resultado.pacotes) {
+      if (pacote.canal !== "ML") continue;
+      for (const item of pacote.itens) {
+        if (!item.itemId) continue;
+        const info = infos.get(item.itemId);
+        if (!info) continue;
+        item.thumbnailUrl = resolverMiniatura(info, item.variationId, item.sku);
+        item.permalink = info.permalink ?? null;
+      }
+    }
+  } catch (err) {
+    // Sem `throw`: a fila já está montada e é o que a pessoa precisa ver.
+    console.warn("[expedicao] fotos do Mercado Livre não vieram:", err);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -248,6 +307,7 @@ export async function GET(req: NextRequest) {
     }
 
     const resultado = await buscarExpedicao(session.sub, filtros);
+    await preencherFotos(session.sub, resultado);
 
     if (csv) {
       const hoje = hojeSP();

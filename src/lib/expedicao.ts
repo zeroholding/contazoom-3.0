@@ -98,6 +98,23 @@ export const URGENCIA_TOM: Partial<Record<Urgencia, "alerta" | "critico">> = {
 };
 
 /**
+ * Cor da barra vertical na borda esquerda da linha.
+ *
+ * É o que permite achar os atrasados descendo o olho pela margem, sem ler nada.
+ * Numa fila de cinquenta linhas, o selo de urgência está no fim da linha e exige
+ * varredura horizontal; a barra fica na margem e todas as linhas compartilham a
+ * mesma coluna de leitura.
+ */
+export const URGENCIA_BARRA: Record<Urgencia, string> = {
+  atrasado: "border-l-rose-500",
+  hoje: "border-l-amber-500",
+  amanha: "border-l-orange-400",
+  proximo: "border-l-sky-400",
+  futuro: "border-l-emerald-400",
+  semPrazo: "border-l-slate-300",
+};
+
+/**
  * Faixa a partir de "quantos dias faltam".
  *
  * `dias` é a diferença entre DATAS CIVIS em São Paulo, não uma divisão de
@@ -171,7 +188,30 @@ export type ItemPacote = {
   sku: string | null;
   quantidade: number;
   valorTotal: number;
+  /** MLB do anúncio. Só Mercado Livre. Usado para achar a foto e o link. */
+  itemId: string | null;
+  /**
+   * Variação do anúncio. `"-"` é o marcador de "olhei e não havia variação" —
+   * ver o docblock do campo no schema.
+   */
+  variationId: string | null;
+  /**
+   * Foto da VARIAÇÃO vendida, com a capa do anúncio como reserva.
+   *
+   * Não vem do banco: é resolvida na API do Mercado Livre a cada carregamento,
+   * porque foto de anúncio muda e não vale persistir. `null` quando o anúncio
+   * não respondeu, foi apagado, ou é da Shopee (que não temos como consultar).
+   */
+  thumbnailUrl: string | null;
+  /** Link do anúncio no Mercado Livre. */
+  permalink: string | null;
+  /** Categorias do cadastro de SKU. Servem para separar trabalho no galpão. */
+  hierarquia1: string | null;
+  hierarquia2: string | null;
 };
+
+/** Conta disponível para o filtro, já com o canal. */
+export type ContaFiltro = { accountId: string; conta: string; canal: Canal };
 
 /**
  * A unidade da tela é o PACOTE, não a venda.
@@ -202,6 +242,9 @@ export type PacoteExpedicao = {
   pedidos: number;
   unidades: number;
   valorTotal: number;
+  /** Categoria do pacote (a do primeiro item). Ver o comentário no SQL. */
+  hierarquia1: string | null;
+  hierarquia2: string | null;
   itens: ItemPacote[];
 };
 

@@ -131,6 +131,28 @@ const MODALIDADE_SP = Prisma.raw(`
 `);
 
 /**
+ * Junção com o cadastro de SKU, para trazer a hierarquia.
+ *
+ * `LEFT JOIN` e não `JOIN`: venda de SKU que ainda não foi cadastrado tem de
+ * continuar aparecendo na fila. Ela existe, o pacote precisa sair, e sumir da
+ * tela por falta de cadastro seria esconder trabalho — o mesmo defeito que a
+ * lista branca de status.
+ *
+ * O `user_id` no ON, e não só no WHERE de fora: a unicidade do cadastro é
+ * `@@unique([userId, sku])`, ou seja o MESMO código de SKU existe em usuários
+ * diferentes. Sem essa condição a junção casaria o SKU de um inquilino com a
+ * venda de outro e multiplicaria as linhas do pacote.
+ */
+const JUNCAO_SKU = Prisma.raw(`
+  LEFT JOIN sku k
+    ON k.user_id = v.user_id
+   AND UPPER(TRIM(k.sku)) = UPPER(TRIM(v.sku))
+`);
+
+const HIERARQUIA_1 = Prisma.raw(`NULLIF(TRIM(k.hierarquia_1), '')`);
+const HIERARQUIA_2 = Prisma.raw(`NULLIF(TRIM(k.hierarquia_2), '')`);
+
+/**
  * Chave do pacote.
  *
  * No ML, várias vendas do mesmo comprador saem numa etiqueta só e compartilham
@@ -257,8 +279,17 @@ function baseMeli(
       v.titulo                                   AS titulo,
       v.sku                                      AS sku,
       v.quantidade                               AS quantidade,
-      v.valor_total                              AS valor_total
+      v.valor_total                              AS valor_total,
+      -- item_id e variation_id NAO aparecem na tela: servem para achar a FOTO da
+      -- variacao no Mercado Livre e montar o link do anuncio. Sem a variacao, um
+      -- anuncio de camiseta com seis cores mostraria a mesma capa nas seis
+      -- linhas, e a foto deixaria de ajudar exatamente na conferencia.
+      v.item_id                                  AS item_id,
+      v.variation_id                             AS variation_id,
+      ${HIERARQUIA_1}                            AS hierarquia1,
+      ${HIERARQUIA_2}                            AS hierarquia2
     FROM meli_venda v
+    ${JUNCAO_SKU}
     WHERE v.user_id = ${userId}
       ${fragmentoJanela(filtros.janelaDias)}
       AND LOWER(COALESCE(v.logistic_type, '')) NOT IN (${lista(MODALIDADE_FULL)})
@@ -298,8 +329,16 @@ function baseShopee(
       v.titulo                                   AS titulo,
       v.sku                                      AS sku,
       v.quantidade                               AS quantidade,
-      v.valor_total                              AS valor_total
+      v.valor_total                              AS valor_total,
+      -- A Shopee nao tem anuncio nem variacao no nosso modelo, mas as colunas
+      -- precisam existir: e um UNION ALL, e o Postgres casa por POSICAO. Sem os
+      -- NULL aqui, a hierarquia da Shopee cairia na coluna do item_id.
+      NULL::text                                 AS item_id,
+      NULL::text                                 AS variation_id,
+      ${HIERARQUIA_1}                            AS hierarquia1,
+      ${HIERARQUIA_2}                            AS hierarquia2
     FROM shopee_venda v
+    ${JUNCAO_SKU}
     WHERE v.user_id = ${userId}
       ${fragmentoJanela(filtros.janelaDias)}
       AND UPPER(COALESCE(v.status, '')) IN (${lista(SP_STATUS_FILA)})
@@ -350,13 +389,23 @@ function montarCte(
         COUNT(*)               AS pedidos,
         SUM(b.quantidade)      AS unidades,
         SUM(b.valor_total)     AS valor_total,
+        -- Hierarquia do pacote = a do PRIMEIRO item, para o filtro e o resumo.
+        -- Pacote com itens de categorias diferentes existe, e nesse caso a
+        -- etiqueta pertence a mais de uma prateleira; a decisão aqui é mostrar
+        -- uma e deixar as demais visíveis linha a linha, dentro do pacote.
+        MIN(b.hierarquia1)     AS hierarquia1,
+        MIN(b.hierarquia2)     AS hierarquia2,
         JSON_AGG(
           JSON_BUILD_OBJECT(
-            'orderId',    b.order_id,
-            'titulo',     b.titulo,
-            'sku',        b.sku,
-            'quantidade', b.quantidade,
-            'valorTotal', b.valor_total
+            'orderId',     b.order_id,
+            'titulo',      b.titulo,
+            'sku',         b.sku,
+            'quantidade',  b.quantidade,
+            'valorTotal',  b.valor_total,
+            'itemId',      b.item_id,
+            'variationId', b.variation_id,
+            'hierarquia1', b.hierarquia1,
+            'hierarquia2', b.hierarquia2
           )
           ORDER BY b.titulo, b.order_id
         ) AS itens
@@ -483,6 +532,15 @@ function itens(valor: unknown): ItemPacote[] {
       sku: i.sku ? texto(i.sku) : null,
       quantidade: numero(i.quantidade),
       valorTotal: numero(i.valorTotal),
+      itemId: i.itemId ? texto(i.itemId) : null,
+      variationId: i.variationId ? texto(i.variationId) : null,
+      // Preenchidos depois, na rota, com a consulta ao Mercado Livre. A camada de
+      // SQL não fala com API externa de propósito: assim ela permanece testável e
+      // uma falha do ML não derruba a fila.
+      thumbnailUrl: null,
+      permalink: null,
+      hierarquia1: i.hierarquia1 ? texto(i.hierarquia1) : null,
+      hierarquia2: i.hierarquia2 ? texto(i.hierarquia2) : null,
     };
   });
 }
@@ -591,6 +649,8 @@ export async function buscarExpedicao(
       pedidos: numero(linha.pedidos),
       unidades: numero(linha.unidades),
       valorTotal: numero(linha.valor_total),
+      hierarquia1: linha.hierarquia1 ? texto(linha.hierarquia1) : null,
+      hierarquia2: linha.hierarquia2 ? texto(linha.hierarquia2) : null,
       itens: itens(linha.itens),
     };
   });

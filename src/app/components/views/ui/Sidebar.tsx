@@ -17,7 +17,11 @@ import gsap from "gsap";
 
 type Leaf = { href: string; label: string };
 type Branch = {
-  slug: "sales" | "ads" | "finance";
+  // `shipping` entrou quando a Expedição deixou de ser uma tela e passou a ser
+  // três (Geral, Mercado Livre, Shopee). O slug precisa estar neste union porque
+  // é ele que identifica o submenu no estado de aberto/fechado e no flyout da
+  // barra recolhida — sem isso o submenu abre e nunca fecha.
+  slug: "sales" | "shipping" | "ads" | "finance";
   label: string;
   icon?: React.ReactNode;
   href?: string;
@@ -225,10 +229,22 @@ const NAV_ITEMS: Item[] = [
     ],
   },
   // Logo abaixo da Central de Vendas, e não no fim da lista: expedição é o passo
-  // seguinte à venda, e é a tela que se abre todos os dias de manhã. Item simples
-  // porque não tem submenu — a fila já é unificada entre ML e Shopee, e separá-la
-  // em duas páginas obrigaria a conferir prazo em dois lugares.
-  { href: "/expedicao", label: "Expedição", icon: <CaminhaoIcon /> },
+  // seguinte à venda, e é a tela que se abre todos os dias de manhã.
+  //
+  // A Geral vem PRIMEIRO e é o destino do item pai: quem separa mercadoria
+  // trabalha a fila inteira, não um canal. As telas por canal existem para o dia
+  // em que o corte da transportadora de um marketplace vence antes do outro.
+  {
+    slug: "shipping",
+    label: "Expedição",
+    icon: <CaminhaoIcon />,
+    href: "/expedicao",
+    children: [
+      { href: "/expedicao", label: "Expedição Geral" },
+      { href: "/expedicao/mercado-livre", label: "Expedição Mercado Livre" },
+      { href: "/expedicao/shopee", label: "Expedição Shopee" },
+    ],
+  },
   {
     slug: "ads",
     label: "Gestão de Anúncios",
@@ -382,9 +398,12 @@ const RailFlyoutCard = forwardRef<
         </div>
         <div className="space-y-0.5">
           {items.map((leaf) => {
-            const active =
-              activePath === leaf.href ||
-              activePath?.startsWith(leaf.href + "/");
+            // Comparação EXATA, e não `startsWith`. Com prefixo, o item "Expedição
+            // Geral" (`/expedicao`) acendia junto com "Expedição Shopee"
+            // (`/expedicao/shopee`), porque um é prefixo do outro — dois itens
+            // marcados como o lugar onde você está. Nenhuma folha do menu tem
+            // sub-rota própria, então exato é o certo aqui.
+            const active = activePath === leaf.href;
             return (
               <Link
                 key={leaf.href}
@@ -468,6 +487,7 @@ export default function Sidebar({
 
   const [open, setOpen] = useState<Record<string, boolean>>({
     sales: false,
+    shipping: false,
     ads: false,
     finance: false,
   });
@@ -511,11 +531,13 @@ export default function Sidebar({
   // abre branch correspondente ao path (modo expandido)
   useEffect(() => {
     const salesActive = pathname?.startsWith("/vendas");
+    const shippingActive = pathname?.startsWith("/expedicao");
     const adsActive = pathname?.startsWith("/anuncios");
     const financeActive = pathname?.startsWith("/financeiro");
     setOpen((s) => ({
       ...s,
       sales: !!salesActive,
+      shipping: !!shippingActive,
       ads: !!adsActive,
       finance: !!financeActive,
     }));
@@ -891,9 +913,9 @@ export default function Sidebar({
                       substitui o recuo exagerado que existia (`pl-9`). */}
                   <div className="ml-[1.4rem] space-y-0.5 border-l border-[var(--cz-hairline)] py-1 pl-3">
                     {branch.children.map((leaf) => {
-                      const active =
-                        pathname === leaf.href ||
-                        pathname?.startsWith(leaf.href + "/");
+                      // Exata pelo mesmo motivo do flyout: `/expedicao` é prefixo
+                      // de `/expedicao/shopee`.
+                      const active = pathname === leaf.href;
                       return (
                         <Link
                           key={leaf.href}
