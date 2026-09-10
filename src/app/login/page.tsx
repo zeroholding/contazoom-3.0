@@ -17,12 +17,17 @@ function LoginFallback() {
   return (
     <div className="cz-auth flex min-h-screen items-center justify-center bg-white px-6">
       <div className="flex flex-col items-center gap-4 text-center">
+        {/* Mesma marca, mesmo tamanho do estado de "verificando sessão" do
+            `Login`. Se divergirem, a troca entre os dois pisca como se a página
+            tivesse recarregado sozinha — foi o defeito que este componente já
+            existia para resolver. */}
         <Image
-          src="/logopng.webp"
+          src="/contazoom-logo.svg"
           alt="ContaZoom"
-          width={210}
-          height={48}
-          className="h-11 w-auto object-contain"
+          width={646}
+          height={230}
+          unoptimized
+          className="h-14 w-auto object-contain"
           priority
         />
         <p className="flex items-center gap-2 text-[13px] font-medium text-[#6B7280]">

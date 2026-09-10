@@ -47,12 +47,20 @@ export default function Topbar({
     label: toLabel(seg),
   }));
 
-  // Ref para animar a seta do botão (rotação)
-  const arrowRef = useRef<SVGSVGElement | null>(null);
+  /**
+   * Só o CHEVRON gira, não o ícone inteiro.
+   *
+   * O ícone é um painel (retângulo + divisa) com uma setinha dentro. Girar tudo
+   * 180° viraria o painel de cabeça para baixo e a divisa mudaria de lado, o que
+   * lê como "outro ícone" em vez de "mesmo ícone, outro estado".
+   */
+  const chevronRef = useRef<SVGGElement | null>(null);
   useEffect(() => {
-    gsap.to(arrowRef.current, {
+    gsap.to(chevronRef.current, {
       rotate: collapsed ? 180 : 0,
-      transformOrigin: "50% 50%",
+      // Centro do próprio chevron, em unidades do viewBox. Com o padrão (50% 50%)
+      // ele giraria em torno do centro do ícone e sairia de dentro do painel.
+      transformOrigin: "15px 12px",
       duration: 0.25,
       ease: "power2.inOut",
     });
@@ -89,6 +97,40 @@ export default function Topbar({
                 strokeWidth="2"
               >
                 <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            {/* Recolher/expandir a barra lateral.
+                DENTRO da linha do cabeçalho, como primeiro item. Antes era um
+                bloco `fixed` posicionado em `left: calc(var(--sidebar-w) + …)`,
+                ou seja, flutuava POR CIMA do breadcrumb com `z-50` — e como o
+                cabeçalho também começa em `var(--sidebar-w)`, o botão cobria as
+                primeiras letras do caminho ("Dashboard" aparecia como
+                "shboard"). Como item de flex ele ocupa espaço de verdade, e o
+                texto começa depois dele. */}
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? "Expandir o menu lateral" : "Recolher o menu lateral"}
+              aria-expanded={!collapsed}
+              title={collapsed ? "Expandir o menu lateral" : "Recolher o menu lateral"}
+              className="hidden shrink-0 items-center justify-center rounded-lg p-2 text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)] md:inline-flex"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-[18px] w-[18px] pointer-events-none"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+                <g ref={chevronRef}>
+                  <path d="M16.5 9.5L14 12l2.5 2.5" />
+                </g>
               </svg>
             </button>
 
@@ -142,40 +184,6 @@ export default function Topbar({
         </div>
       </header>
 
-      {/* Botao de recolher a barra lateral.
-          Ficava solto sobre a divisa das duas areas, em
-          `left: calc(var(--sidebar-w) - 14px)`, sem fundo — um alvo de 28px
-          pairando sobre o nada, que sumia quando a barra tinha a mesma cor do
-          fundo. Agora fica ancorado DENTRO do cabecalho, encostado na divisa,
-          com area de clique e estado de hover. */}
-      <div
-        className="fixed top-0 z-50 hidden h-[var(--cz-topbar-h)] items-center md:flex"
-        style={{ left: "calc(var(--sidebar-w) + 0.375rem)" }}
-      >
-        <button
-          onClick={onToggleCollapse}
-          aria-label={collapsed ? "Expandir o menu lateral" : "Recolher o menu lateral"}
-          aria-expanded={!collapsed}
-          title={collapsed ? "Expandir o menu lateral" : "Recolher o menu lateral"}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]"
-        >
-          {/* Chevron girado por GSAP: 0° aponta para a esquerda (recolher), 180°
-              para a direita (expandir). */}
-          <svg
-            ref={arrowRef}
-            viewBox="0 0 24 24"
-            className="h-[18px] w-[18px]"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
-        </button>
-      </div>
     </>
   );
 }

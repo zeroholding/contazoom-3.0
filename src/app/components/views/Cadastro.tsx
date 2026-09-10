@@ -335,12 +335,15 @@ export default function Cadastro() {
             reconhece onde está. A imagem do logo é usada porque o fundo é
             branco, que é para o que ela foi feita. */}
         <div className="shrink-0">
+          {/* Mesmo tamanho do login (56px): as duas telas são a mesma jornada e
+              a marca não pode mudar de tamanho entre entrar e criar conta. */}
           <Image
-            src="/logopng.webp"
+            src="/contazoom-logo.svg"
             alt="ContaZoom"
-            width={210}
-            height={48}
-            className="h-11 w-auto object-contain"
+            width={646}
+            height={230}
+            unoptimized
+            className="h-14 w-auto object-contain"
             priority
           />
         </div>

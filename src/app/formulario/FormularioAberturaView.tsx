@@ -384,10 +384,11 @@ export default function FormularioAberturaView() {
         <div className="mx-auto max-w-[920px] px-4 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-8">
           {/* A logo de verdade, a mesma do login e da barra lateral. */}
           <Image
-            src="/logopng.webp"
+            src="/contazoom-logo.svg"
             alt="ContaZoom"
-            width={210}
-            height={48}
+            width={646}
+            height={230}
+            unoptimized
             className="h-8 w-auto object-contain sm:h-9"
             priority
           />

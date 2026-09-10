@@ -77,10 +77,11 @@ export default function ReciboView({ token }: { token: string }) {
       <header className="border-b border-[#E7EAEF] bg-white">
         <div className="mx-auto max-w-[920px] px-4 py-6 sm:px-8 sm:py-8">
           <Image
-            src="/logopng.webp"
+            src="/contazoom-logo.svg"
             alt="ContaZoom"
-            width={210}
-            height={48}
+            width={646}
+            height={230}
+            unoptimized
             className="h-8 w-auto object-contain sm:h-9"
             priority
           />

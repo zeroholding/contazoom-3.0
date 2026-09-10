@@ -89,11 +89,17 @@ export default function Login() {
       <div className="cz-auth flex min-h-screen items-center justify-center bg-white px-6">
         <div className="flex flex-col items-center gap-4 text-center">
           <Image
-            src="/logopng.webp"
+            src="/contazoom-logo.svg"
             alt="ContaZoom"
-            width={210}
-            height={48}
-            className="h-11 w-auto object-contain"
+            // Dimensões do viewBox, só para reservar espaço; o tamanho vem da
+            // classe. `unoptimized` porque o otimizador do Next recusa SVG sem
+            // `dangerouslyAllowSVG` — ver o comentário no Sidebar.
+            width={646}
+            height={230}
+            unoptimized
+            // 56px contra os 44px de antes. É a primeira tela do produto e a
+            // única em que a marca não disputa espaço com navegação nenhuma.
+            className="h-14 w-auto object-contain"
             priority
           />
           <p className="flex items-center gap-2 text-[13px] font-medium text-[#6B7280]">
@@ -227,11 +233,17 @@ export default function Login() {
             foi feita. */}
         <div className="shrink-0">
           <Image
-            src="/logopng.webp"
+            src="/contazoom-logo.svg"
             alt="ContaZoom"
-            width={210}
-            height={48}
-            className="h-11 w-auto object-contain"
+            // Dimensões do viewBox, só para reservar espaço; o tamanho vem da
+            // classe. `unoptimized` porque o otimizador do Next recusa SVG sem
+            // `dangerouslyAllowSVG` — ver o comentário no Sidebar.
+            width={646}
+            height={230}
+            unoptimized
+            // 56px contra os 44px de antes. É a primeira tela do produto e a
+            // única em que a marca não disputa espaço com navegação nenhuma.
+            className="h-14 w-auto object-contain"
             priority
           />
         </div>

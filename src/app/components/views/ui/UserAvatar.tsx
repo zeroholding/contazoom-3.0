@@ -61,16 +61,19 @@ export default function UserAvatar() {
       </button>
 
 
-      {/* Dropdown */}
+      {/* Dropdown.
+          A largura era `w-72 sm:w-64`, ou seja, ENCOLHIA de 288px para 256px a
+          partir do tablet — o oposto do que o conteúdo pede, e é onde o nome
+          começava a ser cortado. Agora só cresce, e o mínimo acompanha. */}
       {isVisible && (
         <div 
           ref={dropdownRef}
-          className={`smart-dropdown w-72 sm:w-64 py-2 ${
+          className={`smart-dropdown w-72 sm:w-80 py-2 ${
             isOpen ? 'dropdown-enter' : 'dropdown-exit'
           }`}
           style={{
             ...position,
-            minWidth: '256px'
+            minWidth: '288px'
           }}
         >
           {/* Informações do usuário */}
@@ -82,11 +85,24 @@ export default function UserAvatar() {
               >
                 {initial}
               </div>
+              {/* `truncate` cortava as duas linhas com reticências, e num nome
+                  composto sobrava "GIANLUCCA FLORENC…" — o sobrenome, que é o que
+                  distingue duas pessoas do mesmo primeiro nome, era exatamente a
+                  parte que sumia. Aqui o texto QUEBRA em até duas linhas em vez de
+                  ser cortado, e o `title` continua garantindo o valor inteiro.
+                  `break-words` no nome (quebra entre palavras) e `break-all` no
+                  e-mail, que é uma palavra só e precisa poder partir no meio. */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-900 truncate">
+                <p
+                  className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2 break-words"
+                  title={user.name}
+                >
                   {user.name}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
+                <p
+                  className="mt-0.5 text-xs text-gray-500 leading-snug line-clamp-2 break-all"
+                  title={user.email}
+                >
                   {user.email}
                 </p>
               </div>

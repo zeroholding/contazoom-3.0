@@ -688,18 +688,33 @@ export default function Sidebar({
             virarem uma linha unica atravessando a tela. Com alturas diferentes,
             aparecia um degrau de poucos pixels exatamente no canto que o olho
             usa para alinhar a interface. */}
-        <div
-          className={`flex h-[var(--cz-topbar-h)] shrink-0 items-center border-b border-[var(--cz-hairline)] ${
-            collapsed ? "justify-center px-0" : "px-4"
-          }`}
-        >
+        {/* `justify-center` nos DOIS estados. Antes a marca era centralizada só
+            quando a barra estava recolhida e colada em `px-4` quando aberta, então
+            ela pulava de lugar ao recolher — e, ao lado do bloco de menu que é
+            centrado, ficava visivelmente torta. */}
+        <div className="flex h-[var(--cz-topbar-h)] shrink-0 items-center justify-center border-b border-[var(--cz-hairline)] px-2">
           <Image
-            src="/logopng.webp"
+            src="/contazoom-logo.svg"
             alt="ContaZoom"
-            width={collapsed ? 32 : 180}
-            height={collapsed ? 32 : 36}
+            // Dimensões intrínsecas do viewBox (646x230). Servem para o navegador
+            // reservar o espaço antes de baixar e evitar o salto de layout; o
+            // tamanho na tela vem das classes.
+            width={646}
+            height={230}
+            // `unoptimized` porque o otimizador de imagem do Next RECUSA SVG a
+            // menos que `dangerouslyAllowSVG` esteja ligado no next.config — e
+            // ligar isso valeria para qualquer SVG remoto do projeto, o que é
+            // risco desnecessário por causa de um logo local. Sem otimizar não se
+            // perde nada: SVG já é vetor e o arquivo é servido de /public.
+            unoptimized
             className={
-              collapsed ? "h-8 w-8 object-contain" : "h-9 w-auto object-contain"
+              collapsed
+                // Barra recolhida tem 4rem (64px). A marca é horizontal (proporção
+                // ~2,8:1), então quem manda aqui é a LARGURA: fixar altura faria
+                // ela vazar para fora da barra.
+                ? "h-auto w-12 max-w-full object-contain"
+                // 41px = os 36px de antes com os 15% pedidos.
+                : "h-[41px] w-auto max-w-full object-contain"
             }
             priority
           />
