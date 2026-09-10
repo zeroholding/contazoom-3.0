@@ -13,7 +13,8 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import Sidebar from "../ui/Sidebar";
 import Topbar from "../ui/Topbar";
-import { inteiro } from "./formato";
+import { ENTRADA, inteiro } from "./formato";
+import { IconeBusca } from "./icones";
 
 /* -------------------------------------------------------------------------- */
 /*                                  Moldura                                   */
@@ -234,6 +235,69 @@ export function Campo({
   );
 }
 
+/**
+ * Campo de busca com lupa, e o botão de aplicar quando a busca não é ao vivo.
+ *
+ * Existia escrito à mão em quatro telas, sempre igual: um `<Campo rotulo="Buscar">`
+ * com um `<input className={ENTRADA}>` e, ao lado, um `<button>` "Buscar" com
+ * `border-gray-300 hover:border-emerald-400 hover:text-emerald-700` — cinza cru e
+ * verde onde o produto usa laranja.
+ *
+ * A lupa dentro do campo é o que faltava: um campo de texto sem afordância
+ * nenhuma, no meio de uma fileira de selects idênticos, não se distingue como
+ * busca. `pl-9` abre o espaço dela — sem isso o ícone fica POR CIMA do texto
+ * digitado.
+ */
+export function CampoBusca({
+  valor,
+  onMudar,
+  onAplicar,
+  rotulo = "Buscar",
+  placeholder,
+  className = "",
+}: {
+  valor: string;
+  onMudar: (v: string) => void;
+  /**
+   * Quando informado, aparece o botão "Buscar" e o Enter dispara a busca. Sem
+   * ele, o campo filtra a cada tecla — o que só serve quando a consulta é local
+   * ou barata.
+   */
+  onAplicar?: () => void;
+  rotulo?: string;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <Campo rotulo={rotulo} className={className}>
+      <div className="flex gap-2">
+        <span className="relative block flex-1">
+          <IconeBusca className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--cz-texto-fraco)]" />
+          <input
+            type="search"
+            value={valor}
+            onChange={(e) => onMudar(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && onAplicar) onAplicar();
+            }}
+            placeholder={placeholder}
+            className={`${ENTRADA} pl-9`}
+          />
+        </span>
+        {onAplicar && (
+          <button
+            type="button"
+            onClick={onAplicar}
+            className="h-10 shrink-0 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 text-[13px] font-semibold text-[var(--cz-texto)] transition-colors hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)]"
+          >
+            Buscar
+          </button>
+        )}
+      </div>
+    </Campo>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                Indicadores                                 */
 /* -------------------------------------------------------------------------- */
@@ -244,12 +308,23 @@ export function Kpi({
   nota,
   destaque = false,
   tom,
+  icone,
 }: {
   rotulo: string;
   valor: string;
   nota?: string;
   destaque?: boolean;
   tom?: "alerta" | "critico";
+  /**
+   * Ícone do canto, opcional.
+   *
+   * Fica DEPOIS do rótulo e em tinta fraca de propósito: o cartão existe para o
+   * número ser lido primeiro. Ícone grande e colorido ao lado de um número
+   * grande cria dois centros de atenção e o olho não sabe onde pousar — foi o
+   * que aconteceu com os cartões que traziam o ícone dentro de um quadrado
+   * cinza antes do texto.
+   */
+  icone?: ReactNode;
 }) {
   // Vermelho, âmbar e verde continuam SEMÂNTICOS e não viraram laranja: aqui eles
   // significam ruim, atenção e bom. Trocá-los pela cor da marca apagaria a única
@@ -273,9 +348,17 @@ export function Kpi({
 
   return (
     <div className={`rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] ${casca}`}>
-      <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--cz-texto-suave)]">
-        {rotulo}
-      </span>
+      <div className="flex items-start justify-between gap-2">
+        <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--cz-texto-suave)]">
+          {rotulo}
+        </span>
+        {icone && (
+          // `opacity-60` e não uma cor própria: assim o ícone acompanha o tom do
+          // cartão (âmbar no alerta, rosa no crítico) sem precisar de um mapa de
+          // cores paralelo que possa sair de sincronia com a casca.
+          <span className={`shrink-0 opacity-60 ${cor}`}>{icone}</span>
+        )}
+      </div>
       {/* `cz-valor` carrega peso 800 e o tracking apertado dos números grandes do
           painel — o mesmo tratamento do login e do admin. */}
       <strong className={`cz-valor mt-1 block text-[21px] ${cor}`}>{valor}</strong>
@@ -283,6 +366,187 @@ export function Kpi({
         <span className="mt-0.5 block text-[10.5px] text-[var(--cz-texto-suave)]">{nota}</span>
       )}
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Faixa de aviso                                  */
+/* -------------------------------------------------------------------------- */
+
+export type TomFaixa = "info" | "bom" | "alerta" | "critico";
+
+const CASCA_FAIXA: Record<TomFaixa, string> = {
+  info: "border-sky-200 bg-sky-50 text-sky-900",
+  bom: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  alerta: "border-amber-200 bg-amber-50 text-amber-900",
+  critico: "border-rose-200 bg-rose-50 text-rose-900",
+};
+
+/**
+ * A faixa de aviso dentro do fluxo da tela.
+ *
+ * POR QUE EXISTE: este bloco estava escrito à mão em cinco telas —
+ * `<p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3
+ * text-[12px] leading-relaxed text-amber-800">` e variações. Cada cópia divergiu
+ * em algo: uma usava `rounded-xl`, outra `rounded-[var(--cz-raio)]`; o texto ia
+ * de `text-amber-800` a `text-amber-900`; o espaçamento de `mt-3` a `mt-4`. São
+ * diferenças pequenas que, somadas na mesma página, é exatamente o que se lê
+ * como "desalinhado".
+ *
+ * É diferente do `Aviso`: `Aviso` ocupa o lugar do conteúdo que não veio (vazio,
+ * erro), centralizado e grande. A `Faixa` acompanha um conteúdo que EXISTE, para
+ * qualificá-lo — "os números estão certos, mas 30 vendas ainda não entraram".
+ */
+export function Faixa({
+  tom = "info",
+  icone,
+  children,
+  acao,
+  className = "",
+}: {
+  tom?: TomFaixa;
+  icone?: ReactNode;
+  children: ReactNode;
+  acao?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`mt-4 flex items-start gap-3 rounded-[var(--cz-raio-cartao)] border px-4 py-3 text-[12.5px] leading-relaxed ${CASCA_FAIXA[tom]} ${className}`}
+    >
+      {/* `mt-0.5` alinha o ícone com a primeira LINHA do texto, e não com o
+          bloco inteiro. Em aviso de duas ou três linhas, centralizar deixa o
+          ícone flutuando no meio do parágrafo. */}
+      {icone && <span className="mt-0.5 shrink-0">{icone}</span>}
+      <div className="min-w-0 flex-1">{children}</div>
+      {acao && <div className="shrink-0">{acao}</div>}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                          Recorte por pastilhas                             */
+/* -------------------------------------------------------------------------- */
+
+export type OpcaoRecorte<C extends string> = {
+  chave: C;
+  rotulo: string;
+  /** Uma linha explicando o recorte. Aparece abaixo do grupo, só para o ativo. */
+  explicacao?: string;
+  /** Número à direita do rótulo, quando faz sentido contar. */
+  contagem?: number;
+};
+
+/**
+ * O grupo de pastilhas que define o RECORTE da tela.
+ *
+ * Reúne o padrão que Anúncios Mortos e Estoque Full tinham escrito à mão, e
+ * corrige a cor: as duas usavam `bg-emerald-600` na pastilha ativa. Verde nessas
+ * telas já significa "saudável" e "no pódio" — a mesma cor dizendo "selecionado"
+ * fazia parecer que o recorte escolhido era o recorte BOM. Aqui o ativo usa o
+ * laranja da marca, que em todo o produto quer dizer "foi você que escolheu
+ * isso".
+ *
+ * Fica acima do painel de filtros porque é o eixo da tela, não um filtro entre
+ * outros: trocar o recorte muda a pergunta, trocar um filtro só estreita a
+ * resposta.
+ */
+export function GrupoRecorte<C extends string>({
+  opcoes,
+  valor,
+  onMudar,
+  className = "",
+}: {
+  opcoes: ReadonlyArray<OpcaoRecorte<C>>;
+  valor: C;
+  onMudar: (chave: C) => void;
+  className?: string;
+}) {
+  const ativa = opcoes.find((o) => o.chave === valor);
+
+  return (
+    <div className={`mt-5 ${className}`}>
+      <div className="flex flex-wrap gap-2" role="group">
+        {opcoes.map((o) => {
+          const selecionada = o.chave === valor;
+          return (
+            <button
+              key={o.chave || "todos"}
+              type="button"
+              onClick={() => onMudar(o.chave)}
+              aria-pressed={selecionada}
+              className={`inline-flex items-center gap-2 rounded-[var(--cz-raio)] border px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+                selecionada
+                  ? "border-[var(--cz-laranja)] bg-[var(--cz-laranja)] text-white"
+                  : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)]"
+              }`}
+            >
+              {o.rotulo}
+              {o.contagem !== undefined && (
+                <span className={`tabular-nums ${selecionada ? "opacity-80" : "text-[var(--cz-texto-fraco)]"}`}>
+                  {inteiro(o.contagem)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {ativa?.explicacao && (
+        <p className="mt-2 text-[12px] leading-relaxed text-[var(--cz-texto-suave)]">
+          {ativa.explicacao}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Selo                                      */
+/* -------------------------------------------------------------------------- */
+
+export type TomSelo = "neutro" | "info" | "bom" | "alerta" | "critico" | "marca";
+
+const CASCA_SELO: Record<TomSelo, string> = {
+  neutro:
+    "border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] text-[var(--cz-texto-suave)]",
+  info: "border-sky-200 bg-sky-50 text-sky-700",
+  bom: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  alerta: "border-amber-200 bg-amber-50 text-amber-800",
+  critico: "border-rose-200 bg-rose-50 text-rose-700",
+  marca:
+    "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]",
+};
+
+/**
+ * Pastilha de estado. Uma forma só para todas as tabelas.
+ *
+ * As pastilhas do painel estavam em três formatos ao mesmo tempo — `rounded`,
+ * `rounded-lg` e `rounded-full`; com fio, sem fio; `text-[10px]` a
+ * `text-[11.5px]`; e paletas de 100/800 (`bg-amber-100 text-amber-800`) ao lado
+ * de 50/700 (`bg-amber-50 text-amber-700`). Na mesma linha da mesma tabela.
+ *
+ * Aqui há UM formato: cápsula com fio, tinta 50/700. O fio importa: sem ele, a
+ * pastilha clara sobre a linha branca da tabela perde o contorno e o texto
+ * parece só um texto colorido solto.
+ */
+export function Selo({
+  children,
+  tom = "neutro",
+  titulo,
+  className = "",
+}: {
+  children: ReactNode;
+  tom?: TomSelo;
+  titulo?: string;
+  className?: string;
+}) {
+  return (
+    <span
+      title={titulo}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10.5px] font-bold ${CASCA_SELO[tom]} ${className}`}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -491,13 +755,27 @@ export function Aviso({
   titulo,
   texto,
   acao,
+  icone,
 }: {
   titulo: string;
   texto: string;
   acao?: ReactNode;
+  /**
+   * Ícone grande acima do título, opcional.
+   *
+   * Um vazio só com texto centralizado no meio de uma área grande parece erro de
+   * carregamento. O ícone dá ao bloco um peso visual que diz "esta tela está
+   * funcionando e o resultado é nenhum" — que é uma informação diferente.
+   */
+  icone?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center px-5 py-16 text-center">
+      {icone && (
+        <span className="mb-4 grid size-14 place-items-center rounded-full border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)]">
+          {icone}
+        </span>
+      )}
       <h3 className="cz-titulo text-[14px]">{titulo}</h3>
       <p className="mt-1 max-w-md text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
         {texto}

@@ -544,7 +544,7 @@ export default function FiltrosGestaoSKU({
 
                   {!isEditMode && (
                     <div className="mt-2 p-2 bg-gray-50 border border-[var(--cz-hairline)] rounded text-xs text-gray-600">
-                      💡 Ative o Modo Edição primeiro
+                      Ative o Modo Edição primeiro
               </div>
                   )}
               </div>

@@ -576,7 +576,7 @@ export default function GestaoSKU() {
                   <p className={`text-xs font-bold uppercase tracking-wide ${
                     skuStats.skusSemCusto > 0 ? "text-orange-700" : "text-gray-500"
                   }`}>
-                    ⚠️ SKUs Pendentes
+                    SKUs Pendentes
                   </p>
                   <p className={`text-sm ${
                     skuStats.skusSemCusto > 0 ? "text-orange-800 font-medium" : "text-gray-600"

@@ -20,8 +20,9 @@ const FaturamentoPorConta = lazy(() => import("../views/ui/FaturamentoPorConta")
 const FaturamentoPorModalidade = lazy(() => import("../views/ui/FaturamentoPorModalidade"));
 import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "../views/ui/FiltrosDashboardExtra";
 import type { FiltroAgrupamentoSKU } from "../views/ui/FiltroSKU";
-import { AlertBanner } from "@/components/ui/alert-banner";
 import { UserGuidanceNotification } from "@/components/ui/user-guidance-notification";
+import { Faixa } from "./comum/shell";
+import { IconeAlerta, IconeFechar, IconeSeta } from "./comum/icones";
 import { useUserGuidance } from "@/hooks/useUserGuidance";
 import { useAuthContext } from "@/contexts/AuthContext";
 
@@ -207,7 +208,7 @@ export default function Dashboard() {
           {!isLoading && showConnectAccounts && (
             <UserGuidanceNotification
               type="warning"
-              title="🚀 Bem-vindo ao Contazoom!"
+              title="Bem-vindo ao ContaZoom"
               message="Para começar, você precisa conectar suas contas do Mercado Livre e Shopee. Após conectar, você poderá sincronizar e visualizar todas as suas vendas."
               actionLabel="Conectar Contas"
               actionHref="/contas"
@@ -219,7 +220,7 @@ export default function Dashboard() {
           {!isLoading && showSyncVendas && (
             <UserGuidanceNotification
               type="info"
-              title="✅ Contas conectadas com sucesso!"
+              title="Contas conectadas"
               message="Agora você pode sincronizar suas vendas para visualizar os dados no dashboard. Clique no botão abaixo para começar a sincronização."
               actionLabel="Sincronizar Vendas"
               actionHref="/vendas/geral"
@@ -231,7 +232,7 @@ export default function Dashboard() {
           {!isLoading && showViewVendas && (
             <UserGuidanceNotification
               type="success"
-              title="📊 Dashboard carregado!"
+              title="Dashboard pronto"
               message="Aqui você pode visualizar gráficos e estatísticas das suas vendas. Para ver os detalhes completos, acesse a tabela de vendas."
               actionLabel="Ver Tabela de Vendas"
               actionHref="/vendas/geral"
@@ -240,36 +241,19 @@ export default function Dashboard() {
             />
           )}
 
+          {/* Alerta de SKU sem custo.
+              Era um bloco de 45 linhas escrito à mão, com três SVG colados
+              (triângulo, seta, X), paleta `red-*` crua e raio `rounded-lg` que
+              não é o do resto do painel. Agora usa a `Faixa` do kit e os ícones
+              do conjunto: o desenho passa a acompanhar as outras telas de graça,
+              e o "⚠️" do título saiu porque o ícone já está ali — emoji ao lado
+              de ícone vetorial é o mesmo símbolo duas vezes, em dois estilos. */}
           {pendingSkusCount > 0 && !isPendingSkuAlertHidden && (
-            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-sm font-bold text-red-800">
-                    ⚠️ Alerta Crítico de Lucratividade
-                  </h3>
-                  <p className="mt-1 text-sm text-red-700">
-                    Você possui <strong>{pendingSkusCount} SKU(s) pendente(s)</strong>:{" "}
-                    <strong>{pendingSkuBreakdown.semCusto}</strong> sem custo e{" "}
-                    <strong>{pendingSkuBreakdown.naoCadastrados}</strong> sem cadastro.
-                    <br />CMV, lucro e margem dependem desses custos para fechar corretamente.
-                  </p>
-                  <div className="mt-3">
-                    <a
-                      href="/sku?pendentes=1"
-                      className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                    >
-                      Cadastrar Custos Agora
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                      </svg>
-                    </a>
-                  </div>
-                </div>
+            <Faixa
+              tom="critico"
+              className="mb-6 mt-0"
+              icone={<IconeAlerta className="h-5 w-5" />}
+              acao={
                 <button
                   type="button"
                   onClick={() => {
@@ -278,16 +262,29 @@ export default function Dashboard() {
                       localStorage.setItem(SKU_ALERT_DISMISS_KEY, String(pendingSkusCount));
                     } catch {}
                   }}
-                  className="rounded-md p-1 text-red-400 transition-colors hover:bg-red-100 hover:text-red-700"
+                  className="rounded-lg p-1 text-rose-500 transition-colors hover:bg-rose-100 hover:text-rose-800"
                   aria-label="Ocultar alerta de SKUs pendentes"
                   title="Ocultar alerta"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <IconeFechar className="h-4 w-4" />
                 </button>
-              </div>
-            </div>
+              }
+            >
+              <strong className="block text-[13px]">Custos de SKU pendentes</strong>
+              <p className="mt-1">
+                <strong>{pendingSkusCount} SKU(s)</strong> sem custo definido:{" "}
+                <strong>{pendingSkuBreakdown.semCusto}</strong> cadastrados sem custo e{" "}
+                <strong>{pendingSkuBreakdown.naoCadastrados}</strong> ainda sem cadastro.
+                Enquanto isso, CMV, lucro e margem desta tela saem incompletos.
+              </p>
+              <a
+                href="/sku?pendentes=1"
+                className="mt-3 inline-flex h-9 items-center gap-2 rounded-[var(--cz-raio)] bg-rose-600 px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-rose-700"
+              >
+                Cadastrar custos
+                <IconeSeta className="h-4 w-4" />
+              </a>
+            </Faixa>
           )}
 
           <HeaderDashboard

@@ -35,6 +35,15 @@ import {
   SeloStatus,
   Th,
 } from "./anuncios/comum";
+import { CampoBusca, Faixa, Selo } from "./comum/shell";
+import {
+  IconeAlerta,
+  IconeCaixa,
+  IconeDinheiro,
+  IconePreco,
+  IconeProibido,
+  IconeSubindo,
+} from "./comum/icones";
 import {
   brl,
   dataCurta,
@@ -115,26 +124,13 @@ export default function AnunciosMaisVendidos() {
       <AvisoBackfill pendentes={dados?.backfillPendente ?? 0} />
 
       <PainelFiltros nota={<NotaFiltroCaro visivel={Boolean(status || estoque)} />}>
-        <Campo rotulo="Buscar" className="lg:col-span-4">
-          <div className="flex gap-2">
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") aplicarBusca();
-              }}
-              placeholder="MLB, título ou SKU"
-              className={ENTRADA}
-            />
-            <button
-              type="button"
-              onClick={aplicarBusca}
-              className="h-10 shrink-0 rounded-xl border border-gray-300 px-3 text-[13px] font-semibold text-gray-700 transition hover:border-emerald-400 hover:text-emerald-700"
-            >
-              Buscar
-            </button>
-          </div>
-        </Campo>
+        <CampoBusca
+          valor={busca}
+          onMudar={setBusca}
+          onAplicar={aplicarBusca}
+          placeholder="MLB, título ou SKU"
+          className="lg:col-span-4"
+        />
 
         <Campo rotulo="Conta" className="lg:col-span-3">
           <select
@@ -219,17 +215,32 @@ export default function AnunciosMaisVendidos() {
       </PainelFiltros>
 
       <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
-        <Kpi rotulo="Anúncios com venda" valor={inteiro(resumo.anuncios)} />
-        <Kpi rotulo="Unidades vendidas" valor={inteiro(resumo.unidades)} />
-        <Kpi rotulo="Faturamento" valor={brl(resumo.faturamento)} destaque />
+        <Kpi
+          rotulo="Anúncios com venda"
+          valor={inteiro(resumo.anuncios)}
+          icone={<IconeSubindo className="h-5 w-5" />}
+        />
+        <Kpi
+          rotulo="Unidades vendidas"
+          valor={inteiro(resumo.unidades)}
+          icone={<IconeCaixa className="h-5 w-5" />}
+        />
+        <Kpi
+          rotulo="Faturamento"
+          valor={brl(resumo.faturamento)}
+          destaque
+          icone={<IconeDinheiro className="h-5 w-5" />}
+        />
         <Kpi
           rotulo="Ticket médio por unidade"
           valor={brl(resumo.unidades > 0 ? resumo.faturamento / resumo.unidades : 0)}
+          icone={<IconePreco className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Esgotados"
           valor={inteiro(resumo.semEstoque)}
           tom={resumo.semEstoque > 0 ? "alerta" : undefined}
+          icone={<IconeProibido className="h-5 w-5" />}
           // A ressalva é obrigatória: no caminho normal o estoque é consultado
           // só nos anúncios exibidos, e "3 esgotados" ao lado de um total de 200
           // seria lido como 3 de 200.
@@ -242,21 +253,26 @@ export default function AnunciosMaisVendidos() {
       </div>
 
       {resumo.semEstoque > 0 && (
-        <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] leading-relaxed text-rose-800">
+        <Faixa tom="critico" icone={<IconeProibido className="h-4 w-4" />}>
           <strong>{inteiro(resumo.semEstoque)}</strong> anúncio(s) que vendem estão{" "}
           <strong>com estoque zerado</strong>. Anúncio campeão esgotado é venda que
           existe e não está sendo feita — é a fila mais curta entre repor mercadoria e
           faturar.
-        </p>
+        </Faixa>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--cz-hairline)] bg-white">
+      <div className="mt-4 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
         {carregando ? (
           <Esqueleto />
         ) : erro ? (
-          <Aviso titulo="Erro ao carregar" texto={erro} />
+          <Aviso
+            icone={<IconeAlerta className="h-6 w-6" />}
+            titulo="Erro ao carregar"
+            texto={erro}
+          />
         ) : linhas.length === 0 ? (
           <Aviso
+            icone={<IconeSubindo className="h-6 w-6" />}
             titulo="Nenhuma venda no período"
             texto="Amplie o período, solte o filtro de conta, ou sincronize as vendas se ainda não sincronizou."
           />
@@ -325,7 +341,7 @@ function LinhaVendida({
 
   return (
     <tr
-      className={`border-b border-gray-100 text-[12.5px] transition last:border-b-0 hover:bg-emerald-50/30 ${
+      className={`border-b border-[var(--cz-hairline)] text-[12.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
         esgotado ? "bg-rose-50/30" : ""
       }`}
     >
@@ -339,39 +355,35 @@ function LinhaVendida({
 
       <td className="px-3 py-3 text-right">
         {esgotado ? (
-          <span className="rounded-lg bg-rose-100 px-2 py-1 text-[11px] font-bold text-rose-800">
+          <Selo tom="critico">
+            <IconeProibido className="h-3 w-3" />
             esgotado
-          </span>
+          </Selo>
         ) : cobertura === null ? (
-          <span className="text-gray-400">—</span>
+          <span className="text-[var(--cz-texto-fraco)]">—</span>
         ) : (
-          <span
-            className={`inline-block rounded-lg px-2 py-1 text-[11.5px] font-bold tabular-nums ${
-              cobertura <= 7
-                ? "bg-rose-100 text-rose-800"
-                : cobertura <= 21
-                  ? "bg-amber-100 text-amber-800"
-                  : "bg-gray-100 text-gray-600"
-            }`}
-            title={`No ritmo do período, o estoque atual dura cerca de ${cobertura} dia(s)`}
+          <Selo
+            tom={cobertura <= 7 ? "critico" : cobertura <= 21 ? "alerta" : "neutro"}
+            className="tabular-nums"
+            titulo={`No ritmo do período, o estoque atual dura cerca de ${cobertura} dia(s)`}
           >
             {cobertura <= 90 ? `${inteiro(cobertura)} d` : "90+ d"}
-          </span>
+          </Selo>
         )}
       </td>
 
       <CelulaPreco preco={l.preco} />
 
-      <td className="px-3 py-3 text-right tabular-nums text-gray-700">
+      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
         {inteiro(l.pedidos)}
       </td>
-      <td className="px-3 py-3 text-right font-semibold tabular-nums text-gray-900">
+      <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--cz-texto)]">
         {inteiro(l.unidades)}
       </td>
       <td className="px-3 py-3 text-right font-semibold tabular-nums text-emerald-700">
         {brl(l.faturamento)}
       </td>
-      <td className="px-3 py-3 text-right tabular-nums text-gray-600">
+      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
         {dataCurta(l.ultimaVenda)}
       </td>
 

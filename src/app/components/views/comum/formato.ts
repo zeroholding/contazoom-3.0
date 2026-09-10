@@ -15,9 +15,23 @@ export const inteiro = (v: number) => v.toLocaleString("pt-BR");
 
 export const dataCurta = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
 
-/** Classe do input/select padrão das telas novas. */
+/**
+ * Classe do input/select padrão das telas novas.
+ *
+ * O FOCO É LARANJA, NÃO VERDE. Antes era
+ * `focus:border-emerald-500 focus:ring-emerald-100`, e isso brigava com o
+ * significado do verde nas próprias telas onde a classe é usada: em Estoque Full
+ * e em Anúncios, verde quer dizer "saudável" e "no pódio". O anel de foco é
+ * resposta a uma AÇÃO da pessoa — a mesma coisa que o botão do login, o item
+ * ativo do menu e a coluna ordenada — e no produto essa cor é o laranja da marca.
+ *
+ * As cores neutras passaram a tokens (`--cz-hairline-forte`, `--cz-superficie`,
+ * `--cz-texto`) em vez de `gray-300`/`bg-white`/`text-gray-900`. Com cinza cru, o
+ * campo ficava com um cinza levemente diferente do fio dos cartões ao lado, o que
+ * a olho nu não se nomeia mas se percebe como desalinho.
+ */
 export const ENTRADA =
-  "h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
+  "h-10 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 text-[13px] text-[var(--cz-texto)] outline-none transition-colors focus:border-[var(--cz-laranja)] focus:ring-2 focus:ring-[var(--cz-laranja-suave)]";
 
 /**
  * "há 5 min", "há 3h", "há 2d".

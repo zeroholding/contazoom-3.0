@@ -5,6 +5,23 @@ import NumberLoader from "../../../../components/NumberLoader";
 import { FiltroPeriodo } from "./FiltrosDashboard";
 import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "./FiltrosDashboardExtra";
 import type { FiltroAgrupamentoSKU } from "./FiltroSKU";
+import { LogoCanal, type CanalLogo } from "../comum/logos";
+
+/**
+ * Quebra de um total por canal, com o logo do canal em vez do nome.
+ *
+ * `tabular-nums` no valor: sem isso os dígitos têm larguras diferentes e as duas
+ * linhas (Mercado Livre e Shopee) não alinham a vírgula, o que num par de valores
+ * empilhados é o que mais chama atenção de errado.
+ */
+function ValorPorCanal({ canal, valor }: { canal: CanalLogo; valor: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] text-gray-600">
+      <LogoCanal canal={canal} />
+      <span className="tabular-nums">{valor}</span>
+    </span>
+  );
+}
 
 interface DashboardStatsProps {
   periodoAtivo?: FiltroPeriodo;
@@ -224,11 +241,15 @@ const DashboardStats = memo(function DashboardStats({
                 <span>{`${(safeDiv(stats.taxasPlataformas.total, stats.faturamentoTotal) * 100).toFixed(1)}% do faturamento`}</span>
                 {(stats.taxasPlataformas.mercadoLivre > 0 || stats.taxasPlataformas.shopee > 0) && (
                   <div className="flex gap-2 mt-1">
+                    {/* Logo no lugar de "ML:" e "Shopee:". A linha ficava com
+                        duas grafias para a mesma ideia — sigla de duas letras num
+                        canal e nome inteiro no outro — e o nome longo empurrava o
+                        valor para fora do cartão em tela estreita. */}
                     {stats.taxasPlataformas.mercadoLivre > 0 && (
-                      <span className="text-[10px]">ML: {formatCurrency(stats.taxasPlataformas.mercadoLivre)}</span>
+                      <ValorPorCanal canal="ML" valor={formatCurrency(stats.taxasPlataformas.mercadoLivre)} />
                     )}
                     {stats.taxasPlataformas.shopee > 0 && (
-                      <span className="text-[10px]">Shopee: {formatCurrency(stats.taxasPlataformas.shopee)}</span>
+                      <ValorPorCanal canal="SP" valor={formatCurrency(stats.taxasPlataformas.shopee)} />
                     )}
                   </div>
                 )}
@@ -263,10 +284,10 @@ const DashboardStats = memo(function DashboardStats({
                 {(stats.custoFrete.mercadoLivre > 0 || stats.custoFrete.shopee > 0) && (
                   <div className="flex gap-2 mt-1">
                     {stats.custoFrete.mercadoLivre > 0 && (
-                      <span className="text-[10px]">ML: {formatCurrency(stats.custoFrete.mercadoLivre)}</span>
+                      <ValorPorCanal canal="ML" valor={formatCurrency(stats.custoFrete.mercadoLivre)} />
                     )}
                     {stats.custoFrete.shopee > 0 && (
-                      <span className="text-[10px]">Shopee: {formatCurrency(stats.custoFrete.shopee)}</span>
+                      <ValorPorCanal canal="SP" valor={formatCurrency(stats.custoFrete.shopee)} />
                     )}
                   </div>
                 )}

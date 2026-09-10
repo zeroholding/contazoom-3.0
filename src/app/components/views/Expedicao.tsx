@@ -21,14 +21,29 @@ import {
   Cabecalho,
   Campo,
   Esqueleto,
+  Faixa,
   Kpi,
   MolduraTela,
   Paginacao,
   PainelFiltros,
+  Selo,
   Th,
   ThOrdenavel,
 } from "./comum/shell";
 import { brl, ENTRADA, inteiro } from "./comum/formato";
+import { SeloCanal } from "./comum/logos";
+import {
+  IconeAlerta,
+  IconeAmpulheta,
+  IconeBaixar,
+  IconeBusca,
+  IconeCaixa,
+  IconeCaminhao,
+  IconeDinheiro,
+  IconeEtiqueta,
+  IconePessoa,
+  IconeRelogio,
+} from "./comum/icones";
 import {
   CANAIS,
   CANAL_ROTULO,
@@ -76,30 +91,39 @@ function dataCurtaSP(iso: string): string {
 /*                                  Etiquetas                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Ícone de cada faixa de urgência.
+ *
+ * A cor sozinha não basta: quem não distingue vermelho de âmbar (cerca de 8% dos
+ * homens) lê a coluna toda como a mesma coisa. O ícone é o segundo canal da
+ * mesma informação, e é ele que faz "atrasado" e "vence hoje" se separarem num
+ * relance mesmo em tela ruim.
+ */
+const ICONE_URGENCIA: Record<Urgencia, React.ReactNode> = {
+  atrasado: <IconeAlerta className="h-3.5 w-3.5" />,
+  hoje: <IconeAmpulheta className="h-3.5 w-3.5" />,
+  amanha: <IconeRelogio className="h-3.5 w-3.5" />,
+  proximo: <IconeCalendarioCurto />,
+  futuro: <IconeCalendarioCurto />,
+  semPrazo: <IconeRelogioVazio />,
+};
+
+/** Envolvem os ícones do conjunto só para fixar o tamanho usado no selo. */
+function IconeCalendarioCurto() {
+  return <IconeRelogio className="h-3.5 w-3.5" />;
+}
+function IconeRelogioVazio() {
+  return <IconeRelogio className="h-3.5 w-3.5 opacity-60" />;
+}
+
 function SeloUrgencia({ urgencia, dias }: { urgencia: Urgencia; dias: number | null }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.04em] ${URGENCIA_CLASSE[urgencia]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.04em] ${URGENCIA_CLASSE[urgencia]}`}
       title={rotuloPrazo(dias)}
     >
+      {ICONE_URGENCIA[urgencia]}
       {URGENCIA_ROTULO[urgencia]}
-    </span>
-  );
-}
-
-function SeloCanal({ canal }: { canal: Canal }) {
-  // Amarelo para o ML e laranja para a Shopee: são as cores das próprias marcas,
-  // que é como a pessoa já identifica a origem do pedido. Não conflita com o
-  // laranja de ação porque aqui o selo não é clicável.
-  const classe =
-    canal === "ML"
-      ? "border-yellow-200 bg-yellow-50 text-yellow-800"
-      : "border-orange-200 bg-orange-50 text-orange-800";
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${classe}`}
-    >
-      {canal}
     </span>
   );
 }
@@ -124,34 +148,41 @@ function Linha({ pacote }: { pacote: PacoteExpedicao }) {
       </td>
 
       <td className="px-3 py-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5">
-            <SeloCanal canal={pacote.canal} />
-            <span className="text-[12px] font-semibold text-[var(--cz-texto)]">
+        <div className="flex items-center gap-2">
+          {/* O LOGO no lugar da sigla. "ML" e "SP" numa pastilha obrigavam a
+              decodificar a abreviação; o logo é reconhecido antes de ser lido, e
+              numa fila que se varre com o olho isso é a diferença entre ler a
+              coluna e conferi-la. */}
+          <SeloCanal canal={pacote.canal} />
+          <div className="min-w-0">
+            <span className="block truncate text-[12px] font-semibold text-[var(--cz-texto)]">
               {pacote.conta}
             </span>
+            <span className="block text-[10.5px] text-[var(--cz-texto-suave)]">
+              Venda {dataCurtaSP(pacote.dataVenda)}
+            </span>
           </div>
-          <span className="text-[10.5px] text-[var(--cz-texto-suave)]">
-            Venda {dataCurtaSP(pacote.dataVenda)}
-          </span>
         </div>
       </td>
 
       <td className="px-3 py-3">
-        <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-[11.5px] font-semibold text-[var(--cz-texto)]">
+        <div className="flex flex-col gap-1">
+          <span className="flex items-center gap-1.5 font-mono text-[11.5px] font-semibold text-[var(--cz-texto)]">
+            <IconeEtiqueta className="h-3.5 w-3.5 shrink-0 text-[var(--cz-texto-fraco)]" />
             {pacote.shippingId ?? "sem etiqueta"}
           </span>
-          <span className="text-[10.5px] text-[var(--cz-texto-suave)]">
-            {pacote.comprador}
+          <span className="flex items-center gap-1.5 text-[10.5px] text-[var(--cz-texto-suave)]">
+            <IconePessoa className="h-3.5 w-3.5 shrink-0 text-[var(--cz-texto-fraco)]" />
+            <span className="truncate">{pacote.comprador}</span>
           </span>
           {/* Só aparece quando o pacote junta mais de uma venda. É a informação
               que explica por que a contagem de pacotes é menor que a de pedidos —
               sem ela, a diferença parece defeito. */}
           {pacote.pedidos > 1 && (
-            <span className="text-[10.5px] font-semibold text-sky-700">
-              {pacote.pedidos} pedidos na mesma etiqueta
-            </span>
+            <Selo tom="info" titulo="Vendas diferentes que saem na mesma etiqueta">
+              <IconeCaixa className="h-3 w-3" />
+              {pacote.pedidos} pedidos juntos
+            </Selo>
           )}
         </div>
       </td>
@@ -265,6 +296,7 @@ export default function Expedicao() {
               onClick={() => baixarCsv(filtros)}
               desabilitado={carregando || (dados?.total ?? 0) === 0}
             >
+              <IconeBaixar className="h-4 w-4" />
               Baixar lista de separação
             </BotaoSecundario>
             <BotaoAtualizar
@@ -282,17 +314,18 @@ export default function Expedicao() {
           aqui: pacote sem prazo enquanto o preenchimento do histórico não
           terminou. Sem ele, a conclusão natural é que o sistema perdeu o prazo. */}
       {dados && dados.prazoPendente > 0 && (
-        <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-amber-200 bg-amber-50 px-4 py-3 text-[12.5px] text-amber-900">
+        <Faixa tom="alerta" icone={<IconeRelogio className="h-4 w-4" />}>
           <strong>{inteiro(dados.prazoPendente)}</strong> vendas ainda estão tendo o
           prazo lido do histórico. Enquanto isso, elas podem aparecer como{" "}
-          <em>sem prazo</em>. O preenchimento continua a cada visita a esta tela.
-        </div>
+          <em>sem prazo</em>, no fim da fila. O preenchimento continua a cada visita
+          a esta tela.
+        </Faixa>
       )}
 
       {erro && (
-        <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+        <Faixa tom="critico" icone={<IconeAlerta className="h-4 w-4" />}>
           Não foi possível carregar a fila: {erro}
-        </div>
+        </Faixa>
       )}
 
       {/* Indicadores. Atrasado e "vence hoje" ganham tom próprio (vermelho e
@@ -304,24 +337,32 @@ export default function Expedicao() {
           valor={inteiro(porUrgencia?.atrasado ?? 0)}
           nota="prazo já venceu"
           tom={URGENCIA_TOM.atrasado}
+          icone={<IconeAlerta className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Vencem hoje"
           valor={inteiro(porUrgencia?.hoje ?? 0)}
           nota="despachar ainda hoje"
           tom={URGENCIA_TOM.hoje}
+          icone={<IconeAmpulheta className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Vencem amanhã"
           valor={inteiro(porUrgencia?.amanha ?? 0)}
+          icone={<IconeRelogio className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Pacotes na fila"
           valor={inteiro(dados?.total ?? 0)}
           nota={`${inteiro(dados?.unidades ?? 0)} unidades`}
           destaque
+          icone={<IconeCaminhao className="h-5 w-5" />}
         />
-        <Kpi rotulo="Valor na fila" valor={brl(dados?.valorTotal ?? 0)} />
+        <Kpi
+          rotulo="Valor na fila"
+          valor={brl(dados?.valorTotal ?? 0)}
+          icone={<IconeDinheiro className="h-5 w-5" />}
+        />
       </div>
 
       {/* Fichas de urgência: filtro e panorama na mesma peça. As contagens NÃO
@@ -343,6 +384,7 @@ export default function Expedicao() {
                   : `${URGENCIA_CLASSE[u]} hover:brightness-95`
               }`}
             >
+              {ICONE_URGENCIA[u]}
               {URGENCIA_ROTULO[u]}
               <span className="tabular-nums opacity-80">
                 {inteiro(porUrgencia?.[u] ?? 0)}
@@ -362,13 +404,19 @@ export default function Expedicao() {
         }
       >
         <Campo rotulo="Buscar" className="lg:col-span-4">
-          <input
-            type="search"
-            value={filtros.busca}
-            onChange={(e) => mudar({ busca: e.target.value })}
-            placeholder="Pedido, etiqueta, SKU, produto ou comprador"
-            className={ENTRADA}
-          />
+          {/* Lupa dentro do campo. O `pl-9` abre o espaço dela; sem isso o ícone
+              fica por cima do texto digitado — o mesmo defeito da seta do menu
+              sobre o breadcrumb. */}
+          <span className="relative block">
+            <IconeBusca className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--cz-texto-fraco)]" />
+            <input
+              type="search"
+              value={filtros.busca}
+              onChange={(e) => mudar({ busca: e.target.value })}
+              placeholder="Pedido, etiqueta, SKU, produto ou comprador"
+              className={`${ENTRADA} pl-9`}
+            />
+          </span>
         </Campo>
 
         <Campo rotulo="Canal" className="lg:col-span-2">
@@ -440,6 +488,7 @@ export default function Expedicao() {
           <Esqueleto linhas={8} />
         ) : vazio ? (
           <Aviso
+            icone={<IconeCaminhao className="h-6 w-6" />}
             titulo={semFiltro ? "Nada a despachar" : "Nenhum pacote com esses filtros"}
             texto={
               semFiltro

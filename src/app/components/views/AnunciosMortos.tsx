@@ -44,6 +44,23 @@ import {
   Th,
 } from "./anuncios/comum";
 import {
+  CampoBusca,
+  Faixa,
+  GrupoRecorte,
+  Selo,
+  type OpcaoRecorte,
+} from "./comum/shell";
+import {
+  IconeAlerta,
+  IconeCaixa,
+  IconeDescendo,
+  IconeEditar,
+  IconeInfo,
+  IconePausa,
+  IconeProibido,
+  IconeRelogio,
+} from "./comum/icones";
+import {
   brl,
   dataCurta,
   ENTRADA,
@@ -55,7 +72,7 @@ import {
 import { useAnuncios, useContasMeli } from "./anuncios/useAnuncios";
 
 /** Os três recortes por motivo. Mapeiam para o filtro `estoque` da API. */
-const RECORTES = [
+const RECORTES: ReadonlyArray<OpcaoRecorte<string>> = [
   {
     chave: "",
     rotulo: "Todos os parados",
@@ -73,7 +90,7 @@ const RECORTES = [
     explicacao:
       "Parou porque acabou. Aqui o problema é reposição — mexer no anúncio não resolve.",
   },
-] as const;
+];
 
 export default function AnunciosMortos() {
   const [busca, setBusca] = useState("");
@@ -108,7 +125,6 @@ export default function AnunciosMortos() {
 
   const resumo = dados?.resumo ?? RESUMO_VAZIO;
   const linhas = useMemo(() => dados?.linhas ?? [], [dados]);
-  const recorteAtual = RECORTES.find((r) => r.chave === estoque) ?? RECORTES[0];
 
   function aplicarBusca() {
     setBuscaAplicada(busca);
@@ -137,51 +153,20 @@ export default function AnunciosMortos() {
       <AvisoBackfill pendentes={dados?.backfillPendente ?? 0} />
 
       {/* Recorte por motivo. É o eixo da tela, então fica acima dos filtros e
-          não escondido dentro deles. */}
-      <div className="mt-5">
-        <div className="flex flex-wrap gap-2">
-          {RECORTES.map((r) => (
-            <button
-              key={r.chave || "todos"}
-              type="button"
-              onClick={() => trocarRecorte(r.chave)}
-              aria-pressed={estoque === r.chave}
-              className={`rounded-xl border px-3.5 py-2 text-[13px] font-semibold transition ${
-                estoque === r.chave
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-gray-300 bg-white text-gray-700 hover:border-emerald-400 hover:text-emerald-700"
-              }`}
-            >
-              {r.rotulo}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-[12px] leading-relaxed text-gray-500">
-          {recorteAtual.explicacao}
-        </p>
-      </div>
+          não escondido dentro deles. Agora pelo `GrupoRecorte` do kit, que
+          também trocou o verde da pastilha ativa pelo laranja da marca: nesta
+          mesma tela o verde é o faturamento, e "selecionado" em verde fazia
+          parecer que o recorte escolhido era o recorte bom. */}
+      <GrupoRecorte opcoes={RECORTES} valor={estoque} onMudar={trocarRecorte} />
 
       <PainelFiltros nota={<NotaFiltroCaro visivel={Boolean(status || estoque)} />}>
-        <Campo rotulo="Buscar" className="lg:col-span-4">
-          <div className="flex gap-2">
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") aplicarBusca();
-              }}
-              placeholder="MLB, título ou SKU"
-              className={ENTRADA}
-            />
-            <button
-              type="button"
-              onClick={aplicarBusca}
-              className="h-10 shrink-0 rounded-xl border border-gray-300 px-3 text-[13px] font-semibold text-gray-700 transition hover:border-emerald-400 hover:text-emerald-700"
-            >
-              Buscar
-            </button>
-          </div>
-        </Campo>
+        <CampoBusca
+          valor={busca}
+          onMudar={setBusca}
+          onAplicar={aplicarBusca}
+          placeholder="MLB, título ou SKU"
+          className="lg:col-span-4"
+        />
 
         <Campo rotulo="Conta" className="lg:col-span-3">
           <select
@@ -287,22 +272,34 @@ export default function AnunciosMortos() {
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
-        <Kpi rotulo="Anúncios parados" valor={inteiro(resumo.anuncios)} tom="alerta" />
-        <Kpi rotulo="Unidades que vendiam" valor={inteiro(resumo.unidades)} />
+        <Kpi
+          rotulo="Anúncios parados"
+          valor={inteiro(resumo.anuncios)}
+          tom="alerta"
+          icone={<IconePausa className="h-5 w-5" />}
+        />
+        <Kpi
+          rotulo="Unidades que vendiam"
+          valor={inteiro(resumo.unidades)}
+          icone={<IconeCaixa className="h-5 w-5" />}
+        />
         <Kpi
           rotulo="Faturamento que parou"
           valor={brl(resumo.faturamento)}
           destaque
           nota="acumulado no histórico"
+          icone={<IconeDescendo className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Média de tempo parado"
           valor={`${inteiro(Math.round(resumo.mediaHoras / 24))} dias`}
           tom="alerta"
+          icone={<IconeRelogio className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Sem estoque"
           valor={inteiro(resumo.semEstoque)}
+          icone={<IconeProibido className="h-5 w-5" />}
           nota={
             resumo.escopoEstoque === "pagina"
               ? `de ${inteiro(resumo.estoqueConsultados)} nesta página`
@@ -312,21 +309,26 @@ export default function AnunciosMortos() {
       </div>
 
       {resumo.pausadosSemEstoque > 0 && (
-        <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-800">
+        <Faixa tom="alerta" icone={<IconeInfo className="h-4 w-4" />}>
           <strong>{inteiro(resumo.pausadosSemEstoque)}</strong> anúncio(s) foram
           pausados pelo próprio Mercado Livre <strong>por falta de estoque</strong>.
           Esses voltam ao ar sozinhos quando a mercadoria chega — não precisam de
           nenhuma alteração no anúncio.
-        </p>
+        </Faixa>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--cz-hairline)] bg-white">
+      <div className="mt-4 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
         {carregando ? (
           <Esqueleto />
         ) : erro ? (
-          <Aviso titulo="Erro ao carregar" texto={erro} />
+          <Aviso
+            icone={<IconeAlerta className="h-6 w-6" />}
+            titulo="Erro ao carregar"
+            texto={erro}
+          />
         ) : linhas.length === 0 ? (
           <Aviso
+            icone={<IconePausa className="h-6 w-6" />}
             titulo="Nenhum anúncio parado com esses critérios"
             texto={
               estoque
@@ -386,7 +388,7 @@ function LinhaParada({ l }: { l: Linha }) {
 
   return (
     <tr
-      className={`border-b border-gray-100 text-[12.5px] transition last:border-b-0 hover:bg-emerald-50/30 ${
+      className={`border-b border-[var(--cz-hairline)] text-[12.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
         motivo === "sem_estoque" ? "bg-amber-50/40" : ""
       }`}
     >
@@ -402,19 +404,22 @@ function LinhaParada({ l }: { l: Linha }) {
       </td>
 
       {/* A coluna que dá o encaminhamento. Sem ela a tela lista problemas; com
-          ela a tela distribui trabalho. */}
+          ela a tela distribui trabalho. Cada saída ganhou ícone: o operador varre
+          esta coluna com o olho, e forma se distingue mais rápido que texto. */}
       <td className="px-3 py-3">
         {motivo === "sem_estoque" ? (
-          <span className="inline-block rounded-lg bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-800">
+          <Selo tom="alerta">
+            <IconeCaixa className="h-3 w-3" />
             Repor estoque
-          </span>
+          </Selo>
         ) : motivo === "com_estoque" ? (
-          <span className="inline-block rounded-lg bg-sky-100 px-2 py-1 text-[11px] font-bold text-sky-800">
+          <Selo tom="info">
+            <IconeEditar className="h-3 w-3" />
             Revisar anúncio
-          </span>
+          </Selo>
         ) : (
           <span
-            className="text-[11px] text-gray-400"
+            className="text-[11px] text-[var(--cz-texto-fraco)]"
             title="Sem o estoque atual não é possível dizer se o problema é reposição ou o anúncio"
           >
             —
@@ -425,7 +430,7 @@ function LinhaParada({ l }: { l: Linha }) {
       <CelulaEstoque estoque={l.estoque} />
       <CelulaPreco preco={l.preco} />
 
-      <td className="px-3 py-3 text-right font-semibold tabular-nums text-gray-900">
+      <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--cz-texto)]">
         {inteiro(l.unidades)}
       </td>
       <td className="px-3 py-3 text-right font-semibold tabular-nums text-emerald-700">
@@ -433,20 +438,12 @@ function LinhaParada({ l }: { l: Linha }) {
       </td>
 
       <td className="px-3 py-3 text-right">
-        <span
-          className={`inline-block rounded-lg px-2 py-1 text-[11.5px] font-bold tabular-nums ${
-            l.diasSemVenda >= 90
-              ? "bg-rose-100 text-rose-800"
-              : l.diasSemVenda >= 60
-                ? "bg-orange-100 text-orange-800"
-                : "bg-amber-100 text-amber-800"
-          }`}
-        >
+        <Selo tom={l.diasSemVenda >= 90 ? "critico" : "alerta"} className="tabular-nums">
           {inteiro(l.diasSemVenda)} dias
-        </span>
+        </Selo>
       </td>
 
-      <td className="px-3 py-3 text-right tabular-nums text-gray-600">
+      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
         {dataCurta(l.ultimaVenda)}
       </td>
 

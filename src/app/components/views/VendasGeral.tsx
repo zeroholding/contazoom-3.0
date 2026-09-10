@@ -307,7 +307,7 @@ function VendasGeralContent() {
           {!isLoadingGuidance && showConnectAccounts && (
             <UserGuidanceNotification
               type="warning"
-              title="🚀 Bem-vindo ao Contazoom!"
+              title="Bem-vindo ao ContaZoom"
               message="Para começar, você precisa conectar suas contas do Mercado Livre e Shopee. Após conectar, você poderá sincronizar e visualizar todas as suas vendas."
               actionLabel="Conectar Contas"
               actionHref="/contas"
@@ -319,7 +319,7 @@ function VendasGeralContent() {
           {!isLoadingGuidance && showSyncVendas && (
             <UserGuidanceNotification
               type="sync"
-              title="🔄 Sincronize suas vendas"
+              title="Sincronize suas vendas"
               message="Suas contas estão conectadas! Agora você pode sincronizar suas vendas para visualizar os dados na tabela abaixo."
               actionLabel={isSyncing ? "Sincronizando..." : "Sincronizar Agora"}
               onAction={handleGuidanceSync}
@@ -331,7 +331,7 @@ function VendasGeralContent() {
           {!isLoadingGuidance && showViewDashboard && (
             <UserGuidanceNotification
               type="success"
-              title="📊 Vendas carregadas!"
+              title="Vendas carregadas"
               message="Aqui você pode visualizar todas as suas vendas em detalhes. Para ver gráficos e estatísticas, acesse o dashboard."
               actionLabel="Ver Dashboard"
               actionHref="/dashboard"

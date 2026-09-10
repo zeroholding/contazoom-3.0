@@ -23,15 +23,31 @@ import {
   Cabecalho,
   CabecalhoTabela,
   Campo,
+  CampoBusca,
   Esqueleto,
+  Faixa,
+  GrupoRecorte,
   Kpi,
   Miniatura,
   MolduraTela,
+  type OpcaoRecorte,
   Paginacao,
   PainelFiltros,
   Th,
   ThOrdenavel,
 } from "./comum/shell";
+import {
+  IconeAlerta,
+  IconeAtualizar,
+  IconeCaixas,
+  IconeCaminhao,
+  IconeCerto,
+  IconeFiltro,
+  IconeInfo,
+  IconePausa,
+  IconeProibido,
+  IconeSubindo,
+} from "./comum/icones";
 import { brl, ENTRADA, inteiro, tempoRelativo } from "./comum/formato";
 import {
   DIAS_ESTOQUE_ALTO,
@@ -104,7 +120,7 @@ const RESUMO_VAZIO: Resumo = {
 };
 
 /** Os quatro recortes por situação, com a explicação do que fazer em cada um. */
-const SITUACOES: { chave: "" | SituacaoEstoque; rotulo: string; explicacao: string }[] = [
+const SITUACOES: ReadonlyArray<OpcaoRecorte<"" | SituacaoEstoque>> = [
   { chave: "", rotulo: "Tudo", explicacao: "Todo o estoque que está no Full." },
   {
     chave: "repor",
@@ -325,7 +341,8 @@ export default function EstoqueFull() {
   const resumo = dados?.resumo ?? RESUMO_VAZIO;
   const linhas = dados?.linhas ?? [];
   const atualizado = tempoRelativo(resumo.ultimaAtualizacao);
-  const recorte = SITUACOES.find((s) => s.chave === situacao) ?? SITUACOES[0];
+  // A explicação do recorte ativo agora é impressa pelo próprio `GrupoRecorte`,
+  // então não é mais preciso achar a opção aqui.
   const temFiltro = Boolean(
     buscaAplicada || contas.length || situacao || estoque || hierarquia1 || hierarquia2,
   );
@@ -357,75 +374,44 @@ export default function EstoqueFull() {
       />
 
       {progresso && (
-        <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] text-emerald-800">
+        <Faixa tom="bom" icone={<IconeAtualizar className="h-4 w-4 animate-spin" />}>
           {progresso.texto}
-        </p>
+        </Faixa>
       )}
 
       {(dados?.backfillPendente ?? 0) > 0 && (
-        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] leading-relaxed text-sky-900">
+        <Faixa tom="info" icone={<IconeInfo className="h-4 w-4" />}>
           <strong>{inteiro(dados!.backfillPendente)} venda(s)</strong> ainda estão sendo
           associadas à variação do anúncio. Até terminar, a coluna{" "}
           <strong>Vendas 30d</strong> pode estar incompleta em anúncios com variação, e a
           cobertura desses itens sai maior do que a real. O preenchimento é automático a
           cada carregamento desta tela e não consome a API do Mercado Livre.
-        </div>
+        </Faixa>
       )}
 
-      {/* Recorte por situação: é o eixo da tela, então fica acima dos filtros. */}
-      <div className="mt-5">
-        <div className="flex flex-wrap gap-2">
-          {SITUACOES.map((s) => (
-            <button
-              key={s.chave || "tudo"}
-              type="button"
-              onClick={() => {
-                setSituacao(s.chave);
-                setPagina(1);
-              }}
-              aria-pressed={situacao === s.chave}
-              className={`rounded-xl border px-3.5 py-2 text-[13px] font-semibold transition ${
-                situacao === s.chave
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-gray-300 bg-white text-gray-700 hover:border-emerald-400 hover:text-emerald-700"
-              }`}
-            >
-              {s.rotulo}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 max-w-4xl text-[12px] leading-relaxed text-gray-500">
-          {recorte.explicacao}
-        </p>
-      </div>
+      {/* Recorte por situação: é o eixo da tela, então fica acima dos filtros.
+          Pelo `GrupoRecorte` do kit — que também tirou daqui o verde da pastilha
+          ativa, e nesta tela o verde é justamente o selo "Saudável". */}
+      <GrupoRecorte
+        opcoes={SITUACOES}
+        valor={situacao}
+        onMudar={(chave) => {
+          setSituacao(chave);
+          setPagina(1);
+        }}
+      />
 
       <PainelFiltros>
-        <Campo rotulo="Buscar" className="lg:col-span-4">
-          <div className="flex gap-2">
-            <input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  setBuscaAplicada(busca);
-                  setPagina(1);
-                }
-              }}
-              placeholder="Título, SKU, código do estoque ou MLB"
-              className={ENTRADA}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setBuscaAplicada(busca);
-                setPagina(1);
-              }}
-              className="h-10 shrink-0 rounded-xl border border-gray-300 px-3 text-[13px] font-semibold text-gray-700 transition hover:border-emerald-400 hover:text-emerald-700"
-            >
-              Buscar
-            </button>
-          </div>
-        </Campo>
+        <CampoBusca
+          valor={busca}
+          onMudar={setBusca}
+          onAplicar={() => {
+            setBuscaAplicada(busca);
+            setPagina(1);
+          }}
+          placeholder="Título, SKU, código do estoque ou MLB"
+          className="lg:col-span-4"
+        />
 
         <Campo rotulo="Conta" className="lg:col-span-3">
           <select
@@ -498,43 +484,65 @@ export default function EstoqueFull() {
       </PainelFiltros>
 
       <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-7">
-        <Kpi rotulo="Itens no Full" valor={inteiro(resumo.itens)} />
+        <Kpi
+          rotulo="Itens no Full"
+          valor={inteiro(resumo.itens)}
+          icone={<IconeCaixas className="h-5 w-5" />}
+        />
         <Kpi
           rotulo="Vendas 30 dias"
           valor={`${inteiro(resumo.vendasUnidades)} un.`}
           nota={brl(resumo.vendasReceita)}
+          icone={<IconeSubindo className="h-5 w-5" />}
         />
-        <Kpi rotulo="Aptas p/ venda" valor={inteiro(resumo.aptas)} destaque />
-        <Kpi rotulo="A caminho" valor={inteiro(resumo.aCaminho)} />
+        <Kpi
+          rotulo="Aptas p/ venda"
+          valor={inteiro(resumo.aptas)}
+          destaque
+          icone={<IconeCerto className="h-5 w-5" />}
+        />
+        <Kpi
+          rotulo="A caminho"
+          valor={inteiro(resumo.aCaminho)}
+          icone={<IconeCaminhao className="h-5 w-5" />}
+        />
         <Kpi
           rotulo="Não aptas"
           valor={inteiro(resumo.naoAptas)}
           tom={resumo.naoAptas > 0 ? "alerta" : undefined}
+          icone={<IconeProibido className="h-5 w-5" />}
         />
         <Kpi
           rotulo="A repor"
           valor={inteiro(resumo.aRepor)}
           tom={resumo.aRepor > 0 ? "critico" : undefined}
           nota="acaba em 2 semanas"
+          icone={<IconeAlerta className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Parados"
           valor={inteiro(resumo.parados)}
           tom={resumo.parados > 0 ? "alerta" : undefined}
           nota="sem venda em 30d"
+          icone={<IconePausa className="h-5 w-5" />}
         />
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--cz-hairline)] bg-white">
+      <div className="mt-4 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
         {carregando ? (
           <Esqueleto />
         ) : erro ? (
-          <Aviso titulo="Erro ao carregar" texto={erro} />
+          <Aviso
+            icone={<IconeAlerta className="h-6 w-6" />}
+            titulo="Erro ao carregar"
+            texto={erro}
+          />
         ) : dados?.nuncaSincronizou ? (
           /* Distingue "nunca sincronizou" de "filtro sem resultado". O projeto
              irmão mostra a mesma mensagem nos dois casos e manda sincronizar
              quando bastava limpar o filtro. */
           <Aviso
+            icone={<IconeCaixas className="h-6 w-6" />}
             titulo="Nenhum estoque importado ainda"
             texto="O estoque do Full vem da API do Mercado Livre e ainda não foi trazido. Clique em Atualizar estoque Full — na primeira vez pode levar alguns minutos, dependendo de quantos anúncios você tem em Full."
             acao={
@@ -549,6 +557,7 @@ export default function EstoqueFull() {
           />
         ) : linhas.length === 0 ? (
           <Aviso
+            icone={<IconeFiltro className="h-6 w-6" />}
             titulo="Nenhum item com esses filtros"
             texto={
               temFiltro
@@ -632,7 +641,7 @@ export default function EstoqueFull() {
         )}
       </div>
 
-      <p className="mt-4 max-w-4xl text-[11.5px] leading-relaxed text-gray-500">
+      <p className="mt-4 max-w-4xl text-[11.5px] leading-relaxed text-[var(--cz-texto-suave)]">
         Os números de estoque vêm da API do Mercado Livre e são gravados quando você clica
         em Atualizar — não mudam sozinhos entre um clique e outro. As vendas de 30 dias e a
         cobertura são calculadas a partir das vendas já sincronizadas neste sistema.{" "}
@@ -651,7 +660,7 @@ function LinhaEstoque({ l }: { l: Linha }) {
 
   return (
     <tr
-      className={`border-b border-gray-100 text-[12.5px] transition last:border-b-0 hover:bg-emerald-50/30 ${
+      className={`border-b border-[var(--cz-hairline)] text-[12.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
         l.situacao === "repor" ? "bg-rose-50/30" : ""
       }`}
     >
@@ -659,29 +668,29 @@ function LinhaEstoque({ l }: { l: Linha }) {
         <div className="flex items-center gap-3">
           <Miniatura src={l.thumbnail} alt={l.titulo} tamanho={48} />
           <div className="min-w-0">
-            <span className="block truncate font-semibold text-gray-900" title={l.titulo}>
+            <span className="block truncate font-semibold text-[var(--cz-texto)]" title={l.titulo}>
               {l.titulo}
             </span>
             <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">
               {/* O "código do estoque" é como o ML chama o inventory_id no painel
                   dele. Usar o mesmo nome evita a pergunta "que código é esse?". */}
-              <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-600">
+              <span className="rounded bg-[var(--cz-fundo)] px-1.5 py-0.5 font-mono text-[var(--cz-texto-suave)]">
                 Cód. estoque: {l.inventoryId}
               </span>
               {l.sku && (
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-600">
+                <span className="rounded bg-[var(--cz-fundo)] px-1.5 py-0.5 font-mono text-[var(--cz-texto-suave)]">
                   SKU: {l.sku}
                 </span>
               )}
-              {l.itemId && <span className="font-mono text-gray-400">#{l.itemId}</span>}
+              {l.itemId && <span className="font-mono text-[var(--cz-texto-fraco)]">#{l.itemId}</span>}
               {l.conta && (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                <span className="rounded-full bg-[var(--cz-fundo)] px-2 py-0.5 font-semibold text-[var(--cz-texto-suave)] ring-1 ring-inset ring-[var(--cz-hairline-forte)]">
                   {l.conta}
                 </span>
               )}
             </span>
             {(l.hierarquia1 || l.hierarquia2) && (
-              <span className="mt-0.5 block truncate text-[10.5px] text-gray-400">
+              <span className="mt-0.5 block truncate text-[10.5px] text-[var(--cz-texto-fraco)]">
                 {[l.hierarquia1, l.hierarquia2].filter(Boolean).join(" › ")}
               </span>
             )}
@@ -705,15 +714,15 @@ function LinhaEstoque({ l }: { l: Linha }) {
       </td>
 
       <td className="px-3 py-3 text-right tabular-nums">
-        <span className="block font-semibold text-gray-900">
+        <span className="block font-semibold text-[var(--cz-texto)]">
           {inteiro(l.vendas30dUnidades)} un.
         </span>
-        <span className="block text-[10.5px] text-gray-400">{brl(l.vendas30dReceita)}</span>
+        <span className="block text-[10.5px] text-[var(--cz-texto-fraco)]">{brl(l.vendas30dReceita)}</span>
       </td>
 
-      <td className="px-3 py-3 text-right tabular-nums text-gray-700">
+      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
         {l.estoqueMedio === null ? (
-          <span className="text-gray-400" title="Sem histórico ainda: o primeiro dia é hoje">
+          <span className="text-[var(--cz-texto-fraco)]" title="Sem histórico ainda: o primeiro dia é hoje">
             —
           </span>
         ) : (
@@ -721,12 +730,12 @@ function LinhaEstoque({ l }: { l: Linha }) {
         )}
       </td>
 
-      <td className="px-3 py-3 text-right tabular-nums text-gray-700">
-        {l.transferencia > 0 ? `${inteiro(l.transferencia)} un.` : <span className="text-gray-300">—</span>}
+      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
+        {l.transferencia > 0 ? `${inteiro(l.transferencia)} un.` : <span className="text-[var(--cz-texto-fraco)]">—</span>}
       </td>
 
       <td className="px-3 py-3 text-right tabular-nums">
-        <span className={l.naoDisponivel > 0 ? "font-semibold text-rose-600" : "text-gray-400"}>
+        <span className={l.naoDisponivel > 0 ? "font-semibold text-rose-600" : "text-[var(--cz-texto-fraco)]"}>
           {inteiro(l.naoDisponivel)} un.
         </span>
       </td>
@@ -736,7 +745,7 @@ function LinhaEstoque({ l }: { l: Linha }) {
           className={`tabular-nums ${
             l.cobertura !== null && l.cobertura <= DIAS_REPOR
               ? "font-semibold text-rose-700"
-              : "text-gray-700"
+              : "text-[var(--cz-texto-suave)]"
           }`}
           title={
             l.cobertura === null

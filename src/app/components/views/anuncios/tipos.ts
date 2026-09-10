@@ -75,16 +75,18 @@ export const RESUMO_VAZIO: Resumo = {
   estoqueConsultados: 0,
 };
 
-export const brl = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-export const inteiro = (v: number) => v.toLocaleString("pt-BR");
-
-export const dataCurta = (iso: string) =>
-  new Date(iso).toLocaleDateString("pt-BR");
-
-export const ENTRADA =
-  "h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-[13px] text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
+/**
+ * Reexportados de `comum/formato`, não redefinidos.
+ *
+ * Eram quatro cópias literais das mesmas funções e da mesma classe de campo. A
+ * cópia daqui já tinha divergido: quando o `ENTRADA` do `comum/formato` trocou o
+ * foco verde pelo laranja da marca, os campos das telas de anúncios continuaram
+ * verdes — mesma tela, dois anéis de foco diferentes, porque o import vinha de
+ * arquivos distintos. Reexportar mantém o import das telas intacto e garante que
+ * elas recebam as correções futuras, exatamente como `anuncios/comum.tsx` já faz
+ * com as peças de interface.
+ */
+export { brl, dataCurta, ENTRADA, inteiro } from "../comum/formato";
 
 /**
  * Um anúncio parado POR FALTA DE ESTOQUE é um problema diferente de um anúncio

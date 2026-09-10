@@ -42,7 +42,7 @@ import {
   MolduraTela,
 } from "./comum/shell";
 import { inteiro } from "./comum/formato";
-import { LogoMercadoLivre, LogoShopee } from "./contas/logos";
+import { LogoMercadoLivre, LogoShopee } from "./comum/logos";
 import {
   conectarConta,
   excluirConta,
