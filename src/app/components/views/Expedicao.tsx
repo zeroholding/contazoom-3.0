@@ -17,37 +17,35 @@ import {
   Aviso,
   BotaoAtualizar,
   BotaoSecundario,
-  CabecalhoTabela,
   Cabecalho,
+  CaixaBusca,
   Campo,
-  CampoBusca,
   Esqueleto,
   Faixa,
   GrupoRecorte,
   Kpi,
-  Miniatura,
   MolduraTela,
   MultiSelecao,
   Paginacao,
-  PainelFiltros,
-  Selo,
-  Th,
-  ThOrdenavel,
 } from "./comum/shell";
-import { brl, ENTRADA, inteiro } from "./comum/formato";
-import { LogoCanal, SeloCanal } from "./comum/logos";
 import {
-  IconeAbrirFora,
+  BarraFiltros,
+  BotaoAvancados,
+  ChipsFiltro,
+  FiltroRapido,
+  type ChipFiltro,
+} from "./comum/filtros";
+import { brl, ENTRADA, inteiro } from "./comum/formato";
+import { LogoCanal } from "./comum/logos";
+import {
   IconeAlerta,
   IconeAmpulheta,
   IconeBaixar,
-  IconeCaixa,
   IconeCaixas,
-  IconeCalendario,
   IconeCamadas,
   IconeCaminhao,
   IconeDinheiro,
-  IconeEtiqueta,
+  IconeLoja,
   IconePessoa,
   IconeRelogio,
   IconeSku,
@@ -57,10 +55,8 @@ import {
   CANAL_ROTULO,
   FILTROS_PADRAO,
   PRAZO_PRESETS,
-  rotuloPrazo,
   STATUS_VENDA,
   TEM_PRAZO,
-  URGENCIA_BARRA,
   URGENCIA_CLASSE,
   URGENCIA_ROTULO,
   URGENCIA_TOM,
@@ -69,14 +65,13 @@ import {
   type FiltrosExpedicao,
   type LinhaResumo,
   type OrdemExpedicao,
-  type PacoteExpedicao,
   type PrazoPreset,
   type StatusVenda,
   type TemPrazo,
   type Urgencia,
 } from "@/lib/expedicao";
-import { statusEnvio, transportadoraShopee } from "@/lib/expedicao-status";
-import BotaoEtiqueta from "./expedicao/BotaoEtiqueta";
+import BarraLote, { type PacoteLote } from "./expedicao/BarraLote";
+import CartaoPacote, { ICONE_URGENCIA } from "./expedicao/CartaoPacote";
 import { baixarCsv, useExpedicao } from "./expedicao/useExpedicao";
 
 /**
@@ -109,248 +104,6 @@ const EXPLICACAO_PRAZO: Partial<Record<PrazoPreset, string>> = {
     "Sem recorte de prazo: a fila inteira dentro da janela. As fichas de urgência abaixo mostram como ela se distribui.",
   personalizado: "Escolha as datas de prazo nos campos abaixo.",
 };
-
-/** Prazo em "09/09 às 18:00", no fuso de São Paulo. */
-function prazoCurto(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function dataCurtaSP(iso: string): string {
-  return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                  Etiquetas                                 */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Ícone de cada faixa de urgência.
- *
- * A cor sozinha não basta: quem não distingue vermelho de âmbar (cerca de 8% dos
- * homens) lê a coluna toda como a mesma coisa. O ícone é o segundo canal da
- * mesma informação, e é ele que faz "atrasado" e "vence hoje" se separarem num
- * relance mesmo em tela ruim.
- */
-const ICONE_URGENCIA: Record<Urgencia, React.ReactNode> = {
-  atrasado: <IconeAlerta className="h-3.5 w-3.5" />,
-  hoje: <IconeAmpulheta className="h-3.5 w-3.5" />,
-  amanha: <IconeRelogio className="h-3.5 w-3.5" />,
-  // Calendário nas duas faixas com folga: elas são de PLANEJAMENTO, não de
-  // pressa, e o relógio (que é o ícone da urgência) daria a elas a mesma
-  // linguagem visual do que vence amanhã.
-  proximo: <IconeCalendario className="h-3.5 w-3.5" />,
-  futuro: <IconeCalendario className="h-3.5 w-3.5" />,
-  // Meio apagado: é ausência de informação, não gravidade. Mesmo raciocínio do
-  // cinza em `URGENCIA_CLASSE`.
-  semPrazo: <IconeRelogio className="h-3.5 w-3.5 opacity-50" />,
-};
-
-function SeloUrgencia({ urgencia, dias }: { urgencia: Urgencia; dias: number | null }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.04em] ${URGENCIA_CLASSE[urgencia]}`}
-      title={rotuloPrazo(dias)}
-    >
-      {ICONE_URGENCIA[urgencia]}
-      {URGENCIA_ROTULO[urgencia]}
-    </span>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                   Linha                                    */
-/* -------------------------------------------------------------------------- */
-
-function Linha({ pacote }: { pacote: PacoteExpedicao }) {
-  const estado = statusEnvio(pacote.canal, pacote.shippingStatus, pacote.status);
-  const transportadora = transportadoraShopee(pacote.shippingStatus);
-
-  return (
-    // A barra de urgência é uma BORDA ESQUERDA de 4px na própria linha, não um
-    // elemento posicionado. Numa `<tr>`, um `absolute` precisaria de um
-    // `relative` na célula e o navegador ainda pode recolher a altura; a borda
-    // acompanha a linha inteira de graça, mesmo quando o pacote tem cinco itens.
-    <tr
-      className={`border-b border-l-4 border-[var(--cz-hairline)] align-top last:border-b-0 hover:bg-[var(--cz-fundo)] ${URGENCIA_BARRA[pacote.urgencia]}`}
-    >
-      <td className="px-3 py-3">
-        <div className="flex flex-col gap-1">
-          <SeloUrgencia urgencia={pacote.urgencia} dias={pacote.diasRestantes} />
-          <span className="text-[12px] font-semibold tabular-nums text-[var(--cz-texto)]">
-            {prazoCurto(pacote.prazoDespacho)}
-          </span>
-          <span className="text-[10.5px] text-[var(--cz-texto-suave)]">
-            {rotuloPrazo(pacote.diasRestantes)}
-          </span>
-        </div>
-      </td>
-
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-2">
-          {/* O LOGO no lugar da sigla. "ML" e "SP" numa pastilha obrigavam a
-              decodificar a abreviação; o logo é reconhecido antes de ser lido, e
-              numa fila que se varre com o olho isso é a diferença entre ler a
-              coluna e conferi-la. */}
-          <SeloCanal canal={pacote.canal} />
-          <div className="min-w-0">
-            <span className="block truncate text-[12px] font-semibold text-[var(--cz-texto)]">
-              {pacote.conta}
-            </span>
-            <span className="block text-[10.5px] text-[var(--cz-texto-suave)]">
-              Venda {dataCurtaSP(pacote.dataVenda)}
-            </span>
-          </div>
-        </div>
-      </td>
-
-      <td className="px-3 py-3">
-        <div className="flex flex-col gap-1">
-          <span className="flex items-center gap-1.5 font-mono text-[11.5px] font-semibold text-[var(--cz-texto)]">
-            <IconeEtiqueta className="h-3.5 w-3.5 shrink-0 text-[var(--cz-texto-fraco)]" />
-            {pacote.shippingId ?? "sem etiqueta"}
-          </span>
-          <span className="flex items-center gap-1.5 text-[10.5px] text-[var(--cz-texto-suave)]">
-            <IconePessoa className="h-3.5 w-3.5 shrink-0 text-[var(--cz-texto-fraco)]" />
-            <span className="truncate">{pacote.comprador}</span>
-          </span>
-          {/* Só aparece quando o pacote junta mais de uma venda. É a informação
-              que explica por que a contagem de pacotes é menor que a de pedidos —
-              sem ela, a diferença parece defeito. */}
-          {pacote.pedidos > 1 && (
-            <Selo tom="info" titulo="Vendas diferentes que saem na mesma etiqueta">
-              <IconeCaixa className="h-3 w-3" />
-              {pacote.pedidos} pedidos juntos
-            </Selo>
-          )}
-        </div>
-      </td>
-
-      <td className="px-3 py-3">
-        {/* Todos os itens, sem expandir. Esta coluna É a lista de separação: quem
-            olha a tela precisa saber o que buscar na prateleira, e esconder isso
-            atrás de um clique transformaria a tarefa em dois passos. */}
-        <ul className="flex flex-col gap-2">
-          {pacote.itens.map((item) => (
-            <li key={item.orderId} className="flex items-start gap-2.5">
-              {/* A FOTO da variação vendida, não a capa do anúncio. Quem separa
-                  confere cor e tamanho pela imagem antes de fechar a caixa; num
-                  anúncio de seis cores a capa é a mesma para as seis e a foto
-                  deixaria de ajudar exatamente onde mais importa. */}
-              <Miniatura src={item.thumbnailUrl} alt={item.titulo} tamanho={44} />
-
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="flex items-start gap-1.5">
-                  <span className="inline-flex h-5 min-w-[1.5rem] shrink-0 items-center justify-center rounded-md border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] px-1 text-[11px] font-bold tabular-nums">
-                    {item.quantidade}
-                  </span>
-                  {item.permalink ? (
-                    <a
-                      href={item.permalink}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={`Abrir "${item.titulo}" no Mercado Livre`}
-                      className="inline-flex min-w-0 items-center gap-1 text-[12px] font-semibold text-[var(--cz-texto)] transition-colors hover:text-[var(--cz-laranja-forte)]"
-                    >
-                      <span className="truncate">{item.titulo}</span>
-                      <IconeAbrirFora className="h-3 w-3 shrink-0 opacity-60" />
-                    </a>
-                  ) : (
-                    <span
-                      className="truncate text-[12px] font-semibold text-[var(--cz-texto)]"
-                      title={item.titulo}
-                    >
-                      {item.titulo}
-                    </span>
-                  )}
-                </span>
-
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-[calc(1.5rem+0.375rem)] text-[10.5px] text-[var(--cz-texto-suave)]">
-                  <span className="font-mono">{item.sku ?? "sem SKU"}</span>
-                  <span className="font-mono opacity-70">#{item.orderId}</span>
-                  {item.hierarquia1 && (
-                    <Selo tom="neutro" titulo="Categoria do cadastro de SKU">
-                      <IconeCamadas className="h-3 w-3" />
-                      {item.hierarquia1}
-                    </Selo>
-                  )}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </td>
-
-      <td className="px-3 py-3 text-right text-[12px] font-bold tabular-nums">
-        {inteiro(pacote.unidades)}
-      </td>
-
-      <td className="px-3 py-3 text-right text-[12px] font-semibold tabular-nums">
-        {brl(pacote.valorTotal)}
-      </td>
-
-      <td className="px-3 py-3">
-        {/* O estado do pacote vem TRADUZIDO por `statusEnvio`, que sabe qual
-            coluna vale em cada canal. No ML vale `shipping_status`; na Shopee
-            aquela coluna guarda a TRANSPORTADORA e o estado real está em
-            `status` — ver a armadilha no topo de `expedicao-status.ts`. */}
-        <div className="flex flex-col items-start gap-1">
-          {/* Sem `titulo` no selo: a explicação já aparece por extenso abaixo, e
-              repetir a mesma frase num tooltip só cria um segundo lugar para ela
-              divergir. */}
-          <Selo tom={estado.tom}>{estado.rotulo}</Selo>
-          <span className="text-[11.5px] font-semibold text-[var(--cz-texto)]">
-            {pacote.modalidade}
-          </span>
-          {/* Só na Shopee: no ML esta linha repetiria a modalidade, que já está
-              logo acima. */}
-          {pacote.canal === "SP" && transportadora && (
-            <span className="flex items-center gap-1 text-[10.5px] text-[var(--cz-texto-suave)]">
-              <IconeCaminhao className="h-3 w-3 shrink-0" />
-              {transportadora}
-            </span>
-          )}
-          {estado.explicacao && (
-            <span className="text-[10.5px] leading-snug text-[var(--cz-texto-suave)]">
-              {estado.explicacao}
-            </span>
-          )}
-        </div>
-      </td>
-
-      <td className="px-3 py-3">
-        {/* Etiqueta só no Mercado Livre. A Shopee não expõe a etiqueta pelos
-            endpoints que este projeto usa, e desenhar um botão desabilitado em
-            toda linha da Shopee prometeria um recurso que não existe. O texto no
-            lugar dele diz onde imprimir de fato. */}
-        {pacote.canal === "ML" ? (
-          <div className="flex flex-wrap gap-1.5">
-            <BotaoEtiqueta
-              shippingId={pacote.shippingId}
-              contaId={pacote.accountId}
-              tipo="pdf"
-            />
-            <BotaoEtiqueta
-              shippingId={pacote.shippingId}
-              contaId={pacote.accountId}
-              tipo="zpl"
-            />
-          </div>
-        ) : (
-          <span className="text-[10.5px] leading-snug text-[var(--cz-texto-fraco)]">
-            Etiqueta no painel da Shopee
-          </span>
-        )}
-      </td>
-    </tr>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /*                            Resumos do rodapé                               */
@@ -514,6 +267,26 @@ export default function Expedicao({
   const textos = TEXTOS[canalFixo ?? "geral"];
 
   /**
+   * O painel avançado começa FECHADO.
+   *
+   * Os doze filtros desta tela estavam todos abertos ao mesmo tempo, num grid de
+   * três linhas que empurrava a fila para baixo da dobra — numa tela cuja única
+   * função é olhar a fila. Os cinco que se usam todo dia ficaram na barra
+   * compacta; estes sete são de conferência pontual, e conferência pontual não
+   * merece ocupar a tela nos outros dias.
+   */
+  const [avancados, setAvancados] = useState(false);
+
+  /**
+   * Quais pacotes estão marcados para imprimir etiqueta em lote.
+   *
+   * Guarda a CHAVE do pacote, não o índice: a lista repagina e se reordena, e um
+   * índice apontaria para outro pacote depois de qualquer mudança — imprimindo
+   * etiqueta de coisa que não foi escolhida.
+   */
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+
+  /**
    * O padrão desta tela. Em tela de canal único o canal faz parte do padrão, e
    * não de um filtro que a pessoa escolheu — senão "Limpar filtros" na tela da
    * Shopee traria pacotes do Mercado Livre.
@@ -531,6 +304,17 @@ export default function Expedicao({
    */
   const mudar = useCallback((parcial: Partial<FiltrosExpedicao>) => {
     setFiltros((atual) => ({ ...atual, ...parcial, pagina: 1 }));
+    // A seleção MORRE a cada mudança de filtro, e isto é segurança e não
+    // arrumação: marcar dez pacotes, trocar o filtro e clicar em "Imprimir" faria
+    // sair etiqueta de pacote que já não está na tela — dez etiquetas erradas
+    // coladas em dez caixas erradas.
+    setSelecionados(new Set());
+  }, []);
+
+  const trocarPagina = useCallback((pagina: number) => {
+    setFiltros((atual) => ({ ...atual, pagina }));
+    // Mesmo motivo do `mudar`: a seleção é da PÁGINA que está na tela.
+    setSelecionados(new Set());
   }, []);
 
   const alternarUrgencia = useCallback((urgencia: Urgencia) => {
@@ -544,10 +328,12 @@ export default function Expedicao({
         pagina: 1,
       };
     });
+    setSelecionados(new Set());
   }, []);
 
   const ordenar = useCallback((ordem: OrdemExpedicao, direcao: "asc" | "desc") => {
     setFiltros((atual) => ({ ...atual, ordem, direcao, pagina: 1 }));
+    setSelecionados(new Set());
   }, []);
 
   const porUrgencia = dados?.porUrgencia;
@@ -598,6 +384,219 @@ export default function Expedicao({
     return canalFixo ? todas.filter((c) => c.canal === canalFixo) : todas;
   }, [dados?.contas, canalFixo]);
 
+  /**
+   * Quantos filtros AVANÇADOS estão ligados.
+   *
+   * Vai no botão que abre o painel. É o que impede o pior defeito de um filtro
+   * recolhido: um recorte ativo lá dentro corta a lista e nada na tela explica
+   * por quê — a pessoa conclui que não há trabalho, e há.
+   */
+  const avancadosAtivos = useMemo(() => {
+    let n = 0;
+    if (filtros.hierarquias1.length > 0) n++;
+    if (filtros.hierarquias2.length > 0) n++;
+    if (filtros.statusVenda !== FILTROS_PADRAO.statusVenda) n++;
+    if (filtros.temPrazo !== FILTROS_PADRAO.temPrazo) n++;
+    if (filtros.janelaDias !== FILTROS_PADRAO.janelaDias) n++;
+    if (filtros.prazoDe || filtros.prazoAte) n++;
+    if (filtros.vendaDe || filtros.vendaAte) n++;
+    return n;
+  }, [filtros]);
+
+  /**
+   * Os chips do que está filtrado agora.
+   *
+   * Um chip por VALOR e não por filtro: com "Conta: 3 selecionados" a pessoa
+   * ainda precisa abrir o painel para saber quais três, e remover uma delas exige
+   * achar o campo e desmarcar. Cada valor com o seu X é o caminho mais curto para
+   * o ajuste que se faz mil vezes por dia.
+   */
+  const chips = useMemo<ChipFiltro[]>(() => {
+    const lista: ChipFiltro[] = [];
+
+    const semLista = (valores: string[], valor: string) =>
+      valores.filter((v) => v !== valor);
+
+    if (filtros.busca.trim() !== "") {
+      lista.push({
+        chave: "busca",
+        grupo: "Busca",
+        rotulo: filtros.busca.trim(),
+        remover: () => mudar({ busca: "" }),
+      });
+    }
+
+    // O prazo é o eixo da tela e já tem as pastilhas grandes do `GrupoRecorte`,
+    // então só vira chip quando FOGE do padrão — o padrão não é uma escolha.
+    if (filtros.prazoPreset !== FILTROS_PADRAO.prazoPreset) {
+      const p = PRAZO_PRESETS.find((x) => x.chave === filtros.prazoPreset);
+      lista.push({
+        chave: "prazo",
+        grupo: "Prazo",
+        rotulo: p?.rotulo ?? filtros.prazoPreset,
+        remover: () => mudar({ prazoPreset: FILTROS_PADRAO.prazoPreset }),
+      });
+    }
+
+    for (const u of filtros.urgencias) {
+      lista.push({
+        chave: `urg-${u}`,
+        grupo: "Urgência",
+        rotulo: URGENCIA_ROTULO[u],
+        remover: () => mudar({ urgencias: filtros.urgencias.filter((x) => x !== u) }),
+      });
+    }
+
+    if (!canalFixo) {
+      for (const c of filtros.canais) {
+        lista.push({
+          chave: `canal-${c}`,
+          grupo: "Canal",
+          rotulo: CANAL_ROTULO[c],
+          icone: <LogoCanal canal={c} />,
+          remover: () => mudar({ canais: semLista(filtros.canais, c) as Canal[] }),
+        });
+      }
+    }
+
+    for (const id of filtros.contas) {
+      const conta = contasDoCanal.find((c) => c.accountId === id);
+      lista.push({
+        chave: `conta-${id}`,
+        grupo: "Conta",
+        rotulo: conta?.conta ?? id,
+        icone: conta ? <LogoCanal canal={conta.canal} /> : undefined,
+        remover: () => mudar({ contas: semLista(filtros.contas, id) }),
+      });
+    }
+
+    for (const m of filtros.modalidades) {
+      lista.push({
+        chave: `mod-${m}`,
+        grupo: "Envio",
+        rotulo: m,
+        remover: () => mudar({ modalidades: semLista(filtros.modalidades, m) }),
+      });
+    }
+
+    for (const s of filtros.skus) {
+      lista.push({
+        chave: `sku-${s}`,
+        grupo: "SKU",
+        rotulo: s,
+        remover: () => mudar({ skus: semLista(filtros.skus, s) }),
+      });
+    }
+
+    for (const h of filtros.hierarquias1) {
+      lista.push({
+        chave: `h1-${h}`,
+        grupo: "Categoria",
+        rotulo: h,
+        remover: () => mudar({ hierarquias1: semLista(filtros.hierarquias1, h) }),
+      });
+    }
+
+    for (const h of filtros.hierarquias2) {
+      lista.push({
+        chave: `h2-${h}`,
+        grupo: "Subcategoria",
+        rotulo: h,
+        remover: () => mudar({ hierarquias2: semLista(filtros.hierarquias2, h) }),
+      });
+    }
+
+    if (filtros.statusVenda !== FILTROS_PADRAO.statusVenda) {
+      const s = STATUS_VENDA.find((x) => x.chave === filtros.statusVenda);
+      lista.push({
+        chave: "status",
+        grupo: "Situação",
+        rotulo: s?.rotulo ?? filtros.statusVenda,
+        remover: () => mudar({ statusVenda: FILTROS_PADRAO.statusVenda }),
+      });
+    }
+
+    if (filtros.temPrazo !== FILTROS_PADRAO.temPrazo) {
+      const t = TEM_PRAZO.find((x) => x.chave === filtros.temPrazo);
+      lista.push({
+        chave: "temPrazo",
+        grupo: "Prazo",
+        rotulo: t?.rotulo ?? filtros.temPrazo,
+        remover: () => mudar({ temPrazo: FILTROS_PADRAO.temPrazo }),
+      });
+    }
+
+    if (filtros.janelaDias !== FILTROS_PADRAO.janelaDias) {
+      lista.push({
+        chave: "janela",
+        grupo: "Janela",
+        rotulo: `${filtros.janelaDias} dias`,
+        remover: () => mudar({ janelaDias: FILTROS_PADRAO.janelaDias }),
+      });
+    }
+
+    if (filtros.prazoDe || filtros.prazoAte) {
+      lista.push({
+        chave: "prazoDatas",
+        grupo: "Limite",
+        rotulo: `${filtros.prazoDe ?? "…"} a ${filtros.prazoAte ?? "…"}`,
+        remover: () =>
+          mudar({
+            prazoDe: null,
+            prazoAte: null,
+            // Sem voltar o atalho, a tela ficaria acesa em "personalizado" sem
+            // nenhuma data personalizada — um recorte que não recorta nada.
+            prazoPreset: FILTROS_PADRAO.prazoPreset,
+          }),
+      });
+    }
+
+    if (filtros.vendaDe || filtros.vendaAte) {
+      lista.push({
+        chave: "vendaDatas",
+        grupo: "Venda",
+        rotulo: `${filtros.vendaDe ?? "…"} a ${filtros.vendaAte ?? "…"}`,
+        remover: () => mudar({ vendaDe: null, vendaAte: null }),
+      });
+    }
+
+    return lista;
+  }, [filtros, canalFixo, contasDoCanal, mudar]);
+
+  /**
+   * Os pacotes da página que podem ir para a impressão em lote.
+   *
+   * Só Mercado Livre e só com envio gerado. A Shopee não expõe a etiqueta pelos
+   * endpoints que este projeto usa, e pacote sem `shippingId` não tem o que
+   * imprimir — deixá-los selecionáveis faria "Selecionar todos" prometer
+   * etiquetas que não existem.
+   */
+  const elegiveisLote = useMemo<PacoteLote[]>(
+    () =>
+      (dados?.pacotes ?? [])
+        .filter((p) => p.canal === "ML" && p.shippingId)
+        .map((p) => ({
+          chave: p.chave,
+          shippingId: p.shippingId as string,
+          accountId: p.accountId,
+        })),
+    [dados?.pacotes],
+  );
+
+  const alternarSelecao = useCallback((chave: string) => {
+    setSelecionados((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
+      return proximo;
+    });
+  }, []);
+
+  const elegivel = useMemo(
+    () => new Set(elegiveisLote.map((p) => p.chave)),
+    [elegiveisLote],
+  );
+
   return (
     <MolduraTela>
       <Cabecalho
@@ -641,9 +640,269 @@ export default function Expedicao({
         </Faixa>
       )}
 
-      {/* Indicadores. Atrasado e "vence hoje" ganham tom próprio (vermelho e
-          âmbar) porque são as duas únicas linhas que mudam o que a pessoa faz nos
-          próximos minutos. */}
+      {/* O RECORTE DE PRAZO fica acima do painel porque muda a PERGUNTA, e não
+          só estreita a resposta: "o que já venceu" e "o que sai na semana" são
+          duas telas diferentes. Vale junto com as fichas de urgência — o atalho
+          escolhe a FAIXA que o banco lê, a ficha classifica o que voltou. */}
+      <GrupoRecorte
+        opcoes={PRAZO_PRESETS.map((p) => ({
+          chave: p.chave,
+          rotulo: p.rotulo,
+          explicacao: EXPLICACAO_PRAZO[p.chave],
+        }))}
+        valor={filtros.prazoPreset}
+        onMudar={(chave: PrazoPreset) => mudar({ prazoPreset: chave })}
+      />
+
+      {/* ═══════════════════════ FILTROS ═══════════════════════
+          Uma LINHA de pastilhas, e o resto atrás de "Filtros avançados".
+
+          Eram doze campos de largura cheia num grid de 12 colunas: três linhas de
+          formulário ocupando quase metade da altura útil antes do primeiro pacote
+          aparecer. Não é excesso de filtro — cada um serve. Era excesso de PESO
+          IGUAL: conta e modalidade de envio se usam todo dia, faixa de data da
+          venda se usa quando alguém vem perguntar de um pedido específico. */}
+      <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3 shadow-[var(--cz-elev-1)]">
+        <BarraFiltros>
+          <CaixaBusca
+            compacta
+            className="min-w-[15rem] flex-1"
+            valor={filtros.busca}
+            onMudar={(v) => mudar({ busca: v })}
+            placeholder="Pedido, etiqueta, SKU, produto ou comprador"
+            rotuloAcessivel="Buscar na fila de expedição"
+          />
+
+          {/* Todos os recortes de conjunto são MULTI-seleção. Um `<select>` simples
+              obriga a escolher entre "uma" e "todas", e não existe ali "estas duas"
+              — que é justamente a pergunta de quem tem quatro contas e quer
+              conferir duas, ou de quem separa três SKUs de um lote. */}
+          {!canalFixo && (
+            <FiltroRapido
+              rotulo="Canal"
+              placeholder="Todos"
+              icone={<IconeLoja className="h-4 w-4" />}
+              opcoes={CANAIS.map((c) => ({
+                valor: c,
+                rotulo: CANAL_ROTULO[c],
+                icone: <LogoCanal canal={c} />,
+              }))}
+              selecionados={filtros.canais}
+              onMudar={(v) => mudar({ canais: v as Canal[] })}
+            />
+          )}
+
+          <FiltroRapido
+            rotulo="Conta"
+            placeholder="Todas"
+            vazio="Nenhuma conta com pacote na fila"
+            icone={<IconePessoa className="h-4 w-4" />}
+            opcoes={contasDoCanal.map((c) => ({
+              valor: c.accountId,
+              rotulo: c.conta,
+              contagem: c.pacotes,
+              // O logo dentro da opção resolve o caso de duas contas com nome
+              // parecido em marketplaces diferentes, na tela Geral.
+              icone: <LogoCanal canal={c.canal} />,
+            }))}
+            selecionados={filtros.contas}
+            onMudar={(v) => mudar({ contas: v })}
+          />
+
+          <FiltroRapido
+            rotulo="Envio"
+            placeholder="Todas"
+            vazio="Nenhuma modalidade na fila"
+            icone={<IconeCaminhao className="h-4 w-4" />}
+            opcoes={modalidades.map((m) => ({ valor: m, rotulo: m }))}
+            selecionados={filtros.modalidades}
+            onMudar={(v) => mudar({ modalidades: v })}
+          />
+
+          {/* SKU, e não categoria: escolher aqui deixa na tela só as VENDAS daquele
+              código, e um pacote misto aparece com o item escolhido apenas. É o
+              recorte de quem vai separar um lote, e ele responde "quantas unidades
+              deste produto saem hoje" — o pacote inteiro traria produto de fora. */}
+          <FiltroRapido
+            rotulo="SKU"
+            placeholder="Todos"
+            buscaPlaceholder="Digite o código do SKU…"
+            vazio="Nenhum SKU na fila"
+            icone={<IconeSku className="h-4 w-4" />}
+            larguraPainel="w-[17rem]"
+            opcoes={opcoesSku.map((s) => ({ valor: s, rotulo: s }))}
+            selecionados={filtros.skus}
+            onMudar={(v) => mudar({ skus: v })}
+          />
+
+          <BotaoAvancados
+            aberto={avancados}
+            onAlternar={() => setAvancados((v) => !v)}
+            ativos={avancadosAtivos}
+          />
+
+          {/* A ORDEM fica aqui, e não em cabeçalho de coluna clicável: sem tabela
+              não existe cabeçalho onde clicar, e a fila tem uma ordem que importa
+              (o prazo) mais quatro que servem de conferência. */}
+          <label className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 text-[13px]">
+            <span className="shrink-0 text-[var(--cz-texto-suave)]">Ordenar:</span>
+            <select
+              value={`${filtros.ordem}:${filtros.direcao}`}
+              onChange={(e) => {
+                const [ordem, direcao] = e.target.value.split(":");
+                ordenar(ordem as OrdemExpedicao, direcao as "asc" | "desc");
+              }}
+              aria-label="Ordenação da fila"
+              className="bg-transparent font-semibold text-[var(--cz-texto)] outline-none"
+            >
+              <option value="prazo:asc">Prazo mais próximo</option>
+              <option value="prazo:desc">Prazo mais distante</option>
+              <option value="venda:desc">Venda mais recente</option>
+              <option value="venda:asc">Venda mais antiga</option>
+              <option value="unidades:desc">Mais unidades</option>
+              <option value="valor:desc">Maior valor</option>
+            </select>
+          </label>
+        </BarraFiltros>
+
+        <ChipsFiltro chips={chips} onLimparTudo={() => setFiltros(padrao)} />
+
+        {/* Os avançados. Ficam num grid porque aqui são campos de formulário de
+            verdade — duas faixas de data e três listas — e não pastilhas de uso
+            diário. */}
+        {avancados && (
+          <div className="mt-3 border-t border-[var(--cz-hairline)] pt-3">
+            <div className="grid gap-3 lg:grid-cols-12">
+              <MultiSelecao
+                className="lg:col-span-3"
+                rotulo="Categoria"
+                placeholder="Todas"
+                vazio="Nenhuma categoria cadastrada"
+                opcoes={opcoes1.map((h) => ({ valor: h, rotulo: h }))}
+                selecionados={filtros.hierarquias1}
+                onMudar={(v) => mudar({ hierarquias1: v })}
+              />
+
+              <MultiSelecao
+                className="lg:col-span-3"
+                rotulo="Subcategoria"
+                placeholder="Todas"
+                vazio="Nenhuma subcategoria cadastrada"
+                opcoes={opcoes2.map((h) => ({ valor: h, rotulo: h }))}
+                selecionados={filtros.hierarquias2}
+                onMudar={(v) => mudar({ hierarquias2: v })}
+              />
+
+              <Campo rotulo="Situação da venda" className="lg:col-span-3">
+                <select
+                  value={filtros.statusVenda}
+                  onChange={(e) => mudar({ statusVenda: e.target.value as StatusVenda })}
+                  className={ENTRADA}
+                >
+                  {STATUS_VENDA.map((s) => (
+                    <option key={s.chave} value={s.chave}>
+                      {s.rotulo}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+
+              <Campo rotulo="Prazo" className="lg:col-span-3">
+                <select
+                  value={filtros.temPrazo}
+                  onChange={(e) => mudar({ temPrazo: e.target.value as TemPrazo })}
+                  className={ENTRADA}
+                >
+                  {TEM_PRAZO.map((t) => (
+                    <option key={t.chave} value={t.chave}>
+                      {t.rotulo}
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+
+              <Campo rotulo="Janela" className="lg:col-span-2">
+                <select
+                  value={filtros.janelaDias}
+                  onChange={(e) => mudar({ janelaDias: Number(e.target.value) })}
+                  className={ENTRADA}
+                >
+                  {JANELAS.map((d) => (
+                    <option key={d} value={d}>
+                      {d} dias
+                    </option>
+                  ))}
+                </select>
+              </Campo>
+
+              {/* Digitar uma data já muda o recorte para "personalizado", então o
+                  atalho aceso lá em cima nunca contradiz as datas daqui. */}
+              <Campo rotulo="Limite de despacho — de" className="lg:col-span-2">
+                <input
+                  type="date"
+                  value={filtros.prazoDe ?? ""}
+                  onChange={(e) =>
+                    mudar({
+                      prazoPreset: "personalizado",
+                      prazoDe: e.target.value || null,
+                    })
+                  }
+                  className={ENTRADA}
+                />
+              </Campo>
+              <Campo rotulo="Limite de despacho — até" className="lg:col-span-3">
+                <input
+                  type="date"
+                  value={filtros.prazoAte ?? ""}
+                  onChange={(e) =>
+                    mudar({
+                      prazoPreset: "personalizado",
+                      prazoAte: e.target.value || null,
+                    })
+                  }
+                  className={ENTRADA}
+                />
+              </Campo>
+
+              {/* Data da VENDA, não do prazo. São perguntas diferentes: "o que
+                  vence hoje" é a fila de trabalho; "o que foi vendido no dia 3" é
+                  conferência de lote. */}
+              <Campo rotulo="Venda de" className="lg:col-span-2">
+                <input
+                  type="date"
+                  value={filtros.vendaDe ?? ""}
+                  onChange={(e) => mudar({ vendaDe: e.target.value || null })}
+                  className={ENTRADA}
+                />
+              </Campo>
+              <Campo rotulo="Venda até" className="lg:col-span-3">
+                <input
+                  type="date"
+                  value={filtros.vendaAte ?? ""}
+                  onChange={(e) => mudar({ vendaAte: e.target.value || null })}
+                  className={ENTRADA}
+                />
+              </Campo>
+            </div>
+
+            <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+              A janela limita a busca pela data da venda e existe para a consulta não
+              varrer a base inteira. Se um pedido antigo estiver preso sem despachar,
+              alargue a janela para vê-lo. As categorias vêm do cadastro de SKU — venda
+              de SKU não cadastrado continua na fila, sob <em>Sem categoria</em>.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Indicadores DEPOIS dos filtros, e não antes.
+          Eles descrevem o CONJUNTO FILTRADO — "atrasados" é atrasados dentro do
+          recorte atual, não na base inteira. Acima dos filtros, os cinco números
+          se leem como panorama geral e não fecham com o que a pessoa acabou de
+          escolher; aqui eles são a legenda da lista que vem logo abaixo.
+
+          Atrasado e "vence hoje" ganham tom próprio (vermelho e âmbar) porque são
+          as duas únicas linhas que mudam o que a pessoa faz nos próximos minutos. */}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Kpi
           rotulo="Atrasados"
@@ -714,212 +973,6 @@ export default function Expedicao({
         })}
       </div>
 
-      {/* O RECORTE DE PRAZO fica acima do painel porque muda a PERGUNTA, e não
-          só estreita a resposta: "o que já venceu" e "o que sai na semana" são
-          duas telas diferentes. Vale junto com as fichas de urgência — o atalho
-          escolhe a FAIXA que o banco lê, a ficha classifica o que voltou. */}
-      <GrupoRecorte
-        opcoes={PRAZO_PRESETS.map((p) => ({
-          chave: p.chave,
-          rotulo: p.rotulo,
-          explicacao: EXPLICACAO_PRAZO[p.chave],
-        }))}
-        valor={filtros.prazoPreset}
-        onMudar={(chave: PrazoPreset) => mudar({ prazoPreset: chave })}
-      />
-
-      <PainelFiltros
-        nota={
-          <p className="mt-3 text-[11px] leading-relaxed text-[var(--cz-texto-suave)]">
-            A janela limita a busca pela data da venda e existe para a consulta não
-            varrer a base inteira. Se um pedido antigo estiver preso sem despachar,
-            alargue a janela para vê-lo. As categorias vêm do cadastro de SKU — venda
-            de SKU não cadastrado continua na fila, sob <em>Sem categoria</em>.
-          </p>
-        }
-      >
-        <CampoBusca
-          className="lg:col-span-4"
-          valor={filtros.busca}
-          onMudar={(v) => mudar({ busca: v })}
-          placeholder="Pedido, etiqueta, SKU, produto ou comprador"
-        />
-
-        {/* Todos os recortes de conjunto viraram MULTI-seleção. Um `<select>`
-            simples obriga a escolher entre "uma" e "todas", e não existe ali
-            "estas duas" — que é justamente a pergunta de quem tem quatro contas e
-            quer conferir duas, ou de quem separa três SKUs de um lote. */}
-        {!canalFixo && (
-          <MultiSelecao
-            className="lg:col-span-2"
-            rotulo="Marketplace"
-            placeholder="Todos"
-            opcoes={CANAIS.map((c) => ({
-              valor: c,
-              rotulo: CANAL_ROTULO[c],
-              icone: <LogoCanal canal={c} />,
-            }))}
-            selecionados={filtros.canais}
-            onMudar={(v) => mudar({ canais: v as Canal[] })}
-          />
-        )}
-
-        <MultiSelecao
-          className="lg:col-span-3"
-          rotulo="Conta"
-          placeholder="Todas"
-          vazio="Nenhuma conta com pacote na fila"
-          opcoes={contasDoCanal.map((c) => ({
-            valor: c.accountId,
-            rotulo: c.conta,
-            contagem: c.pacotes,
-            // O logo dentro da opção resolve o caso de duas contas com nome
-            // parecido em marketplaces diferentes, na tela Geral.
-            icone: <LogoCanal canal={c.canal} />,
-          }))}
-          selecionados={filtros.contas}
-          onMudar={(v) => mudar({ contas: v })}
-        />
-
-        <MultiSelecao
-          className="lg:col-span-3"
-          rotulo="Modalidade de envio"
-          placeholder="Todas"
-          vazio="Nenhuma modalidade na fila"
-          opcoes={modalidades.map((m) => ({ valor: m, rotulo: m }))}
-          selecionados={filtros.modalidades}
-          onMudar={(v) => mudar({ modalidades: v })}
-        />
-
-        {/* SKU, e não categoria: escolher aqui deixa na tela só as VENDAS daquele
-            código, e um pacote misto aparece com o item escolhido apenas. É o
-            recorte de quem vai separar um lote, e ele responde "quantas unidades
-            deste produto saem hoje" — o pacote inteiro traria produto de fora. */}
-        <MultiSelecao
-          className="lg:col-span-4"
-          rotulo="SKU"
-          placeholder="Todos os SKUs"
-          buscaPlaceholder="Digite o código do SKU…"
-          vazio="Nenhum SKU na fila"
-          opcoes={opcoesSku.map((s) => ({ valor: s, rotulo: s }))}
-          selecionados={filtros.skus}
-          onMudar={(v) => mudar({ skus: v })}
-        />
-
-        <MultiSelecao
-          className="lg:col-span-3"
-          rotulo="Categoria"
-          placeholder="Todas"
-          vazio="Nenhuma categoria cadastrada"
-          opcoes={opcoes1.map((h) => ({ valor: h, rotulo: h }))}
-          selecionados={filtros.hierarquias1}
-          onMudar={(v) => mudar({ hierarquias1: v })}
-        />
-
-        <MultiSelecao
-          className="lg:col-span-3"
-          rotulo="Subcategoria"
-          placeholder="Todas"
-          vazio="Nenhuma subcategoria cadastrada"
-          opcoes={opcoes2.map((h) => ({ valor: h, rotulo: h }))}
-          selecionados={filtros.hierarquias2}
-          onMudar={(v) => mudar({ hierarquias2: v })}
-        />
-
-        <Campo rotulo="Situação da venda" className="lg:col-span-2">
-          <select
-            value={filtros.statusVenda}
-            onChange={(e) => mudar({ statusVenda: e.target.value as StatusVenda })}
-            className={ENTRADA}
-          >
-            {STATUS_VENDA.map((s) => (
-              <option key={s.chave} value={s.chave}>
-                {s.rotulo}
-              </option>
-            ))}
-          </select>
-        </Campo>
-
-        <Campo rotulo="Prazo" className="lg:col-span-2">
-          <select
-            value={filtros.temPrazo}
-            onChange={(e) => mudar({ temPrazo: e.target.value as TemPrazo })}
-            className={ENTRADA}
-          >
-            {TEM_PRAZO.map((t) => (
-              <option key={t.chave} value={t.chave}>
-                {t.rotulo}
-              </option>
-            ))}
-          </select>
-        </Campo>
-
-        {/* 4 colunas e não 2: fecha a linha em 12 junto com "Prazo" e as duas
-            datas de limite. Com 2, sobrava um buraco de 2 colunas no meio do
-            painel. */}
-        <Campo rotulo="Janela" className="lg:col-span-4">
-          <select
-            value={filtros.janelaDias}
-            onChange={(e) => mudar({ janelaDias: Number(e.target.value) })}
-            className={ENTRADA}
-          >
-            {JANELAS.map((d) => (
-              <option key={d} value={d}>
-                {d} dias
-              </option>
-            ))}
-          </select>
-        </Campo>
-
-        {/* As datas de LIMITE DE DESPACHO ficam SEMPRE visíveis.
-            Antes só apareciam no recorte "personalizado", o que escondia o
-            controle atrás de uma escolha em outro lugar da tela — quem quer uma
-            faixa de datas não adivinha que precisa primeiro clicar numa pastilha.
-            Digitar aqui já muda o recorte para personalizado, então o atalho aceso
-            nunca contradiz as datas que estão na tela. */}
-        <Campo rotulo="Limite de despacho — de" className="lg:col-span-3">
-          <input
-            type="date"
-            value={filtros.prazoDe ?? ""}
-            onChange={(e) =>
-              mudar({ prazoPreset: "personalizado", prazoDe: e.target.value || null })
-            }
-            className={ENTRADA}
-          />
-        </Campo>
-        <Campo rotulo="Limite de despacho — até" className="lg:col-span-3">
-          <input
-            type="date"
-            value={filtros.prazoAte ?? ""}
-            onChange={(e) =>
-              mudar({ prazoPreset: "personalizado", prazoAte: e.target.value || null })
-            }
-            className={ENTRADA}
-          />
-        </Campo>
-
-        {/* Data da VENDA, não do prazo. São perguntas diferentes: "o que vence
-            hoje" é a fila de trabalho; "o que foi vendido no dia 3" é
-            conferência de lote. Manter as duas faixas separadas é o que permite
-            cruzá-las. */}
-        <Campo rotulo="Venda de" className="lg:col-span-3">
-          <input
-            type="date"
-            value={filtros.vendaDe ?? ""}
-            onChange={(e) => mudar({ vendaDe: e.target.value || null })}
-            className={ENTRADA}
-          />
-        </Campo>
-        <Campo rotulo="Venda até" className="lg:col-span-3">
-          <input
-            type="date"
-            value={filtros.vendaAte ?? ""}
-            onChange={(e) => mudar({ vendaAte: e.target.value || null })}
-            className={ENTRADA}
-          />
-        </Campo>
-      </PainelFiltros>
-
       <section className="mt-4 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-1)]">
         {carregando ? (
           <Esqueleto linhas={8} />
@@ -952,50 +1005,31 @@ export default function Expedicao({
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1280px] border-collapse text-left">
-                <CabecalhoTabela>
-                  <ThOrdenavel
-                    campo="prazo"
-                    rotulo="Prazo"
-                    ordemAtual={filtros.ordem}
-                    direcaoAtual={filtros.direcao}
-                    onOrdenar={ordenar}
-                    align="left"
-                  />
-                  <ThOrdenavel
-                    campo="venda"
-                    rotulo="Conta"
-                    ordemAtual={filtros.ordem}
-                    direcaoAtual={filtros.direcao}
-                    onOrdenar={ordenar}
-                    align="left"
-                  />
-                  <Th>Etiqueta / Comprador</Th>
-                  <Th>Itens a separar</Th>
-                  <ThOrdenavel
-                    campo="unidades"
-                    rotulo="Unid."
-                    ordemAtual={filtros.ordem}
-                    direcaoAtual={filtros.direcao}
-                    onOrdenar={ordenar}
-                  />
-                  <ThOrdenavel
-                    campo="valor"
-                    rotulo="Valor"
-                    ordemAtual={filtros.ordem}
-                    direcaoAtual={filtros.direcao}
-                    onOrdenar={ordenar}
-                  />
-                  <Th>Envio</Th>
-                  <Th>Etiqueta</Th>
-                </CabecalhoTabela>
-                <tbody>
-                  {dados?.pacotes.map((pacote) => (
-                    <Linha key={pacote.chave} pacote={pacote} />
-                  ))}
-                </tbody>
-              </table>
+            {/* Contador + seleção + impressão em lote, na mesma faixa. Sem tabela
+                não existe cabeçalho de coluna, e é aqui que ficam as ações que
+                valem para a página inteira. */}
+            <BarraLote
+              elegiveis={elegiveisLote}
+              selecionados={selecionados}
+              onSelecionar={setSelecionados}
+              totalNaPagina={dados?.pacotes.length ?? 0}
+              totalGeral={dados?.total ?? 0}
+              atualizando={atualizando}
+            />
+
+            <div>
+              {dados?.pacotes.map((pacote) => (
+                <CartaoPacote
+                  key={pacote.chave}
+                  pacote={pacote}
+                  selecionado={selecionados.has(pacote.chave)}
+                  onAlternarSelecao={
+                    elegivel.has(pacote.chave)
+                      ? () => alternarSelecao(pacote.chave)
+                      : undefined
+                  }
+                />
+              ))}
             </div>
 
             <Paginacao
@@ -1003,7 +1037,7 @@ export default function Expedicao({
               totalPaginas={dados?.totalPaginas ?? 1}
               total={dados?.total ?? 0}
               porPagina={filtros.porPagina}
-              onPagina={(p) => setFiltros((atual) => ({ ...atual, pagina: p }))}
+              onPagina={trocarPagina}
               onPorPagina={(v) => mudar({ porPagina: v })}
               rotulo="pacotes"
               opcoesPorPagina={[25, 50, 100, 200]}

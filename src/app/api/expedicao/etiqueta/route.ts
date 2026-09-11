@@ -29,6 +29,17 @@ const STATUS_IMPRIMIVEL = new Set(["ready_to_ship", "printed"]);
 
 type TipoEtiqueta = "pdf" | "zpl";
 
+/**
+ * Teto de envios por pedido em LOTE.
+ *
+ * O endpoint `shipment_labels` do Mercado Livre aceita vários `shipment_ids` e
+ * devolve UM arquivo com todas as etiquetas — é assim que se imprime a fila do dia
+ * sem abrir cinquenta abas. O teto existe porque a URL cresce com a lista (cada id
+ * tem ~11 dígitos) e porque um PDF de duzentas páginas trava a impressora do galpão
+ * antes de trancar o navegador.
+ */
+const MAX_LOTE = 50;
+
 /** O que o ML devolve no corpo de erro do `shipment_labels`. */
 type FalhaEtiqueta = { message?: string };
 type RespostaErroEtiqueta = {
@@ -86,17 +97,45 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = new URL(req.url);
-    const shippingId = (url.searchParams.get("shippingId") ?? "").trim();
     const contaId = (url.searchParams.get("contaId") ?? "").trim();
     const tipo: TipoEtiqueta = url.searchParams.get("tipo") === "zpl" ? "zpl" : "pdf";
 
-    if (!shippingId && !contaId) {
+    /**
+     * UM envio (`shippingId`) ou VÁRIOS (`shippingIds`, separados por vírgula).
+     *
+     * Os dois parâmetros caem no mesmo caminho porque o endpoint do Mercado Livre
+     * é o mesmo: ele sempre recebe uma LISTA de `shipment_ids`. Manter
+     * `shippingId` é o que preserva o botão por linha, que continua sendo o uso
+     * mais comum — imprimir uma etiqueta avulsa.
+     *
+     * Todos os envios de um pedido têm de ser da MESMA conta, porque o token é da
+     * conta. Quem chama em lote agrupa por conta antes; ver `BarraLote`.
+     */
+    const brutos = (
+      url.searchParams.get("shippingIds") ??
+      url.searchParams.get("shippingId") ??
+      ""
+    )
+      .split(",")
+      .map((s) => s.trim())
+      // O ML às vezes devolve o envio com sufixo (`43123456789.1`), que aparece na
+      // nossa base como veio. Esse sufixo não é um id válido nos endpoints de
+      // shipment: mandado inteiro, dá 404 e o operador vê "envio não encontrado"
+      // para um pacote que existe. A parte antes do ponto é o id de verdade.
+      .map((s) => s.split(".")[0])
+      .filter((s) => s !== "");
+
+    // `Set` para o mesmo envio não entrar duas vezes: um pacote com duas vendas
+    // aparece duas vezes na seleção e o ML cobraria duas páginas da mesma etiqueta.
+    const ids = Array.from(new Set(brutos));
+
+    if (ids.length === 0 && !contaId) {
       return NextResponse.json(
         { error: "Informe o código de envio e a conta do Mercado Livre." },
         { status: 400 },
       );
     }
-    if (!shippingId) {
+    if (ids.length === 0) {
       return NextResponse.json(
         { error: "Código de envio não informado." },
         { status: 400 },
@@ -108,6 +147,16 @@ export async function GET(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (ids.length > MAX_LOTE) {
+      return NextResponse.json(
+        {
+          error: `São ${ids.length} etiquetas de uma vez, e o limite é ${MAX_LOTE}. Imprima em duas tandas.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const emLote = ids.length > 1;
 
     /**
      * O `userId` no `where` é SEGURANÇA, não formalidade.
@@ -141,48 +190,53 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    /**
-     * O ML às vezes devolve o envio com sufixo (`43123456789.1`), que aparece na
-     * nossa base como veio. Esse sufixo não é um id válido nos endpoints de
-     * shipment: mandado inteiro, dá 404 e o operador vê "envio não encontrado"
-     * para um pacote que existe. A parte antes do ponto é o id de verdade.
-     */
-    const sid = shippingId.split(".")[0];
-
+    const sid = ids[0];
     const headers = { Authorization: `Bearer ${token}` };
 
     /**
-     * Revalidação do status na hora, sem cache.
+     * Revalidação do status na hora, sem cache — SÓ no envio avulso.
      *
      * O status guardado no banco tem a idade da última sincronização, e é exatamente
      * nesta tela que ele fica velho mais rápido (a NF-e sai por fora, no painel do
      * ML). Consultar agora é o que permite responder "emita a NF-e" em vez de
      * devolver um PDF vazio ou um erro cru do ML.
+     *
+     * EM LOTE ESTA CHECAGEM NÃO ACONTECE, e é deliberado: cinquenta etiquetas
+     * seriam cinquenta chamadas extras ao ML antes da que interessa — segundos de
+     * espera e cinquenta vezes mais chance de bater no limite de requisições, para
+     * melhorar uma mensagem de erro. No lote quem responde é o próprio
+     * `shipment_labels`: ele devolve `failed_shipments` com o envio e o motivo de
+     * cada um que não pôde sair, e o tratamento abaixo repassa isso.
      */
     let statusAtual: string | null = null;
-    try {
-      const envio = await fetch(`${MELI_API_BASE}/shipments/${sid}`, {
-        headers,
-        cache: "no-store",
-      });
-      if (envio.ok) {
-        const dados = (await envio.json()) as { status?: string };
-        statusAtual = typeof dados.status === "string" ? dados.status : null;
+    if (!emLote) {
+      try {
+        const envio = await fetch(`${MELI_API_BASE}/shipments/${sid}`, {
+          headers,
+          cache: "no-store",
+        });
+        if (envio.ok) {
+          const dados = (await envio.json()) as { status?: string };
+          statusAtual = typeof dados.status === "string" ? dados.status : null;
+        }
+      } catch (err) {
+        // NÃO bloqueia. Esta checagem existe para dar mensagem melhor, não para dar
+        // permissão: se ela falhou por rede ou instabilidade do ML, negar aqui seria
+        // impedir a impressão de um pacote que talvez esteja perfeitamente pronto. O
+        // pedido da etiqueta, logo abaixo, é a fonte da verdade — se não puder, ele
+        // mesmo diz o motivo.
+        console.warn(
+          "[expedicao/etiqueta] status do envio não pôde ser revalidado:",
+          err,
+        );
       }
-    } catch (err) {
-      // NÃO bloqueia. Esta checagem existe para dar mensagem melhor, não para dar
-      // permissão: se ela falhou por rede ou instabilidade do ML, negar aqui seria
-      // impedir a impressão de um pacote que talvez esteja perfeitamente pronto. O
-      // pedido da etiqueta, logo abaixo, é a fonte da verdade — se não puder, ele
-      // mesmo diz o motivo.
-      console.warn("[expedicao/etiqueta] status do envio não pôde ser revalidado:", err);
-    }
 
-    if (statusAtual && !STATUS_IMPRIMIVEL.has(statusAtual)) {
-      return NextResponse.json(
-        { error: mensagemDeStatus(statusAtual), statusAtual },
-        { status: 409 },
-      );
+      if (statusAtual && !STATUS_IMPRIMIVEL.has(statusAtual)) {
+        return NextResponse.json(
+          { error: mensagemDeStatus(statusAtual), statusAtual },
+          { status: 409 },
+        );
+      }
     }
 
     const responseType = tipo === "zpl" ? "zpl2" : "pdf";
@@ -195,18 +249,21 @@ export async function GET(req: NextRequest) {
      * ninguém audita.
      */
     const resposta = await fetch(
-      `${MELI_API_BASE}/shipment_labels?shipment_ids=${encodeURIComponent(sid)}&response_type=${responseType}`,
+      `${MELI_API_BASE}/shipment_labels?shipment_ids=${encodeURIComponent(ids.join(","))}&response_type=${responseType}`,
       { headers, cache: "no-store" },
     );
 
     if (!resposta.ok || !resposta.body) {
-      let mensagem = "Não foi possível gerar a etiqueta no Mercado Livre.";
+      let mensagem = emLote
+        ? "Não foi possível gerar as etiquetas no Mercado Livre."
+        : "Não foi possível gerar a etiqueta no Mercado Livre.";
 
       try {
         const corpo = (await resposta.json()) as RespostaErroEtiqueta;
         // O motivo real quase sempre está em `failed_shipments`, por envio; o
         // `message` do topo costuma ser genérico ("error processing request").
-        const bruta = corpo.failed_shipments?.[0]?.message ?? corpo.message ?? "";
+        const falhas = corpo.failed_shipments ?? [];
+        const bruta = falhas[0]?.message ?? corpo.message ?? "";
 
         // O ML embute o status na frase de erro ("...status is invoice_pending").
         // Extrair dali é o que permite responder a providência mesmo quando a
@@ -214,12 +271,25 @@ export async function GET(req: NextRequest) {
         const achado = /status is (\w+)/i.exec(bruta);
         if (achado) mensagem = mensagemDeStatus(achado[1].toLowerCase());
         else if (bruta.trim()) mensagem = bruta.trim();
+
+        /**
+         * Em lote, a contagem entra na frase.
+         *
+         * "Aguardando a nota fiscal" sozinho, depois de selecionar trinta pacotes,
+         * não diz se o problema é um pacote ou os trinta — e a providência é
+         * diferente: um é emitir uma NF-e, trinta é revisar o filtro. O ML recusa o
+         * pedido INTEIRO quando qualquer envio falha, então saber quantos falharam
+         * é o que permite desmarcar os culpados e imprimir o resto.
+         */
+        if (emLote && falhas.length > 0) {
+          mensagem = `${falhas.length} de ${ids.length} etiqueta(s) não puderam sair, e o Mercado Livre recusa o lote inteiro quando isso acontece. Motivo da primeira: ${mensagem}`;
+        }
       } catch {
         // Corpo não-JSON (HTML de erro, resposta vazia): fica a mensagem genérica.
       }
 
       console.warn(
-        `[expedicao/etiqueta] ML recusou a etiqueta do envio ${sid}: ${resposta.status}`,
+        `[expedicao/etiqueta] ML recusou ${ids.length} etiqueta(s) (${ids.join(",")}): ${resposta.status}`,
       );
       return NextResponse.json({ error: mensagem, statusAtual }, { status: 409 });
     }
@@ -228,6 +298,9 @@ export async function GET(req: NextRequest) {
       resposta.headers.get("content-type") ??
       (tipo === "zpl" ? "text/plain" : "application/pdf");
     const extensao = tipo === "zpl" ? "txt" : "pdf";
+    const nomeArquivo = emLote
+      ? `etiquetas-${ids.length}.${extensao}`
+      : `etiqueta-${sid}.${extensao}`;
 
     /**
      * Stream dos bytes, e não `redirect` para a URL do ML.
@@ -244,7 +317,7 @@ export async function GET(req: NextRequest) {
         "Content-Type": tipoConteudo,
         // `inline`: a etiqueta abre para conferir e imprimir. `attachment` obrigaria
         // a salvar um arquivo que ninguém quer guardar.
-        "Content-Disposition": `inline; filename="etiqueta-${sid}.${extensao}"`,
+        "Content-Disposition": `inline; filename="${nomeArquivo}"`,
         "Cache-Control": "no-store",
       },
     });

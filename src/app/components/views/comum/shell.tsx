@@ -19,6 +19,7 @@ import {
 
 import Sidebar from "../ui/Sidebar";
 import Topbar from "../ui/Topbar";
+import { ListaOpcoes, resumoSelecao, type OpcaoSelecao } from "./filtros";
 import { inteiro } from "./formato";
 import { IconeBusca, IconeFechar, IconeSeta } from "./icones";
 
@@ -290,20 +291,65 @@ export function CampoBusca({
 }) {
   return (
     <Campo rotulo={rotulo} className={className}>
-      <div className="flex h-11 items-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] pl-3 pr-1 transition-colors focus-within:border-[var(--cz-laranja)] focus-within:ring-2 focus-within:ring-[var(--cz-laranja-suave)]">
-        <IconeBusca className="h-4 w-4 shrink-0 text-[var(--cz-texto-fraco)]" />
-        <input
-          type="text"
-          enterKeyHint="search"
-          value={valor}
-          onChange={(e) => onMudar(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && onAplicar) onAplicar();
-          }}
-          placeholder={placeholder}
-          aria-label={rotulo}
-          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-[var(--cz-texto)] outline-none placeholder:text-[var(--cz-texto-fraco)]"
-        />
+      <CaixaBusca
+        valor={valor}
+        onMudar={onMudar}
+        onAplicar={onAplicar}
+        placeholder={placeholder}
+        rotuloAcessivel={rotulo}
+      />
+    </Campo>
+  );
+}
+
+/**
+ * A caixa de busca SEM o rótulo acima.
+ *
+ * Existe para a barra de filtros rápidos, onde a busca divide a linha com as
+ * pastilhas e um rótulo "BUSCAR" empilhado em cima jogaria a caixa 20px abaixo
+ * das pastilhas ao lado. O `aria-label` carrega o nome do campo para quem usa
+ * leitor de tela, então nada se perde ao esconder a legenda visual.
+ *
+ * `h-10` aqui, e não `h-11` como no `ENTRADA`: nesta barra a referência de altura
+ * são as pastilhas de filtro, não os campos de formulário.
+ */
+export function CaixaBusca({
+  valor,
+  onMudar,
+  onAplicar,
+  placeholder,
+  rotuloAcessivel = "Buscar",
+  className = "",
+  compacta = false,
+}: {
+  valor: string;
+  onMudar: (v: string) => void;
+  onAplicar?: () => void;
+  placeholder?: string;
+  rotuloAcessivel?: string;
+  className?: string;
+  /** Altura de pastilha (40px) em vez de altura de campo (44px). */
+  compacta?: boolean;
+}) {
+  return (
+    <div
+      className={`flex ${compacta ? "h-10" : "h-11"} items-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] pl-3 pr-1 transition-colors focus-within:border-[var(--cz-laranja)] focus-within:ring-2 focus-within:ring-[var(--cz-laranja-suave)] ${className}`}
+    >
+      <IconeBusca className="h-4 w-4 shrink-0 text-[var(--cz-texto-fraco)]" />
+      <input
+        type="text"
+        enterKeyHint="search"
+        value={valor}
+        onChange={(e) => onMudar(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && onAplicar) onAplicar();
+        }}
+        placeholder={placeholder}
+        aria-label={rotuloAcessivel}
+        className={`min-w-0 flex-1 bg-transparent text-[var(--cz-texto)] outline-none placeholder:text-[var(--cz-texto-fraco)] ${
+          compacta ? "text-[13px]" : "text-[13.5px]"
+        }`}
+      />
 
         {/* Limpar só existe com texto digitado, e limpa TAMBÉM o resultado: sem o
             `onAplicar()`, apagar o campo deixava a lista filtrada pelo termo que
@@ -323,17 +369,18 @@ export function CampoBusca({
           </button>
         )}
 
-        {onAplicar && (
-          <button
-            type="button"
-            onClick={onAplicar}
-            className="h-9 shrink-0 rounded-[calc(var(--cz-raio)-2px)] bg-[var(--cz-laranja)] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--cz-laranja-forte)]"
-          >
-            Buscar
-          </button>
-        )}
-      </div>
-    </Campo>
+      {onAplicar && (
+        <button
+          type="button"
+          onClick={onAplicar}
+          className={`shrink-0 rounded-[calc(var(--cz-raio)-2px)] bg-[var(--cz-laranja)] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--cz-laranja-forte)] ${
+            compacta ? "h-8" : "h-9"
+          }`}
+        >
+          Buscar
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -341,14 +388,13 @@ export function CampoBusca({
 /*                             Multi-seleção                                  */
 /* -------------------------------------------------------------------------- */
 
-export type OpcaoSelecao = {
-  valor: string;
-  rotulo: string;
-  /** Número à direita (quantos pacotes, quantas unidades). Opcional. */
-  contagem?: number;
-  /** Aparece à esquerda do rótulo. Serve para o logo do canal. */
-  icone?: ReactNode;
-};
+/**
+ * O tipo da opção vive em `comum/filtros.tsx`, junto da lista que o consome, e é
+ * REEXPORTADO aqui porque as telas o importam deste arquivo desde que foram
+ * escritas. Reexportar em vez de declarar nos dois lugares também evita o ciclo
+ * `shell -> filtros -> shell`.
+ */
+export type { OpcaoSelecao } from "./filtros";
 
 /**
  * Escolher VÁRIOS de uma lista, com busca dentro.
@@ -358,14 +404,15 @@ export type OpcaoSelecao = {
  * entre "uma conta" e "todas": não existe "estas duas", que é justamente a
  * pergunta de quem tem quatro contas e quer conferir duas.
  *
- * A busca aparece só quando a lista passa de `MINIMO_BUSCA` itens. Campo de busca
- * sobre cinco opções é ruído; sobre trezentos SKUs é a única forma de achar algo.
- *
  * Fecha ao clicar fora e no `Esc`, e NÃO fecha ao marcar um item — marcar cinco
  * SKUs seriam dez cliques se cada escolha fechasse o painel.
+ *
+ * A LISTA em si vive em `comum/filtros.tsx` (`ListaOpcoes`), compartilhada com a
+ * pastilha compacta `FiltroRapido`. São dois gatilhos para o mesmo painel: este,
+ * com rótulo acima, para o painel de filtros avançados; e a pastilha, para a barra
+ * de filtros rápidos. Com a lista dentro de cada um, a correção de um não chegaria
+ * ao outro.
  */
-const MINIMO_BUSCA = 8;
-
 export function MultiSelecao({
   rotulo,
   opcoes,
@@ -388,7 +435,6 @@ export function MultiSelecao({
   vazio?: string;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [busca, setBusca] = useState("");
   const caixa = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -411,45 +457,6 @@ export function MultiSelecao({
     };
   }, [aberto]);
 
-  // A busca é zerada ao FECHAR, e não ao abrir: zerar na abertura descartaria o
-  // texto no exato momento em que a pessoa reabre o painel para continuar
-  // escolhendo dentro do mesmo recorte.
-  useEffect(() => {
-    if (!aberto) setBusca("");
-  }, [aberto]);
-
-  const marcados = new Set(selecionados);
-
-  const alternar = (valor: string) => {
-    onMudar(
-      marcados.has(valor)
-        ? selecionados.filter((v) => v !== valor)
-        : [...selecionados, valor],
-    );
-  };
-
-  const filtradas =
-    busca.trim() === ""
-      ? opcoes
-      : opcoes.filter((o) =>
-          o.rotulo.toLocaleLowerCase("pt-BR").includes(busca.trim().toLocaleLowerCase("pt-BR")),
-        );
-
-  /**
-   * O resumo no botão fechado.
-   *
-   * Com um item escolhido mostra o NOME dele; com mais de um, a contagem. Mostrar
-   * "3 selecionados" para uma escolha só esconderia a informação atrás de um
-   * clique, e listar cinco nomes num botão de 200px vira reticências que não
-   * dizem nada.
-   */
-  const resumo =
-    selecionados.length === 0
-      ? placeholder
-      : selecionados.length === 1
-        ? (opcoes.find((o) => o.valor === selecionados[0])?.rotulo ?? selecionados[0])
-        : `${selecionados.length} selecionados`;
-
   return (
     <div className={className}>
       <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
@@ -469,7 +476,9 @@ export function MultiSelecao({
               : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:border-[var(--cz-laranja-borda)]"
           }`}
         >
-          <span className="truncate">{resumo}</span>
+          <span className="truncate">
+            {resumoSelecao(opcoes, selecionados, placeholder)}
+          </span>
           <IconeSeta
             className={`h-4 w-4 shrink-0 opacity-60 transition-transform ${
               aberto ? "-rotate-90" : "rotate-90"
@@ -478,74 +487,17 @@ export function MultiSelecao({
         </button>
 
         {aberto && (
+          // A `ListaOpcoes` DESMONTA ao fechar, e é isso que zera a busca interna
+          // dela. Zerar ao abrir seria descartar o texto no momento em que a pessoa
+          // reabre o painel para continuar escolhendo dentro do mesmo recorte.
           <div className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] shadow-lg">
-            {opcoes.length >= MINIMO_BUSCA && (
-              <div className="border-b border-[var(--cz-hairline)] p-2">
-                <span className="relative block">
-                  <IconeBusca className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--cz-texto-fraco)]" />
-                  <input
-                    type="search"
-                    autoFocus
-                    value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
-                    placeholder={buscaPlaceholder}
-                    className="h-9 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] pl-8 pr-2 text-[13px] text-[var(--cz-texto)] focus:border-[var(--cz-laranja)] focus:outline-none"
-                  />
-                </span>
-              </div>
-            )}
-
-            <div className="max-h-64 overflow-y-auto p-1">
-              {filtradas.length === 0 ? (
-                <p className="px-2 py-3 text-center text-[13px] text-[var(--cz-texto-suave)]">
-                  {opcoes.length === 0 ? vazio : "Nada encontrado"}
-                </p>
-              ) : (
-                filtradas.map((o) => {
-                  const ativo = marcados.has(o.valor);
-                  return (
-                    <label
-                      key={o.valor}
-                      className={`flex cursor-pointer items-center gap-2 rounded-[var(--cz-raio)] px-2 py-2 text-[13px] transition-colors ${
-                        ativo
-                          ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
-                          : "text-[var(--cz-texto)] hover:bg-[var(--cz-fundo)]"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={ativo}
-                        onChange={() => alternar(o.valor)}
-                        className="size-3.5 shrink-0 accent-[var(--cz-laranja)]"
-                      />
-                      {o.icone}
-                      <span className="min-w-0 flex-1 truncate" title={o.rotulo}>
-                        {o.rotulo}
-                      </span>
-                      {o.contagem !== undefined && (
-                        <span className="shrink-0 tabular-nums text-[12px] text-[var(--cz-texto-fraco)]">
-                          {inteiro(o.contagem)}
-                        </span>
-                      )}
-                    </label>
-                  );
-                })
-              )}
-            </div>
-
-            {/* "Limpar" só aparece com algo escolhido: um botão permanentemente
-                desabilitado ocuparia a mesma linha sem nunca servir. */}
-            {selecionados.length > 0 && (
-              <div className="border-t border-[var(--cz-hairline)] p-1.5">
-                <button
-                  type="button"
-                  onClick={() => onMudar([])}
-                  className="w-full rounded-[var(--cz-raio)] px-2 py-2 text-[13px] font-semibold text-[var(--cz-texto-suave)] transition-colors hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-laranja-forte)]"
-                >
-                  Limpar seleção
-                </button>
-              </div>
-            )}
+            <ListaOpcoes
+              opcoes={opcoes}
+              selecionados={selecionados}
+              onMudar={onMudar}
+              buscaPlaceholder={buscaPlaceholder}
+              vazio={vazio}
+            />
           </div>
         )}
       </div>
