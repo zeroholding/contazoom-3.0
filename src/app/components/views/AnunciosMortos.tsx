@@ -101,6 +101,7 @@ export default function AnunciosMortos() {
   const [diasSemVenda, setDiasSemVenda] = useState(30);
   const [minUnidades, setMinUnidades] = useState(10);
   const [minFaturamento, setMinFaturamento] = useState(1000);
+  const [relevancia, setRelevancia] = useState<"ou" | "e">("ou");
   const [ordem, setOrdem] = useState("faturamento_desc");
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(20);
@@ -114,6 +115,7 @@ export default function AnunciosMortos() {
     diasSemVenda,
     minUnidades,
     minFaturamento,
+    relevancia,
     busca: buscaAplicada,
     contaId,
     status,
@@ -216,33 +218,95 @@ export default function AnunciosMortos() {
           </select>
         </Campo>
 
-        {/* Os mínimos de relevância. Existem para a lista não virar "todo anúncio
-            que já vendeu uma vez em 2019": o que interessa é o que DAVA dinheiro. */}
-        <Campo rotulo="Vendia ao menos (unidades)" className="lg:col-span-3">
-          <input
-            type="number"
-            min={0}
-            value={minUnidades}
-            onChange={(e) => {
-              setMinUnidades(Math.max(0, Number(e.target.value) || 0));
-              setPagina(1);
-            }}
-            className={ENTRADA}
-          />
-        </Campo>
+        {/*
+          OS MÍNIMOS DE RELEVÂNCIA, COM O OPERADOR NO MEIO.
 
-        <Campo rotulo="Ou faturou ao menos (R$)" className="lg:col-span-3">
-          <input
-            type="number"
-            min={0}
-            value={minFaturamento}
-            onChange={(e) => {
-              setMinFaturamento(Math.max(0, Number(e.target.value) || 0));
-              setPagina(1);
-            }}
-            className={ENTRADA}
-          />
-        </Campo>
+          Os dois campos e o "OU/E" ficam dentro de UM bloco, lado a lado, porque
+          o efeito de cada um depende do outro. Antes eram dois `Campo` separados —
+          um rotulado "Vendia ao menos" e o outro "Ou faturou ao menos" — e a
+          palavra "ou" perdida no início de um rótulo não bastava: com o mínimo de
+          unidades em 10, subir o de faturamento não removia nenhuma linha, e o
+          campo parecia morto. Agora a relação é a primeira coisa que se lê.
+        */}
+        <div className="lg:col-span-6">
+          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)]">
+            Relevância — o que conta como &ldquo;vendia bem&rdquo;
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex min-w-[7.5rem] flex-1 items-center gap-1.5">
+              <input
+                type="number"
+                min={0}
+                value={minUnidades}
+                onChange={(e) => {
+                  setMinUnidades(Math.max(0, Number(e.target.value) || 0));
+                  setPagina(1);
+                }}
+                className={ENTRADA}
+                aria-label="Mínimo de unidades vendidas"
+              />
+              <span className="shrink-0 text-[11.5px] text-[var(--cz-texto-suave)]">
+                un.
+              </span>
+            </label>
+
+            {/* O operador é um SELECT e não um texto fixo: era o "ou" implícito
+                que fazia os dois campos parecerem independentes. Como controle,
+                ele também dá a saída que faltava — em "e", cada mínimo passa a
+                cortar de verdade. */}
+            <select
+              value={relevancia}
+              onChange={(e) => {
+                setRelevancia(e.target.value as "ou" | "e");
+                setPagina(1);
+              }}
+              className="h-10 shrink-0 rounded-[var(--cz-raio)] border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-2 text-[12px] font-bold uppercase text-[var(--cz-laranja-forte)] outline-none transition-colors focus:border-[var(--cz-laranja)]"
+              aria-label="Como os dois mínimos se combinam"
+            >
+              <option value="ou">ou</option>
+              <option value="e">e</option>
+            </select>
+
+            <label className="flex min-w-[8.5rem] flex-1 items-center gap-1.5">
+              <span className="shrink-0 text-[11.5px] text-[var(--cz-texto-suave)]">
+                R$
+              </span>
+              <input
+                type="number"
+                min={0}
+                value={minFaturamento}
+                onChange={(e) => {
+                  setMinFaturamento(Math.max(0, Number(e.target.value) || 0));
+                  setPagina(1);
+                }}
+                className={ENTRADA}
+                aria-label="Mínimo de faturamento"
+              />
+            </label>
+          </div>
+
+          {/* A frase muda com o operador. É o que fecha o problema: em vez de a
+              pessoa descobrir na tentativa que um campo não corta, a tela diz o
+              que o recorte atual faz — e como usar um critério sozinho. */}
+          <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--cz-texto-suave)]">
+            {relevancia === "ou" ? (
+              <>
+                Entra quem vendia <strong>{inteiro(minUnidades)} unidade(s)</strong>{" "}
+                <strong>ou</strong> faturou <strong>{brl(minFaturamento)}</strong> —
+                basta um dos dois. Subir só um deles não encurta a lista; para usar um
+                critério sozinho, deixe o outro em <strong>0</strong>, ou troque o{" "}
+                <strong>ou</strong> por <strong>e</strong>.
+              </>
+            ) : (
+              <>
+                Entra só quem vendia <strong>{inteiro(minUnidades)} unidade(s)</strong>{" "}
+                <strong>e</strong> faturou <strong>{brl(minFaturamento)}</strong> — os
+                dois. Lista mais curta, mas esconde item barato de giro alto e item
+                caro de giro baixo.
+              </>
+            )}
+          </p>
+        </div>
 
         <Campo rotulo="Situação no ML" className="lg:col-span-3">
           <select
@@ -262,14 +326,10 @@ export default function AnunciosMortos() {
         </Campo>
       </PainelFiltros>
 
-      {/* Os dois mínimos são OU, não E. Escrito na tela porque um rótulo
-          "Vendia ao menos" ao lado de outro "Ou faturou ao menos" ainda deixa
-          dúvida sobre como os dois se combinam. */}
-      <p className="mt-2 text-[11.5px] leading-relaxed text-gray-500">
-        Um anúncio entra na lista se passar em <strong>um</strong> dos dois mínimos.
-        Item barato de giro alto aparece pelas unidades; item caro de giro baixo
-        aparece pelo faturamento. Exigir os dois esconderia metade dos casos.
-      </p>
+      {/* O parágrafo que explicava o "OU" saiu daqui: agora a explicação fica
+          COLADA nos dois campos, dentro do painel de filtros, e muda conforme o
+          operador escolhido. Texto solto abaixo do painel descrevia uma regra que
+          a pessoa só ia reler depois de já ter estranhado o resultado. */}
 
       <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
         <Kpi

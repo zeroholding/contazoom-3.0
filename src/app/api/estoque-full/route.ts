@@ -57,6 +57,10 @@ function lerFiltros(url: URL): FiltrosFull {
   return {
     contas: lista(url.searchParams.get("contas")),
     busca: texto(url.searchParams.get("busca")),
+    // Teto de 200: é filtro de lote, e alguém colando uma planilha inteira na URL
+    // viraria um `IN (...)` de milhares de itens. O corte é silencioso pelo mesmo
+    // critério do resto daqui.
+    skus: lista(url.searchParams.get("skus"), 200),
     situacao: SITUACOES.includes(situacaoBruta) ? situacaoBruta : "",
     estoque: estoqueBruto === "com" || estoqueBruto === "sem" ? estoqueBruto : "",
     hierarquia1: texto(url.searchParams.get("hierarquia1")),
@@ -94,6 +98,7 @@ export async function GET(req: NextRequest) {
       session.sub,
       filtros.contas.join("|"),
       filtros.busca,
+      filtros.skus.join("|"),
       filtros.situacao,
       filtros.estoque,
       filtros.hierarquia1,

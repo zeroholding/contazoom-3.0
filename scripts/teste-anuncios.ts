@@ -145,6 +145,8 @@ async function main() {
     diasSemVenda: 30,
     minUnidades: 0,
     minFaturamento: 0,
+    // Como os dois mínimos se combinam. `ou` é o padrão da rota.
+    relevancia: "ou" as const,
     meliAccountId: "",
     busca: "",
     hierarquia1: "",

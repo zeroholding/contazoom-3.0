@@ -42,6 +42,31 @@ export type FiltrosAnuncios = {
   diasSemVenda: number;
   minUnidades: number;
   minFaturamento: number;
+  /**
+   * Como os dois mínimos se combinam.
+   *
+   * ┌──────────────────────────────────────────────────────────────────────┐
+   * │ POR QUE ISTO EXISTE                                                  │
+   * ├──────────────────────────────────────────────────────────────────────┤
+   * │ Os dois mínimos eram fixamente unidos por OU, e o padrão da tela é   │
+   * │ 10 unidades / R$ 1.000. Com OU, subir só o de faturamento NÃO REMOVE │
+   * │ NADA: toda linha que já passou pelas 10 unidades continua entrando.  │
+   * │ Quem digitava R$ 50.000 via a lista intacta e concluía, com razão,   │
+   * │ que o campo estava quebrado.                                         │
+   * │                                                                      │
+   * │ E estava, no sentido que importa: um controle cujo efeito depende do │
+   * │ valor de OUTRO controle, sem que a tela diga isso, é um controle que │
+   * │ não funciona. Cada um deles, sozinho, só conseguia AUMENTAR a lista. │
+   * │                                                                      │
+   * │ O OU não foi trocado por AND às cegas — ele tem motivo (ver o topo   │
+   * │ do arquivo): item barato de giro alto entra por unidades, item caro  │
+   * │ de giro baixo entra por faturamento, e exigir os dois esconderia     │
+   * │ metade dos casos. Então a combinação virou ESCOLHA, com o OU como    │
+   * │ padrão, e a tela passou a mostrar qual está em uso entre os dois     │
+   * │ campos.                                                              │
+   * └──────────────────────────────────────────────────────────────────────┘
+   */
+  relevancia: "ou" | "e";
   meliAccountId: string;
   busca: string;
   hierarquia1: string;
@@ -199,7 +224,14 @@ async function agregar(userId: string, f: FiltrosAnuncios): Promise<LinhaCrua[]>
       params.push(f.minFaturamento);
       relevancia.push(`COALESCE(SUM(v.valor_total), 0) >= $${params.length}`);
     }
-    if (relevancia.length > 0) tendo.push(`(${relevancia.join(" OR ")})`);
+    // Um mínimo em ZERO continua saindo da conta por completo (o `if` acima nem
+    // adiciona a condição). Isso é o que permite "só por faturamento": deixar o
+    // de unidades em 0 faz o de faturamento passar a valer sozinho, mesmo no modo
+    // OU — e é a saída que a tela sugere no texto ao lado dos campos.
+    if (relevancia.length > 0) {
+      const juncao = f.relevancia === "e" ? " AND " : " OR ";
+      tendo.push(`(${relevancia.join(juncao)})`);
+    }
   }
 
   const ordenacao =

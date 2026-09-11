@@ -30,6 +30,7 @@ import {
   Kpi,
   Miniatura,
   MolduraTela,
+  MultiSelecao,
   type OpcaoRecorte,
   Paginacao,
   PainelFiltros,
@@ -105,6 +106,7 @@ type Resposta = {
   contasDisponiveis: { id: string; nickname: string | null }[];
   hierarquias1: string[];
   hierarquias2: string[];
+  skusDisponiveis: string[];
 };
 
 const RESUMO_VAZIO: Resumo = {
@@ -162,6 +164,7 @@ export default function EstoqueFull() {
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [contas, setContas] = useState<string[]>([]);
+  const [skus, setSkus] = useState<string[]>([]);
   const [situacao, setSituacao] = useState<"" | SituacaoEstoque>("");
   const [estoque, setEstoque] = useState("");
   const [hierarquia1, setHierarquia1] = useState("");
@@ -185,6 +188,7 @@ export default function EstoqueFull() {
     const p = new URLSearchParams();
     if (buscaAplicada) p.set("busca", buscaAplicada);
     if (contas.length > 0) p.set("contas", contas.join(","));
+    if (skus.length > 0) p.set("skus", skus.join(","));
     if (situacao) p.set("situacao", situacao);
     if (estoque) p.set("estoque", estoque);
     if (hierarquia1) p.set("hierarquia1", hierarquia1);
@@ -197,6 +201,7 @@ export default function EstoqueFull() {
   }, [
     buscaAplicada,
     contas,
+    skus,
     situacao,
     estoque,
     hierarquia1,
@@ -344,7 +349,13 @@ export default function EstoqueFull() {
   // A explicação do recorte ativo agora é impressa pelo próprio `GrupoRecorte`,
   // então não é mais preciso achar a opção aqui.
   const temFiltro = Boolean(
-    buscaAplicada || contas.length || situacao || estoque || hierarquia1 || hierarquia2,
+    buscaAplicada ||
+      contas.length ||
+      skus.length ||
+      situacao ||
+      estoque ||
+      hierarquia1 ||
+      hierarquia2,
   );
 
   const pctProgresso =
@@ -413,23 +424,45 @@ export default function EstoqueFull() {
           className="lg:col-span-4"
         />
 
-        <Campo rotulo="Conta" className="lg:col-span-3">
-          <select
-            value={contas[0] ?? ""}
-            onChange={(e) => {
-              setContas(e.target.value ? [e.target.value] : []);
-              setPagina(1);
-            }}
-            className={ENTRADA}
-          >
-            <option value="">Todas as contas</option>
-            {(dados?.contasDisponiveis ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nickname ?? c.id}
-              </option>
-            ))}
-          </select>
-        </Campo>
+        {/* Conta em MULTI-seleção: o `contas` da API sempre foi uma lista, mas o
+            `<select>` só sabia mandar um item, então "estas duas contas" era uma
+            pergunta que o back respondia e a tela não sabia fazer. */}
+        <MultiSelecao
+          className="lg:col-span-3"
+          rotulo="Conta"
+          placeholder="Todas as contas"
+          vazio="Nenhuma conta com estoque no Full"
+          opcoes={(dados?.contasDisponiveis ?? []).map((c) => ({
+            valor: c.id,
+            rotulo: c.nickname ?? c.id,
+          }))}
+          selecionados={contas}
+          onMudar={(v) => {
+            setContas(v);
+            setPagina(1);
+          }}
+        />
+
+        {/* SKU selecionável, não digitado.
+            A busca livre ao lado acha UM item quando se sabe parte do texto; este
+            filtro responde outra pergunta: "quanto tenho em Full destes cinco
+            produtos". Com busca, seriam cinco consultas separadas — e nenhuma
+            delas daria o total somado dos cinco, que é o que os cartões do topo
+            passam a mostrar. A lista vem ordenada por estoque disponível, então os
+            primeiros códigos são os que têm mercadoria. */}
+        <MultiSelecao
+          className="lg:col-span-4"
+          rotulo="SKU"
+          placeholder="Todos os SKUs"
+          buscaPlaceholder="Digite o código do SKU…"
+          vazio="Nenhum SKU no snapshot do Full"
+          opcoes={(dados?.skusDisponiveis ?? []).map((s) => ({ valor: s, rotulo: s }))}
+          selecionados={skus}
+          onMudar={(v) => {
+            setSkus(v);
+            setPagina(1);
+          }}
+        />
 
         <Campo rotulo="Estoque" className="lg:col-span-2">
           <select

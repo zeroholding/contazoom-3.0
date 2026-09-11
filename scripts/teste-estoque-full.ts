@@ -56,6 +56,8 @@ const U2 = "u2";
 const BASE = {
   contas: [] as string[],
   busca: "",
+  /** Códigos escolhidos na lista. Vazio = todos. */
+  skus: [] as string[],
   situacao: "" as const,
   estoque: "" as const,
   hierarquia1: "",

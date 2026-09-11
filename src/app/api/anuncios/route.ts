@@ -71,6 +71,10 @@ function lerFiltros(url: URL): FiltrosAnuncios {
     diasSemVenda: inteiro(url.searchParams.get("diasSemVenda"), 30, 1, 3650),
     minUnidades: inteiro(url.searchParams.get("minUnidades"), modo === "mortos" ? 10 : 0, 0, 1_000_000),
     minFaturamento: decimal(url.searchParams.get("minFaturamento"), modo === "mortos" ? 1000 : 0),
+    // `ou` continua o padrão: é o comportamento documentado no topo de
+    // `anuncios-data.ts`, e trocá-lo aqui mudaria a lista de quem já tem um link
+    // salvo. Ver o docblock de `relevancia` para o motivo de a escolha existir.
+    relevancia: url.searchParams.get("relevancia") === "e" ? "e" : "ou",
     meliAccountId: texto(url.searchParams.get("contaId"), 40),
     busca: texto(url.searchParams.get("busca")),
     hierarquia1: texto(url.searchParams.get("hierarquia1")),
@@ -124,6 +128,7 @@ export async function GET(req: NextRequest) {
       String(filtros.diasSemVenda),
       String(filtros.minUnidades),
       String(filtros.minFaturamento),
+      filtros.relevancia,
       filtros.meliAccountId,
       filtros.busca,
       filtros.hierarquia1,

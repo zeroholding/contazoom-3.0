@@ -40,6 +40,17 @@ export type FiltrosFull = {
   contas: string[];
   /** Busca em título, SKU, código do inventário e MLB. */
   busca: string;
+  /**
+   * Códigos de SKU escolhidos na lista. Vazio = todos.
+   *
+   * Diferente da `busca`, que é `ILIKE` em quatro campos e serve para achar UMA
+   * coisa quando se sabe parte do texto. Aqui a pessoa ESCOLHE de uma lista, e
+   * escolhe vários: "quanto tenho em Full destes cinco produtos" é uma pergunta de
+   * reposição, e com busca livre ela exigiria cinco consultas separadas — sem
+   * nunca dar o total somado dos cinco, que é o que o resumo do topo passa a
+   * responder.
+   */
+  skus: string[];
   situacao: "" | SituacaoEstoque;
   /** `com` = disponível > 0, `sem` = disponível = 0. */
   estoque: "" | "com" | "sem";
@@ -107,6 +118,14 @@ export type ResultadoFull = {
   contasDisponiveis: { id: string; nickname: string | null }[];
   hierarquias1: string[];
   hierarquias2: string[];
+  /**
+   * SKUs presentes no snapshot, para o filtro.
+   *
+   * Calculada IGNORANDO o próprio filtro de SKU, igual às hierarquias: escolher
+   * um código não pode apagar os outros da lista, senão não há como trocar de SKU
+   * sem limpar a seleção antes.
+   */
+  skusDisponiveis: string[];
 };
 
 /**
@@ -183,7 +202,11 @@ const JOINS = `
 function montarWhere(
   f: FiltrosFull,
   params: unknown[],
-  opcoes: { ignorarHierarquia1?: boolean; ignorarHierarquia2?: boolean } = {},
+  opcoes: {
+    ignorarHierarquia1?: boolean;
+    ignorarHierarquia2?: boolean;
+    ignorarSkus?: boolean;
+  } = {},
 ): string {
   const cond: string[] = [`f.user_id = $1`];
 
@@ -193,6 +216,22 @@ function montarWhere(
       return `$${params.length}`;
     });
     cond.push(`f.meli_account_id IN (${marcadores.join(", ")})`);
+  }
+
+  /**
+   * Filtro por SKU escolhido na lista.
+   *
+   * `UPPER(TRIM(...))` nos dois lados: SKU cadastrado à mão vem com espaço e caixa
+   * trocados, e o snapshot do Full guarda o que o Mercado Livre devolveu. Comparar
+   * cru faria o filtro achar nada para metade dos códigos — e a pessoa concluiria
+   * que não tem aquele produto em Full.
+   */
+  if (!opcoes.ignorarSkus && f.skus.length > 0) {
+    const marcadores = f.skus.map((s) => {
+      params.push(s.trim().toUpperCase());
+      return `$${params.length}`;
+    });
+    cond.push(`UPPER(TRIM(COALESCE(f.sku, ''))) IN (${marcadores.join(", ")})`);
   }
 
   if (f.busca) {
@@ -368,8 +407,8 @@ export async function buscarEstoqueFull(
 
   // As listas de hierarquia ignoram o PRÓPRIO nível: senão, ao escolher
   // "Fitness" o seletor passaria a oferecer só "Fitness" e a pessoa não teria
-  // como trocar sem limpar o filtro antes.
-  const [h1, h2] = await Promise.all([
+  // como trocar sem limpar o filtro antes. Vale igual para a lista de SKUs.
+  const [h1, h2, listaSkus] = await Promise.all([
     (async () => {
       const p: unknown[] = [userId];
       const w = montarWhere(f, p, { ignorarHierarquia1: true });
@@ -390,6 +429,32 @@ export async function buscarEstoqueFull(
          SELECT DISTINCT k.hierarquia_2 AS valor ${JOINS} ${w}
            AND k.hierarquia_2 IS NOT NULL AND k.hierarquia_2 <> ''
          ORDER BY valor`,
+        ...p,
+      );
+      return rows.map((x) => x.valor);
+    })(),
+    /**
+     * A lista de SKUs do filtro.
+     *
+     * Ordenada por APTAS (estoque disponível) e não alfabeticamente, com teto de
+     * 500: numa conta com milhares de itens em Full, ordem alfabética obriga a
+     * rolar para achar o que importa, e o que importa é onde há mercadoria. A
+     * busca dentro do próprio filtro cobre o resto.
+     *
+     * `GROUP BY` e não `DISTINCT` porque o mesmo SKU aparece em várias linhas do
+     * snapshot (uma por variação/inventário), e a soma das aptas é o que dá a
+     * ordem certa.
+     */
+    (async () => {
+      const p: unknown[] = [userId];
+      const w = montarWhere(f, p, { ignorarSkus: true });
+      const rows = await prisma.$queryRawUnsafe<Array<{ valor: string }>>(
+        `WITH ${CTE_VENDAS}, ${CTE_MEDIA}
+         SELECT f.sku AS valor, SUM(f.available_quantity) AS aptas ${JOINS} ${w}
+           AND f.sku IS NOT NULL AND TRIM(f.sku) <> ''
+         GROUP BY f.sku
+         ORDER BY SUM(f.available_quantity) DESC NULLS LAST, f.sku ASC
+         LIMIT 500`,
         ...p,
       );
       return rows.map((x) => x.valor);
@@ -447,5 +512,8 @@ export async function buscarEstoqueFull(
     contasDisponiveis,
     hierarquias1: h1,
     hierarquias2: h2,
+    // Ordem do SQL (por aptas) PRESERVADA: reordenar aqui jogaria fora o critério
+    // que faz os primeiros itens da lista serem os que têm mercadoria.
+    skusDisponiveis: listaSkus,
   };
 }

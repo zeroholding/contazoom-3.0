@@ -157,10 +157,19 @@ export default function DriveDocumentos() {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
+  /**
+   * Ícone por tipo de arquivo.
+   *
+   * O vermelho do PDF FICA: é convenção universal (Acrobat), e trocá-lo pelo
+   * laranja da marca faria PDF e imagem virarem a mesma coisa num relance — o
+   * ícone existe justamente para distingui-los antes da leitura. O azul da
+   * imagem, esse sim saiu: não significava nada e brigava com a paleta.
+   */
   const getFileIcon = (mimeType: string) => {
-    if (mimeType.includes("pdf")) return <FileText className="w-8 h-8 text-red-500" />;
-    if (mimeType.includes("image")) return <ImageIcon className="w-8 h-8 text-blue-500" />;
-    return <File className="w-8 h-8 text-gray-500" />;
+    if (mimeType.includes("pdf")) return <FileText className="w-8 h-8 text-rose-500" />;
+    if (mimeType.includes("image"))
+      return <ImageIcon className="w-8 h-8 text-[var(--cz-laranja)]" />;
+    return <File className="w-8 h-8 text-[var(--cz-texto-fraco)]" />;
   };
 
   const getAvailableYears = (folderId: string) => {
@@ -207,9 +216,22 @@ export default function DriveDocumentos() {
     <div className="flex flex-col lg:flex-row h-full w-full bg-white">
       
       {/* SIDEBAR ESQUERDA - Árvore de Pastas */}
-      <div className={`w-full lg:w-72 border-r bg-gray-50/50 flex flex-col shrink-0 lg:h-full overflow-y-auto ${currentFolderId && (currentYear || currentMonth || visibleFiles.length > 0) ? 'hidden lg:flex' : 'flex'}`}>
-        <div className="p-4 border-b bg-white flex justify-between items-center sticky top-0 z-10 shadow-sm">
-          <h2 className="font-bold text-gray-800">Pastas</h2>
+      <div className={`w-full lg:w-72 border-r border-[var(--cz-hairline)] bg-[var(--cz-fundo)] flex flex-col shrink-0 lg:h-full overflow-y-auto ${currentFolderId && (currentYear || currentMonth || visibleFiles.length > 0) ? 'hidden lg:flex' : 'flex'}`}>
+        {/* Cabeçalho da árvore com o ícone em laranja e a contagem: antes era só a
+            palavra "Pastas" em negrito, e a coluna inteira abria em cinza sobre
+            cinza. O ícone dá o ponto de cor que ancora a lateral. */}
+        <div className="p-4 border-b border-[var(--cz-hairline)] bg-[var(--cz-superficie)] flex justify-between items-center sticky top-0 z-10">
+          <h2 className="flex items-center gap-2 font-bold text-[var(--cz-texto)]">
+            <span className="grid size-7 place-items-center rounded-lg bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]">
+              <Folder className="w-4 h-4" />
+            </span>
+            Pastas
+          </h2>
+          {userFolders.length > 0 && (
+            <span className="rounded-full bg-[var(--cz-fundo)] px-2 py-0.5 text-[11px] font-bold tabular-nums text-[var(--cz-texto-suave)]">
+              {userFolders.length}
+            </span>
+          )}
         </div>
         
         <div className="p-3 space-y-1">
@@ -226,9 +248,17 @@ export default function DriveDocumentos() {
 
               return (
                 <div key={folder.id}>
+                  {/* Pasta ativa em LARANJA, com barra na borda esquerda.
+                      Era `bg-blue-100 text-blue-700`: azul não significa nada no
+                      produto, e "onde eu estou" é a mesma informação que o item
+                      ativo do menu lateral — que é laranja. A barra de 2px repete
+                      o padrão do menu e é o que permite achar a pasta atual
+                      descendo o olho pela margem, numa árvore de vinte pastas. */}
                   <div
-                    className={`flex items-center w-full rounded-lg cursor-pointer transition-colors ${
-                      isCatActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-700'
+                    className={`flex items-center w-full rounded-lg cursor-pointer border-l-2 transition-colors ${
+                      isCatActive
+                        ? 'border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]'
+                        : 'border-transparent text-[var(--cz-texto)] hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-laranja-forte)]'
                     }`}
                     style={{ paddingLeft: depth > 0 ? `${depth * 12}px` : undefined }}
                   >
@@ -250,7 +280,9 @@ export default function DriveDocumentos() {
                       onClick={() => selectFolder(folder.id)}
                     >
                       <Folder className={`w-4 h-4 mr-2 flex-shrink-0 ${
-                        isCatActive ? 'text-blue-600 fill-blue-600/20' : depth > 0 ? 'text-gray-300' : 'text-gray-400'
+                        isCatActive
+                          ? 'text-[var(--cz-laranja)] fill-[var(--cz-laranja)]/20'
+                          : depth > 0 ? 'text-[var(--cz-texto-fraco)]/60' : 'text-[var(--cz-texto-fraco)]'
                       }`} />
                       <span className="text-sm font-medium truncate" title={folder.name}>{folder.name}</span>
                     </div>
@@ -272,34 +304,42 @@ export default function DriveDocumentos() {
 
                         return (
                           <div key={year}>
-                            <div className={`flex items-center w-full rounded-lg cursor-pointer transition-colors ${
-                              isYearActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-200 text-gray-600'
+                            <div className={`flex items-center w-full rounded-lg cursor-pointer border-l-2 transition-colors ${
+                              isYearActive
+                                ? 'border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]'
+                                : 'border-transparent text-[var(--cz-texto-suave)] hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-laranja-forte)]'
                             }`}>
                               <button className="p-2" onClick={() => toggleYear(year)}>
                                 {isYearExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                               </button>
                               <div className="flex items-center flex-1 py-1.5 pr-2" onClick={() => selectFolder(folder.id, year)}>
                                 <Folder className={`w-4 h-4 mr-2 ${
-                                  isYearActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-400'
+                                  isYearActive
+                                    ? 'text-[var(--cz-laranja)] fill-[var(--cz-laranja)]/20'
+                                    : 'text-[var(--cz-texto-fraco)]'
                                 }`} />
                                 <span className="text-sm font-medium">{year}</span>
                               </div>
                             </div>
 
                             {isYearExpanded && (
-                              <div className="ml-5 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
+                              <div className="ml-5 mt-1 space-y-1 border-l-2 border-[var(--cz-hairline)] pl-2">
                                 {MONTHS.map(month => {
                                   const isMonthActive = currentFolderId === folder.id && currentYear === year && currentMonth === month;
                                   return (
                                     <div
                                       key={month}
-                                      className={`flex items-center py-1.5 px-3 rounded-lg cursor-pointer transition-colors ${
-                                        isMonthActive ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100 text-gray-500'
+                                      className={`flex items-center py-1.5 px-3 rounded-lg cursor-pointer border-l-2 transition-colors ${
+                                        isMonthActive
+                                          ? 'border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]'
+                                          : 'border-transparent text-[var(--cz-texto-suave)] hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-laranja-forte)]'
                                       }`}
                                       onClick={() => selectFolder(folder.id, year, month)}
                                     >
                                       <Folder className={`w-3.5 h-3.5 mr-2 ${
-                                        isMonthActive ? 'text-blue-600 fill-blue-600/20' : 'text-gray-300'
+                                        isMonthActive
+                                          ? 'text-[var(--cz-laranja)] fill-[var(--cz-laranja)]/20'
+                                          : 'text-[var(--cz-texto-fraco)]/60'
                                       }`} />
                                       <span className="text-xs font-medium">{month.split(" - ")[1]}</span>
                                     </div>
@@ -333,37 +373,60 @@ export default function DriveDocumentos() {
                   setCurrentYear(null);
                   setCurrentMonth(null);
                 }}
-                className="lg:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="lg:hidden rounded-lg p-2 -ml-2 text-[var(--cz-texto-suave)] transition-colors hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             <div>
-              <div className="flex items-center text-xs sm:text-sm text-gray-500 mb-1 space-x-2">
-                <span className="font-medium text-gray-700">{userFolders.find(c => c.id === currentFolderId)?.name || "Documentos"}</span>
+              <div className="flex items-center text-xs sm:text-sm text-[var(--cz-texto-suave)] mb-1 space-x-2">
+                <span className="font-semibold text-[var(--cz-laranja-forte)]">{userFolders.find(c => c.id === currentFolderId)?.name || "Documentos"}</span>
                 {currentYear && <><ChevronRight className="w-4 h-4" /><span>{currentYear}</span></>}
                 {currentMonth && <><ChevronRight className="w-4 h-4" /><span>{currentMonth}</span></>}
               </div>
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900">
+              <h1 className="text-lg sm:text-xl font-bold text-[var(--cz-texto)]">
                 {userFolders.find(c => c.id === currentFolderId)?.name || "Todos os Documentos"}
               </h1>
             </div>
           </div>
+
+          {/* Contagem de arquivos da pasta aberta.
+              O cabeçalho repetia o nome da pasta duas vezes (no caminho e no
+              título) e não dizia o que mais importa ao abrir uma pasta: se tem
+              algo dentro. */}
+          {!loading && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-3 py-1 text-[12px] font-bold text-[var(--cz-laranja-forte)]">
+              <FileText className="w-3.5 h-3.5" />
+              {visibleFiles.length}{" "}
+              {visibleFiles.length === 1 ? "arquivo" : "arquivos"}
+            </span>
+          )}
         </div>
 
         {/* Corpo da Área Principal */}
-        <div className="flex-1 p-6 overflow-y-auto bg-gray-50/30">
+        {/* O conteúdo assenta no fundo claro do produto, e os cartões brancos se
+            destacam dele. Era `bg-gray-50/30`, um cinza fora dos tokens que ficava
+            levemente diferente do fundo das outras telas. */}
+        <div className="flex-1 p-6 overflow-y-auto bg-[var(--cz-fundo)]">
           {loading ? (
             <div className="flex justify-center items-center h-full">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-[var(--cz-laranja)]" />
             </div>
           ) : visibleFiles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <div className="p-6 bg-gray-100 rounded-full mb-4">
-                <Folder className="w-12 h-12 text-gray-300" />
+            <div className="flex flex-col items-center justify-center h-full text-center text-[var(--cz-texto-suave)]">
+              {/* O círculo da pasta vazia ganhou o laranja suave e o fio da marca.
+                  Cinza sobre cinza fazia o vazio parecer erro de carregamento —
+                  que é uma informação diferente de "esta pasta não tem nada". */}
+              <div className="mb-4 grid size-20 place-items-center rounded-full border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)]">
+                <Folder className="w-9 h-9 text-[var(--cz-laranja)]" />
               </div>
-              <h3 className="text-lg font-medium text-gray-700">Esta pasta está vazia</h3>
-              <p className="text-sm mt-1">Nenhum documento foi enviado para cá ainda.</p>
+              <h3 className="text-lg font-semibold text-[var(--cz-texto)]">
+                Esta pasta está vazia
+              </h3>
+              <p className="mt-1 max-w-sm text-sm leading-relaxed">
+                Nenhum documento foi enviado para cá ainda. Quando o contador subir
+                um arquivo nesta pasta, ele aparece aqui.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -377,25 +440,36 @@ export default function DriveDocumentos() {
                 return (
                   <div 
                     key={doc.id} 
-                    className="flex flex-col p-4 bg-white border border-[var(--cz-hairline)] rounded-xl hover:shadow-md hover:border-blue-400 transition-all group cursor-pointer"
+                    className="flex flex-col p-4 bg-[var(--cz-superficie)] border border-[var(--cz-hairline)] rounded-xl transition-all group cursor-pointer hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)]/40 hover:shadow-[var(--cz-elev-1)]"
                     onClick={() => window.open(`${doc.fileUrl}?action=view`, '_blank')}
                   >
                     <div className="flex items-start">
-                      <div className="relative mt-1">
+                      {/* O ícone ganhou um quadro claro atrás: solto sobre o cartão
+                          branco ele flutuava, e o cartão inteiro ficava sem nenhum
+                          ponto de ancoragem visual. */}
+                      <div className="relative mt-0.5 grid size-12 shrink-0 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] transition-colors group-hover:border-[var(--cz-laranja-borda)]">
                         {getFileIcon(doc.mimeType)}
-                        <span className="absolute -top-2 -right-2 bg-gray-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm uppercase">
+                        {/* A etiqueta do tipo era `bg-gray-800` — um retângulo preto
+                            no canto de cada cartão, o elemento de maior contraste
+                            de uma tela que não é sobre o formato do arquivo. */}
+                        <span className="absolute -top-1.5 -right-1.5 rounded bg-[var(--cz-laranja)] px-1.5 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">
                           {fileExt}
                         </span>
                       </div>
-                      <div className="ml-4 flex-1 overflow-hidden">
-                        <p className="font-semibold text-gray-800 text-sm truncate" title={doc.originalName}>{doc.originalName}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                      <div className="ml-3 flex-1 overflow-hidden">
+                        {/* Duas linhas: nome de documento fiscal é longo por
+                            natureza ("DAS-2026-03-EMPRESA-LTDA.pdf") e cortado numa
+                            linha só, dois arquivos do mesmo mês ficam idênticos. */}
+                        <p className="text-sm font-semibold leading-snug text-[var(--cz-texto)] line-clamp-2" title={doc.originalName}>
+                          {doc.originalName}
+                        </p>
+                        <p className="text-xs text-[var(--cz-texto-suave)] mt-1">
                           {formatSize(doc.sizeBytes)} • {new Date(doc.createdAt).toLocaleDateString("pt-BR")}
                         </p>
                         {storeLabel && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {storeLabel.split(",").map((s, idx) => (
-                              <div key={idx} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 border-[var(--cz-hairline)] text-gray-600 font-medium">
+                              <div key={idx} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full border bg-[var(--cz-fundo)] border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] font-medium">
                                 <Store className="w-3 h-3 mr-1" />
                                 <span className="truncate max-w-[120px]">{s}</span>
                               </div>
@@ -403,11 +477,16 @@ export default function DriveDocumentos() {
                           </div>
                         )}
                       </div>
-                      <div className="flex flex-col space-y-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* O botão de baixar era `opacity-0` até o hover — invisível
+                          em telas de toque, onde não existe hover, e ali o cartão
+                          inteiro só abria o arquivo. Agora ele fica visível em tinta
+                          fraca e ganha o laranja no hover: a ação existe sempre, e
+                          o realce diz que é clicável. */}
+                      <div className="ml-2 flex flex-col space-y-1">
                       <button 
                         onClick={(e) => { e.stopPropagation(); window.open(`${doc.fileUrl}?action=download`, '_self'); }}
-                        className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Baixar Arquivo"
+                        className="rounded-lg p-1.5 text-[var(--cz-texto-fraco)] transition-colors hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
+                        title="Baixar arquivo"
                       >
                         <Download className="w-4 h-4" />
                       </button>

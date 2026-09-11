@@ -725,13 +725,39 @@ export default function TabelaGestaoSKU({
         </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table ref={tableRef} className="w-full min-w-[720px] divide-y divide-gray-200">
+      {/*
+        SEM `overflow-x-auto` e SEM `min-w`: a tabela cabe na tela.
+
+        Eram sete colunas com `min-w-[720px]`, e cada célula com
+        `whitespace-nowrap` — ou seja, a largura era a soma dos conteúdos e nada
+        podia encolher. Numa tabela com scroll lateral a coluna do SKU sai de
+        vista justamente quando se olha custo e vendas, e aí não se sabe mais de
+        qual produto é a linha.
+
+        As sete viraram cinco. A fusão que resolve é SKU + Produto: as duas
+        descreviam a MESMA coisa em colunas vizinhas (o código e o nome), e
+        separá-las gastava a largura de duas colunas para uma informação. Juntas,
+        o nome do produto pode usar duas linhas em vez de ser cortado em 280px.
+
+        `table-fixed` + `colgroup`: sem isso o navegador distribui a largura pelo
+        conteúdo, e um nome de produto longo empurraria as outras colunas a cada
+        página — a tabela "dançaria" ao filtrar.
+      */}
+      <div>
+        <table ref={tableRef} className="w-full table-fixed divide-y divide-gray-200">
+          <colgroup>
+            {isMultiSelect && <col className="w-10" />}
+            <col className={isMultiSelect ? "w-[44%]" : "w-[46%]"} />
+            <col className="w-[15%]" />
+            <col className="w-[7%]" />
+            <col className="w-[16%]" />
+            <col className={isMultiSelect ? "w-[15%]" : "w-[16%]"} />
+          </colgroup>
           <thead className="bg-gray-50/80">
             <tr>
               {/* Checkbox para seleção múltipla */}
               {isMultiSelect && (
-                <th className="w-10 px-3 py-3 text-left">
+                <th className="px-3 py-3 text-left">
                   <input
                     type="checkbox"
                     checked={selectedSKUs.length === skus.length && skus.length > 0}
@@ -741,22 +767,19 @@ export default function TabelaGestaoSKU({
                 </th>
               )}
 
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                SKU
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                SKU / Produto
               </th>
-              <th className="w-full px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Produto
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Custo
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Qtd
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Vendas
               </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Ações
               </th>
             </tr>
@@ -789,9 +812,12 @@ export default function TabelaGestaoSKU({
                     </td>
                   )}
 
-                  {/* SKU */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className="flex items-center gap-3">
+                  {/* SKU + Produto, na mesma célula.
+                      `items-start` e não `items-center`: com o nome do produto em
+                      duas linhas, centralizar deixaria a miniatura flutuando no
+                      meio de um bloco alto, desalinhada da primeira linha. */}
+                  <td className={`px-3 py-2 sm:px-4 sm:py-3 text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                    <div className="flex items-start gap-3">
                       {/* Miniatura */}
                       {(() => {
                         const img = getImagemUrl(sku);
@@ -824,6 +850,11 @@ export default function TabelaGestaoSKU({
                           </button>
                         );
                       })()}
+                      {/* Código + nome do produto, empilhados. O `min-w-0` é o que
+                          permite o `truncate`/`line-clamp` de dentro funcionar:
+                          sem ele o filho de um flex não encolhe abaixo do próprio
+                          conteúdo, e o nome longo voltaria a esticar a tabela. */}
+                      <div className="min-w-0 flex-1">
                       {/* Hierarquia Visual */}
                       {sku.tipo === 'pai' ? (
                         <div className="flex items-center gap-2">
@@ -887,14 +918,17 @@ export default function TabelaGestaoSKU({
                           <span className="font-mono text-gray-700">{sku.sku}</span>
                         </div>
                       )}
-                    </div>
-                  </td>
 
-                  {/* Produto (com tipo, status e hierarquia) */}
-                  <td className={`px-4 py-3 text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className={sku.skuPai ? 'pl-14' : ''}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className={`truncate max-w-[280px] ${sku.tipo === 'pai' ? 'font-semibold text-gray-900' : 'text-gray-700'}`} title={sku.produto}>
+                    {/* Produto (com tipo, status e hierarquia), logo abaixo do
+                        código. O `pl-14` que existia para alinhar o filho do kit
+                        saiu: aqui o recuo já vem do bloco do código acima. */}
+                    <div className="mt-1">
+                      <div className="flex items-start gap-2 flex-wrap">
+                        {/* DUAS LINHAS em vez de `truncate max-w-[280px]`: nome de
+                            produto cortado em 280px transforma "Cadeira Gamer
+                            Preta" e "Cadeira Gamer Branca" na mesma linha, e é
+                            justamente o que diferencia dois SKUs vizinhos. */}
+                        <p className={`min-w-0 flex-1 leading-snug line-clamp-2 ${sku.tipo === 'pai' ? 'font-semibold text-gray-900' : 'text-gray-700'}`} title={sku.produto}>
                           {sku.produto}
                         </p>
                         {getTipoBadge(sku)}
@@ -919,10 +953,12 @@ export default function TabelaGestaoSKU({
                         <p className="text-xs text-gray-500 truncate mt-1">{sku.observacoes}</p>
                       )}
                     </div>
+                    </div>
+                    </div>
                   </td>
 
                   {/* Custo Unitário */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-4 sm:py-3 text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     <div 
                       className="cursor-pointer group"
                       onClick={() => {
@@ -941,7 +977,7 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Quantidade */}
-                  <td className={`px-4 py-3 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-4 py-3 text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {sku.tipo === 'pai' ? (
                       <span className="text-gray-400" title="Kits não possuem quantidade própria">-</span>
                     ) : (
@@ -950,7 +986,7 @@ export default function TabelaGestaoSKU({
                   </td>
 
                   {/* Vendas */}
-                  <td className={`px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                  <td className={`px-3 py-2 sm:px-4 sm:py-3 text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
                     {sku.statusVendas ? (
                       <div className="space-y-1">
                         <div className="text-xs">
@@ -970,9 +1006,12 @@ export default function TabelaGestaoSKU({
                     )}
                   </td>
 
-                  {/* Ações */}
-                  <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    <div className="flex items-center justify-end gap-1">
+                  {/* Ações. `flex-wrap` porque são cinco botões: numa coluna de
+                      ~15% da tela eles quebram em duas fileiras em vez de forçar
+                      a largura mínima da tabela — que era parte do motivo do
+                      scroll horizontal. */}
+                  <td className={`px-4 py-3 text-sm font-medium ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                    <div className="flex flex-wrap items-center justify-end gap-1">
                       <button
                         onClick={() => {
                           setSelectedSKU(sku);
