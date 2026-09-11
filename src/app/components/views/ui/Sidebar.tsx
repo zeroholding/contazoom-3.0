@@ -14,6 +14,7 @@ import {
 } from "react";
 import { ClipboardList } from "lucide-react";
 import gsap from "gsap";
+import { LogoCanal, type CanalLogo } from "../comum/logos";
 
 type Leaf = { href: string; label: string };
 type Branch = {
@@ -278,6 +279,62 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+/**
+ * O marketplace de um item do menu, lido do próprio rótulo.
+ *
+ * Derivado do texto em vez de virar um campo em `NAV_ITEMS`: são seis itens hoje
+ * ("Vendas Mercado Livre", "Expedição Shopee"…) e a lista cresce por canal. Um
+ * campo `canal` obrigaria a lembrar de preenchê-lo em cada item novo, e o preço
+ * de esquecer é um item sem logo — bug silencioso. O rótulo, esse, ninguém
+ * esquece de escrever.
+ */
+function canalDoRotulo(label: string): CanalLogo | null {
+  if (/mercado\s*liv/i.test(label)) return "ML";
+  if (/shopee/i.test(label)) return "SP";
+  return null;
+}
+
+/**
+ * Uma folha do menu: logo do marketplace quando houver, e o rótulo.
+ *
+ * A caixa do logo tem LARGURA FIXA e some quando o item não é de canal. Os dois
+ * desenhos têm proporções diferentes (o do Mercado Livre é largo, o da Shopee é
+ * alto), e sem a caixa comum "Vendas Mercado Livre" e "Vendas Shopee" começariam
+ * em colunas diferentes — numa lista vertical curta isso salta aos olhos.
+ */
+function RotuloFolha({ label }: { label: string }) {
+  const canal = canalDoRotulo(label);
+  return (
+    <>
+      {canal && (
+        <span className="grid w-[18px] shrink-0 place-items-center" aria-hidden="true">
+          <LogoCanal canal={canal} />
+        </span>
+      )}
+      {/* `min-w-0` junto de `truncate`: dentro de um flex o item não encolhe
+          abaixo do conteúdo por padrão, e sem isso o rótulo longo vazaria da
+          pastilha em vez de cortar com reticências. */}
+      <span className="min-w-0 truncate">{label}</span>
+    </>
+  );
+}
+
+/**
+ * Quais submenus estão abertos, no nível do MÓDULO.
+ *
+ * Cada página renderiza o seu próprio Sidebar, então o componente desmonta e
+ * remonta a cada navegação — um `useState` local perde tudo o que a pessoa abriu
+ * e o menu "fecha sozinho" no meio do caminho. Guardar aqui faz o estado
+ * atravessar a navegação, e reseta num reload de verdade. Mesmo ciclo de vida de
+ * `adminCheckCache` logo acima.
+ */
+let submenusAbertos: Record<string, boolean> = {
+  sales: false,
+  shipping: false,
+  ads: false,
+  finance: false,
+};
+
 // Cache do resultado de /api/admin/check no nível do módulo. O Sidebar
 // re-monta a cada navegação (cada página renderiza o seu), o que antes
 // disparava essa chamada (que bate no banco) em TODA troca de página.
@@ -412,13 +469,13 @@ const RailFlyoutCard = forwardRef<
                 onClick={onLinkClick}
                 aria-current={active ? "page" : undefined}
                 className={[
-                  "block rounded-lg px-2.5 py-2 text-[13px] transition-colors",
+                  "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
                   active
                     ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
                     : "text-[var(--cz-texto-suave)] hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]",
                 ].join(" ")}
               >
-                {leaf.label}
+                <RotuloFolha label={leaf.label} />
               </Link>
             );
           })}
@@ -485,12 +542,13 @@ export default function Sidebar({
 
   const visibleItems = [...NAV_ITEMS];
 
-  const [open, setOpen] = useState<Record<string, boolean>>({
-    sales: false,
-    shipping: false,
-    ads: false,
-    finance: false,
-  });
+  // Começa do que ficou da navegação anterior, não de tudo fechado.
+  const [open, setOpen] = useState<Record<string, boolean>>(() => ({
+    ...submenusAbertos,
+  }));
+  useEffect(() => {
+    submenusAbertos = open;
+  }, [open]);
   const submenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const branchBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const asideRef = useRef<HTMLElement | null>(null);
@@ -528,36 +586,72 @@ export default function Sidebar({
     onMobileCloseRef.current?.();
   }, [pathname]);
 
-  // abre branch correspondente ao path (modo expandido)
+  // Garante que o grupo da página atual esteja ABERTO (modo expandido).
+  //
+  // Só abre. Antes este efeito reescrevia os quatro slugs a partir do path, ou
+  // seja, FECHAVA na sua cara todo grupo que você tivesse aberto para comparar
+  // duas áreas — e, como o Sidebar remonta a cada navegação, isso acontecia em
+  // todo clique. Fechar é decisão de quem clica no cabeçalho do grupo; o path só
+  // tem direito de abrir o grupo onde você está, para o item ativo em laranja
+  // ficar visível sem precisar de um clique a mais.
   useEffect(() => {
-    const salesActive = pathname?.startsWith("/vendas");
-    const shippingActive = pathname?.startsWith("/expedicao");
-    const adsActive = pathname?.startsWith("/anuncios");
-    const financeActive = pathname?.startsWith("/financeiro");
-    setOpen((s) => ({
-      ...s,
-      sales: !!salesActive,
-      shipping: !!shippingActive,
-      ads: !!adsActive,
-      finance: !!financeActive,
-    }));
+    const ativos: Record<string, boolean> = {
+      sales: !!pathname?.startsWith("/vendas"),
+      shipping: !!pathname?.startsWith("/expedicao"),
+      ads: !!pathname?.startsWith("/anuncios"),
+      finance: !!pathname?.startsWith("/financeiro"),
+    };
+
+    setOpen((s) => {
+      const faltando = Object.keys(ativos).filter(
+        (slug) => ativos[slug] && !s[slug],
+      );
+      // Devolver o MESMO objeto quando nada muda evita um render à toa e, com
+      // ele, um passe da animação de altura nos submenus.
+      if (faltando.length === 0) return s;
+      const proximo = { ...s };
+      for (const slug of faltando) proximo[slug] = true;
+      return proximo;
+    });
   }, [pathname]);
 
-  // estado inicial dos submenus (expandido)
+  // Pinta o estado inicial dos submenus ANTES do primeiro quadro.
+  //
+  // Quem já estava aberto nasce aberto, sem animação. Antes tudo nascia com
+  // `height: 0` e o efeito seguinte reabria com 0,25s de animação — a cada
+  // navegação o menu piscava fechado e voltava, que é a parte visível do "fecha
+  // sozinho". Lê o estado do módulo, e não `open`, porque este efeito roda uma
+  // única vez e não deve declarar dependência de algo que muda.
+  const primeiroPasseAnimacao = useRef(true);
   useLayoutEffect(() => {
-    Object.values(submenuRefs.current).forEach((el) => {
+    Object.entries(submenuRefs.current).forEach(([key, el]) => {
       if (!el) return;
-      gsap.set(el, {
-        height: 0,
-        opacity: 0,
-        filter: "blur(8px)",
-        display: "none",
-      });
+      if (submenusAbertos[key]) {
+        gsap.set(el, {
+          display: "block",
+          height: "auto",
+          opacity: 1,
+          filter: "blur(0px)",
+        });
+      } else {
+        gsap.set(el, {
+          height: 0,
+          opacity: 0,
+          filter: "blur(8px)",
+          display: "none",
+        });
+      }
     });
   }, []);
 
   // anima abrir/fechar submenus (expandido) com blur também
   useEffect(() => {
+    // O primeiro passe já foi pintado pelo layout effect acima; animar aqui
+    // significaria animar a partir do estado final, o que só produz um piscar.
+    if (primeiroPasseAnimacao.current) {
+      primeiroPasseAnimacao.current = false;
+      return;
+    }
     Object.entries(submenuRefs.current).forEach(([key, el]) => {
       if (!el) return;
       const isOpen = open[key];
@@ -922,13 +1016,13 @@ export default function Sidebar({
                           href={leaf.href}
                           aria-current={active ? "page" : undefined}
                           className={[
-                            "block rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+                            "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
                             active
                               ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
                               : "text-[var(--cz-texto-suave)] hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]",
                           ].join(" ")}
                         >
-                          {leaf.label}
+                          <RotuloFolha label={leaf.label} />
                         </Link>
                       );
                     })}

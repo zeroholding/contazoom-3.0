@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "../CardsContas";
 import VendasTable from "../VendasTable";
 import VendasPagination from "../VendasPagination";
+import ResumoPorConta, { type LinhaResumoConta } from "../ResumoPorConta";
 import type { ColunasVisiveis } from "../colunasVendas";
 import { useToast } from "../toaster";
 import { useVendasV2 } from "@/hooks/v2/useVendas";
@@ -205,17 +206,38 @@ export default function TabelaVendasV2({
     isStartingSync,
   ]);
 
-  const resumoPorConta = useMemo(() => {
-    const counts = new Map<string, number>();
+  const resumoPorConta = useMemo<LinhaResumoConta[]>(() => {
+    // O canal vem da PRIMEIRA venda de cada conta, e não da lista de contas
+    // conectadas: a pastilha fala das vendas em tela, então o marketplace tem de
+    // sair do mesmo lugar de onde saiu o número. `canal` é gravado na venda como
+    // "ML" ou "SP" pelos dois sincronizadores, que é exatamente o que o logo
+    // espera receber.
+    const counts = new Map<string, { total: number; canal: "ML" | "SP" | null }>();
 
     for (const item of vendasProcessadas) {
-      const contaNome = (item as any)?.venda?.conta ?? "Sem conta";
-      counts.set(contaNome, (counts.get(contaNome) ?? 0) + 1);
+      const venda = (item as any)?.venda ?? {};
+      const contaNome = venda.conta ?? "Sem conta";
+      const bruto = String(venda.canal ?? venda.plataforma ?? "").toUpperCase();
+      const canal: "ML" | "SP" | null = bruto.startsWith("ML")
+        ? "ML"
+        : bruto.startsWith("SP") || bruto.startsWith("SHOPEE")
+          ? "SP"
+          : bruto.startsWith("MERCADO")
+            ? "ML"
+            : null;
+
+      const atual = counts.get(contaNome);
+      if (atual) {
+        atual.total += 1;
+        atual.canal = atual.canal ?? canal;
+      } else {
+        counts.set(contaNome, { total: 1, canal });
+      }
     }
 
-    const lista: { conta: string; total: number }[] = Array.from(
-      counts.entries(),
-    ).map(([conta, total]) => ({ conta, total }));
+    const lista: LinhaResumoConta[] = Array.from(counts.entries())
+      .map(([conta, { total, canal }]) => ({ conta, total, canal }))
+      .sort((a, b) => b.total - a.total);
 
     // Enquanto está sincronizando, injeta informações de progresso
     if (isSyncing || isStartingSync) {
@@ -248,6 +270,7 @@ export default function TabelaVendasV2({
               textProgresso ? ` ${textProgresso}` : ""
             })`,
             total: fetched,
+            progresso: true,
           });
         }
       } else {
@@ -268,6 +291,7 @@ export default function TabelaVendasV2({
         lista.push({
           conta: `${baseLabel} ${mergedSync.accountLabel}${textoQtd}`,
           total: fetched,
+          progresso: true,
         });
       }
     } else if (
@@ -279,6 +303,7 @@ export default function TabelaVendasV2({
       lista.push({
         conta: "↻ Última sincronização (vendas processadas)",
         total: fetched,
+        progresso: true,
       });
     }
 
@@ -517,21 +542,34 @@ export default function TabelaVendasV2({
           />
         </div>
       ) : (
-        <div className="flex h-[600px] flex-col">
-          <div className="min-h-0 flex-1">
-            {/* `colunasVisiveis` chegava nesta tabela e morria aqui: a prop era
-                declarada e nunca repassada, e é uma das duas razões de o botão de
-                colunas não fazer nada. A outra estava no próprio `VendasTable`. */}
-            <VendasTable
-              vendas={vendasProcessadas}
-              isLoading={isTableLoading}
-              currentPage={pagination.page}
-              itemsPerPage={pagination.limit}
-              colunasVisiveis={colunasVisiveis}
-              platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
-            />
-          </div>
-          <div className="border-t border-[var(--cz-hairline)] bg-white">
+        <>
+          {/* Resumo por conta ACIMA da tabela. Ele descreve o que está em tela,
+              então pertence ao topo do cartão, logo abaixo do título da página, e
+              não ao rodapé de controles. */}
+          <ResumoPorConta
+            itens={resumoPorConta}
+            totalGeral={pagination.totalItems}
+            rotulo="Nesta página"
+          />
+
+          {/* A altura do cartão acompanha a janela em vez de ser 600px fixos: em
+              tela cheia sobrava faixa branca embaixo enquanto a tabela mostrava
+              poucas linhas. O piso de 460px protege telas curtas e o teto de
+              860px evita uma tabela mais alta que o alcance do olho. */}
+          <div className="flex h-[clamp(460px,74vh,860px)] flex-col">
+            <div className="min-h-0 flex-1">
+              {/* `colunasVisiveis` chegava nesta tabela e morria aqui: a prop era
+                  declarada e nunca repassada, e é uma das duas razões de o botão de
+                  colunas não fazer nada. A outra estava no próprio `VendasTable`. */}
+              <VendasTable
+                vendas={vendasProcessadas}
+                isLoading={isTableLoading}
+                currentPage={pagination.page}
+                itemsPerPage={pagination.limit}
+                colunasVisiveis={colunasVisiveis}
+                platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
+              />
+            </div>
             <VendasPagination
               currentPage={pagination.page}
               totalPages={totalPages}
@@ -539,10 +577,9 @@ export default function TabelaVendasV2({
               itemsPerPage={pagination.limit}
               onPageChange={handlePageChange}
               onItemsPerPageChange={onItemsPerPageChange}
-              resumoPorConta={resumoPorConta}
             />
           </div>
-        </div>
+        </>
       )}
     </div>
   );

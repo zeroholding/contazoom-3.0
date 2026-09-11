@@ -21,13 +21,19 @@ const useIsoLayout = typeof window !== "undefined" ? useLayoutEffect : useEffect
 
 interface HeaderVendasGeralProps {
   totalItems?: number;
-  contasConectadas?: any[];
 }
 
-const HeaderVendasGeral = ({
-  totalItems = 0,
-  contasConectadas = [],
-}: HeaderVendasGeralProps) => {
+/**
+ * Cabeçalho da tela.
+ *
+ * Já teve um bloco "Contas conectadas: 8" no canto direito, com três iniciais em
+ * bolinha laranja e um "+5". Saiu: ele não respondia nada que se pergunte AQUI.
+ * Quantas contas existem é assunto da tela de Contas; quais contas estão nesta
+ * lista é o resumo por conta no topo da tabela, que traz nome, logo do
+ * marketplace e a quantidade de vendas. As iniciais empilhadas repetiam metade
+ * disso pior e ocupavam o lugar mais nobre da tela.
+ */
+const HeaderVendasGeral = ({ totalItems = 0 }: HeaderVendasGeralProps) => {
   const router = useRouter();
   const [showInfoDropdown, setShowInfoDropdown] = useState(false);
 
@@ -40,7 +46,7 @@ const HeaderVendasGeral = ({
   });
 
   return (
-    <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="mb-6">
       <div className="text-left">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -118,32 +124,6 @@ const HeaderVendasGeral = ({
         </p>
       </div>
 
-      {contasConectadas.length > 0 && (
-        <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-          <span className="text-sm text-gray-600">Contas conectadas:</span>
-          <div className="flex items-center -space-x-1">
-            {contasConectadas.slice(0, 3).map((conta) => {
-              const label = conta.nickname || conta.shop_id || conta.merchant_id || conta.ml_user_id || conta.id;
-              const title = conta.nickname || `Conta ${label}`;
-              const initial = (String(label || "?").charAt(0) || "?").toUpperCase();
-              return (
-                <div
-                  key={conta.id || label}
-                  className="relative bg-orange-500 text-white rounded-full flex items-center justify-center text-xs font-semibold w-6 h-6"
-                  title={title}
-                >
-                  <span>{initial}</span>
-                </div>
-              );
-            })}
-            {contasConectadas.length > 3 && (
-              <div className="relative bg-gray-400 text-white rounded-full flex items-center justify-center text-xs font-semibold w-6 h-6 ml-1">
-                <span>+{contasConectadas.length - 3}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -280,7 +260,6 @@ function VendasGeralContent() {
         <section className="p-3 sm:p-6">
           <HeaderVendasGeral
             totalItems={pagination.totalItems}
-            contasConectadas={contasConectadas || []}
           />
 
           {!isLoadingGuidance && showConnectAccounts && (

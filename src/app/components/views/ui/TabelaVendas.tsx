@@ -5,6 +5,7 @@ import { EmptyState } from "./CardsContas";
 import AvatarConta, { type ContaConectada } from "./AvatarConta";
 import VendasTable, { type Venda } from "./VendasTable";
 import VendasPagination from "./VendasPagination";
+import ResumoPorConta, { type LinhaResumoConta } from "./ResumoPorConta";
 import {
   FiltroStatus,
   FiltroPeriodo,
@@ -621,17 +622,37 @@ export default function TabelaVendas({
     isStartingSync,
   ]);
 
-  const resumoPorConta = useMemo(() => {
-    const counts = new Map<string, number>();
+  const resumoPorConta = useMemo<LinhaResumoConta[]>(() => {
+    // O canal sai da PRIMEIRA venda de cada conta, e não da lista de contas
+    // conectadas: a pastilha fala das vendas em tela, então o marketplace tem de
+    // vir do mesmo lugar de onde veio o número. Os dois sincronizadores gravam
+    // `canal` como "ML" ou "SP", que é o que o logo espera.
+    const counts = new Map<string, { total: number; canal: "ML" | "SP" | null }>();
 
     for (const item of vendasFiltradas) {
-      const contaNome = (item as any)?.venda?.conta ?? "Sem conta";
-      counts.set(contaNome, (counts.get(contaNome) ?? 0) + 1);
+      const venda = (item as any)?.venda ?? {};
+      const contaNome = venda.conta ?? "Sem conta";
+      const bruto = String(venda.canal ?? venda.plataforma ?? "").toUpperCase();
+      const canal: "ML" | "SP" | null = bruto.startsWith("ML")
+        ? "ML"
+        : bruto.startsWith("SP") || bruto.startsWith("SHOPEE")
+        ? "SP"
+        : bruto.startsWith("MERCADO")
+        ? "ML"
+        : null;
+
+      const atual = counts.get(contaNome);
+      if (atual) {
+        atual.total += 1;
+        atual.canal = atual.canal ?? canal;
+      } else {
+        counts.set(contaNome, { total: 1, canal });
+      }
     }
 
-    const lista: { conta: string; total: number }[] = Array.from(
-      counts.entries(),
-    ).map(([conta, total]) => ({ conta, total }));
+    const lista: LinhaResumoConta[] = Array.from(counts.entries())
+      .map(([conta, { total, canal }]) => ({ conta, total, canal }))
+      .sort((a, b) => b.total - a.total);
 
     // Enquanto está sincronizando, injeta informações de progresso
     if (isSyncing || isStartingSync) {
@@ -664,6 +685,7 @@ export default function TabelaVendas({
               textProgresso ? ` ${textProgresso}` : ""
             })`,
             total: fetched,
+            progresso: true,
           });
         }
       } else {
@@ -684,6 +706,7 @@ export default function TabelaVendas({
         lista.push({
           conta: `${baseLabel} ${mergedSync.accountLabel}${textoQtd}`,
           total: fetched,
+          progresso: true,
         });
       }
     } else if (
@@ -695,6 +718,7 @@ export default function TabelaVendas({
       lista.push({
         conta: "↻ Última sincronização (vendas processadas)",
         total: fetched,
+        progresso: true,
       });
     }
 
@@ -947,19 +971,32 @@ export default function TabelaVendas({
           />
         </div>
       ) : (
-        <div className="flex h-[400px] sm:h-[600px] flex-col">
-          <div className="min-h-0 flex-1">
-            <VendasTable
-              vendas={vendasFiltradas}
-              isLoading={isTableLoading}
-              currentPage={currentPage}
-              itemsPerPage={itemsPerPage}
-              colunasVisiveis={colunasVisiveis}
-              platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
-              managePage
-            />
-          </div>
-          <div className="border-t border-[var(--cz-hairline)] bg-white">
+        <>
+          {/* Resumo por conta ACIMA da tabela: ele descreve o que está em tela,
+              então é topo de cartão, perto do título, e não rodapé de controles.
+              Aqui NÃO leva rótulo de escopo porque esta tela pagina em memória —
+              os números por conta já são a lista inteira do filtro, igual ao
+              "Total". */}
+          <ResumoPorConta
+            itens={resumoPorConta}
+            totalGeral={vendasFiltradas.length}
+          />
+
+          {/* Altura acompanhando a janela em vez de 600px fixos: com o rodapé
+              antigo (três alturas de texto) sobrava faixa branca embaixo e a
+              tabela mostrava poucas linhas. */}
+          <div className="flex h-[420px] sm:h-[clamp(460px,74vh,860px)] flex-col">
+            <div className="min-h-0 flex-1">
+              <VendasTable
+                vendas={vendasFiltradas}
+                isLoading={isTableLoading}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                colunasVisiveis={colunasVisiveis}
+                platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
+                managePage
+              />
+            </div>
             <VendasPagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -973,7 +1010,6 @@ export default function TabelaVendas({
                 setItemsPerPage(n);
                 setCurrentPage(1);
               }}
-              resumoPorConta={resumoPorConta}
             />
           </div>
 
@@ -993,7 +1029,7 @@ export default function TabelaVendas({
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
