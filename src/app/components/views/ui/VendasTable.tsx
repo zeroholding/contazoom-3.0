@@ -135,23 +135,19 @@ interface VendasTableProps {
  */
 function TabelaVendasSkeleton({ colunas }: { colunas: number }) {
   return (
-    <div className="h-full flex flex-col">
+    <div>
       {/* CSS para ocultar scrollbars */}
       <style dangerouslySetInnerHTML={{
         __html: `
           .table-scroll-container {
-            overflow: auto;
-            /* scrollbar-width: none; */
-            /* -ms-overflow-style: none; */
-          }
-          .table-scroll-container::-webkit-scrollbar {
-            /* display: none; Removed to allow scrolling on mobile */
+            overflow-x: auto;
           }
         `
       }} />
-      
-      {/* Container com scroll horizontal e vertical - scrollbar oculta */}
-      <div className="flex-1 table-scroll-container relative">
+
+      {/* Só scroll HORIZONTAL. O vertical é da página — ver o comentário grande
+          na tabela de verdade, abaixo. */}
+      <div className="table-scroll-container relative">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
@@ -320,17 +316,22 @@ export default function VendasTable({
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div>
       {/* CSS para ocultar scrollbars e animação de gradiente */}
       <style dangerouslySetInnerHTML={{
         __html: `
+          /* SÓ o eixo horizontal.
+             Era \`overflow: auto\`, e a tabela vivia dentro de uma caixa de altura
+             fixa — então a página tinha uma barra de rolagem e a tabela tinha
+             outra, uma dentro da outra. Você rolava a página até a tabela e
+             precisava rolar de novo, por dentro, para ver as vendas; e a barra de
+             fora nunca chegava ao fim da lista, porque a lista não estava na
+             página, estava presa num box de 600px.
+             Sem altura fixa, a tabela cresce com o conteúdo e sobra UMA barra: a
+             da página. A horizontal fica porque as 7 colunas somam ~990px de
+             largura mínima e em tela estreita elas realmente não caberiam. */
           .table-scroll-container {
-            overflow: auto;
-            /* scrollbar-width: none; */
-            /* -ms-overflow-style: none; */
-          }
-          .table-scroll-container::-webkit-scrollbar {
-            /* display: none; Removed to allow scrolling on mobile */
+            overflow-x: auto;
           }
           /* Garantir que dropdowns não sejam cortados */
           .table-scroll-container .smart-dropdown {
@@ -403,8 +404,9 @@ export default function VendasTable({
         `
       }} />
       
-      {/* Container com scroll horizontal e vertical - scrollbar completamente oculta */}
-      <div className="flex-1 table-scroll-container">
+      {/* Container de scroll HORIZONTAL apenas. Sem `flex-1` e sem altura: quem
+          rola na vertical é a página. */}
+      <div className="table-scroll-container">
         <table className="min-w-full divide-y divide-gray-200">
           {/*
             O cabeçalho é GERADO a partir da lista de grupos, não escrito à mão.
@@ -413,6 +415,16 @@ export default function VendasTable({
             de poder sair de sincronia com a `<td>` — elas casam por POSIÇÃO, e
             esconder só uma das duas deslocaria todas as colunas seguintes.
           */}
+          {/* `sticky` continua declarado, mas hoje ele NÃO prende nada, e é bom
+              saber disso antes de tentar consertar.
+              `position: sticky` gruda no scroll mais próximo, e o mais próximo é
+              este container (ele tem `overflow-x`, o que já faz dele um
+              scrollport) e, acima dele, o cartão com `overflow-hidden`. Nenhum
+              dos dois rola na vertical desde que a altura fixa saiu, então o
+              cabeçalho fica onde está. Para ele grudar na PÁGINA seria preciso
+              tirar o `overflow` dos dois — e aí as 7 colunas (~990px de largura
+              mínima) passariam a vazar do cartão em telas médias. Fica assim de
+              propósito: uma barra de rolagem só vale mais que o cabeçalho preso. */}
           <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 {GRUPOS_COLUNA.filter(mostrar).map((grupo) => (

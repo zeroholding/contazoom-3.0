@@ -982,36 +982,35 @@ export default function TabelaVendas({
             totalGeral={vendasFiltradas.length}
           />
 
-          {/* Altura acompanhando a janela em vez de 600px fixos: com o rodapé
-              antigo (três alturas de texto) sobrava faixa branca embaixo e a
-              tabela mostrava poucas linhas. */}
-          <div className="flex h-[420px] sm:h-[clamp(460px,74vh,860px)] flex-col">
-            <div className="min-h-0 flex-1">
-              <VendasTable
-                vendas={vendasFiltradas}
-                isLoading={isTableLoading}
-                currentPage={currentPage}
-                itemsPerPage={itemsPerPage}
-                colunasVisiveis={colunasVisiveis}
-                platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
-                managePage
-              />
-            </div>
-            <VendasPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={vendasFiltradas.length}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setCurrentPage}
-              onItemsPerPageChange={(n) => {
-                // Volta para a página 1: quem estava na página 9 com 10 por página
-                // e escolhe 100 cairia numa página que não existe mais, e veria a
-                // lista vazia logo depois de pedir para ver MAIS itens.
-                setItemsPerPage(n);
-                setCurrentPage(1);
-              }}
-            />
-          </div>
+          {/* SEM caixa de altura fixa: havia um `flex h-[600px] flex-col` aqui e
+              um `overflow: auto` dentro do `VendasTable`, o que dava DUAS barras
+              de rolagem verticais, uma dentro da outra — e só a de dentro andava
+              na lista. A tabela agora tem a altura do conteúdo e quem rola é a
+              página. Quanto cabe de uma vez já é escolhido no rodapé
+              (10/20/50/100). */}
+          <VendasTable
+            vendas={vendasFiltradas}
+            isLoading={isTableLoading}
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            colunasVisiveis={colunasVisiveis}
+            platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
+            managePage
+          />
+          <VendasPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={vendasFiltradas.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(n) => {
+              // Volta para a página 1: quem estava na página 9 com 10 por página
+              // e escolhe 100 cairia numa página que não existe mais, e veria a
+              // lista vazia logo depois de pedir para ver MAIS itens.
+              setItemsPerPage(n);
+              setCurrentPage(1);
+            }}
+          />
 
           {/* Indicador de sincronização/salvamento (persiste após reload) */}
           {progress && (progress.message?.includes('Salvando') || progress.message?.includes('baixadas') || progress.type === 'sync_progress') && progress.type !== 'sync_complete' && (

@@ -552,33 +552,36 @@ export default function TabelaVendasV2({
             rotulo="Nesta página"
           />
 
-          {/* A altura do cartão acompanha a janela em vez de ser 600px fixos: em
-              tela cheia sobrava faixa branca embaixo enquanto a tabela mostrava
-              poucas linhas. O piso de 460px protege telas curtas e o teto de
-              860px evita uma tabela mais alta que o alcance do olho. */}
-          <div className="flex h-[clamp(460px,74vh,860px)] flex-col">
-            <div className="min-h-0 flex-1">
-              {/* `colunasVisiveis` chegava nesta tabela e morria aqui: a prop era
-                  declarada e nunca repassada, e é uma das duas razões de o botão de
-                  colunas não fazer nada. A outra estava no próprio `VendasTable`. */}
-              <VendasTable
-                vendas={vendasProcessadas}
-                isLoading={isTableLoading}
-                currentPage={pagination.page}
-                itemsPerPage={pagination.limit}
-                colunasVisiveis={colunasVisiveis}
-                platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
-              />
-            </div>
-            <VendasPagination
-              currentPage={pagination.page}
-              totalPages={totalPages}
-              totalItems={pagination.totalItems}
-              itemsPerPage={pagination.limit}
-              onPageChange={handlePageChange}
-              onItemsPerPageChange={onItemsPerPageChange}
-            />
-          </div>
+          {/* SEM caixa de altura fixa em volta da tabela.
+              Havia aqui um `flex h-[...] flex-col` e, dentro do `VendasTable`, um
+              `overflow: auto`. O resultado eram DUAS barras de rolagem verticais
+              empilhadas: a da página, que passava batido pela tabela, e a de
+              dentro do box, que era a única que andava na lista. Rolar a página
+              não chegava ao fim das vendas porque as vendas não estavam na
+              página, estavam presas num quadrado de 600px.
+              Agora a tabela tem a altura do conteúdo e quem rola é a página.
+              Como o tamanho de página é escolhido ali no rodapé (10/20/50/100), o
+              controle de "quanto cabe de uma vez" já existe e não precisa de um
+              box com barra própria. */}
+          {/* `colunasVisiveis` chegava nesta tabela e morria aqui: a prop era
+              declarada e nunca repassada, e é uma das duas razões de o botão de
+              colunas não fazer nada. A outra estava no próprio `VendasTable`. */}
+          <VendasTable
+            vendas={vendasProcessadas}
+            isLoading={isTableLoading}
+            currentPage={pagination.page}
+            itemsPerPage={pagination.limit}
+            colunasVisiveis={colunasVisiveis}
+            platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
+          />
+          <VendasPagination
+            currentPage={pagination.page}
+            totalPages={totalPages}
+            totalItems={pagination.totalItems}
+            itemsPerPage={pagination.limit}
+            onPageChange={handlePageChange}
+            onItemsPerPageChange={onItemsPerPageChange}
+          />
         </>
       )}
     </div>
