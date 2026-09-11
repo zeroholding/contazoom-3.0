@@ -208,7 +208,10 @@ export default function AnunciosMaisVendidos() {
         </Campo>
       </PainelFiltros>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
+      {/* `sm:grid-cols-3` entre o 2 e o 5: com apenas `grid-cols-2 xl:grid-cols-5`,
+          toda a faixa de 640px a 1280px ficava com cartões de meia largura e um
+          sobrando sozinho na última linha. */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Kpi
           rotulo="Anúncios com venda"
           valor={inteiro(resumo.anuncios)}
@@ -353,8 +356,10 @@ function LinhaVendida({
 
   return (
     <tr
-      className={`border-b border-[var(--cz-hairline)] text-[12.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
-        esgotado ? "bg-rose-50/30" : ""
+      // 13,5px: era 12,5, e com metade do conteúdo da linha em 10,5px isso fazia
+      // a tabela inteira viver abaixo do corpo de texto do resto do produto.
+      className={`border-b border-[var(--cz-hairline)] align-top text-[13.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
+        esgotado ? "bg-rose-50/40" : ""
       }`}
     >
       <CelulaAnuncio l={l} posicao={posicao} />
@@ -362,10 +367,10 @@ function LinhaVendida({
       {/* Situação + estoque + preço: o bloco do "agora". */}
       <CelulaAgora l={l} />
 
-      <td className="px-3 py-3 text-right">
+      <td className="px-3 py-3.5 text-right">
         {esgotado ? (
           <Selo tom="critico">
-            <IconeProibido className="h-3 w-3" />
+            <IconeProibido className="h-3.5 w-3.5" />
             esgotado
           </Selo>
         ) : cobertura === null ? (
@@ -385,24 +390,27 @@ function LinhaVendida({
           Unidades em destaque porque é o que ordena a tela; faturamento embaixo
           porque é a consequência; pedidos em terceiro porque quase nunca decide
           algo sozinho (é unidades ÷ itens por venda). */}
-      <td className="px-3 py-3 text-right">
-        <span className="block font-bold tabular-nums text-[var(--cz-texto)]">
+      <td className="px-3 py-3.5 text-right">
+        {/* 16px nas unidades: é o número que ORDENA a tela, então é o número que
+            tem de ser lido primeiro na linha. Em 12,5px ele tinha o mesmo peso do
+            código do anúncio. */}
+        <span className="block text-[16px] font-bold leading-none tabular-nums text-[var(--cz-texto)]">
           {inteiro(l.unidades)}
-          <span className="ml-1 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
+          <span className="ml-1 text-[11px] font-medium text-[var(--cz-texto-fraco)]">
             un.
           </span>
         </span>
-        <span className="mt-0.5 block font-semibold tabular-nums text-emerald-700">
+        <span className="mt-1 block font-semibold tabular-nums text-emerald-700">
           {brl(l.faturamento)}
         </span>
-        <span className="mt-0.5 block text-[10.5px] tabular-nums text-[var(--cz-texto-fraco)]">
+        <span className="mt-0.5 block text-[11px] tabular-nums text-[var(--cz-texto-suave)]">
           {inteiro(l.pedidos)} pedido(s)
         </span>
       </td>
 
       {/* Data e hora, e o botão de abrir no ML embaixo. Juntar a ação nesta
           coluna é o que dispensa uma décima coluna só para um ícone. */}
-      <td className="px-3 py-3 pr-5 text-right">
+      <td className="px-3 py-3.5 pr-5 text-right">
         <UltimaVenda iso={l.ultimaVenda} />
         <span className="mt-1.5 inline-flex">
           <LinkAbrir l={l} />

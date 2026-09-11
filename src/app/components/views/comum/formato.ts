@@ -58,9 +58,23 @@ export function horaCurta(iso: string | null): string {
  * `--cz-texto`) em vez de `gray-300`/`bg-white`/`text-gray-900`. Com cinza cru, o
  * campo ficava com um cinza levemente diferente do fio dos cartões ao lado, o que
  * a olho nu não se nomeia mas se percebe como desalinho.
+ *
+ * ALTURA 11 (2,75rem) E TEXTO 13,5px, e não 10/13.
+ *
+ * A altura casa com a dos botões do kit (`BotaoPrimario`, `BotaoAtualizar` e
+ * `BotaoSecundario` são todos `h-11`). Com o campo em `h-10`, qualquer linha que
+ * tivesse um campo ao lado de um botão saía com 4px de degrau — e é esse tipo de
+ * diferença que faz uma tela "não parecer do sistema" sem que se consiga apontar
+ * o quê. 13,5px porque 13 era o menor texto de formulário do produto inteiro,
+ * dentro de um campo de 40px de altura: sobrava caixa e faltava letra.
+ *
+ * Quem escrever um campo à mão deve usar `ALTURA_CAMPO` para não reintroduzir o
+ * degrau.
  */
+export const ALTURA_CAMPO = "h-11";
+
 export const ENTRADA =
-  "h-10 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 text-[13px] text-[var(--cz-texto)] outline-none transition-colors focus:border-[var(--cz-laranja)] focus:ring-2 focus:ring-[var(--cz-laranja-suave)]";
+  "h-11 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 text-[13.5px] text-[var(--cz-texto)] outline-none transition-colors focus:border-[var(--cz-laranja)] focus:ring-2 focus:ring-[var(--cz-laranja-suave)]";
 
 /**
  * "há 5 min", "há 3h", "há 2d".

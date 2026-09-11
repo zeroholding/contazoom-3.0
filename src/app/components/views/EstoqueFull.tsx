@@ -516,7 +516,10 @@ export default function EstoqueFull() {
         </Campo>
       </PainelFiltros>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-7">
+      {/* Escada de colunas em vez de saltar de 2 para 7: com `grid-cols-2
+          xl:grid-cols-7`, tudo entre 640px e 1280px ficava com sete cartões em
+          duas colunas — quatro linhas de cartão antes de chegar à tabela. */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <Kpi
           rotulo="Itens no Full"
           valor={inteiro(resumo.itens)}
@@ -528,10 +531,13 @@ export default function EstoqueFull() {
           nota={brl(resumo.vendasReceita)}
           icone={<IconeSubindo className="h-5 w-5" />}
         />
+        {/* `tom="bom"` e não `destaque`: aqui o verde é SEMÂNTICO (apto para
+            venda é o estado bom), e `destaque` passou a ser o laranja de ênfase.
+            Ver o docblock do `Kpi`. */}
         <Kpi
           rotulo="Aptas p/ venda"
           valor={inteiro(resumo.aptas)}
-          destaque
+          tom="bom"
           icone={<IconeCerto className="h-5 w-5" />}
         />
         <Kpi

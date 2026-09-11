@@ -86,7 +86,14 @@ export const RESUMO_VAZIO: Resumo = {
  * elas recebam as correções futuras, exatamente como `anuncios/comum.tsx` já faz
  * com as peças de interface.
  */
-export { brl, dataCurta, ENTRADA, horaCurta, inteiro } from "../comum/formato";
+export {
+  ALTURA_CAMPO,
+  brl,
+  dataCurta,
+  ENTRADA,
+  horaCurta,
+  inteiro,
+} from "../comum/formato";
 
 /**
  * Um anúncio parado POR FALTA DE ESTOQUE é um problema diferente de um anúncio

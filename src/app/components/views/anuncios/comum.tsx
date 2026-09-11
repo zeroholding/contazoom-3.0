@@ -33,7 +33,12 @@
 
 import type { ReactNode } from "react";
 
-import { Miniatura, Paginacao as PaginacaoBase } from "../comum/shell";
+import {
+  Miniatura,
+  Paginacao as PaginacaoBase,
+  Selo,
+  type TomSelo,
+} from "../comum/shell";
 import { brl, dataCurta, horaCurta, inteiro, type Linha } from "./tipos";
 
 /* -------------------------------------------------------------------------- */
@@ -83,7 +88,7 @@ export function Paginacao(
 export function NotaFiltroCaro({ visivel }: { visivel: boolean }) {
   if (!visivel) return null;
   return (
-    <p className="mt-3 text-[11.5px] leading-relaxed text-amber-700">
+    <p className="mt-3 text-[12.5px] leading-relaxed text-amber-700">
       Filtrar por situação ou estoque exige consultar o Mercado Livre em todos os
       anúncios da lista, e não só nos exibidos — pode levar alguns segundos a mais.
     </p>
@@ -100,7 +105,7 @@ export function NotaFiltroCaro({ visivel }: { visivel: boolean }) {
 export function AvisoBackfill({ pendentes }: { pendentes: number }) {
   if (pendentes === 0) return null;
   return (
-    <div className="mt-4 rounded-[var(--cz-raio)] border border-sky-200 bg-sky-50 px-4 py-3 text-[12px] leading-relaxed text-sky-900">
+    <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-sky-200 bg-sky-50 px-4 py-3 text-[13px] leading-relaxed text-sky-900">
       <strong>{inteiro(pendentes)} venda(s)</strong> ainda estão sendo associadas ao
       anúncio de origem. O ranking já funciona, mas fica mais completo a cada
       carregamento desta tela — o preenchimento é automático e não consome a API do
@@ -111,7 +116,7 @@ export function AvisoBackfill({ pendentes }: { pendentes: number }) {
 
 export function RodapeFonte() {
   return (
-    <p className="mt-4 text-[11.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+    <p className="mt-4 max-w-4xl text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
       Estoque, preço e situação são lidos no Mercado Livre a cada carregamento — não
       ficam guardados no banco, porque mudam a cada venda. Estoque em branco significa
       que a API não respondeu para aquele anúncio, e não que ele está zerado. A lista
@@ -130,21 +135,27 @@ export function RodapeFonte() {
  */
 export function AvisoDoisTempos() {
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-3.5 py-2 text-[11.5px] leading-relaxed">
-      <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--cz-texto)]">
-        <span className="size-1.5 rounded-full bg-emerald-500" />
-        Situação, estoque e preço: <span className="font-bold">agora</span> no Mercado
-        Livre
-      </span>
-      <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--cz-texto)]">
-        <span className="size-1.5 rounded-full bg-[var(--cz-texto-fraco)]" />
-        Unidades, faturamento e última venda:{" "}
-        <span className="font-bold">histórico</span> do período filtrado
-      </span>
-      <span className="text-[var(--cz-texto-suave)]">
+    // Legenda, com a cara de legenda: duas pastilhas com fio, não três frases de
+    // 11,5px encostadas numa faixa cinza. A terceira frase virou a segunda linha,
+    // em tinta suave — ela qualifica a primeira pastilha e não é um terceiro item
+    // da mesma lista, que era como se lia quando as três dividiam a linha.
+    <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[12px] font-semibold leading-none text-emerald-800">
+          <span className="size-1.5 rounded-full bg-emerald-500" />
+          Situação, estoque e preço: <span className="font-bold">agora</span> no
+          Mercado Livre
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1 text-[12px] font-semibold leading-none text-[var(--cz-texto-suave)]">
+          <span className="size-1.5 rounded-full bg-[var(--cz-texto-fraco)]" />
+          Unidades, faturamento e última venda:{" "}
+          <span className="font-bold">histórico</span> do período
+        </span>
+      </div>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
         O preço exibido é o da etiqueta hoje, não o preço praticado nas vendas
         listadas.
-      </span>
+      </p>
     </div>
   );
 }
@@ -159,14 +170,19 @@ export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
     // `items-start` e não `items-center`: com o título em duas linhas, centralizar
     // deixaria a miniatura flutuando no meio de um bloco alto, desalinhada da
     // primeira linha do texto que ela ilustra.
-    <td className="py-3 pl-5 pr-3">
+    <td className="py-3.5 pl-5 pr-3">
       <div className="flex items-start gap-3">
         {posicao !== undefined && (
           // Verde no pódio é SEMÂNTICO (é o topo do ranking), então não virou
-          // laranja junto com as cores de ação.
+          // laranja junto com as cores de ação. Os três primeiros ganharam
+          // cápsula: num ranking, saber que a linha é o 1º ou o 12º é a primeira
+          // pergunta, e um número cinza de 13px solto ao lado da foto não
+          // respondia.
           <span
-            className={`mt-1 w-6 shrink-0 text-center text-[13px] font-bold tabular-nums ${
-              posicao <= 3 ? "text-emerald-700" : "text-[var(--cz-texto-fraco)]"
+            className={`mt-1 grid size-6 shrink-0 place-items-center rounded-full text-[12.5px] font-bold tabular-nums ${
+              posicao <= 3
+                ? "bg-emerald-100 text-emerald-800"
+                : "text-[var(--cz-texto-fraco)]"
             }`}
             aria-label={`Posição ${posicao}`}
           >
@@ -185,12 +201,12 @@ export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
             permite a tela viver sem scroll horizontal.
           */}
           <span
-            className="block font-semibold leading-snug text-[var(--cz-texto)] line-clamp-2"
+            className="block text-[13.5px] font-semibold leading-snug text-[var(--cz-texto)] line-clamp-2"
             title={l.titulo}
           >
             {l.titulo}
           </span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">
+          <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
             <span className="rounded bg-[var(--cz-fundo)] px-1.5 py-0.5 font-mono text-[var(--cz-texto-suave)]">
               {l.itemId}
             </span>
@@ -249,10 +265,10 @@ export function LinkAbrir({ l }: { l: Linha }) {
       target="_blank"
       rel="noreferrer"
       title={`Abrir ${l.titulo} no Mercado Livre`}
-      className="inline-grid size-8 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
+      className="inline-grid size-9 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
     >
       <svg
-        className="h-3.5 w-3.5"
+        className="h-4 w-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -320,7 +336,10 @@ export function ThGrupo({
       } ${className}`}
     >
       <span className="block">{titulo}</span>
-      <span className="mt-0.5 block text-[9px] font-semibold normal-case tracking-normal text-[var(--cz-texto-fraco)]">
+      {/* 10,5px, e não 9. Nove pixels é menor que qualquer coisa no resto do
+          produto: a linha que existe justamente para avisar "este dado é de agora"
+          era a que menos se conseguia ler. */}
+      <span className="mt-0.5 block text-[10.5px] font-semibold normal-case tracking-normal text-[var(--cz-texto-fraco)]">
         {momento}
       </span>
     </th>
@@ -345,18 +364,18 @@ export function CelulaAgora({
   extra?: ReactNode;
 }) {
   return (
-    <td className="px-3 py-3">
-      <div className="flex flex-col items-start gap-1">
+    <td className="px-3 py-3.5">
+      <div className="flex flex-col items-start gap-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <SeloStatus status={l.status} />
           {l.subStatus.includes("out_of_stock") && (
-            <span className="text-[10px] font-semibold text-amber-700">
+            <span className="text-[11px] font-semibold text-amber-700">
               pausado por falta de estoque
             </span>
           )}
         </div>
 
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px]">
           {/* Estoque tem TRÊS estados e não dois: número, `0` (esgotado) e vazio
               (a API não respondeu). Mostrar vazio como zero faria a tela afirmar
               que o anúncio está sem estoque quando ela apenas não sabe — e alguém
@@ -375,7 +394,7 @@ export function CelulaAgora({
               }`}
             >
               {inteiro(l.estoque)}
-              <span className="ml-0.5 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
+              <span className="ml-0.5 text-[11px] font-medium text-[var(--cz-texto-fraco)]">
                 un.
               </span>
             </span>
@@ -409,10 +428,10 @@ export function UltimaVenda({ iso }: { iso: string | null }) {
   if (!iso) return <span className="text-[var(--cz-texto-fraco)]">—</span>;
   return (
     <>
-      <span className="block tabular-nums text-[11.5px] text-[var(--cz-texto-suave)]">
+      <span className="block font-semibold tabular-nums text-[12.5px] text-[var(--cz-texto)]">
         {dataCurta(iso)}
       </span>
-      <span className="block text-[10.5px] tabular-nums text-[var(--cz-texto-fraco)]">
+      <span className="block text-[11.5px] tabular-nums text-[var(--cz-texto-suave)]">
         {horaCurta(iso)}
       </span>
     </>
@@ -423,29 +442,31 @@ export function UltimaVenda({ iso }: { iso: string | null }) {
 /*                                   Selos                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Situação do anúncio no Mercado Livre.
+ *
+ * Passou a usar o `Selo` do kit em vez de desenhar a própria cápsula. As duas
+ * formas conviviam na MESMA linha da tabela — este selo sem fio em 10,5px, e o
+ * `Selo` de "esgotado"/"Repor estoque" com fio em 10,5px — o que dava duas
+ * pastilhas de contorno diferente encostadas. Uma forma só é metade do que faz a
+ * tela parecer do mesmo sistema.
+ */
 export function SeloStatus({ status }: { status: string | null }) {
-  const mapa: Record<string, { texto: string; casca: string }> = {
-    active: { texto: "Ativo", casca: "bg-emerald-50 text-emerald-700" },
-    paused: { texto: "Pausado", casca: "bg-amber-50 text-amber-700" },
-    closed: { texto: "Finalizado", casca: "bg-rose-50 text-rose-700" },
-    under_review: { texto: "Em revisão", casca: "bg-sky-50 text-sky-700" },
+  const mapa: Record<string, { texto: string; tom: TomSelo }> = {
+    active: { texto: "Ativo", tom: "bom" },
+    paused: { texto: "Pausado", tom: "alerta" },
+    closed: { texto: "Finalizado", tom: "critico" },
+    under_review: { texto: "Em revisão", tom: "info" },
   };
   const m = status ? mapa[status] : undefined;
   if (!m) {
     return (
-      <span
-        className="rounded-full bg-[var(--cz-fundo)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--cz-texto-suave)]"
-        title="A API do Mercado Livre não respondeu para este anúncio"
-      >
+      <Selo titulo="A API do Mercado Livre não respondeu para este anúncio">
         Não consultado
-      </span>
+      </Selo>
     );
   }
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${m.casca}`}>
-      {m.texto}
-    </span>
-  );
+  return <Selo tom={m.tom}>{m.texto}</Selo>;
 }
 
 /**
@@ -465,7 +486,7 @@ export function SeloEnvio({ tipo }: { tipo: string }) {
     xd_drop_off: "Agência",
   };
   return (
-    <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+    <span className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-bold leading-none text-indigo-700">
       {mapa[tipo] ?? tipo}
     </span>
   );

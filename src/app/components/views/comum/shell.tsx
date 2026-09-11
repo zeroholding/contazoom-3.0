@@ -19,8 +19,8 @@ import {
 
 import Sidebar from "../ui/Sidebar";
 import Topbar from "../ui/Topbar";
-import { ENTRADA, inteiro } from "./formato";
-import { IconeBusca, IconeSeta } from "./icones";
+import { inteiro } from "./formato";
+import { IconeBusca, IconeFechar, IconeSeta } from "./icones";
 
 /* -------------------------------------------------------------------------- */
 /*                                  Moldura                                   */
@@ -137,8 +137,8 @@ export function Cabecalho({
   return (
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 className="cz-titulo text-[22px] leading-7">{titulo}</h1>
-        <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
+        <h1 className="cz-titulo text-[24px] leading-8">{titulo}</h1>
+        <p className="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-[var(--cz-texto-suave)]">
           {descricao}
         </p>
       </div>
@@ -233,7 +233,12 @@ export function Campo({
 }) {
   return (
     <label className={className}>
-      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)]">
+      {/* 11px, e não 10. Rótulo de filtro em 10px maiúsculo com tracking aberto
+          é o menor texto da tela e o primeiro que se tem de ler para entender o
+          painel — a ordem exatamente invertida. `--cz-texto-suave` no lugar de
+          `--cz-texto-fraco` pelo mesmo motivo: o fraco é para nota de pé, não
+          para o nome do campo. */}
+      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
         {rotulo}
       </span>
       {children}
@@ -242,17 +247,26 @@ export function Campo({
 }
 
 /**
- * Campo de busca com lupa, e o botão de aplicar quando a busca não é ao vivo.
+ * Campo de busca: UMA caixa só, com a lupa dentro e o botão dentro.
  *
- * Existia escrito à mão em quatro telas, sempre igual: um `<Campo rotulo="Buscar">`
- * com um `<input className={ENTRADA}>` e, ao lado, um `<button>` "Buscar" com
- * `border-gray-300 hover:border-emerald-400 hover:text-emerald-700` — cinza cru e
- * verde onde o produto usa laranja.
+ * ANTES ERAM DUAS CAIXAS LADO A LADO, E ERA ISSO QUE PARECIA DEFEITO.
  *
- * A lupa dentro do campo é o que faltava: um campo de texto sem afordância
- * nenhuma, no meio de uma fileira de selects idênticos, não se distingue como
- * busca. `pl-9` abre o espaço dela — sem isso o ícone fica POR CIMA do texto
- * digitado.
+ * O desenho anterior era `<div class="flex gap-2">` com um input de fio próprio e,
+ * ao lado, um botão "Buscar" de fio próprio. Numa fileira em que todos os outros
+ * campos são um retângulo único de largura cheia, esse par partido lê como campo
+ * cortado no meio: dois fios verticais no meio da linha, o texto do placeholder
+ * comprimido de um lado e uma palavra solta do outro. Some a isso o
+ * `type="search"`, que no Chrome injeta um "×" nativo ENCOSTADO no botão, e o
+ * resultado é o que se vê na tela: uma caixa que parece bugada.
+ *
+ * Agora o fio é do INVÓLUCRO. O input vive dentro sem borda e sem anel próprio, e
+ * o foco acende o invólucro inteiro (`focus-within`) — a caixa responde como uma
+ * peça só, que é o que ela é. O botão fica dentro, na cor de ação do produto, e
+ * some quando a busca é ao vivo.
+ *
+ * `type="text"` com `enterKeyHint="search"`: perde-se o "×" nativo (que ninguém
+ * pediu e chegava desalinhado) e mantém-se o teclado de busca no celular. Limpar
+ * agora é um botão nosso, que só aparece com texto digitado e fica no lugar certo.
  */
 export function CampoBusca({
   valor,
@@ -276,25 +290,44 @@ export function CampoBusca({
 }) {
   return (
     <Campo rotulo={rotulo} className={className}>
-      <div className="flex gap-2">
-        <span className="relative block flex-1">
-          <IconeBusca className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--cz-texto-fraco)]" />
-          <input
-            type="search"
-            value={valor}
-            onChange={(e) => onMudar(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && onAplicar) onAplicar();
+      <div className="flex h-11 items-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] pl-3 pr-1 transition-colors focus-within:border-[var(--cz-laranja)] focus-within:ring-2 focus-within:ring-[var(--cz-laranja-suave)]">
+        <IconeBusca className="h-4 w-4 shrink-0 text-[var(--cz-texto-fraco)]" />
+        <input
+          type="text"
+          enterKeyHint="search"
+          value={valor}
+          onChange={(e) => onMudar(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && onAplicar) onAplicar();
+          }}
+          placeholder={placeholder}
+          aria-label={rotulo}
+          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-[var(--cz-texto)] outline-none placeholder:text-[var(--cz-texto-fraco)]"
+        />
+
+        {/* Limpar só existe com texto digitado, e limpa TAMBÉM o resultado: sem o
+            `onAplicar()`, apagar o campo deixava a lista filtrada pelo termo que
+            já não está mais escrito em lugar nenhum. */}
+        {valor !== "" && (
+          <button
+            type="button"
+            onClick={() => {
+              onMudar("");
+              onAplicar?.();
             }}
-            placeholder={placeholder}
-            className={`${ENTRADA} pl-9`}
-          />
-        </span>
+            aria-label="Limpar busca"
+            title="Limpar busca"
+            className="grid size-7 shrink-0 place-items-center rounded-full text-[var(--cz-texto-fraco)] transition-colors hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-texto)]"
+          >
+            <IconeFechar className="h-3.5 w-3.5" />
+          </button>
+        )}
+
         {onAplicar && (
           <button
             type="button"
             onClick={onAplicar}
-            className="h-10 shrink-0 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 text-[13px] font-semibold text-[var(--cz-texto)] transition-colors hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)]"
+            className="h-9 shrink-0 rounded-[calc(var(--cz-raio)-2px)] bg-[var(--cz-laranja)] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[var(--cz-laranja-forte)]"
           >
             Buscar
           </button>
@@ -419,16 +452,18 @@ export function MultiSelecao({
 
   return (
     <div className={className}>
-      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)]">
+      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
         {rotulo}
       </span>
 
       <div className="relative" ref={caixa}>
+        {/* `h-11` para casar com `ENTRADA`: com este botão em `h-10` no meio de
+            uma fileira de selects de 44px, a linha de filtros saía com degrau. */}
         <button
           type="button"
           onClick={() => setAberto((v) => !v)}
           aria-expanded={aberto}
-          className={`flex h-10 w-full items-center justify-between gap-2 rounded-[var(--cz-raio)] border px-3 text-left text-[13px] transition-colors ${
+          className={`flex h-11 w-full items-center justify-between gap-2 rounded-[var(--cz-raio)] border px-3 text-left text-[13.5px] transition-colors ${
             selecionados.length > 0
               ? "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
               : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:border-[var(--cz-laranja-borda)]"
@@ -454,7 +489,7 @@ export function MultiSelecao({
                     value={busca}
                     onChange={(e) => setBusca(e.target.value)}
                     placeholder={buscaPlaceholder}
-                    className="h-8 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] pl-8 pr-2 text-[12.5px] text-[var(--cz-texto)] focus:border-[var(--cz-laranja)] focus:outline-none"
+                    className="h-9 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] pl-8 pr-2 text-[13px] text-[var(--cz-texto)] focus:border-[var(--cz-laranja)] focus:outline-none"
                   />
                 </span>
               </div>
@@ -462,7 +497,7 @@ export function MultiSelecao({
 
             <div className="max-h-64 overflow-y-auto p-1">
               {filtradas.length === 0 ? (
-                <p className="px-2 py-3 text-center text-[12px] text-[var(--cz-texto-suave)]">
+                <p className="px-2 py-3 text-center text-[13px] text-[var(--cz-texto-suave)]">
                   {opcoes.length === 0 ? vazio : "Nada encontrado"}
                 </p>
               ) : (
@@ -471,7 +506,7 @@ export function MultiSelecao({
                   return (
                     <label
                       key={o.valor}
-                      className={`flex cursor-pointer items-center gap-2 rounded-[var(--cz-raio)] px-2 py-1.5 text-[12.5px] transition-colors ${
+                      className={`flex cursor-pointer items-center gap-2 rounded-[var(--cz-raio)] px-2 py-2 text-[13px] transition-colors ${
                         ativo
                           ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
                           : "text-[var(--cz-texto)] hover:bg-[var(--cz-fundo)]"
@@ -488,7 +523,7 @@ export function MultiSelecao({
                         {o.rotulo}
                       </span>
                       {o.contagem !== undefined && (
-                        <span className="shrink-0 tabular-nums text-[11px] text-[var(--cz-texto-fraco)]">
+                        <span className="shrink-0 tabular-nums text-[12px] text-[var(--cz-texto-fraco)]">
                           {inteiro(o.contagem)}
                         </span>
                       )}
@@ -505,7 +540,7 @@ export function MultiSelecao({
                 <button
                   type="button"
                   onClick={() => onMudar([])}
-                  className="w-full rounded-[var(--cz-raio)] px-2 py-1.5 text-[12px] font-semibold text-[var(--cz-texto-suave)] transition-colors hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-laranja-forte)]"
+                  className="w-full rounded-[var(--cz-raio)] px-2 py-2 text-[13px] font-semibold text-[var(--cz-texto-suave)] transition-colors hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-laranja-forte)]"
                 >
                   Limpar seleção
                 </button>
@@ -522,6 +557,45 @@ export function MultiSelecao({
 /*                                Indicadores                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Cartão de indicador.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * REFEITO PORQUE OS CINCO CARTÕES ESTAVAM LIDOS COMO "RETÂNGULOS VAZIOS"
+ *
+ * O desenho anterior tinha três problemas somados, e o efeito conjunto era um
+ * cartão largo com um número modesto perdido no meio de muito branco:
+ *
+ *   1. rótulo em 10px maiúsculo com `tracking` aberto — no limite do ilegível, e
+ *      um bloco de 5 cartões vira cinco borrões cinza;
+ *   2. número em 21px, ou seja, praticamente do tamanho do TÍTULO da tela (22px):
+ *      o dado principal do cartão não se destacava de nada;
+ *   3. ícone em `opacity-60` no canto, sem caixa — a 5×5 e translúcido ele não
+ *      chega a ser visto, então pagava-se a largura sem ganhar o reconhecimento
+ *      que um ícone deveria dar.
+ *
+ * Agora: rótulo 11px, número 26px (bem acima do título), e o ícone dentro de um
+ * quadrado tintado que herda o tom do cartão. A caixa do ícone é o que dá aos
+ * cinco cartões cinco silhuetas diferentes — é por ela que se acha "Faturamento"
+ * sem ler os cinco rótulos.
+ *
+ * O DESTAQUE VIROU LARANJA, E NÃO É DETALHE.
+ *
+ * `destaque` pintava o cartão de VERDE. Nestas telas verde é semântico e
+ * significa "saudável" / "no pódio" — então "Faturamento" em verde no meio de
+ * quatro cartões brancos não lia como "este é o número principal", lia como
+ * "este número está bom", que é uma afirmação que o cartão não tem como fazer.
+ * Laranja é a cor de ênfase da marca e não afirma nada sobre o valor.
+ *
+ * E o verde não desapareceu: virou `tom="bom"`, ao lado de `alerta` e `critico`.
+ * Assim ÊNFASE e JULGAMENTO passam a ser duas propriedades diferentes, que é o
+ * que elas sempre foram — "Faturamento" é o número principal (ênfase) e "Aptas
+ * para venda" é um número que está bom (julgamento). Antes as duas coisas
+ * dividiam o mesmo `destaque`, e por isso uma tinha de ficar errada.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+export type TomKpi = "bom" | "alerta" | "critico";
+
 export function Kpi({
   rotulo,
   valor,
@@ -533,58 +607,73 @@ export function Kpi({
   rotulo: string;
   valor: string;
   nota?: string;
+  /** O número principal do bloco. Ênfase, não julgamento de valor. */
   destaque?: boolean;
-  tom?: "alerta" | "critico";
-  /**
-   * Ícone do canto, opcional.
-   *
-   * Fica DEPOIS do rótulo e em tinta fraca de propósito: o cartão existe para o
-   * número ser lido primeiro. Ícone grande e colorido ao lado de um número
-   * grande cria dois centros de atenção e o olho não sabe onde pousar — foi o
-   * que aconteceu com os cartões que traziam o ícone dentro de um quadrado
-   * cinza antes do texto.
-   */
+  /** Julgamento sobre o valor. A cor AQUI é informação. */
+  tom?: TomKpi;
   icone?: ReactNode;
 }) {
-  // Vermelho, âmbar e verde continuam SEMÂNTICOS e não viraram laranja: aqui eles
-  // significam ruim, atenção e bom. Trocá-los pela cor da marca apagaria a única
-  // informação que a cor carrega nesta tela.
   const casca =
     tom === "critico"
-      ? "border-rose-200 bg-rose-50"
+      ? "border-rose-200 bg-rose-50/70"
       : tom === "alerta"
-        ? "border-amber-200 bg-amber-50"
-        : destaque
-          ? "border-emerald-200 bg-emerald-50"
-          : "border-[var(--cz-hairline)] bg-[var(--cz-superficie)]";
+        ? "border-amber-200 bg-amber-50/70"
+        : tom === "bom"
+          ? "border-emerald-200 bg-emerald-50/70"
+          : destaque
+            ? "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)]"
+            : "border-[var(--cz-hairline)] bg-[var(--cz-superficie)]";
+
   const cor =
     tom === "critico"
       ? "text-rose-800"
       : tom === "alerta"
-        ? "text-amber-800"
-        : destaque
+        ? "text-amber-900"
+        : tom === "bom"
           ? "text-emerald-800"
-          : "text-[var(--cz-texto)]";
+          : destaque
+            ? "text-[var(--cz-laranja-forte)]"
+            : "text-[var(--cz-texto)]";
+
+  // A caixa do ícone acompanha o tom em vez de ter um mapa de cores próprio: um
+  // segundo mapa é o que sai de sincronia quando alguém acrescenta um tom novo.
+  const caixaIcone =
+    tom === "critico"
+      ? "bg-rose-100 text-rose-700"
+      : tom === "alerta"
+        ? "bg-amber-100 text-amber-800"
+        : tom === "bom"
+          ? "bg-emerald-100 text-emerald-700"
+          : destaque
+            ? "bg-white text-[var(--cz-laranja-forte)]"
+            : "bg-[var(--cz-fundo)] text-[var(--cz-texto-suave)]";
 
   return (
-    <div className={`rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] ${casca}`}>
-      <div className="flex items-start justify-between gap-2">
-        <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--cz-texto-suave)]">
+    <div
+      className={`flex items-start gap-3 rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] ${casca}`}
+    >
+      {icone && (
+        <span
+          className={`grid size-10 shrink-0 place-items-center rounded-[var(--cz-raio)] ${caixaIcone}`}
+        >
+          {icone}
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <span className="block text-[11px] font-bold uppercase leading-tight tracking-[0.05em] text-[var(--cz-texto-suave)]">
           {rotulo}
         </span>
-        {icone && (
-          // `opacity-60` e não uma cor própria: assim o ícone acompanha o tom do
-          // cartão (âmbar no alerta, rosa no crítico) sem precisar de um mapa de
-          // cores paralelo que possa sair de sincronia com a casca.
-          <span className={`shrink-0 opacity-60 ${cor}`}>{icone}</span>
+        {/* `cz-valor` carrega peso 800 e o tracking apertado dos números grandes
+            do painel — o mesmo tratamento do login e do admin. */}
+        <strong className={`cz-valor mt-1 block text-[26px] leading-none ${cor}`}>
+          {valor}
+        </strong>
+        {nota && (
+          <span className="mt-1.5 block text-[11px] leading-snug text-[var(--cz-texto-suave)]">
+            {nota}
+          </span>
         )}
       </div>
-      {/* `cz-valor` carrega peso 800 e o tracking apertado dos números grandes do
-          painel — o mesmo tratamento do login e do admin. */}
-      <strong className={`cz-valor mt-1 block text-[21px] ${cor}`}>{valor}</strong>
-      {nota && (
-        <span className="mt-0.5 block text-[10.5px] text-[var(--cz-texto-suave)]">{nota}</span>
-      )}
     </div>
   );
 }
@@ -632,7 +721,7 @@ export function Faixa({
 }) {
   return (
     <div
-      className={`mt-4 flex items-start gap-3 rounded-[var(--cz-raio-cartao)] border px-4 py-3 text-[12.5px] leading-relaxed ${CASCA_FAIXA[tom]} ${className}`}
+      className={`mt-4 flex items-start gap-3 rounded-[var(--cz-raio-cartao)] border px-4 py-3 text-[13px] leading-relaxed ${CASCA_FAIXA[tom]} ${className}`}
     >
       {/* `mt-0.5` alinha o ícone com a primeira LINHA do texto, e não com o
           bloco inteiro. Em aviso de duas ou três linhas, centralizar deixa o
@@ -695,7 +784,7 @@ export function GrupoRecorte<C extends string>({
               type="button"
               onClick={() => onMudar(o.chave)}
               aria-pressed={selecionada}
-              className={`inline-flex items-center gap-2 rounded-[var(--cz-raio)] border px-3.5 py-2 text-[13px] font-semibold transition-colors ${
+              className={`inline-flex h-10 items-center gap-2 rounded-[var(--cz-raio)] border px-4 text-[13.5px] font-semibold transition-colors ${
                 selecionada
                   ? "border-[var(--cz-laranja)] bg-[var(--cz-laranja)] text-white"
                   : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)]"
@@ -712,7 +801,7 @@ export function GrupoRecorte<C extends string>({
         })}
       </div>
       {ativa?.explicacao && (
-        <p className="mt-2 text-[12px] leading-relaxed text-[var(--cz-texto-suave)]">
+        <p className="mt-2 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
           {ativa.explicacao}
         </p>
       )}
@@ -763,7 +852,10 @@ export function Selo({
   return (
     <span
       title={titulo}
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10.5px] font-bold ${CASCA_SELO[tom]} ${className}`}
+      /* 11px e `py-1`: a 10,5px numa cápsula de 20px de altura o selo lia como
+         borrão colorido, não como palavra. Continua sendo o menor texto da
+         tabela, mas agora é legível sem aproximar o rosto da tela. */
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-bold leading-none ${CASCA_SELO[tom]} ${className}`}
     >
       {children}
     </span>
@@ -849,17 +941,25 @@ export function Th({
   return (
     <th
       scope="col"
-      className={`px-3 py-2.5 font-bold ${align === "right" ? "text-right" : "text-left"} ${className}`}
+      className={`px-3 py-3 font-bold align-bottom ${align === "right" ? "text-right" : "text-left"} ${className}`}
     >
       {children}
     </th>
   );
 }
 
+/**
+ * A faixa de cabeçalho da tabela.
+ *
+ * 11px e não 10: o cabeçalho é o que diz o que cada coluna significa, e estava
+ * escrito no menor corpo da tela inteira. `align-bottom` no `Th` para o rótulo de
+ * uma linha ficar alinhado com a base dos que têm duas (o `ThGrupo` de anúncios
+ * tem uma segunda linha dizendo a que momento o dado se refere).
+ */
 export function CabecalhoTabela({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[10px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-suave)]">
+      <tr className="border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-suave)]">
         {children}
       </tr>
     </thead>
@@ -896,7 +996,7 @@ export function ThOrdenavel<C extends string>({
     <th
       scope="col"
       aria-sort={ativo ? (direcaoAtual === "asc" ? "ascending" : "descending") : "none"}
-      className={`px-3 py-2.5 font-bold ${align === "right" ? "text-right" : "text-left"} ${className}`}
+      className={`px-3 py-3 font-bold align-bottom ${align === "right" ? "text-right" : "text-left"} ${className}`}
     >
       <button
         type="button"
@@ -922,7 +1022,9 @@ export function ThOrdenavel<C extends string>({
 export function Miniatura({
   src,
   alt,
-  tamanho = 44,
+  // 48 e não 44: a foto do produto é a forma mais rápida de reconhecer a linha, e
+  // a 44px o step preto e o step azul da mesma família eram a mesma manchinha.
+  tamanho = 48,
 }: {
   src: string | null;
   alt: string;
@@ -1007,8 +1109,8 @@ export function Aviso({
           {icone}
         </span>
       )}
-      <h3 className="cz-titulo text-[14px]">{titulo}</h3>
-      <p className="mt-1 max-w-md text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+      <h3 className="cz-titulo text-[16px]">{titulo}</h3>
+      <p className="mt-1.5 max-w-md text-[13.5px] leading-relaxed text-[var(--cz-texto-suave)]">
         {texto}
       </p>
       {(acao || acaoSecundaria) && (
@@ -1026,7 +1128,7 @@ export function Esqueleto({ linhas = 6 }: { linhas?: number }) {
     <div className="animate-pulse divide-y divide-[var(--cz-hairline)]">
       {Array.from({ length: linhas }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-5 py-4">
-          <div className="size-11 shrink-0 rounded-lg bg-[var(--cz-fundo)]" />
+          <div className="size-12 shrink-0 rounded-lg bg-[var(--cz-fundo)]" />
           <div className="flex-1 space-y-2">
             <div className="h-3 w-2/5 rounded bg-[var(--cz-fundo)]" />
             <div className="h-2.5 w-1/4 rounded bg-[var(--cz-fundo)]" />
@@ -1062,10 +1164,11 @@ export function Paginacao({
   const ate = Math.min(pagina * porPagina, total);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] px-5 py-3 text-[12px] text-[var(--cz-texto-suave)]">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-5 py-2.5 text-[12.5px] text-[var(--cz-texto-suave)]">
       <span>
-        Mostrando <strong>{inteiro(de)}</strong> a <strong>{inteiro(ate)}</strong> de{" "}
-        <strong>{inteiro(total)}</strong> {rotulo}
+        Mostrando <strong className="text-[var(--cz-texto)]">{inteiro(de)}</strong> a{" "}
+        <strong className="text-[var(--cz-texto)]">{inteiro(ate)}</strong> de{" "}
+        <strong className="text-[var(--cz-texto)]">{inteiro(total)}</strong> {rotulo}
       </span>
       <div className="flex items-center gap-3">
         <label className="flex items-center gap-1.5">
@@ -1073,7 +1176,7 @@ export function Paginacao({
           <select
             value={porPagina}
             onChange={(e) => onPorPagina(Number(e.target.value))}
-            className="h-8 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2 text-[12px]"
+            className="h-9 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2 text-[12.5px] font-semibold text-[var(--cz-texto)]"
           >
             {opcoesPorPagina.map((n) => (
               <option key={n} value={n}>
@@ -1087,18 +1190,18 @@ export function Paginacao({
             type="button"
             onClick={() => onPagina(pagina - 1)}
             disabled={pagina <= 1}
-            className="h-8 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-9 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Anterior
           </button>
-          <span className="px-2 tabular-nums">
+          <span className="px-2 font-semibold tabular-nums text-[var(--cz-texto)]">
             {pagina} / {totalPaginas}
           </span>
           <button
             type="button"
             onClick={() => onPagina(pagina + 1)}
             disabled={pagina >= totalPaginas}
-            className="h-8 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-9 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Próxima
           </button>

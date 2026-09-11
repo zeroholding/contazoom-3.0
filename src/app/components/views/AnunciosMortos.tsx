@@ -62,6 +62,7 @@ import {
   IconeRelogio,
 } from "./comum/icones";
 import {
+  ALTURA_CAMPO,
   brl,
   ENTRADA,
   inteiro,
@@ -229,7 +230,7 @@ export default function AnunciosMortos() {
           campo parecia morto. Agora a relação é a primeira coisa que se lê.
         */}
         <div className="lg:col-span-6">
-          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)]">
+          <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
             Relevância — o que conta como &ldquo;vendia bem&rdquo;
           </span>
           <div className="flex flex-wrap items-center gap-2">
@@ -245,7 +246,7 @@ export default function AnunciosMortos() {
                 className={ENTRADA}
                 aria-label="Mínimo de unidades vendidas"
               />
-              <span className="shrink-0 text-[11.5px] text-[var(--cz-texto-suave)]">
+              <span className="shrink-0 text-[12.5px] font-semibold text-[var(--cz-texto-suave)]">
                 un.
               </span>
             </label>
@@ -260,7 +261,11 @@ export default function AnunciosMortos() {
                 setRelevancia(e.target.value as "ou" | "e");
                 setPagina(1);
               }}
-              className="h-10 shrink-0 rounded-[var(--cz-raio)] border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-2 text-[12px] font-bold uppercase text-[var(--cz-laranja-forte)] outline-none transition-colors focus:border-[var(--cz-laranja)]"
+              // `ALTURA_CAMPO` e não `h-11` escrito à mão: este é o único campo
+              // desenhado fora do `ENTRADA` nesta tela, e era ele que estava em
+              // `h-10` no meio de dois inputs de 44px — 4px de degrau no centro do
+              // painel de filtros.
+              className={`${ALTURA_CAMPO} shrink-0 rounded-[var(--cz-raio)] border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-2.5 text-[13px] font-bold uppercase text-[var(--cz-laranja-forte)] outline-none transition-colors focus:border-[var(--cz-laranja)]`}
               aria-label="Como os dois mínimos se combinam"
             >
               <option value="ou">ou</option>
@@ -268,7 +273,7 @@ export default function AnunciosMortos() {
             </select>
 
             <label className="flex min-w-[8.5rem] flex-1 items-center gap-1.5">
-              <span className="shrink-0 text-[11.5px] text-[var(--cz-texto-suave)]">
+              <span className="shrink-0 text-[12.5px] font-semibold text-[var(--cz-texto-suave)]">
                 R$
               </span>
               <input
@@ -288,7 +293,7 @@ export default function AnunciosMortos() {
           {/* A frase muda com o operador. É o que fecha o problema: em vez de a
               pessoa descobrir na tentativa que um campo não corta, a tela diz o
               que o recorte atual faz — e como usar um critério sozinho. */}
-          <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--cz-texto-suave)]">
+          <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
             {relevancia === "ou" ? (
               <>
                 Entra quem vendia <strong>{inteiro(minUnidades)} unidade(s)</strong>{" "}
@@ -331,7 +336,9 @@ export default function AnunciosMortos() {
           operador escolhido. Texto solto abaixo do painel descrevia uma regra que
           a pessoa só ia reler depois de já ter estranhado o resultado. */}
 
-      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-5">
+      {/* Mesma escada da tela de Mais Vendidos: sem o degrau de 3 colunas, toda a
+          faixa entre 640px e 1280px ficava com um cartão sozinho na última linha. */}
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Kpi
           rotulo="Anúncios parados"
           valor={inteiro(resumo.anuncios)}
@@ -459,8 +466,8 @@ function LinhaParada({ l }: { l: Linha }) {
 
   return (
     <tr
-      className={`border-b border-[var(--cz-hairline)] text-[12.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
-        motivo === "sem_estoque" ? "bg-amber-50/40" : ""
+      className={`border-b border-[var(--cz-hairline)] align-top text-[13.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
+        motivo === "sem_estoque" ? "bg-amber-50/50" : ""
       }`}
     >
       <CelulaAnuncio l={l} />
@@ -472,20 +479,20 @@ function LinhaParada({ l }: { l: Linha }) {
       {/* A coluna que dá o encaminhamento. Sem ela a tela lista problemas; com
           ela a tela distribui trabalho. Cada saída ganhou ícone: o operador varre
           esta coluna com o olho, e forma se distingue mais rápido que texto. */}
-      <td className="px-3 py-3">
+      <td className="px-3 py-3.5">
         {motivo === "sem_estoque" ? (
           <Selo tom="alerta">
-            <IconeCaixa className="h-3 w-3" />
+            <IconeCaixa className="h-3.5 w-3.5" />
             Repor estoque
           </Selo>
         ) : motivo === "com_estoque" ? (
           <Selo tom="info">
-            <IconeEditar className="h-3 w-3" />
+            <IconeEditar className="h-3.5 w-3.5" />
             Revisar anúncio
           </Selo>
         ) : (
           <span
-            className="text-[11px] text-[var(--cz-texto-fraco)]"
+            className="text-[var(--cz-texto-fraco)]"
             title="Sem o estoque atual não é possível dizer se o problema é reposição ou o anúncio"
           >
             —
@@ -496,19 +503,19 @@ function LinhaParada({ l }: { l: Linha }) {
       {/* O que o anúncio VENDIA — histórico, não presente. Unidades em cima
           porque é o tamanho do buraco em volume; faturamento embaixo porque é o
           tamanho em dinheiro. */}
-      <td className="px-3 py-3 text-right">
-        <span className="block font-bold tabular-nums text-[var(--cz-texto)]">
+      <td className="px-3 py-3.5 text-right">
+        <span className="block text-[16px] font-bold leading-none tabular-nums text-[var(--cz-texto)]">
           {inteiro(l.unidades)}
-          <span className="ml-1 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
+          <span className="ml-1 text-[11px] font-medium text-[var(--cz-texto-fraco)]">
             un.
           </span>
         </span>
-        <span className="mt-0.5 block font-semibold tabular-nums text-emerald-700">
+        <span className="mt-1 block font-semibold tabular-nums text-emerald-700">
           {brl(l.faturamento)}
         </span>
       </td>
 
-      <td className="px-3 py-3 pr-5 text-right">
+      <td className="px-3 py-3.5 pr-5 text-right">
         <Selo tom={l.diasSemVenda >= 90 ? "critico" : "alerta"} className="tabular-nums">
           {inteiro(l.diasSemVenda)} dias
         </Selo>
