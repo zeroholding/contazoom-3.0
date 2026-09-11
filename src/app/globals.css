@@ -593,6 +593,39 @@ select.error {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Barra de progresso indeterminada                                           */
+/*                                                                            */
+/* Para quando se sabe que esta trabalhando mas nao quanto falta — o caso da   */
+/* sincronizacao antes de o Mercado Livre devolver o total esperado.           */
+/*                                                                            */
+/* A alternativa que estava no codigo era travar a barra em 40%. Barra parada  */
+/* num numero inventado comunica "travou", e some com a unica informacao que   */
+/* de fato existe: que ha trabalho em curso. A faixa que atravessa diz isso    */
+/* sem afirmar uma porcentagem falsa.                                         */
+/* -------------------------------------------------------------------------- */
+
+@keyframes cz-indeterminado {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+}
+
+.cz-barra-indeterminada {
+    animation: cz-indeterminado 1.4s ease-in-out infinite;
+}
+
+/* Quem pediu menos movimento no sistema recebe uma barra parada em vez de     */
+/* nada: o elemento continua existindo (a informacao "esta rodando" se         */
+/* mantem), so nao anda.                                                      */
+@media (prefers-reduced-motion: reduce) {
+    .cz-barra-indeterminada {
+        animation: none;
+        transform: translateX(0);
+        width: 100%;
+        opacity: 0.5;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Entrada de modal                                                           */
 /*                                                                            */
 /* Modal que aparece sem transicao parece falha de renderizacao. 140ms e o     */

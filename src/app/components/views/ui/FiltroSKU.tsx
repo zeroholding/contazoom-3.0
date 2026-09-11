@@ -52,10 +52,19 @@ export default function FiltroSKU({
       <button
         ref={agrupamentoDropdown.triggerRef}
         onClick={() => setShowAgrupamentoDropdown(!showAgrupamentoDropdown)}
+        /*
+         * LARANJA DA MARCA, não azul.
+         *
+         * O azul aqui não significava nada: no produto, laranja quer dizer "foi
+         * você que escolheu isto" (é a cor da pastilha ativa em `GrupoRecorte`,
+         * dos botões primários e do menu). Um filtro azul ao lado de controles
+         * laranja parecia de outro sistema, e sugeria uma categoria de estado que
+         * não existe.
+         */
         className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-          showAgrupamentoDropdown 
-            ? "border-blue-400 bg-blue-50 text-blue-900" 
-            : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+          showAgrupamentoDropdown
+            ? "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]"
+            : "border-[var(--cz-hairline-forte)] bg-white text-gray-700 hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)]"
         }`}
         title={getAgrupamentoDescription(agrupamentoAtivo)}
       >
@@ -111,15 +120,27 @@ export default function FiltroSKU({
                 <button
                   key={opcao.id}
                   onClick={() => { onAgrupamentoChange(opcao.id); setShowAgrupamentoDropdown(false); }}
+                  /*
+                   * A opção ATIVA usa o laranja cheio, e não o suave do gatilho:
+                   * dentro de uma lista de cinco linhas, fundo pálido some — foi
+                   * o defeito do `bg-blue-100`, que só se distinguia do branco em
+                   * tela boa. O contraste aqui é o que diz qual está valendo.
+                   */
                   className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
                     agrupamentoAtivo === opcao.id
-                      ? "bg-blue-100 text-blue-900 font-medium"
-                      : "text-gray-700 hover:bg-gray-50"
+                      ? "bg-[var(--cz-laranja)] font-semibold text-white"
+                      : "text-gray-700 hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
                   }`}
                   title={opcao.description}
                 >
                   <div className="font-medium">{opcao.label}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{opcao.description}</div>
+                  <div
+                    className={`text-xs mt-0.5 ${
+                      agrupamentoAtivo === opcao.id ? "text-white/80" : "text-gray-500"
+                    }`}
+                  >
+                    {opcao.description}
+                  </div>
                 </button>
               ))}
             </div>

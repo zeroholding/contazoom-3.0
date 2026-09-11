@@ -293,10 +293,13 @@ export default function FiltrosDashboard({
                     />
                   </div>
 
-                  {/* Resumo das datas selecionadas */}
+                  {/* Resumo das datas selecionadas.
+                      Laranja e nao azul, pelo mesmo motivo do filtro de
+                      agrupamento: no produto, laranja e a cor do que a pessoa
+                      escolheu, e este bloco confirma exatamente uma escolha. */}
                   {startDate && endDate && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                      <div className="text-xs text-blue-800">
+                    <div className="p-3 bg-[var(--cz-laranja-suave)] border border-[var(--cz-laranja-borda)] rounded-md">
+                      <div className="text-xs text-[var(--cz-laranja-forte)]">
                         <strong>Período selecionado:</strong><br />
                         {startDate.toLocaleDateString('pt-BR')} até {endDate.toLocaleDateString('pt-BR')}
                       </div>
@@ -311,7 +314,7 @@ export default function FiltrosDashboard({
                       className={`flex-1 px-3 py-2 text-xs font-medium rounded-md transition-colors ${
                         !startDate || !endDate
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-[var(--cz-laranja)] text-white hover:bg-[var(--cz-laranja-forte)]'
                       }`}
                     >
                       Confirmar
