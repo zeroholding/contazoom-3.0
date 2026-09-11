@@ -282,7 +282,16 @@ export default function AdminDocumentos() {
 
   return (
     <>
-      <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-[#F8FAFC] overflow-hidden">
+      {/* `h-full`, não `h-[calc(100vh-64px)]`.
+          Esta é uma tela de três painéis (clientes | pastas | arquivos), e cada
+          painel rolar por conta própria é o desenho — sem isso a lista de
+          clientes sumiria ao descer nos arquivos. O problema era a CONTA: o
+          cabeçalho do admin tem 4,5rem (72px), e o `main` que envolve isto mede
+          `100vh - 72px`. Pedir `100vh - 64px` fazia o bloco ficar 8px mais alto
+          que o pai, e aparecia uma segunda barra de rolagem — de 8px de curso, o
+          bastante para atrapalhar e não o bastante para servir de nada.
+          `h-full` casa com o pai exatamente e a barra de fora desaparece. */}
+      <div className="flex flex-col lg:flex-row h-full bg-[#F8FAFC] overflow-hidden">
       
       {/* ═══ COL 1 — CLIENT LIST ═══ */}
       <aside className={`w-full lg:w-72 xl:w-80 bg-white border-r border-[var(--cz-hairline)] flex flex-col shrink-0 ${selectedUser ? 'hidden lg:flex' : 'flex'}`}>

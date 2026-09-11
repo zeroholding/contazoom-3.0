@@ -91,7 +91,17 @@ export default function AuditoriaDocumentos() {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-[var(--cz-hairline)] shadow-sm overflow-hidden flex flex-col h-[calc(100vh-100px)]">
+    // SEM altura fixa e SEM scroll próprio.
+    //
+    // Era `h-[calc(100vh-100px)] overflow-hidden flex flex-col` com um
+    // `flex-1 overflow-auto` na tabela. Como o `AdminLayoutWrapper` já é
+    // `h-screen` com `main flex-1 overflow-auto`, davam DUAS barras de rolagem
+    // verticais, uma dentro da outra — e a de fora ainda por cima rolava um
+    // pedaço, porque 100vh-100px é MAIOR que a altura do main (100vh menos o
+    // cabeçalho de 4,5rem). Ou seja: duas barras, e nenhuma das duas percorria a
+    // lista inteira sozinha.
+    // Agora o card cresce com o conteúdo e quem rola é só o `main` do admin.
+    <div className="flex flex-col overflow-hidden rounded-xl border border-[var(--cz-hairline)] bg-white shadow-sm">
       {/* Header */}
       <div className="p-6 border-b border-gray-100 bg-white shrink-0">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -170,18 +180,22 @@ export default function AuditoriaDocumentos() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto bg-gray-50 p-6">
+      {/* Table.
+          `overflow-x-auto` só: as 5 colunas podem não caber em tela estreita, mas
+          na vertical a lista cresce e é a página que rola. Os estados de vazio e
+          de carregando ganharam `min-h-[320px]` porque antes usavam `h-full` para
+          se centralizar — e sem a altura fixa do pai, `h-full` é zero. */}
+      <div className="overflow-x-auto bg-gray-50 p-6">
         {loading && logs.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex min-h-[320px] items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center h-full text-red-500 font-medium">
+          <div className="flex min-h-[320px] items-center justify-center text-red-500 font-medium">
             {error}
           </div>
         ) : logs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="flex min-h-[320px] flex-col items-center justify-center text-center">
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
               <Filter className="w-8 h-8 text-gray-300" />
             </div>

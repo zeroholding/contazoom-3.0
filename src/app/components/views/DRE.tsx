@@ -528,7 +528,12 @@ export default function DRE() {
                       <h4 className="text-xs font-medium text-gray-700">Receitas e Deducoes por Mes</h4>
                     </div>
                   </div>
-                  <div className="overflow-auto rounded-lg border border-[var(--cz-hairline)] bg-white">
+                  {/* `overflow-x-auto`, e não `overflow-auto`: a tabela tem
+                      `min-w-[600px]` e uma coluna congelada, então ela precisa
+                      rolar de lado — mas não tem altura fixa, então a vertical
+                      nunca teria como rolar aqui. Declarar `auto` nos dois eixos
+                      só anunciava uma barra que não existe. */}
+                  <div className="overflow-x-auto rounded-lg border border-[var(--cz-hairline)] bg-white">
                     <table className="w-full min-w-[600px] text-sm">
                       <thead className="bg-gray-50">
                         <tr>
