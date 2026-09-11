@@ -17,23 +17,24 @@ import { useMemo, useState } from "react";
 import {
   Aviso,
   AvisoBackfill,
+  AvisoDoisTempos,
   BotaoAtualizar,
   Cabecalho,
   CabecalhoTabela,
-  CelulaAbrir,
+  CelulaAgora,
   CelulaAnuncio,
-  CelulaEstoque,
-  CelulaPreco,
   Campo,
   Esqueleto,
   Kpi,
+  LinkAbrir,
   MolduraTela,
   NotaFiltroCaro,
   Paginacao,
   PainelFiltros,
   RodapeFonte,
-  SeloStatus,
   Th,
+  ThGrupo,
+  UltimaVenda,
 } from "./anuncios/comum";
 import { CampoBusca, Faixa, Selo } from "./comum/shell";
 import {
@@ -44,14 +45,7 @@ import {
   IconeProibido,
   IconeSubindo,
 } from "./comum/icones";
-import {
-  brl,
-  dataCurta,
-  ENTRADA,
-  inteiro,
-  RESUMO_VAZIO,
-  type Linha,
-} from "./anuncios/tipos";
+import { brl, ENTRADA, inteiro, RESUMO_VAZIO, type Linha } from "./anuncios/tipos";
 import { useAnuncios, useContasMeli } from "./anuncios/useAnuncios";
 
 /**
@@ -261,7 +255,9 @@ export default function AnunciosMaisVendidos() {
         </Faixa>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
+      <AvisoDoisTempos />
+
+      <div className="mt-3 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
         {carregando ? (
           <Esqueleto />
         ) : erro ? (
@@ -277,34 +273,50 @@ export default function AnunciosMaisVendidos() {
             texto="Amplie o período, solte o filtro de conta, ou sincronize as vendas se ainda não sincronizou."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] border-collapse text-left">
-              <CabecalhoTabela>
-                <Th className="pl-5">Anúncio</Th>
-                <Th>Situação</Th>
-                <Th align="right">Estoque</Th>
-                <Th align="right">Cobertura</Th>
-                <Th align="right">Preço</Th>
-                <Th align="right">Pedidos</Th>
-                <Th align="right">Unidades</Th>
-                <Th align="right">Faturamento</Th>
-                <Th align="right">Última venda</Th>
-                <Th align="right" className="pr-5">
-                  Abrir
-                </Th>
-              </CabecalhoTabela>
-              <tbody>
-                {linhas.map((l, i) => (
-                  <LinhaVendida
-                    key={`${l.meliAccountId}:${l.itemId}`}
-                    l={l}
-                    posicao={(dados!.pagina - 1) * porPagina + i + 1}
-                    diasDoPeriodo={diasDoPeriodo}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          // SEM `overflow-x-auto` e SEM `min-w`: a tabela cabe.
+          //
+          // Eram dez colunas e `min-w-[1120px]`, o que dava scroll horizontal em
+          // qualquer tela menor que um monitor grande — e numa tabela com scroll
+          // lateral a coluna do anúncio sai de vista justamente quando se olha os
+          // números, então não se sabe mais de qual anúncio é a linha.
+          //
+          // As dez viraram cinco, agrupando por NATUREZA do dado: o que é leitura
+          // ao vivo do Mercado Livre num bloco, o que é histórico de vendas em
+          // outro. Ver `ThGrupo` e `CelulaAgora` em `anuncios/comum.tsx`.
+          <table className="w-full table-fixed border-collapse text-left">
+            {/* `table-fixed` + `colgroup`: sem isso o navegador distribui a
+                largura pelo conteúdo, e um título longo faria a coluna do anúncio
+                empurrar as outras a cada página — a tabela "dançaria" ao paginar. */}
+            <colgroup>
+              <col className="w-[42%]" />
+              <col className="w-[19%]" />
+              <col className="w-[14%]" />
+              <col className="w-[15%]" />
+              <col className="w-[10%]" />
+            </colgroup>
+            <CabecalhoTabela>
+              <Th className="pl-5">Anúncio</Th>
+              <ThGrupo titulo="Situação / Estoque / Preço" momento="agora no Mercado Livre" />
+              <ThGrupo titulo="Cobertura" momento="estoque ÷ ritmo do período" align="right" />
+              <ThGrupo titulo="Vendas" momento="no período filtrado" align="right" />
+              <ThGrupo
+                titulo="Última venda"
+                momento="data e hora"
+                align="right"
+                className="pr-5"
+              />
+            </CabecalhoTabela>
+            <tbody>
+              {linhas.map((l, i) => (
+                <LinhaVendida
+                  key={`${l.meliAccountId}:${l.itemId}`}
+                  l={l}
+                  posicao={(dados!.pagina - 1) * porPagina + i + 1}
+                  diasDoPeriodo={diasDoPeriodo}
+                />
+              ))}
+            </tbody>
+          </table>
         )}
 
         {dados && dados.total > 0 && (
@@ -347,11 +359,8 @@ function LinhaVendida({
     >
       <CelulaAnuncio l={l} posicao={posicao} />
 
-      <td className="px-3 py-3">
-        <SeloStatus status={l.status} />
-      </td>
-
-      <CelulaEstoque estoque={l.estoque} />
+      {/* Situação + estoque + preço: o bloco do "agora". */}
+      <CelulaAgora l={l} />
 
       <td className="px-3 py-3 text-right">
         {esgotado ? (
@@ -372,22 +381,33 @@ function LinhaVendida({
         )}
       </td>
 
-      <CelulaPreco preco={l.preco} />
+      {/* Unidades, faturamento e pedidos empilhados: o bloco do histórico.
+          Unidades em destaque porque é o que ordena a tela; faturamento embaixo
+          porque é a consequência; pedidos em terceiro porque quase nunca decide
+          algo sozinho (é unidades ÷ itens por venda). */}
+      <td className="px-3 py-3 text-right">
+        <span className="block font-bold tabular-nums text-[var(--cz-texto)]">
+          {inteiro(l.unidades)}
+          <span className="ml-1 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
+            un.
+          </span>
+        </span>
+        <span className="mt-0.5 block font-semibold tabular-nums text-emerald-700">
+          {brl(l.faturamento)}
+        </span>
+        <span className="mt-0.5 block text-[10.5px] tabular-nums text-[var(--cz-texto-fraco)]">
+          {inteiro(l.pedidos)} pedido(s)
+        </span>
+      </td>
 
-      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
-        {inteiro(l.pedidos)}
+      {/* Data e hora, e o botão de abrir no ML embaixo. Juntar a ação nesta
+          coluna é o que dispensa uma décima coluna só para um ícone. */}
+      <td className="px-3 py-3 pr-5 text-right">
+        <UltimaVenda iso={l.ultimaVenda} />
+        <span className="mt-1.5 inline-flex">
+          <LinkAbrir l={l} />
+        </span>
       </td>
-      <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--cz-texto)]">
-        {inteiro(l.unidades)}
-      </td>
-      <td className="px-3 py-3 text-right font-semibold tabular-nums text-emerald-700">
-        {brl(l.faturamento)}
-      </td>
-      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
-        {dataCurta(l.ultimaVenda)}
-      </td>
-
-      <CelulaAbrir l={l} />
     </tr>
   );
 }

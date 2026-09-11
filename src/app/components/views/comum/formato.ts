@@ -16,6 +16,35 @@ export const inteiro = (v: number) => v.toLocaleString("pt-BR");
 export const dataCurta = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
 
 /**
+ * Só a HORA, para quando a data já está numa linha acima.
+ *
+ * `timeZone` explícito e não o fuso do navegador: as datas de venda vêm como
+ * instante UTC, e sem essa opção a mesma venda apareceria em horas diferentes num
+ * notebook com o relógio em outro fuso. O negócio é brasileiro, e a hora que
+ * interessa é a de São Paulo.
+ *
+ * A hora importa em "última venda": vendeu hoje de manhã ou hoje às 23h50 são
+ * leituras diferentes de "está parado", e só a data trata as duas como iguais.
+ *
+ * NÃO existe um `dataHora` aqui de propósito. Já há DOIS no projeto —
+ * `ui/tarefas/formato.ts` (fuso do navegador) e `lib/contas.ts::dataHoraSP`
+ * (São Paulo) — e acrescentar um terceiro com o mesmo nome e comportamento
+ * ligeiramente diferente é exatamente a duplicação que este arquivo existe para
+ * acabar. Quem precisa de data e hora compõe `dataCurta` + `horaCurta`, que é o
+ * que as telas de anúncios fazem (em duas linhas, para a coluna não alargar).
+ */
+export function horaCurta(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  return d.toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
  * Classe do input/select padrão das telas novas.
  *
  * O FOCO É LARANJA, NÃO VERDE. Antes era

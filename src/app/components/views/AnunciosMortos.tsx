@@ -25,23 +25,24 @@ import { useMemo, useState } from "react";
 import {
   Aviso,
   AvisoBackfill,
+  AvisoDoisTempos,
   BotaoAtualizar,
   Cabecalho,
   CabecalhoTabela,
-  CelulaAbrir,
+  CelulaAgora,
   CelulaAnuncio,
-  CelulaEstoque,
-  CelulaPreco,
   Campo,
   Esqueleto,
   Kpi,
+  LinkAbrir,
   MolduraTela,
   NotaFiltroCaro,
   Paginacao,
   PainelFiltros,
   RodapeFonte,
-  SeloStatus,
   Th,
+  ThGrupo,
+  UltimaVenda,
 } from "./anuncios/comum";
 import {
   CampoBusca,
@@ -62,7 +63,6 @@ import {
 } from "./comum/icones";
 import {
   brl,
-  dataCurta,
   ENTRADA,
   inteiro,
   motivoDeParada,
@@ -317,7 +317,9 @@ export default function AnunciosMortos() {
         </Faixa>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
+      <AvisoDoisTempos />
+
+      <div className="mt-3 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
         {carregando ? (
           <Esqueleto />
         ) : erro ? (
@@ -337,29 +339,38 @@ export default function AnunciosMortos() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1160px] border-collapse text-left">
-              <CabecalhoTabela>
-                <Th className="pl-5">Anúncio</Th>
-                <Th>Situação</Th>
-                <Th>O que fazer</Th>
-                <Th align="right">Estoque</Th>
-                <Th align="right">Preço</Th>
-                <Th align="right">Unidades</Th>
-                <Th align="right">Faturamento</Th>
-                <Th align="right">Parado há</Th>
-                <Th align="right">Última venda</Th>
-                <Th align="right" className="pr-5">
-                  Abrir
-                </Th>
-              </CabecalhoTabela>
-              <tbody>
-                {linhas.map((l) => (
-                  <LinhaParada key={`${l.meliAccountId}:${l.itemId}`} l={l} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          // Sem scroll horizontal: as dez colunas viraram cinco, agrupadas por
+          // NATUREZA do dado. Ver o comentário equivalente em
+          // `AnunciosMaisVendidos.tsx` e o `ThGrupo` em `anuncios/comum.tsx`.
+          <table className="w-full table-fixed border-collapse text-left">
+            <colgroup>
+              <col className="w-[40%]" />
+              <col className="w-[20%]" />
+              <col className="w-[13%]" />
+              <col className="w-[14%]" />
+              <col className="w-[13%]" />
+            </colgroup>
+            <CabecalhoTabela>
+              <Th className="pl-5">Anúncio</Th>
+              <ThGrupo
+                titulo="Situação / Estoque / Preço"
+                momento="agora no Mercado Livre"
+              />
+              <ThGrupo titulo="O que fazer" momento="conclusão do sistema" />
+              <ThGrupo titulo="Vendia" momento="histórico acumulado" align="right" />
+              <ThGrupo
+                titulo="Parado há / Última venda"
+                momento="data e hora"
+                align="right"
+                className="pr-5"
+              />
+            </CabecalhoTabela>
+            <tbody>
+              {linhas.map((l) => (
+                <LinhaParada key={`${l.meliAccountId}:${l.itemId}`} l={l} />
+              ))}
+            </tbody>
+          </table>
         )}
 
         {dados && dados.total > 0 && (
@@ -394,14 +405,9 @@ function LinhaParada({ l }: { l: Linha }) {
     >
       <CelulaAnuncio l={l} />
 
-      <td className="px-3 py-3">
-        <SeloStatus status={l.status} />
-        {l.subStatus.includes("out_of_stock") && (
-          <span className="mt-1 block text-[10px] font-semibold text-amber-700">
-            pausado por falta de estoque
-          </span>
-        )}
-      </td>
+      {/* Situação + estoque + preço: o bloco do "agora". O selo de "pausado por
+          falta de estoque" já vem dentro dele. */}
+      <CelulaAgora l={l} />
 
       {/* A coluna que dá o encaminhamento. Sem ela a tela lista problemas; com
           ela a tela distribui trabalho. Cada saída ganhou ícone: o operador varre
@@ -427,27 +433,32 @@ function LinhaParada({ l }: { l: Linha }) {
         )}
       </td>
 
-      <CelulaEstoque estoque={l.estoque} />
-      <CelulaPreco preco={l.preco} />
-
-      <td className="px-3 py-3 text-right font-semibold tabular-nums text-[var(--cz-texto)]">
-        {inteiro(l.unidades)}
-      </td>
-      <td className="px-3 py-3 text-right font-semibold tabular-nums text-emerald-700">
-        {brl(l.faturamento)}
-      </td>
-
+      {/* O que o anúncio VENDIA — histórico, não presente. Unidades em cima
+          porque é o tamanho do buraco em volume; faturamento embaixo porque é o
+          tamanho em dinheiro. */}
       <td className="px-3 py-3 text-right">
+        <span className="block font-bold tabular-nums text-[var(--cz-texto)]">
+          {inteiro(l.unidades)}
+          <span className="ml-1 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
+            un.
+          </span>
+        </span>
+        <span className="mt-0.5 block font-semibold tabular-nums text-emerald-700">
+          {brl(l.faturamento)}
+        </span>
+      </td>
+
+      <td className="px-3 py-3 pr-5 text-right">
         <Selo tom={l.diasSemVenda >= 90 ? "critico" : "alerta"} className="tabular-nums">
           {inteiro(l.diasSemVenda)} dias
         </Selo>
+        <span className="mt-1 block">
+          <UltimaVenda iso={l.ultimaVenda} />
+        </span>
+        <span className="mt-1.5 inline-flex">
+          <LinkAbrir l={l} />
+        </span>
       </td>
-
-      <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
-        {dataCurta(l.ultimaVenda)}
-      </td>
-
-      <CelulaAbrir l={l} />
     </tr>
   );
 }

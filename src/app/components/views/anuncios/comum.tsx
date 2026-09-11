@@ -31,8 +31,10 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
+import type { ReactNode } from "react";
+
 import { Miniatura, Paginacao as PaginacaoBase } from "../comum/shell";
-import { brl, inteiro, type Linha } from "./tipos";
+import { brl, dataCurta, horaCurta, inteiro, type Linha } from "./tipos";
 
 /* -------------------------------------------------------------------------- */
 /*                  Moldura e peças genéricas: vêm do shell                   */
@@ -118,6 +120,35 @@ export function RodapeFonte() {
   );
 }
 
+/**
+ * O aviso de que a linha mistura dois tempos.
+ *
+ * Fica ACIMA da tabela, não no rodapé. A informação "preço e estoque são de
+ * agora, não da época da venda" só serve se for lida ANTES de alguém usar o
+ * número — e ninguém rola até o rodapé antes de olhar a coluna. O rodapé continua
+ * existindo com o detalhe técnico; aqui vai a frase curta que muda a leitura.
+ */
+export function AvisoDoisTempos() {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-3.5 py-2 text-[11.5px] leading-relaxed">
+      <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--cz-texto)]">
+        <span className="size-1.5 rounded-full bg-emerald-500" />
+        Situação, estoque e preço: <span className="font-bold">agora</span> no Mercado
+        Livre
+      </span>
+      <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--cz-texto)]">
+        <span className="size-1.5 rounded-full bg-[var(--cz-texto-fraco)]" />
+        Unidades, faturamento e última venda:{" "}
+        <span className="font-bold">histórico</span> do período filtrado
+      </span>
+      <span className="text-[var(--cz-texto-suave)]">
+        O preço exibido é o da etiqueta hoje, não o preço praticado nas vendas
+        listadas.
+      </span>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*                          Células da tabela de anúncios                     */
 /* -------------------------------------------------------------------------- */
@@ -125,13 +156,16 @@ export function RodapeFonte() {
 /** A célula do anúncio: miniatura, título, MLB, conta, SKU e modalidade. */
 export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
   return (
+    // `items-start` e não `items-center`: com o título em duas linhas, centralizar
+    // deixaria a miniatura flutuando no meio de um bloco alto, desalinhada da
+    // primeira linha do texto que ela ilustra.
     <td className="py-3 pl-5 pr-3">
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         {posicao !== undefined && (
           // Verde no pódio é SEMÂNTICO (é o topo do ranking), então não virou
           // laranja junto com as cores de ação.
           <span
-            className={`w-6 shrink-0 text-center text-[13px] font-bold tabular-nums ${
+            className={`mt-1 w-6 shrink-0 text-center text-[13px] font-bold tabular-nums ${
               posicao <= 3 ? "text-emerald-700" : "text-[var(--cz-texto-fraco)]"
             }`}
             aria-label={`Posição ${posicao}`}
@@ -141,8 +175,17 @@ export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
         )}
         <Miniatura src={l.thumbnailUrl} alt={l.titulo} />
         <div className="min-w-0">
+          {/*
+            DUAS LINHAS, e não uma com reticências.
+            Título de anúncio no Mercado Livre é longo por construção (o vendedor
+            enfia marca, modelo, voltagem e cor para ganhar busca), e cortar na
+            primeira linha some justamente com o que diferencia dois anúncios
+            parecidos — "Ventilador 40cm PRETO" e "Ventilador 40cm BRANCO" ficam
+            idênticos na tela. Duas linhas cabem sem esticar a tabela, que é o que
+            permite a tela viver sem scroll horizontal.
+          */}
           <span
-            className="block truncate font-semibold text-[var(--cz-texto)]"
+            className="block font-semibold leading-snug text-[var(--cz-texto)] line-clamp-2"
             title={l.titulo}
           >
             {l.titulo}
@@ -175,81 +218,204 @@ export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
   );
 }
 
-/**
- * A coluna de estoque.
+/*
+ * `CelulaEstoque` e `CelulaPreco` saíram daqui.
  *
- * Três estados e não dois: número, `0` (esgotado) e vazio (a API não respondeu).
- * Mostrar vazio como zero faria a tela afirmar que o anúncio está sem estoque
- * quando ela apenas não sabe — e alguém compra mercadoria por causa disso.
+ * Eram duas colunas de uma célula cada, e junto com "Situação" formavam três
+ * colunas para três dados que se leem juntos e têm a mesma natureza (leitura ao
+ * vivo do Mercado Livre). Viraram `CelulaAgora`, logo abaixo. Removidas em vez de
+ * mantidas "por segurança": export sem uso é o que deixa duas formas de desenhar
+ * a mesma coisa no código, e foi assim que a lista de colunas das telas de vendas
+ * passou a descrever uma tabela que não existia mais.
  */
-export function CelulaEstoque({ estoque }: { estoque: number | null }) {
-  if (estoque === null) {
-    return (
-      <td className="px-3 py-3 text-right">
-        <span
-          className="text-[var(--cz-texto-fraco)]"
-          title="A API do Mercado Livre não respondeu"
-        >
-          —
-        </span>
-      </td>
-    );
+
+/**
+ * O botão de abrir no Mercado Livre, SEM a célula em volta.
+ *
+ * Separado de `CelulaAbrir` porque a ação deixou de merecer uma coluna própria: um
+ * ícone de 36px numa coluna inteira era largura gasta para nada, e largura é
+ * exatamente o que faltava para a tabela caber sem scroll. Agora ele mora dentro
+ * de outra célula, e quem quiser a coluna dedicada continua usando `CelulaAbrir`.
+ */
+export function LinkAbrir({ l }: { l: Linha }) {
+  if (!l.permalink) {
+    return <span className="text-[var(--cz-texto-fraco)]">—</span>;
   }
   return (
-    <td className="px-3 py-3 text-right">
-      <span
-        className={`font-semibold tabular-nums ${
-          estoque === 0 ? "text-rose-700" : "text-[var(--cz-texto)]"
-        }`}
+    // Abrir no ML é uma AÇÃO, então o realce de hover é laranja. Era verde, que
+    // nesta tela já significa "estoque saudável" e "pódio".
+    <a
+      href={l.permalink}
+      target="_blank"
+      rel="noreferrer"
+      title={`Abrir ${l.titulo} no Mercado Livre`}
+      className="inline-grid size-8 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
+    >
+      <svg
+        className="h-3.5 w-3.5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        aria-hidden
       >
-        {inteiro(estoque)}
-        <span className="ml-1 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
-          un.
-        </span>
-      </span>
-    </td>
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <path d="M15 3h6v6" />
+        <path d="M10 14 21 3" />
+      </svg>
+    </a>
   );
 }
 
 export function CelulaAbrir({ l }: { l: Linha }) {
   return (
     <td className="py-3 pl-3 pr-5 text-right">
-      {l.permalink ? (
-        // Abrir no ML é uma AÇÃO, então o realce de hover é laranja. Era verde,
-        // que nesta tela já significa "estoque saudável" e "pódio".
-        <a
-          href={l.permalink}
-          target="_blank"
-          rel="noreferrer"
-          title={`Abrir ${l.titulo} no Mercado Livre`}
-          className="inline-grid size-9 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
-        >
-          <svg
-            className="h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            aria-hidden
-          >
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            <path d="M15 3h6v6" />
-            <path d="M10 14 21 3" />
-          </svg>
-        </a>
-      ) : (
-        <span className="text-[var(--cz-texto-fraco)]">—</span>
-      )}
+      <LinkAbrir l={l} />
     </td>
   );
 }
 
-export function CelulaPreco({ preco }: { preco: number | null }) {
+/* -------------------------------------------------------------------------- */
+/*                  Cabeçalho de grupo: AGORA vs. HISTÓRICO                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cabeçalho de coluna com uma segunda linha dizendo A QUE MOMENTO o dado se
+ * refere.
+ *
+ * É o ponto central deste ajuste. A tabela mistura duas naturezas de dado na
+ * mesma linha e nada dizia isso:
+ *
+ *   • situação, estoque e preço são LIDOS AGORA no Mercado Livre, a cada
+ *     carregamento da tela;
+ *   • unidades, faturamento e última venda são o HISTÓRICO de vendas do período
+ *     escolhido no filtro.
+ *
+ * Sem a distinção, é natural ler "R$ 89,90" como o preço pelo qual aquelas 40
+ * unidades foram vendidas — e não é: é o preço da etiqueta neste instante, que
+ * pode ter mudado ontem. Quem calcula margem com esse número erra a conta e não
+ * tem como saber.
+ *
+ * A nota de rodapé já explicava, mas rodapé não é lido na hora de olhar a coluna.
+ * O lugar de dizer "isto é de agora" é no cabeçalho da coluna que mostra isso.
+ */
+export function ThGrupo({
+  titulo,
+  momento,
+  align = "left",
+  className = "",
+}: {
+  titulo: string;
+  /** "agora no Mercado Livre" / "no período" — a segunda linha. */
+  momento: string;
+  align?: "left" | "right";
+  className?: string;
+}) {
   return (
-    <td className="px-3 py-3 text-right tabular-nums text-[var(--cz-texto-suave)]">
-      {preco === null ? "—" : brl(preco)}
+    <th
+      scope="col"
+      className={`px-3 py-2 font-bold align-bottom ${
+        align === "right" ? "text-right" : "text-left"
+      } ${className}`}
+    >
+      <span className="block">{titulo}</span>
+      <span className="mt-0.5 block text-[9px] font-semibold normal-case tracking-normal text-[var(--cz-texto-fraco)]">
+        {momento}
+      </span>
+    </th>
+  );
+}
+
+/**
+ * Situação, estoque e preço numa célula só — o bloco do "agora".
+ *
+ * Eram três colunas separadas, e junto com as outras sete faziam a tabela pedir
+ * `min-w-[1120px]` e scroll horizontal. Agrupar não é só economia de largura:
+ * põe lado a lado os três dados que compartilham a mesma natureza (leitura ao
+ * vivo do Mercado Livre) e que se leem juntos — "pausado, 0 em estoque" é uma
+ * frase, não três números soltos em colunas distantes.
+ */
+export function CelulaAgora({
+  l,
+  extra,
+}: {
+  l: Linha;
+  /** Espaço para algo específico da tela, como a cobertura de estoque. */
+  extra?: ReactNode;
+}) {
+  return (
+    <td className="px-3 py-3">
+      <div className="flex flex-col items-start gap-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SeloStatus status={l.status} />
+          {l.subStatus.includes("out_of_stock") && (
+            <span className="text-[10px] font-semibold text-amber-700">
+              pausado por falta de estoque
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
+          {/* Estoque tem TRÊS estados e não dois: número, `0` (esgotado) e vazio
+              (a API não respondeu). Mostrar vazio como zero faria a tela afirmar
+              que o anúncio está sem estoque quando ela apenas não sabe — e alguém
+              compra mercadoria por causa disso. */}
+          {l.estoque === null ? (
+            <span
+              className="text-[var(--cz-texto-fraco)]"
+              title="O Mercado Livre não respondeu o estoque deste anúncio"
+            >
+              estoque —
+            </span>
+          ) : (
+            <span
+              className={`font-bold tabular-nums ${
+                l.estoque === 0 ? "text-rose-700" : "text-[var(--cz-texto)]"
+              }`}
+            >
+              {inteiro(l.estoque)}
+              <span className="ml-0.5 text-[10.5px] font-medium text-[var(--cz-texto-fraco)]">
+                un.
+              </span>
+            </span>
+          )}
+
+          <span className="text-[var(--cz-hairline-forte)]">·</span>
+
+          <span className="tabular-nums text-[var(--cz-texto-suave)]">
+            {l.preco === null ? "—" : brl(l.preco)}
+          </span>
+        </div>
+
+        {extra}
+      </div>
     </td>
+  );
+}
+
+/**
+ * Última venda com DATA E HORA, em duas linhas.
+ *
+ * A hora estava sendo jogada fora por `dataCurta`, embora o dado sempre a tivesse
+ * (`ultima_venda` é `MAX(data_venda)`, um timestamp). E ela é o que distingue
+ * "vendeu hoje de manhã" de "vendeu hoje às 23h50" — duas leituras diferentes numa
+ * tela cujo assunto é justamente há quanto tempo o anúncio não vende.
+ *
+ * Duas linhas e não uma: "09/09/26 14:32" numa linha só alarga a coluna, e largura
+ * é exatamente o que falta para esta tabela caber sem scroll.
+ */
+export function UltimaVenda({ iso }: { iso: string | null }) {
+  if (!iso) return <span className="text-[var(--cz-texto-fraco)]">—</span>;
+  return (
+    <>
+      <span className="block tabular-nums text-[11.5px] text-[var(--cz-texto-suave)]">
+        {dataCurta(iso)}
+      </span>
+      <span className="block text-[10.5px] tabular-nums text-[var(--cz-texto-fraco)]">
+        {horaCurta(iso)}
+      </span>
+    </>
   );
 }
 
