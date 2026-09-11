@@ -27,6 +27,7 @@ export function paraQuery(filtros: FiltrosExpedicao): URLSearchParams {
   if (filtros.modalidades.length) p.set("modalidades", filtros.modalidades.join(","));
   if (filtros.hierarquias1.length) p.set("hierarquias1", filtros.hierarquias1.join(","));
   if (filtros.hierarquias2.length) p.set("hierarquias2", filtros.hierarquias2.join(","));
+  if (filtros.skus.length) p.set("skus", filtros.skus.join(","));
   if (filtros.busca.trim()) p.set("busca", filtros.busca.trim());
 
   if (filtros.prazoPreset !== FILTROS_PADRAO.prazoPreset) {

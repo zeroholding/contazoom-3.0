@@ -27,6 +27,7 @@ import {
   Kpi,
   Miniatura,
   MolduraTela,
+  MultiSelecao,
   Paginacao,
   PainelFiltros,
   Selo,
@@ -34,7 +35,7 @@ import {
   ThOrdenavel,
 } from "./comum/shell";
 import { brl, ENTRADA, inteiro } from "./comum/formato";
-import { SeloCanal } from "./comum/logos";
+import { LogoCanal, SeloCanal } from "./comum/logos";
 import {
   IconeAbrirFora,
   IconeAlerta,
@@ -96,6 +97,8 @@ const JANELAS = [15, 30, 60, 90, 180, 365];
  * Sem a frase, a pessoa descobre isso pela contagem que não fecha.
  */
 const EXPLICACAO_PRAZO: Partial<Record<PrazoPreset, string>> = {
+  aDespachar:
+    "O trabalho de hoje: o que vence hoje MAIS tudo o que já venceu. É o recorte com que a tela abre.",
   atrasados: "Tudo cujo prazo já passou, sem limite de quanto tempo atrás.",
   hoje: "Prazo de despacho caindo hoje, no fuso de São Paulo — o dia inteiro, inclusive um prazo às 23h.",
   amanha: "Prazo caindo amanhã. Serve para adiantar o que já pode ser separado hoje.",
@@ -380,7 +383,10 @@ function TabelaResumo({
 }) {
   if (linhas.length < 2) return null;
 
-  const totalPacotes = linhas.reduce((s, l) => s + l.pacotes, 0);
+  // A barra de proporção usa UNIDADES, não pacotes: o que dimensiona o trabalho
+  // de separação é quanto sai da prateleira, e uma categoria com dois pacotes de
+  // vinte itens pesa mais que uma com cinco pacotes de um.
+  const totalUnidades = linhas.reduce((s, l) => s + l.unidades, 0);
 
   return (
     <section className="overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-1)]">
@@ -393,13 +399,23 @@ function TabelaResumo({
       </header>
 
       <table className="w-full border-collapse text-left">
+        {/* Cabeçalho miúdo, mas presente: sem ele, "12 / 40 un. / R$ 900" obriga a
+            adivinhar o que é 12 — pacote, venda ou item. */}
+        <thead>
+          <tr className="border-b border-[var(--cz-hairline)] text-[9.5px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-fraco)]">
+            <th className="px-3.5 py-1.5 text-left font-bold">{titulo.replace("Por ", "")}</th>
+            <th className="px-2 py-1.5 text-right font-bold">Vendas</th>
+            <th className="px-2 py-1.5 text-right font-bold">Unid.</th>
+            <th className="px-3.5 py-1.5 text-right font-bold">Valor</th>
+          </tr>
+        </thead>
         <tbody>
           {linhas.map((linha) => {
             // Barra de proporção no fundo da célula do rótulo. É o que transforma
             // uma coluna de números numa distribuição legível de relance — sem
             // ela, achar a maior pilha exige comparar sete números.
             const fatia =
-              totalPacotes > 0 ? Math.round((linha.pacotes / totalPacotes) * 100) : 0;
+              totalUnidades > 0 ? Math.round((linha.unidades / totalUnidades) * 100) : 0;
 
             return (
               <tr
@@ -419,8 +435,16 @@ function TabelaResumo({
                     {linha.rotulo}
                   </span>
                 </td>
-                <td className="relative px-2 py-2 text-right text-[12px] font-bold tabular-nums text-[var(--cz-texto)]">
-                  {inteiro(linha.pacotes)}
+                {/* VENDAS e UNIDADES, as duas colunas que o galpão usa. A
+                    contagem de pacotes fica no `title`: ela só interessa para
+                    saber quantas etiquetas imprimir, e uma quarta coluna de
+                    números tornaria a tabelinha ilegível na largura de um terço
+                    da tela. */}
+                <td
+                  className="relative px-2 py-2 text-right text-[12px] font-bold tabular-nums text-[var(--cz-texto)]"
+                  title={`${inteiro(linha.pacotes)} pacote(s)`}
+                >
+                  {inteiro(linha.vendas)}
                 </td>
                 <td className="relative px-2 py-2 text-right text-[11px] tabular-nums text-[var(--cz-texto-suave)]">
                   {inteiro(linha.unidades)} un.
@@ -530,6 +554,7 @@ export default function Expedicao({
   const modalidades = dados?.modalidades ?? [];
   const opcoes1 = dados?.opcoesHierarquia1 ?? [];
   const opcoes2 = dados?.opcoesHierarquia2 ?? [];
+  const opcoesSku = dados?.opcoesSku ?? [];
 
   const vazio = !carregando && (dados?.pacotes.length ?? 0) === 0;
 
@@ -546,6 +571,7 @@ export default function Expedicao({
       filtros.modalidades.length === 0 &&
       filtros.hierarquias1.length === 0 &&
       filtros.hierarquias2.length === 0 &&
+      filtros.skus.length === 0 &&
       filtros.busca.trim() === "" &&
       // O recorte de prazo conta como filtro. Sem esta linha, a Expedição aberta
       // em "Atrasados" e sem atrasado nenhum diria "Nada a despachar" — mentira,
@@ -633,17 +659,24 @@ export default function Expedicao({
           tom={URGENCIA_TOM.hoje}
           icone={<IconeAmpulheta className="h-5 w-5" />}
         />
+        {/* VENDAS e ITENS a despachar, como dois cartões separados.
+            São as duas perguntas do galpão, e nenhuma delas é "pacotes": quantas
+            vendas vou dar baixa (o número que fecha com o painel do marketplace) e
+            quantas unidades vou tirar da prateleira. A contagem de PACOTES vira a
+            nota do primeiro, porque é a de etiquetas a imprimir — informação da
+            impressora, não do planejamento. */}
         <Kpi
-          rotulo="Vencem amanhã"
-          valor={inteiro(porUrgencia?.amanha ?? 0)}
-          icone={<IconeRelogio className="h-5 w-5" />}
-        />
-        <Kpi
-          rotulo="Pacotes na fila"
-          valor={inteiro(dados?.total ?? 0)}
-          nota={`${inteiro(dados?.unidades ?? 0)} unidades`}
+          rotulo="Vendas a despachar"
+          valor={inteiro(dados?.vendas ?? 0)}
+          nota={`${inteiro(dados?.total ?? 0)} pacote(s) / etiqueta(s)`}
           destaque
           icone={<IconeCaminhao className="h-5 w-5" />}
+        />
+        <Kpi
+          rotulo="Itens a despachar"
+          valor={inteiro(dados?.unidades ?? 0)}
+          nota="unidades a separar"
+          icone={<IconeCaixas className="h-5 w-5" />}
         />
         <Kpi
           rotulo="Valor na fila"
@@ -712,90 +745,86 @@ export default function Expedicao({
           placeholder="Pedido, etiqueta, SKU, produto ou comprador"
         />
 
+        {/* Todos os recortes de conjunto viraram MULTI-seleção. Um `<select>`
+            simples obriga a escolher entre "uma" e "todas", e não existe ali
+            "estas duas" — que é justamente a pergunta de quem tem quatro contas e
+            quer conferir duas, ou de quem separa três SKUs de um lote. */}
         {!canalFixo && (
-          <Campo rotulo="Canal" className="lg:col-span-2">
-            <select
-              value={filtros.canais[0] ?? ""}
-              onChange={(e) =>
-                mudar({ canais: e.target.value ? [e.target.value as Canal] : [] })
-              }
-              className={ENTRADA}
-            >
-              <option value="">Todos</option>
-              {CANAIS.map((c) => (
-                <option key={c} value={c}>
-                  {CANAL_ROTULO[c]}
-                </option>
-              ))}
-            </select>
-          </Campo>
+          <MultiSelecao
+            className="lg:col-span-2"
+            rotulo="Marketplace"
+            placeholder="Todos"
+            opcoes={CANAIS.map((c) => ({
+              valor: c,
+              rotulo: CANAL_ROTULO[c],
+              icone: <LogoCanal canal={c} />,
+            }))}
+            selecionados={filtros.canais}
+            onMudar={(v) => mudar({ canais: v as Canal[] })}
+          />
         )}
 
-        <Campo rotulo="Conta" className="lg:col-span-3">
-          <select
-            value={filtros.contas[0] ?? ""}
-            onChange={(e) => mudar({ contas: e.target.value ? [e.target.value] : [] })}
-            className={ENTRADA}
-          >
-            <option value="">Todas</option>
-            {contasDoCanal.map((c) => (
-              <option key={c.accountId} value={c.accountId}>
-                {c.conta} ({inteiro(c.pacotes)})
-              </option>
-            ))}
-          </select>
-        </Campo>
+        <MultiSelecao
+          className="lg:col-span-3"
+          rotulo="Conta"
+          placeholder="Todas"
+          vazio="Nenhuma conta com pacote na fila"
+          opcoes={contasDoCanal.map((c) => ({
+            valor: c.accountId,
+            rotulo: c.conta,
+            contagem: c.pacotes,
+            // O logo dentro da opção resolve o caso de duas contas com nome
+            // parecido em marketplaces diferentes, na tela Geral.
+            icone: <LogoCanal canal={c.canal} />,
+          }))}
+          selecionados={filtros.contas}
+          onMudar={(v) => mudar({ contas: v })}
+        />
 
-        <Campo rotulo="Envio" className="lg:col-span-3">
-          <select
-            value={filtros.modalidades[0] ?? ""}
-            onChange={(e) =>
-              mudar({ modalidades: e.target.value ? [e.target.value] : [] })
-            }
-            className={ENTRADA}
-          >
-            <option value="">Todos</option>
-            {modalidades.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </Campo>
+        <MultiSelecao
+          className="lg:col-span-3"
+          rotulo="Modalidade de envio"
+          placeholder="Todas"
+          vazio="Nenhuma modalidade na fila"
+          opcoes={modalidades.map((m) => ({ valor: m, rotulo: m }))}
+          selecionados={filtros.modalidades}
+          onMudar={(v) => mudar({ modalidades: v })}
+        />
 
-        <Campo rotulo="Categoria" className="lg:col-span-3">
-          <select
-            value={filtros.hierarquias1[0] ?? ""}
-            onChange={(e) =>
-              mudar({ hierarquias1: e.target.value ? [e.target.value] : [] })
-            }
-            className={ENTRADA}
-          >
-            <option value="">Todas</option>
-            {opcoes1.map((h) => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-          </select>
-        </Campo>
+        {/* SKU, e não categoria: escolher aqui deixa na tela só as VENDAS daquele
+            código, e um pacote misto aparece com o item escolhido apenas. É o
+            recorte de quem vai separar um lote, e ele responde "quantas unidades
+            deste produto saem hoje" — o pacote inteiro traria produto de fora. */}
+        <MultiSelecao
+          className="lg:col-span-4"
+          rotulo="SKU"
+          placeholder="Todos os SKUs"
+          buscaPlaceholder="Digite o código do SKU…"
+          vazio="Nenhum SKU na fila"
+          opcoes={opcoesSku.map((s) => ({ valor: s, rotulo: s }))}
+          selecionados={filtros.skus}
+          onMudar={(v) => mudar({ skus: v })}
+        />
 
-        <Campo rotulo="Subcategoria" className="lg:col-span-3">
-          <select
-            value={filtros.hierarquias2[0] ?? ""}
-            onChange={(e) =>
-              mudar({ hierarquias2: e.target.value ? [e.target.value] : [] })
-            }
-            className={ENTRADA}
-          >
-            <option value="">Todas</option>
-            {opcoes2.map((h) => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-          </select>
-        </Campo>
+        <MultiSelecao
+          className="lg:col-span-3"
+          rotulo="Categoria"
+          placeholder="Todas"
+          vazio="Nenhuma categoria cadastrada"
+          opcoes={opcoes1.map((h) => ({ valor: h, rotulo: h }))}
+          selecionados={filtros.hierarquias1}
+          onMudar={(v) => mudar({ hierarquias1: v })}
+        />
+
+        <MultiSelecao
+          className="lg:col-span-3"
+          rotulo="Subcategoria"
+          placeholder="Todas"
+          vazio="Nenhuma subcategoria cadastrada"
+          opcoes={opcoes2.map((h) => ({ valor: h, rotulo: h }))}
+          selecionados={filtros.hierarquias2}
+          onMudar={(v) => mudar({ hierarquias2: v })}
+        />
 
         <Campo rotulo="Situação da venda" className="lg:col-span-2">
           <select
@@ -825,7 +854,10 @@ export default function Expedicao({
           </select>
         </Campo>
 
-        <Campo rotulo="Janela" className="lg:col-span-2">
+        {/* 4 colunas e não 2: fecha a linha em 12 junto com "Prazo" e as duas
+            datas de limite. Com 2, sobrava um buraco de 2 colunas no meio do
+            painel. */}
+        <Campo rotulo="Janela" className="lg:col-span-4">
           <select
             value={filtros.janelaDias}
             onChange={(e) => mudar({ janelaDias: Number(e.target.value) })}
@@ -839,29 +871,32 @@ export default function Expedicao({
           </select>
         </Campo>
 
-        {/* As datas de PRAZO só aparecem no recorte personalizado. Nos atalhos
-            elas são derivadas no servidor, e mostrá-las preenchidas convidaria a
-            editá-las — o que contradiria a pastilha acesa logo acima. */}
-        {filtros.prazoPreset === "personalizado" && (
-          <>
-            <Campo rotulo="Prazo de" className="lg:col-span-3">
-              <input
-                type="date"
-                value={filtros.prazoDe ?? ""}
-                onChange={(e) => mudar({ prazoDe: e.target.value || null })}
-                className={ENTRADA}
-              />
-            </Campo>
-            <Campo rotulo="Prazo até" className="lg:col-span-3">
-              <input
-                type="date"
-                value={filtros.prazoAte ?? ""}
-                onChange={(e) => mudar({ prazoAte: e.target.value || null })}
-                className={ENTRADA}
-              />
-            </Campo>
-          </>
-        )}
+        {/* As datas de LIMITE DE DESPACHO ficam SEMPRE visíveis.
+            Antes só apareciam no recorte "personalizado", o que escondia o
+            controle atrás de uma escolha em outro lugar da tela — quem quer uma
+            faixa de datas não adivinha que precisa primeiro clicar numa pastilha.
+            Digitar aqui já muda o recorte para personalizado, então o atalho aceso
+            nunca contradiz as datas que estão na tela. */}
+        <Campo rotulo="Limite de despacho — de" className="lg:col-span-3">
+          <input
+            type="date"
+            value={filtros.prazoDe ?? ""}
+            onChange={(e) =>
+              mudar({ prazoPreset: "personalizado", prazoDe: e.target.value || null })
+            }
+            className={ENTRADA}
+          />
+        </Campo>
+        <Campo rotulo="Limite de despacho — até" className="lg:col-span-3">
+          <input
+            type="date"
+            value={filtros.prazoAte ?? ""}
+            onChange={(e) =>
+              mudar({ prazoPreset: "personalizado", prazoAte: e.target.value || null })
+            }
+            className={ENTRADA}
+          />
+        </Campo>
 
         {/* Data da VENDA, não do prazo. São perguntas diferentes: "o que vence
             hoje" é a fila de trabalho; "o que foi vendido no dia 3" é
@@ -894,8 +929,18 @@ export default function Expedicao({
             titulo={semFiltro ? "Nada a despachar" : "Nenhum pacote com esses filtros"}
             texto={
               semFiltro
-                ? "Nenhuma venda do Mercado Livre ou da Shopee está aguardando despacho na janela escolhida. Se acabou de vender, sincronize as vendas para a fila atualizar."
-                : "Os filtros ativos não deixaram nenhum pacote. Tente limpar a urgência selecionada ou alargar a janela de datas."
+                ? "Nada vence hoje e não há atrasado — a tela abre nesse recorte. Para ver o que sai nos próximos dias, escolha outro prazo acima. Se acabou de vender, sincronize as vendas para a fila atualizar."
+                : "Os filtros ativos não deixaram nenhum pacote. Tente limpar a urgência selecionada, escolher outro prazo ou alargar a janela de datas."
+            }
+            acaoSecundaria={
+              // Com o padrão sendo "a despachar hoje", o caminho mais provável a
+              // partir de uma tela vazia é olhar o resto da fila. Deixar isso a um
+              // clique evita a conclusão errada de que não há nada para despachar.
+              semFiltro ? (
+                <BotaoSecundario onClick={() => mudar({ prazoPreset: "todas" })}>
+                  Ver todos os prazos
+                </BotaoSecundario>
+              ) : undefined
             }
             acao={
               !semFiltro ? (
@@ -971,7 +1016,23 @@ export default function Expedicao({
           isso que eles fecham com os cartões do topo e não com a tabela acima —
           e é o que os torna úteis: a página 1 de 40 não diz nada sobre o dia. */}
       {dados && !carregando && !vazio && (
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {/* Modalidade de envio e SKU primeiro, e nesta ordem: a modalidade define
+              o CORTE do dia (o que sai por coleta, o que vai à agência) e o SKU é a
+              lista de separação. As categorias vêm depois porque são planejamento,
+              não a tarefa. */}
+          <TabelaResumo
+            titulo="Por modalidade de envio"
+            nota="Modalidade no Mercado Livre, transportadora na Shopee. É o que define o corte do dia."
+            icone={<IconeCaminhao className="h-4 w-4" />}
+            linhas={dados.resumoModalidade}
+          />
+          <TabelaResumo
+            titulo="Por SKU"
+            nota="A lista de separação condensada: quantas unidades de cada código saem no recorte atual."
+            icone={<IconeSku className="h-4 w-4" />}
+            linhas={dados.resumoSku}
+          />
           <TabelaResumo
             titulo="Por categoria"
             nota="Onde estão as pilhas. Vem do cadastro de SKU."
@@ -981,14 +1042,8 @@ export default function Expedicao({
           <TabelaResumo
             titulo="Por subcategoria"
             nota="O segundo nível do cadastro, para separar dentro da prateleira."
-            icone={<IconeSku className="h-4 w-4" />}
-            linhas={dados.resumoHierarquia2}
-          />
-          <TabelaResumo
-            titulo="Por envio"
-            nota="Modalidade no Mercado Livre, transportadora na Shopee. Define o corte do dia."
             icone={<IconeCaixas className="h-4 w-4" />}
-            linhas={dados.resumoModalidade}
+            linhas={dados.resumoHierarquia2}
           />
         </div>
       )}

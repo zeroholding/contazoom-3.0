@@ -356,6 +356,27 @@ function fragmentoHierarquia(coluna: Prisma.Sql, valores: string[]): Prisma.Sql 
   return Prisma.sql`AND ${coluna} IN (${lista(valores)})`;
 }
 
+/**
+ * Filtro por SKU, aplicado na VENDA e não no pacote.
+ *
+ * É o que faz "só as vendas deste SKU" significar isso de verdade: como o corte
+ * acontece antes do agrupamento, um pacote misto sobra na tela com APENAS o item
+ * escolhido, e as unidades somam só o que vai ser separado. Filtrar depois do
+ * agrupamento traria o pacote inteiro — inclusive os produtos que não fazem parte
+ * do lote — e o total de unidades passaria a mentir.
+ *
+ * `UPPER(TRIM(...))` nos dois lados porque SKU digitado à mão vem com espaço e
+ * caixa trocados, e a mesma normalização já é usada na junção com o cadastro
+ * (`JUNCAO_SKU`). Comparar cru aqui faria o filtro achar nada para metade dos
+ * códigos.
+ */
+function fragmentoSkus(valores: string[]): Prisma.Sql {
+  if (valores.length === 0) return Prisma.empty;
+  const alvos = valores.map((v) => v.trim().toUpperCase()).filter(Boolean);
+  if (alvos.length === 0) return Prisma.empty;
+  return Prisma.sql`AND UPPER(TRIM(COALESCE(v.sku, ''))) IN (${lista(alvos)})`;
+}
+
 /** Lista de textos para comparação em minúsculas/maiúsculas. */
 function lista(valores: string[]): Prisma.Sql {
   return Prisma.join(valores.map((v) => Prisma.sql`${v}`));
@@ -393,6 +414,7 @@ function baseMeli(
           fragmentoTemPrazo(filtros.temPrazo),
           fragmentoHierarquia(HIERARQUIA_1, filtros.hierarquias1),
           fragmentoHierarquia(HIERARQUIA_2, filtros.hierarquias2),
+          fragmentoSkus(filtros.skus),
         ],
         " ",
       )
@@ -454,6 +476,7 @@ function baseShopee(
           fragmentoTemPrazo(filtros.temPrazo),
           fragmentoHierarquia(HIERARQUIA_1, filtros.hierarquias1),
           fragmentoHierarquia(HIERARQUIA_2, filtros.hierarquias2),
+          fragmentoSkus(filtros.skus),
         ],
         " ",
       )
@@ -592,6 +615,28 @@ function montarCte(
           ELSE 'futuro'
         END AS urgencia
       FROM classificados c
+    ),
+    -- Volta ao nivel da VENDA, carregando a urgencia e a modalidade do pacote.
+    --
+    -- Existe por causa do resumo por SKU. Os outros resumos (categoria,
+    -- modalidade) agrupam PACOTES, e um pacote tem uma categoria so -- a do
+    -- primeiro item. SKU nao: um pacote misto tem varios, e agrupar por SKU no
+    -- nivel do pacote contaria o pacote inteiro para o SKU do primeiro item e
+    -- perderia os demais.
+    --
+    -- O JOIN com fila (e nao com base direto) e o que faz o resumo por SKU
+    -- respeitar os mesmos recortes de urgencia e modalidade que a lista de cima,
+    -- que sao calculados por pacote.
+    itens_fila AS (
+      SELECT
+        b.chave,
+        NULLIF(TRIM(b.sku), '') AS sku,
+        b.quantidade,
+        b.valor_total,
+        f.urgencia,
+        f.modalidade
+      FROM base b
+      JOIN fila f ON f.chave = b.chave
     )
   `;
 }
@@ -737,6 +782,7 @@ async function buscarResumo(
     SELECT
       ${coluna}        AS rotulo,
       COUNT(*)         AS pacotes,
+      SUM(pedidos)     AS vendas,
       SUM(unidades)    AS unidades,
       SUM(valor_total) AS valor_total
     FROM fila
@@ -753,6 +799,49 @@ async function buscarResumo(
     // sem dizer por quê.
     rotulo: linha.rotulo ? texto(linha.rotulo) : "Sem categoria",
     pacotes: numero(linha.pacotes),
+    vendas: numero(linha.vendas),
+    unidades: numero(linha.unidades),
+    valorTotal: numero(linha.valor_total),
+  }));
+}
+
+/**
+ * Resumo por SKU — a lista de separação condensada.
+ *
+ * Roda sobre `itens_fila`, no nível da VENDA, e não sobre `fila`. É a diferença
+ * que faz o número estar certo: um pacote misto contribui para vários SKUs, e
+ * agrupar no nível do pacote daria a ele o SKU do primeiro item e perderia o
+ * resto.
+ *
+ * `COUNT(DISTINCT chave)` para pacotes, porque o mesmo pacote aparece em várias
+ * linhas de `itens_fila` — com `COUNT(*)` a coluna "pacotes" contaria vendas.
+ *
+ * Limite maior que os outros resumos (60 contra 30): aqui a lista É o trabalho.
+ * Quem separa quer ver todos os códigos do dia, não os trinta maiores.
+ */
+async function buscarResumoSku(
+  cte: Prisma.Sql,
+  recortes: Prisma.Sql,
+): Promise<LinhaResumo[]> {
+  const linhas = await prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
+    ${cte}
+    SELECT
+      sku                   AS rotulo,
+      COUNT(DISTINCT chave) AS pacotes,
+      COUNT(*)              AS vendas,
+      SUM(quantidade)       AS unidades,
+      SUM(valor_total)      AS valor_total
+    FROM itens_fila
+    WHERE TRUE ${recortes}
+    GROUP BY sku
+    ORDER BY SUM(quantidade) DESC, sku ASC NULLS LAST
+    LIMIT 60
+  `);
+
+  return linhas.map((linha) => ({
+    rotulo: linha.rotulo ? texto(linha.rotulo) : "Sem SKU",
+    pacotes: numero(linha.pacotes),
+    vendas: numero(linha.vendas),
     unidades: numero(linha.unidades),
     valorTotal: numero(linha.valor_total),
   }));
@@ -792,8 +881,14 @@ export async function buscarExpedicao(
   // exatamente estes, para somarem o mesmo conjunto que a lista mostra.
   const recortes = Prisma.sql`${filtroUrgencia} ${filtroModalidade}`;
 
-  const [linhas, resumo, resumoHierarquia1, resumoHierarquia2, resumoModalidade] =
-    await Promise.all([
+  const [
+    linhas,
+    resumo,
+    resumoHierarquia1,
+    resumoHierarquia2,
+    resumoModalidade,
+    resumoSku,
+  ] = await Promise.all([
       prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
         ${cte}
         SELECT * FROM fila
@@ -808,6 +903,12 @@ export async function buscarExpedicao(
         SELECT
           urgencia,
           COUNT(*)           AS pacotes,
+          -- pedidos e quantas VENDAS o pacote junta. Somado, da as vendas a
+          -- despachar: o numero que fecha com o painel do marketplace, enquanto a
+          -- contagem de pacotes e o numero de etiquetas a imprimir.
+          -- (Sem acento e sem backtick de proposito: comentario SQL dentro de
+          -- template literal, e backtick aqui encerra a string.)
+          SUM(pedidos)       AS vendas,
           SUM(unidades)      AS unidades,
           SUM(valor_total)   AS valor_total
         FROM fila
@@ -817,6 +918,7 @@ export async function buscarExpedicao(
       buscarResumo(cte, "hierarquia1", recortes),
       buscarResumo(cte, "hierarquia2", recortes),
       buscarResumo(cte, "modalidade", recortes),
+      buscarResumoSku(cte, recortes),
     ]);
 
   const porUrgencia = Object.fromEntries(
@@ -824,6 +926,7 @@ export async function buscarExpedicao(
   ) as Record<Urgencia, number>;
 
   let total = 0;
+  let vendas = 0;
   let unidades = 0;
   let valorTotal = 0;
   const selecionadas =
@@ -836,6 +939,7 @@ export async function buscarExpedicao(
 
     if (selecionadas === null || selecionadas.has(faixa)) {
       total += pacotes;
+      vendas += numero(linha.vendas);
       unidades += numero(linha.unidades);
       valorTotal += numero(linha.valor_total);
     }
@@ -881,11 +985,13 @@ export async function buscarExpedicao(
     total,
     totalPaginas: Math.max(1, Math.ceil(total / porPagina)),
     porUrgencia,
+    vendas,
     unidades,
     valorTotal,
     resumoHierarquia1,
     resumoHierarquia2,
     resumoModalidade,
+    resumoSku,
     ...facetas,
   };
 }
@@ -912,12 +1018,13 @@ async function buscarFacetas(
     | "modalidades"
     | "opcoesHierarquia1"
     | "opcoesHierarquia2"
+    | "opcoesSku"
     | "prazoPendente"
   >
 > {
   const cte = montarCte(userId, filtros, { aplicarFiltros: false });
 
-  const [linhas, hierarquias, pendentes] = await Promise.all([
+  const [linhas, hierarquias, skus, pendentes] = await Promise.all([
     prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
       ${cte}
       SELECT canal, account_id, MIN(conta) AS conta, modalidade, COUNT(*) AS pacotes
@@ -932,6 +1039,22 @@ async function buscarFacetas(
       SELECT DISTINCT 1 AS nivel, hierarquia1 AS valor FROM fila WHERE hierarquia1 IS NOT NULL
       UNION
       SELECT DISTINCT 2 AS nivel, hierarquia2 AS valor FROM fila WHERE hierarquia2 IS NOT NULL
+    `),
+    // Os SKUs vem de `itens_fila`, no nivel da venda: `fila` nao tem coluna de
+    // SKU, porque um pacote misto tem varios.
+    //
+    // Ordenado por UNIDADES e nao alfabeticamente, e com teto: em base grande a
+    // fila do dia tem centenas de codigos, e a lista do filtro precisa comecar
+    // pelos que de fato movem o dia. O campo de busca do proprio filtro cobre o
+    // resto -- alfabetico com 300 itens obriga a rolar para achar o que importa.
+    prisma.$queryRaw<LinhaPacote[]>(Prisma.sql`
+      ${cte}
+      SELECT sku AS valor, SUM(quantidade) AS unidades
+      FROM itens_fila
+      WHERE sku IS NOT NULL
+      GROUP BY sku
+      ORDER BY SUM(quantidade) DESC, sku ASC
+      LIMIT 300
     `),
     contarPrazoPendenteRapido(userId),
   ]);
@@ -977,6 +1100,10 @@ async function buscarFacetas(
     // depender de quanto se vendeu naquele dia.
     opcoesHierarquia1: [...opcoes1].sort((a, b) => a.localeCompare(b, "pt-BR")),
     opcoesHierarquia2: [...opcoes2].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    // A ordem do SQL (por unidades) é PRESERVADA: reordenar alfabeticamente aqui
+    // jogaria fora justamente o critério que faz os primeiros itens da lista
+    // serem os que movem o dia.
+    opcoesSku: skus.map((l) => texto(l.valor)).filter(Boolean),
     prazoPendente: pendentes,
   };
 }

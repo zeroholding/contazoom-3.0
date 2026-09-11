@@ -143,6 +143,10 @@ function lerFiltros(url: URL): FiltrosExpedicao {
     // faria todo filtro de categoria devolver vazio.
     hierarquias1: lista(p.get("hierarquias1"), 50),
     hierarquias2: lista(p.get("hierarquias2"), 50),
+    // Teto de 200 SKUs: é um filtro de lote, e alguém colando uma planilha inteira
+    // na URL viraria um `IN (...)` de milhares de itens. O corte é silencioso pelo
+    // mesmo critério do resto daqui, e 200 cobre qualquer separação real de um dia.
+    skus: lista(p.get("skus"), 200),
     busca: texto(p.get("busca")),
     prazoPreset,
     prazoDe,
@@ -360,6 +364,7 @@ export async function GET(req: NextRequest) {
       filtros.modalidades.join("|"),
       filtros.hierarquias1.join("|"),
       filtros.hierarquias2.join("|"),
+      filtros.skus.join("|"),
       filtros.busca,
       // As datas JÁ RESOLVIDAS, não o nome do atalho: dois pedidos com o mesmo
       // `prazoPreset` em dias diferentes descrevem faixas diferentes, e guardar só

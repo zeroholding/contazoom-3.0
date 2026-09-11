@@ -266,6 +266,7 @@ export type PacoteExpedicao = {
  */
 export type PrazoPreset =
   | "personalizado"
+  | "aDespachar"
   | "atrasados"
   | "hoje"
   | "amanha"
@@ -275,6 +276,7 @@ export type PrazoPreset =
   | "todas";
 
 export const PRAZO_PRESETS: { chave: PrazoPreset; rotulo: string }[] = [
+  { chave: "aDespachar", rotulo: "A despachar hoje" },
   { chave: "atrasados", rotulo: "Atrasados" },
   { chave: "hoje", rotulo: "Vencem hoje" },
   { chave: "amanha", rotulo: "Vencem amanhã" },
@@ -322,6 +324,17 @@ export function resolverPrazo(
   const hoje = hojeSP();
 
   switch (preset) {
+    /**
+     * "A despachar hoje" — o padrão da tela.
+     *
+     * Vai até hoje SEM PISO, ou seja inclui o que já venceu. Não é o mesmo que
+     * `hoje`, e a diferença é o ponto: o que precisa sair do galpão hoje é o que
+     * vence hoje MAIS tudo o que já deveria ter saído. Um preset que mostrasse só
+     * o dia corrente esconderia justamente o pacote mais grave — o atrasado —
+     * de quem abre a tela às oito da manhã para montar a carga.
+     */
+    case "aDespachar":
+      return { de: null, ate: hoje };
     // Sem piso: um pacote parado há três meses continua sendo trabalho, e cortar
     // em 30 dias esconderia justamente o caso mais grave.
     case "atrasados":
@@ -395,10 +408,19 @@ export function ehTemPrazo(valor: string): valor is TemPrazo {
   return TEM_PRAZO.some((t) => t.chave === valor);
 }
 
-/** Uma linha dos resumos do rodapé. */
+/**
+ * Uma linha dos resumos do rodapé.
+ *
+ * `pacotes` e `vendas` são coisas diferentes e as duas aparecem: no Mercado Livre
+ * várias vendas do mesmo comprador saem numa etiqueta só, então "8 pacotes / 11
+ * vendas" é normal. Mostrar só um dos dois faz a conferência com o painel do
+ * marketplace (que conta VENDAS) parecer errada.
+ */
 export type LinhaResumo = {
   rotulo: string;
   pacotes: number;
+  /** Vendas dentro desses pacotes. */
+  vendas: number;
   unidades: number;
   valorTotal: number;
 };
@@ -423,6 +445,19 @@ export type FiltrosExpedicao = {
   /** Categorias do cadastro de SKU. Vazio = todas. */
   hierarquias1: string[];
   hierarquias2: string[];
+  /**
+   * Códigos de SKU. Vazio = todos.
+   *
+   * Recorta as VENDAS, não os pacotes: escolher um SKU deixa na tela só as vendas
+   * daquele SKU, e um pacote misto aparece com o item selecionado apenas. É a
+   * pergunta de quem vai separar um lote específico ("quantas unidades deste
+   * produto saem hoje"), e responder com o pacote inteiro traria produto que não
+   * faz parte do lote.
+   *
+   * Diferente de `hierarquias1/2`, que são as CATEGORIAS do cadastro. Aqui é o
+   * código do produto, um por um.
+   */
+  skus: string[];
   busca: string;
 
   /** Atalho de faixa de prazo. `personalizado` usa `prazoDe`/`prazoAte`. */
@@ -459,12 +494,21 @@ export const FILTROS_PADRAO: FiltrosExpedicao = {
   modalidades: [],
   hierarquias1: [],
   hierarquias2: [],
+  skus: [],
   busca: "",
-  // Sem recorte de prazo por padrão: a tela abre com a FILA INTEIRA, e as fichas
-  // de urgência já mostram como ela se distribui. Abrir filtrada em "hoje" (como
-  // faz o projeto irmão) esconde os atrasados justamente de quem abre a tela pela
-  // primeira vez no dia — que é quando eles mais importam.
-  prazoPreset: "todas",
+  /**
+   * A tela abre em "A DESPACHAR HOJE".
+   *
+   * Que é o trabalho do dia: o que vence hoje MAIS o que já venceu. Um padrão de
+   * `hoje` puro esconderia o atrasado — o caso mais grave — de quem abre a tela
+   * pela manhã, e por isso o preset tem piso aberto. E um padrão de "todos os
+   * prazos" abre a fila inteira, incluindo o que vence em três semanas, o que
+   * afoga a decisão de agora numa lista que não é de hoje.
+   *
+   * As fichas de urgência continuam mostrando a distribuição do recorte, e trocar
+   * para "Todos os prazos" é um clique.
+   */
+  prazoPreset: "aDespachar",
   prazoDe: null,
   prazoAte: null,
   vendaDe: null,
@@ -495,6 +539,15 @@ export type ResultadoExpedicao = {
   totalPaginas: number;
   /** Contagem por faixa, ignorando o filtro de urgência — alimenta as fichas. */
   porUrgencia: Record<Urgencia, number>;
+  /**
+   * VENDAS a despachar no conjunto filtrado.
+   *
+   * Separado de `total` (que conta PACOTES) porque são as duas perguntas que o
+   * galpão faz: quantas etiquetas vou imprimir, e quantas vendas vou dar baixa.
+   * No Mercado Livre uma etiqueta pode cobrir três vendas, então os dois números
+   * divergem — e é o de vendas que fecha com o painel do marketplace.
+   */
+  vendas: number;
   /** Somas do conjunto filtrado inteiro, não só da página. */
   unidades: number;
   valorTotal: number;
@@ -503,6 +556,14 @@ export type ResultadoExpedicao = {
   /** Opções de hierarquia disponíveis, para os filtros. */
   opcoesHierarquia1: string[];
   opcoesHierarquia2: string[];
+  /**
+   * SKUs presentes na fila, para o filtro.
+   *
+   * Vem da consulta SEM os filtros do usuário, igual às outras facetas: escolher
+   * um SKU não pode apagar os outros da lista, senão não há como trocar de SKU
+   * sem limpar tudo.
+   */
+  opcoesSku: string[];
   /**
    * Resumos do rodapé: onde o trabalho está concentrado.
    *
@@ -513,6 +574,14 @@ export type ResultadoExpedicao = {
   resumoHierarquia1: LinhaResumo[];
   resumoHierarquia2: LinhaResumo[];
   resumoModalidade: LinhaResumo[];
+  /**
+   * Resumo por SKU.
+   *
+   * É o resumo que o galpão realmente usa: "deste código saem 14 unidades hoje"
+   * é a lista de separação condensada, e evita ir à prateleira duas vezes pelo
+   * mesmo produto porque ele apareceu em pacotes diferentes.
+   */
+  resumoSku: LinhaResumo[];
   /** Quantas vendas ainda não passaram pelo backfill de prazo. */
   prazoPendente: number;
 };
