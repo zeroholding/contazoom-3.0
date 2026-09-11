@@ -1,11 +1,28 @@
 "use client";
 
+/**
+ * Opções de tamanho de página.
+ *
+ * Sem valores acima de 100 de propósito: a tabela de vendas monta um dropdown de
+ * detalhamento por linha (frete, taxa, receita líquida) e consulta o status de
+ * SKU pendente, então cada linha custa. Oferecer "500" ou "todas" convidaria a um
+ * travamento que a pessoa leria como defeito do sistema.
+ */
+const OPCOES_POR_PAGINA = [10, 20, 50, 100];
+
 interface VendasPaginationProps {
   currentPage: number;
   totalPages: number;
   totalItems: number;
   itemsPerPage: number;
   onPageChange: (page: number) => void;
+  /**
+   * Quando informado, aparece o seletor de itens por página.
+   *
+   * Opcional para o componente continuar servindo a quem pagina com tamanho fixo,
+   * em vez de obrigar todo chamador a inventar um handler.
+   */
+  onItemsPerPageChange?: (itemsPerPage: number) => void;
   resumoPorConta?: Array<{ conta: string; total: number }>;
 }
 
@@ -15,23 +32,52 @@ export default function VendasPagination({
   totalItems,
   itemsPerPage,
   onPageChange,
+  onItemsPerPageChange,
   resumoPorConta
 }: VendasPaginationProps) {
   const formatNumber = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
   return (
     <div className="px-6 py-4 border-t border-[var(--cz-hairline)] bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="text-sm text-gray-600">
-        <div>
-          Mostrando
-          <span className="font-medium text-gray-900 ml-1">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
+          <span>Mostrando</span>
+          <span className="font-medium text-gray-900">
             {totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}
           </span>
-          <span className="mx-1">-</span>
+          <span>-</span>
           <span className="font-medium text-gray-900">
             {Math.min(currentPage * itemsPerPage, totalItems)}
           </span>
-          <span className="ml-1">de</span>
-          <span className="font-medium text-gray-900 ml-1">{totalItems}</span>
+          <span>de</span>
+          <span className="font-medium text-gray-900">{formatNumber(totalItems)}</span>
+
+          {/* O seletor fica JUNTO do "mostrando X-Y de Z", e não solto num canto:
+              é a mesma frase. Trocar o tamanho da página é responder "quantos por
+              vez", e a resposta atual está escrita ali ao lado. */}
+          {onItemsPerPageChange && (
+            <label className="ml-2 inline-flex items-center gap-1.5">
+              <span className="text-gray-500">Por página:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+                className="h-8 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-white px-2 text-sm font-medium text-gray-800 transition-colors hover:border-[var(--cz-laranja-borda)] focus:border-[var(--cz-laranja)] focus:outline-none"
+                aria-label="Quantidade de vendas por página"
+              >
+                {/* O valor em uso entra na lista mesmo fora das opções padrão: um
+                    link antigo ou outra tela pode ter fixado 25, e um `<select>`
+                    cujo `value` não existe entre as opções aparece VAZIO — parece
+                    defeito e esconde o tamanho real da página. */}
+                {(OPCOES_POR_PAGINA.includes(itemsPerPage)
+                  ? OPCOES_POR_PAGINA
+                  : [...OPCOES_POR_PAGINA, itemsPerPage].sort((a, b) => a - b)
+                ).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
         {Array.isArray(resumoPorConta) && resumoPorConta.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2">

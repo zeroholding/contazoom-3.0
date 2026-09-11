@@ -4,6 +4,11 @@ import { useState, useEffect } from "react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import DatePicker from "react-datepicker";
 import { DataVendaFilter, VendaFilters } from "@/hooks/useVendasFilter";
+import {
+  COLUNAS_PADRAO,
+  colunasDaPlataforma,
+  type ColunasVisiveis as ColunasVisiveisTipo,
+} from "../colunasVendas";
 
 export type FiltroStatus = "todos" | "paid" | "cancelled";
 export type FiltroPeriodo =
@@ -13,7 +18,6 @@ export type FiltroPeriodo =
   | "hoje"
   | "ontem"
   | "personalizado";
-export type FiltroADS = "todos" | "com_ads" | "sem_ads";
 export type FiltroExposicao = "todas" | "premium" | "classico";
 export type FiltroTipoAnuncio = "todos" | "catalogo" | "proprio";
 export type FiltroModalidadeEnvio =
@@ -23,61 +27,22 @@ export type FiltroModalidadeEnvio =
   | "agencia"
   | "drop_off";
 
-export interface ColunasVisiveis {
-  data: boolean;
-  canal: boolean;
-  conta: boolean;
-  pedido: boolean;
-  comprador: boolean;
-  ads: boolean;
-  exposicao: boolean;
-  tipo: boolean;
-  produto: boolean;
-  sku: boolean;
-  quantidade: boolean;
-  unitario: boolean;
-  valor: boolean;
-  taxa: boolean;
-  frete: boolean;
-  cmv: boolean;
-  margem: boolean;
-  envioMode: boolean;
-}
+/** Ver o re-export equivalente em `ui/FiltrosVendas.tsx`. */
+export type { ColunasVisiveis } from "../colunasVendas";
 
 interface FiltrosVendasProps {
   totalVendas?: number;
   vendasPagas?: number;
   vendasCanceladas?: number;
   platform?: "Mercado Livre" | "Shopee" | "Geral";
-  colunasVisiveis?: ColunasVisiveis;
+  colunasVisiveis?: ColunasVisiveisTipo;
 
   filters: VendaFilters;
   updateFilters: (partial: Partial<VendaFilters>) => void;
 
   contasDisponiveis?: Array<{ id: string; nickname: string }>;
-  onColunasChange?: (colunas: ColunasVisiveis) => void;
+  onColunasChange?: (colunas: ColunasVisiveisTipo) => void;
 }
-
-const colunasVisiveisDefault: ColunasVisiveis = {
-  data: true,
-  canal: true,
-  conta: true,
-  pedido: true,
-  comprador: true,
-  ads: false,
-  exposicao: true,
-  tipo: true,
-  produto: true,
-  sku: true,
-  quantidade: true,
-  unitario: true,
-  valor: true,
-  taxa: true,
-  frete: true,
-  cmv: true,
-  margem: true,
-  envioMode: true,
-};
 
 export default function FiltrosVendasV2({
   filters,
@@ -86,7 +51,7 @@ export default function FiltrosVendasV2({
   vendasPagas = 0,
   vendasCanceladas = 0,
   contasDisponiveis = [],
-  colunasVisiveis = colunasVisiveisDefault,
+  colunasVisiveis = COLUNAS_PADRAO,
   onColunasChange,
   platform = "Mercado Livre",
 }: FiltrosVendasProps) {
@@ -100,7 +65,7 @@ export default function FiltrosVendasV2({
   const [endDate, setEndDate] = useState<Date | null>(null);
 
   // Estados para os novos dropdowns
-  const [showADSDropdown, setShowADSDropdown] = useState(false);
+
   const [showExposicaoDropdown, setShowExposicaoDropdown] = useState(false);
   const [showTipoAnuncioDropdown, setShowTipoAnuncioDropdown] = useState(false);
   const [showModalidadeEnvioDropdown, setShowModalidadeEnvioDropdown] =
@@ -118,14 +83,6 @@ export default function FiltrosVendasV2({
   });
 
   // Hooks para os novos dropdowns
-  const adsDropdown = useSmartDropdown<HTMLButtonElement>({
-    isOpen: showADSDropdown,
-    onClose: () => setShowADSDropdown(false),
-    preferredPosition: "bottom-right",
-    offset: 8,
-    minDistanceFromEdge: 16,
-  });
-
   const exposicaoDropdown = useSmartDropdown<HTMLButtonElement>({
     isOpen: showExposicaoDropdown,
     onClose: () => setShowExposicaoDropdown(false),
@@ -352,25 +309,18 @@ export default function FiltrosVendasV2({
     return periodoOptions.find((item) => item.id === periodo)?.label ?? "Todos";
   };
 
-  const adsOptions = [
-    { id: "todos" as FiltroADS, label: "Todos", apiFilter: undefined },
-    { id: "com_ads" as FiltroADS, label: "Com ADS", apiFilter: true },
-    { id: "sem_ads" as FiltroADS, label: "Sem ADS", apiFilter: false },
-  ];
-
-  const [currentAdsOption, setCurrentAdsOption] = useState<FiltroADS>("todos");
-
-  const handleAdsFilter = (selectedOption: (typeof adsOptions)[0]) => {
-    updateFilters({
-      ads: selectedOption.apiFilter,
-    });
-    setCurrentAdsOption(selectedOption.id);
-    setShowADSDropdown(false);
-  };
-
-  const getADSLabel = (filtro: FiltroADS) => {
-    return adsOptions.find((item) => item.id === filtro)?.label ?? "Todos";
-  };
+  /*
+   * O filtro "Com ADS / Sem ADS" saiu daqui.
+   *
+   * Ele aparecia SÓ na Central de Vendas Geral — a condição era
+   * `platform !== "Shopee" && platform !== "Mercado Livre"`, o que sobra apenas
+   * "Geral" — e é justamente a tela em que ele menos serve: metade das linhas ali
+   * é Shopee, que não tem ADS, e o filtro as trataria todas como "sem ADS".
+   *
+   * `VendaFilters.ads` FOI MANTIDO em `useVendasFilter.ts`: é capacidade real da
+   * API, e a tela do Mercado Livre pode voltar a usá-la. O que saiu é o controle
+   * que estava no lugar errado.
+   */
 
   const exposicaoOptions = [
     { id: "todas" as FiltroExposicao, label: "Todas" },
@@ -495,66 +445,15 @@ export default function FiltrosVendasV2({
     const account = contasDisponiveis.find((c) => c.id === accountId);
     return account ? account.nickname : "Todas as Contas";
   };
+  /**
+   * A lista de colunas oferecidas vem de `colunasVendas.ts`.
+   *
+   * Era uma copia literal da que existe em `ui/FiltrosVendas.tsx`, e as duas ja
+   * nao correspondiam a tabela -- nem entre si. Ver o cabecalho daquele arquivo.
+   */
+  const colunasOferecidas = colunasDaPlataforma(platform);
 
-  const colunaOptions = [
-    { id: "data" as keyof ColunasVisiveis, label: "Data" },
-    {
-      id: "canal" as keyof ColunasVisiveis,
-      label: "Canal",
-    },
-    {
-      id: "conta" as keyof ColunasVisiveis,
-      label: "Conta",
-    },
-    {
-      id: "pedido" as keyof ColunasVisiveis,
-      label: "Id venda",
-    },
-    {
-      id: "comprador" as keyof ColunasVisiveis,
-      label: "Cliente",
-    },
-    { id: "ads" as keyof ColunasVisiveis, label: "ADS" },
-    {
-      id: "exposicao" as keyof ColunasVisiveis,
-      label: "Exposição",
-    },
-    { id: "tipo" as keyof ColunasVisiveis, label: "Tipo" },
-    {
-      id: "produto" as keyof ColunasVisiveis,
-      label: "Produto",
-    },
-    { id: "sku" as keyof ColunasVisiveis, label: "SKU" },
-    {
-      id: "quantidade" as keyof ColunasVisiveis,
-      label: "Qtd.",
-    },
-    {
-      id: "unitario" as keyof ColunasVisiveis,
-      label: "Unitário",
-    },
-    {
-      id: "valor" as keyof ColunasVisiveis,
-      label: "Valor",
-    },
-    { id: "taxa" as keyof ColunasVisiveis, label: "Taxa" },
-    {
-      id: "frete" as keyof ColunasVisiveis,
-      label: "Frete",
-    },
-    { id: "cmv" as keyof ColunasVisiveis, label: "CMV" },
-    {
-      id: "margem" as keyof ColunasVisiveis,
-      label: "Margem",
-    },
-    {
-      id: "envioMode" as keyof ColunasVisiveis,
-      label: "Mod. Envio",
-    },
-  ];
-
-  // Função para alternar visibilidade de coluna
-  const handleToggleColuna = (colunaId: keyof ColunasVisiveis) => {
+  const handleToggleColuna = (colunaId: keyof ColunasVisiveisTipo) => {
     if (onColunasChange) {
       onColunasChange({
         ...colunasVisiveis,
@@ -563,58 +462,21 @@ export default function FiltrosVendasV2({
     }
   };
 
-  // Função para selecionar todas as colunas
+  // "Todas" agora significa TODAS. Antes esta funcao montava um objeto com
+  // `ads: false` dentro -- ou seja, "Selecionar todas" deixava uma de fora, em
+  // silencio, e a caixa de ADS voltava a desmarcar sozinha.
   const handleSelecionarTodas = () => {
-    if (onColunasChange) {
-      const todasVisiveis: ColunasVisiveis = {
-        data: true,
-        canal: true,
-        conta: true,
-        pedido: true,
-        comprador: true,
-        ads: false,
-        exposicao: true,
-        tipo: true,
-        produto: true,
-        sku: true,
-        quantidade: true,
-        unitario: true,
-        valor: true,
-        taxa: true,
-        frete: true,
-        cmv: true,
-        margem: true,
-        envioMode: true,
-      };
-      onColunasChange(todasVisiveis);
-    }
+    if (!onColunasChange) return;
+    const todas = { ...colunasVisiveis };
+    for (const c of colunasOferecidas) todas[c.id] = true;
+    onColunasChange(todas);
   };
 
-  // Função para desselecionar todas as colunas
   const handleDeselecionarTodas = () => {
-    if (onColunasChange) {
-      const nenhumaVisivel: ColunasVisiveis = {
-        data: false,
-        canal: false,
-        conta: false,
-        pedido: false,
-        comprador: false,
-        ads: false,
-        exposicao: false,
-        tipo: false,
-        produto: false,
-        sku: false,
-        quantidade: false,
-        unitario: false,
-        valor: false,
-        taxa: false,
-        frete: false,
-        cmv: false,
-        margem: false,
-        envioMode: false,
-      };
-      onColunasChange(nenhumaVisivel);
-    }
+    if (!onColunasChange) return;
+    const nenhuma = { ...colunasVisiveis };
+    for (const c of colunasOferecidas) nenhuma[c.id] = false;
+    onColunasChange(nenhuma);
   };
 
   const getFiltroClasses = (
@@ -691,83 +553,6 @@ export default function FiltrosVendasV2({
         {/* Botões de Ação */}
         <div className="overflow-x-auto flex-nowrap hide-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
           <div className="flex items-center gap-2 pb-1 min-w-max">
-          {/* Botão de Filtro ADS - Apenas para Mercado Livre */}
-          {platform !== "Shopee" && platform !== "Mercado Livre" && (
-            <div className="relative">
-              <button
-                ref={adsDropdown.triggerRef}
-                onClick={() => setShowADSDropdown(!showADSDropdown)}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                  showADSDropdown
-                    ? "border-gray-400 bg-gray-50 text-gray-900"
-                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
-                }`}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                  <path d="M6 5h12l3 5l-8.5 9.5a.7 .7 0 0 1 -1 0l-8.5 -9.5l3 -5" />
-                  <path d="M10 12l-2 -2.2l.6 -1" />
-                </svg>
-                <span>{getADSLabel(currentAdsOption)}</span>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className={`transition-transform duration-200 ${showADSDropdown ? "rotate-180" : ""}`}
-                >
-                  <polyline points="6,9 12,15 18,9" />
-                </svg>
-              </button>
-
-              {/* Dropdown de ADS */}
-              {adsDropdown.isVisible && (
-                <div
-                  ref={adsDropdown.dropdownRef}
-                  className={`smart-dropdown w-48 ${
-                    adsDropdown.isOpen ? "dropdown-enter" : "dropdown-exit"
-                  }`}
-                  style={adsDropdown.position}
-                >
-                  <div className="p-2">
-                    <div className="space-y-1">
-                      {adsOptions.map((option) => (
-                        <button
-                          key={option.id}
-                          onClick={() => {
-                            handleAdsFilter(option);
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
-                            currentAdsOption === option.id
-                              ? "bg-gray-100 text-gray-900 font-medium"
-                              : "text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Botão de Filtro Exposição - Apenas para Mercado Livre */}
           {platform !== "Shopee" && (
             <div className="relative">
@@ -1364,7 +1149,7 @@ export default function FiltrosVendasV2({
 
                     {/* Lista de colunas disponíveis em 2 colunas */}
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                      {colunaOptions.map((coluna) => (
+                      {colunasOferecidas.map((coluna) => (
                         <label
                           key={coluna.id}
                           className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-gray-50 cursor-pointer transition-colors group"

@@ -12,8 +12,8 @@ import {
   FiltroExposicao,
   FiltroTipoAnuncio,
   FiltroModalidadeEnvio,
-  ColunasVisiveis,
 } from "./FiltrosVendas";
+import { COLUNAS_PADRAO, type ColunasVisiveis } from "./colunasVendas";
 import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
 import { useToast } from "./toaster";
 import { useVendas } from "@/hooks/useVendas";
@@ -181,26 +181,7 @@ export default function TabelaVendas({
   filtroTipoAnuncio = "todos",
   filtroModalidadeEnvio = "todos",
   filtroConta = "todas",
-  colunasVisiveis = {
-    data: true,
-    pedido: true,
-    produto: true,
-    quantidade: true,
-    valor: true,
-    frete: true,
-    taxa: true,
-    margem: true,
-    exposicao: true,
-    ads: false,
-    tipo: true,
-    conta: true,
-    canal: true,
-    sku: true,
-    unitario: true,
-    cmv: true,
-    comprador: true,
-    envioMode: true,
-  },
+  colunasVisiveis = COLUNAS_PADRAO,
   dataInicioPersonalizada = null,
   dataFimPersonalizada = null,
   syncProgress = null,
@@ -253,7 +234,10 @@ export default function TabelaVendas({
     syncProgress || hookSyncProgress || null;
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  // Era `const ITEMS_PER_PAGE = 10` fixo. Esta tabela pagina no CLIENTE (a Shopee
+  // carrega o período inteiro de uma vez), então trocar o tamanho é só recortar
+  // outro pedaço da lista que já está na memória — nenhuma ida ao servidor.
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const [localSyncProgress, setLocalSyncProgress] = useState<{
     fetched: number;
@@ -579,7 +563,7 @@ export default function TabelaVendas({
 
   const totalPages = Math.max(
     1,
-    Math.ceil(vendasFiltradas.length / ITEMS_PER_PAGE),
+    Math.ceil(vendasFiltradas.length / itemsPerPage),
   );
 
   // Combina progressos: SSE + local + retorno do backend
@@ -969,7 +953,7 @@ export default function TabelaVendas({
               vendas={vendasFiltradas}
               isLoading={isTableLoading}
               currentPage={currentPage}
-              itemsPerPage={ITEMS_PER_PAGE}
+              itemsPerPage={itemsPerPage}
               colunasVisiveis={colunasVisiveis}
               platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
               managePage
@@ -980,8 +964,15 @@ export default function TabelaVendas({
               currentPage={currentPage}
               totalPages={totalPages}
               totalItems={vendasFiltradas.length}
-              itemsPerPage={ITEMS_PER_PAGE}
+              itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
+              onItemsPerPageChange={(n) => {
+                // Volta para a página 1: quem estava na página 9 com 10 por página
+                // e escolhe 100 cairia numa página que não existe mais, e veria a
+                // lista vazia logo depois de pedir para ver MAIS itens.
+                setItemsPerPage(n);
+                setCurrentPage(1);
+              }}
               resumoPorConta={resumoPorConta}
             />
           </div>

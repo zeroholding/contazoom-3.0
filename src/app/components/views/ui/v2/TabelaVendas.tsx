@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "../CardsContas";
 import VendasTable from "../VendasTable";
 import VendasPagination from "../VendasPagination";
-import { ColunasVisiveis } from "../FiltrosVendas";
+import type { ColunasVisiveis } from "../colunasVendas";
 import { useToast } from "../toaster";
 import { useVendasV2 } from "@/hooks/v2/useVendas";
 import { PaginationMeta } from "@/validation/validation.interface";
@@ -29,7 +29,12 @@ interface TabelaVendasProps {
   showInfoDropdown?: boolean;
   onToggleInfoDropdown?: () => void;
   dropdownRef?: React.RefObject<HTMLDivElement>;
-  colunasVisiveis?: ColunasVisiveis;
+  colunasVisiveis?: Partial<ColunasVisiveis>;
+  /**
+   * Troca o tamanho da página. Sobe para a tela porque o `limit` faz parte dos
+   * filtros que vão à API (`useVendaFilters`), não do estado desta tabela.
+   */
+  onItemsPerPageChange?: (itemsPerPage: number) => void;
 }
 
 export default function TabelaVendasV2({
@@ -37,6 +42,7 @@ export default function TabelaVendasV2({
   syncProgress = null,
   colunasVisiveis,
   onPageChange,
+  onItemsPerPageChange,
 }: TabelaVendasProps) {
   const { toast } = useToast();
   const [isStartingSync, setIsStartingSync] = useState(false);
@@ -126,7 +132,7 @@ export default function TabelaVendasV2({
     }
 
     const processedVendas = vendas.map((venda) => {
-      let freteCorrigido = venda.frete;
+      const freteCorrigido = venda.frete;
 
 
 
@@ -513,11 +519,15 @@ export default function TabelaVendasV2({
       ) : (
         <div className="flex h-[600px] flex-col">
           <div className="min-h-0 flex-1">
+            {/* `colunasVisiveis` chegava nesta tabela e morria aqui: a prop era
+                declarada e nunca repassada, e é uma das duas razões de o botão de
+                colunas não fazer nada. A outra estava no próprio `VendasTable`. */}
             <VendasTable
               vendas={vendasProcessadas}
               isLoading={isTableLoading}
               currentPage={pagination.page}
               itemsPerPage={pagination.limit}
+              colunasVisiveis={colunasVisiveis}
               platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
             />
           </div>
@@ -528,6 +538,7 @@ export default function TabelaVendasV2({
               totalItems={pagination.totalItems}
               itemsPerPage={pagination.limit}
               onPageChange={handlePageChange}
+              onItemsPerPageChange={onItemsPerPageChange}
               resumoPorConta={resumoPorConta}
             />
           </div>

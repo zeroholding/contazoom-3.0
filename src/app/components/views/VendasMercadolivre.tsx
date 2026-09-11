@@ -14,8 +14,8 @@ import FiltrosVendas, {
   FiltroExposicao,
   FiltroTipoAnuncio,
   FiltroModalidadeEnvio,
-  ColunasVisiveis
 } from "../views/ui/FiltrosVendas";
+import { COLUNAS_PADRAO, type ColunasVisiveis } from "../views/ui/colunasVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import { useToast } from "./ui/toaster";
 import ModalSyncVendas from "./ui/ModalSyncVendas";
@@ -304,27 +304,8 @@ export default function VendasMercadolivre() {
   const [filtroModalidadeEnvio, setFiltroModalidadeEnvio] = useState<FiltroModalidadeEnvio>("todos");
   const [filtroConta, setFiltroConta] = useState<string>("todas");
   
-  // Estado para colunas visíveis
-  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>({
-    data: true,
-    canal: true,
-    conta: true,
-    pedido: true,
-    comprador: true,
-    ads: false,
-    exposicao: true,
-    tipo: true,
-    produto: true,
-    sku: true,
-    quantidade: true,
-    unitario: true,
-    valor: true,
-    taxa: true,
-    frete: true,
-    cmv: true,
-    margem: true,
-    envioMode: true,
-  });
+  // Estado para colunas visíveis, com o padrão único de `colunasVendas.ts`.
+  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>(COLUNAS_PADRAO);
   
   const containerRef = useRef<HTMLDivElement | null>(null);
   

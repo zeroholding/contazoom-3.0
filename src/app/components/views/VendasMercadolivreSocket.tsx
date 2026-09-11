@@ -14,8 +14,8 @@ import FiltrosVendasComponent, {
   FiltroExposicao,
   FiltroTipoAnuncio,
   FiltroModalidadeEnvio,
-  ColunasVisiveis
 } from "../views/ui/FiltrosVendas";
+import { COLUNAS_PADRAO, type ColunasVisiveis } from "../views/ui/colunasVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import { useToast } from "./ui/toaster";
 import ModalSyncVendas from "./ui/ModalSyncVendas";
@@ -286,26 +286,7 @@ export default function VendasMercadolivreSocket() {
   const [filtroModalidadeEnvio, setFiltroModalidadeEnvio] = useState<FiltroModalidadeEnvio>("todos");
   const [filtroConta, setFiltroConta] = useState<string>("todas");
 
-  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>({
-    data: true,
-    canal: true,
-    conta: true,
-    pedido: true,
-    comprador: true,
-    ads: false,
-    exposicao: true,
-    tipo: true,
-    produto: true,
-    sku: true,
-    quantidade: true,
-    unitario: true,
-    valor: true,
-    taxa: true,
-    frete: true,
-    cmv: true,
-    margem: true,
-    envioMode: true,
-  });
+  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>(COLUNAS_PADRAO);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);

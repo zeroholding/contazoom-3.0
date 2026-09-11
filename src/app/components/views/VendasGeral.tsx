@@ -149,28 +149,7 @@ const HeaderVendasGeral = ({
 };
 
 import { useVendaFilters } from "@/hooks/useVendasFilter";
-import { ColunasVisiveis } from "./ui/v2/FiltrosVendas";
-
-const colunasVisiveisDefault: ColunasVisiveis = {
-  data: true,
-  canal: true,
-  conta: true,
-  pedido: true,
-  comprador: true,
-  ads: false,
-  exposicao: false,
-  tipo: false,
-  produto: true,
-  sku: true,
-  quantidade: true,
-  unitario: true,
-  valor: true,
-  taxa: true,
-  frete: true,
-  cmv: true,
-  margem: true,
-  envioMode: true,
-};
+import { COLUNAS_PADRAO, type ColunasVisiveis } from "./ui/colunasVendas";
 
 function VendasGeralContent() {
   const { 
@@ -184,10 +163,10 @@ function VendasGeralContent() {
   
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
-  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>(colunasVisiveisDefault);
+  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>(COLUNAS_PADRAO);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { filters, setPage, updateFilters } = useVendaFilters();
+  const { filters, setPage, setLimit, updateFilters } = useVendaFilters();
 
   const { 
     pagination,
@@ -351,15 +330,19 @@ function VendasGeralContent() {
               nickname: conta.nickname || "",
             }))}
             platform="Geral"
+            colunasVisiveis={colunasVisiveis}
+            onColunasChange={setColunasVisiveis}
           />
 
           <TabelaVendasV2 
             platform="Geral"
             isLoading={isLoading}
             isSyncing={false}
+            colunasVisiveis={colunasVisiveis}
             onPageChange={(page) => {
               setPage(page);
             }}
+            onItemsPerPageChange={setLimit}
           />
         </section>
       </main>

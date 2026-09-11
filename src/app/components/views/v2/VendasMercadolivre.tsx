@@ -14,15 +14,7 @@ import Sidebar from "../../views/ui/Sidebar";
 import Topbar from "../../views/ui/Topbar";
 import TabelaVendas from "../../views/ui/TabelaVendas";
 import { useVendasV2 } from "@/hooks/v2/useVendas";
-import FiltrosVendas, {
-  FiltroStatus,
-  FiltroPeriodo,
-  FiltroADS,
-  FiltroExposicao,
-  FiltroTipoAnuncio,
-  FiltroModalidadeEnvio,
-  ColunasVisiveis,
-} from "../../views/ui/FiltrosVendas";
+import { COLUNAS_PADRAO, type ColunasVisiveis } from "../ui/colunasVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import { useToast } from "../ui/toaster";
 import ModalSyncVendas from "../ui/ModalSyncVendas";
@@ -318,27 +310,10 @@ export default function VendasMercadolivreV2() {
   const [isLoading, setIsLoading] = useState(true);
   const backendInfo = useBackendDetection();
 
-  // Estado para colunas visíveis
-  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>({
-    data: true,
-    canal: true,
-    conta: true,
-    pedido: true,
-    ads: false,
-    exposicao: true,
-    tipo: true,
-    produto: true,
-    sku: true,
-    quantidade: true,
-    unitario: true,
-    valor: true,
-    taxa: true,
-    frete: true,
-    cmv: true,
-    margem: true,
-    comprador: true,
-    envioMode: true,
-  });
+  // Estado para colunas visíveis. O padrão vem de `colunasVendas.ts`: era um
+  // literal escrito à mão aqui, um dos oito que já divergiam entre si.
+  const [colunasVisiveis, setColunasVisiveis] =
+    useState<ColunasVisiveis>(COLUNAS_PADRAO);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -353,7 +328,7 @@ export default function VendasMercadolivreV2() {
     progress,
     reloadVendas,
   } = useVendasContext();
-  const { filters, setPage, updateFilters } = useVendaFilters();
+  const { filters, setPage, setLimit, updateFilters } = useVendaFilters();
 
   useEffect(() => {
     async function load() {
@@ -470,6 +445,8 @@ export default function VendasMercadolivreV2() {
               nickname: conta.nickname || "",
             }))}
             platform="Mercado Livre"
+            colunasVisiveis={colunasVisiveis}
+            onColunasChange={setColunasVisiveis}
           />
 
           <TabelaVendasV2
@@ -477,9 +454,11 @@ export default function VendasMercadolivreV2() {
             isLoading={isLoading}
             isSyncing={isSyncing}
             syncProgress={progress}
+            colunasVisiveis={colunasVisiveis}
             onPageChange={(page) => {
               setPage(page);
             }}
+            onItemsPerPageChange={setLimit}
           />
         </section>
       </main>

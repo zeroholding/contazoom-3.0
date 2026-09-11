@@ -3,6 +3,11 @@
 import { useState, useEffect } from "react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import DatePicker from "react-datepicker";
+import {
+  COLUNAS_PADRAO,
+  colunasDaPlataforma,
+  type ColunasVisiveis as ColunasVisiveisTipo,
+} from "./colunasVendas";
 
 export type FiltroStatus = "todos" | "pagos" | "cancelados";
 export type FiltroPeriodo = "todos" | "mes_passado" | "este_mes" | "hoje" | "ontem" | "personalizado";
@@ -11,26 +16,15 @@ export type FiltroExposicao = "todas" | "premium" | "classico";
 export type FiltroTipoAnuncio = "todos" | "catalogo" | "proprio";
 export type FiltroModalidadeEnvio = "todos" | "me" | "full" | "flex";
 
-export interface ColunasVisiveis {
-  data: boolean;
-  canal: boolean;
-  conta: boolean;
-  pedido: boolean;
-  comprador: boolean;
-  ads: boolean;
-  exposicao: boolean;
-  tipo: boolean;
-  produto: boolean;
-  sku: boolean;
-  quantidade: boolean;
-  unitario: boolean;
-  valor: boolean;
-  taxa: boolean;
-  frete: boolean;
-  cmv: boolean;
-  margem: boolean;
-  envioMode: boolean;
-}
+/**
+ * O modelo de colunas mora em `colunasVendas.ts` agora.
+ *
+ * Este re-export existe para os imports antigos (`import { ColunasVisiveis } from
+ * ".../FiltrosVendas"`) continuarem valendo — havia SEIS deles. O tipo estava
+ * declarado aqui e uma segunda vez, palavra por palavra, no `v2/FiltrosVendas`, e
+ * o default estava escrito à mão em oito arquivos que já divergiam entre si.
+ */
+export type { ColunasVisiveis } from "./colunasVendas";
 
 interface FiltrosVendasProps {
   filtroAtivo: FiltroStatus;
@@ -54,32 +48,13 @@ interface FiltrosVendasProps {
   onContaChange?: (contaId: string) => void;
   contasDisponiveis?: Array<{ id: string; nickname: string }>;
   // Colunas visíveis
-  colunasVisiveis?: ColunasVisiveis;
-  onColunasChange?: (colunas: ColunasVisiveis) => void;
+  colunasVisiveis?: ColunasVisiveisTipo;
+  onColunasChange?: (colunas: ColunasVisiveisTipo) => void;
   // Platform
   platform?: "Mercado Livre" | "Shopee" | "Geral";
 }
 
-const colunasVisiveisDefault: ColunasVisiveis = {
-  data: true,
-  canal: true,
-  conta: true,
-  pedido: true,
-  comprador: true,
-  ads: false,
-  exposicao: true,
-  tipo: true,
-  produto: true,
-  sku: true,
-  quantidade: true,
-  unitario: true,
-  valor: true,
-  taxa: true,
-  frete: true,
-  cmv: true,
-  margem: true,
-  envioMode: true,
-};
+
 
 export default function FiltrosVendas({
   filtroAtivo,
@@ -101,7 +76,7 @@ export default function FiltrosVendas({
   filtroConta = "todas",
   onContaChange,
   contasDisponiveis = [],
-  colunasVisiveis = colunasVisiveisDefault,
+  colunasVisiveis = COLUNAS_PADRAO,
   onColunasChange,
   platform = "Mercado Livre",
 }: FiltrosVendasProps) {
@@ -312,8 +287,16 @@ export default function FiltrosVendas({
     return conta ? conta.nickname : "Todas as Contas";
   };
 
-  // Função para alternar visibilidade de coluna
-  const handleToggleColuna = (colunaId: keyof ColunasVisiveis) => {
+  /**
+   * A lista de colunas oferecidas, já filtrada pela plataforma.
+   *
+   * A Shopee não tem ADS, exposição nem tipo de anúncio, e a tabela nunca desenhou
+   * esses selos para ela. Oferecer as caixas de seleção assim mesmo repetiria o
+   * defeito que este ajuste corrige: um controle que promete o que a tela não faz.
+   */
+  const colunasOferecidas = colunasDaPlataforma(platform);
+
+  const handleToggleColuna = (colunaId: keyof ColunasVisiveisTipo) => {
     if (onColunasChange) {
       onColunasChange({
         ...colunasVisiveis,
@@ -322,58 +305,21 @@ export default function FiltrosVendas({
     }
   };
 
-  // Função para selecionar todas as colunas
+  // "Todas" agora significa TODAS. Antes esta função montava um objeto com
+  // `ads: false` dentro — ou seja, "Selecionar todas" deixava uma de fora, em
+  // silêncio, e a caixa de ADS voltava a desmarcar sozinha.
   const handleSelecionarTodas = () => {
-    if (onColunasChange) {
-      const todasVisiveis: ColunasVisiveis = {
-        data: true,
-        canal: true,
-        conta: true,
-        pedido: true,
-        comprador: true,
-        ads: false,
-        exposicao: true,
-        tipo: true,
-        produto: true,
-        sku: true,
-        quantidade: true,
-        unitario: true,
-        valor: true,
-        taxa: true,
-        frete: true,
-        cmv: true,
-        margem: true,
-        envioMode: true,
-      };
-      onColunasChange(todasVisiveis);
-    }
+    if (!onColunasChange) return;
+    const todas = { ...colunasVisiveis };
+    for (const c of colunasOferecidas) todas[c.id] = true;
+    onColunasChange(todas);
   };
 
-  // Função para desselecionar todas as colunas
   const handleDeselecionarTodas = () => {
-    if (onColunasChange) {
-      const nenhumaVisivel: ColunasVisiveis = {
-        data: false,
-        canal: false,
-        conta: false,
-        pedido: false,
-        comprador: false,
-        ads: false,
-        exposicao: false,
-        tipo: false,
-        produto: false,
-        sku: false,
-        quantidade: false,
-        unitario: false,
-        valor: false,
-        taxa: false,
-        frete: false,
-        cmv: false,
-        margem: false,
-        envioMode: false,
-      };
-      onColunasChange(nenhumaVisivel);
-    }
+    if (!onColunasChange) return;
+    const nenhuma = { ...colunasVisiveis };
+    for (const c of colunasOferecidas) nenhuma[c.id] = false;
+    onColunasChange(nenhuma);
   };
 
   const getFiltroClasses = (filtro: typeof filtros[0], isActive: boolean) => {
@@ -1129,35 +1075,11 @@ export default function FiltrosVendas({
                       `
                     }} />
 
-                    {/* Lista de colunas disponíveis em 2 colunas */}
+                    {/* A lista vem de `colunasVendas.ts`, não escrita à mão aqui.
+                        Era uma cópia literal da que existe no `v2/FiltrosVendas`, e
+                        as duas já não batiam com a tabela — nem entre si. */}
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                      {[
-                        { id: "data" as keyof ColunasVisiveis, label: "Data" },
-                        { id: "canal" as keyof ColunasVisiveis, label: "Canal" },
-                        { id: "conta" as keyof ColunasVisiveis, label: "Conta" },
-                        { id: "pedido" as keyof ColunasVisiveis, label: "Id venda" },
-                        { id: "comprador" as keyof ColunasVisiveis, label: "Cliente" },
-                        { id: "ads" as keyof ColunasVisiveis, label: "ADS" },
-                        { id: "exposicao" as keyof ColunasVisiveis, label: "Exposição" },
-                        { id: "tipo" as keyof ColunasVisiveis, label: "Tipo" },
-                        { id: "produto" as keyof ColunasVisiveis, label: "Produto" },
-                        { id: "sku" as keyof ColunasVisiveis, label: "SKU" },
-                        { id: "quantidade" as keyof ColunasVisiveis, label: "Qtd." },
-                        { id: "unitario" as keyof ColunasVisiveis, label: "Unitário" },
-                        { id: "valor" as keyof ColunasVisiveis, label: "Valor" },
-                        { id: "taxa" as keyof ColunasVisiveis, label: "Taxa" },
-                        { id: "frete" as keyof ColunasVisiveis, label: "Frete" },
-                        { id: "cmv" as keyof ColunasVisiveis, label: "CMV" },
-                        { id: "margem" as keyof ColunasVisiveis, label: "Margem" },
-                        { id: "envioMode" as keyof ColunasVisiveis, label: "Mod. Envio" },
-                      ].filter(coluna => {
-                        // Esconde colunas de Mercado Livre APENAS quando for Shopee
-                        // Na tabela Geral, mantém as colunas disponíveis (mas desmarcadas por padrão)
-                        if (platform === "Shopee" && (coluna.id === "ads" || coluna.id === "exposicao" || coluna.id === "tipo")) {
-                          return false;
-                        }
-                        return true;
-                      }).map((coluna) => (
+                      {colunasOferecidas.map((coluna) => (
                         <label
                           key={coluna.id}
                           className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-gray-50 cursor-pointer transition-colors group"

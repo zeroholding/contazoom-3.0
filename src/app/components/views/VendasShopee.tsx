@@ -10,9 +10,9 @@ import { useVendas } from "@/hooks/useVendas";
 import FiltrosVendas, {
   FiltroStatus,
   FiltroPeriodo,
-  ColunasVisiveis,
   FiltroModalidadeEnvio,
 } from "../views/ui/FiltrosVendas";
+import { COLUNAS_PADRAO, type ColunasVisiveis } from "../views/ui/colunasVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import { useToast } from "./ui/toaster";
 import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
@@ -384,26 +384,11 @@ export default function VendasShopee() {
   const [filtroConta, setFiltroConta] = useState<string>("todas");
 
   const [filtroModalidadeEnvio, setFiltroModalidadeEnvio] = useState<FiltroModalidadeEnvio>("todos");
-  const [colunasVisiveis, setColunasVisiveis] = useState<ColunasVisiveis>({
-    data: true,
-    canal: true,
-    conta: true,
-    pedido: true,
-    comprador: true,
-    ads: false,
-    exposicao: false,
-    tipo: false,
-    produto: true,
-    sku: true,
-    quantidade: true,
-    unitario: true,
-    valor: true,
-    taxa: true,
-    frete: true,
-    cmv: true,
-    margem: true,
-    envioMode: true,
-  });
+  // Padrão único, de `colunasVendas.ts`. ADS, exposição e tipo continuam no objeto
+  // (o tipo exige todas as chaves) mas não são oferecidos nem desenhados para a
+  // Shopee — ver `colunasDaPlataforma`.
+  const [colunasVisiveis, setColunasVisiveis] =
+    useState<ColunasVisiveis>(COLUNAS_PADRAO);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -609,11 +594,14 @@ export default function VendasShopee() {
             platform="Shopee"
             filtroModalidadeEnvio={filtroModalidadeEnvio}
             onModalidadeEnvioChange={setFiltroModalidadeEnvio}
+            colunasVisiveis={colunasVisiveis}
+            onColunasChange={setColunasVisiveis}
           />
 
           <TabelaVendas
             vendas={vendasFiltradas}
             platform="Shopee"
+            colunasVisiveis={colunasVisiveis}
           />
         </section>
       </main>
