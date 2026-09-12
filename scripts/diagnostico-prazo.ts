@@ -190,13 +190,61 @@ async function main() {
     console.log(`  ${String(vezes).padStart(5)}  ${caminho.padEnd(50)} ${exemplo}`);
   }
 
+  /* ------------------------------------------------------------------------ */
+  /*         Despejo COMPLETO de uma amostra, uma por modalidade              */
+  /* ------------------------------------------------------------------------ */
+
+  /**
+   * A primeira rodada deste script mostrou que NENHUM campo de prazo conhecido
+   * existe nos envios desta base — e mostrou também o limite do próprio relatório:
+   * ele só lista folhas que PARECEM data. Um prazo guardado como DURAÇÃO
+   * (`handling: 86400`, em segundos) ou sob um nome que ainda não conhecemos passa
+   * invisível.
+   *
+   * Por isso este segundo bloco despeja o `shipping_option` INTEIRO e as chaves do
+   * envio, uma amostra por modalidade. É o que fecha a pergunta em vez de gerar
+   * outra rodada de chute.
+   */
+  console.log("\n\n══════════ ENVIO COMPLETO, UMA AMOSTRA POR MODALIDADE ══════════");
+
+  const jaMostradas = new Set<string>();
+
+  for (const l of linhas) {
+    const mod = (l.logistic_type || l.envio_mode || "(vazio)").toLowerCase();
+    if (jaMostradas.has(mod)) continue;
+
+    const raiz = (l.raw_data ?? {}) as Record<string, unknown>;
+    const envio = (raiz.shipment ?? {}) as Record<string, unknown>;
+    if (Object.keys(envio).length === 0) continue;
+
+    jaMostradas.add(mod);
+
+    console.log(`\n───── ${mod.toUpperCase()}  (pedido ${l.order_id}) ─────`);
+    console.log(`status: ${String(envio.status)} / ${String(envio.substatus)}`);
+
+    // As chaves do envio com o TIPO: é aqui que aparece um campo de prazo com
+    // nome inesperado, ou um número que seja duração.
+    console.log("\nchaves do shipment:");
+    for (const [k, v] of Object.entries(envio).sort()) {
+      const tipo = v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
+      const amostra =
+        tipo === "object" || tipo === "array"
+          ? ""
+          : ` = ${String(v).slice(0, 60)}`;
+      console.log(`  ${k.padEnd(32)} ${tipo}${amostra}`);
+    }
+
+    console.log("\nshipping_option INTEIRO:");
+    console.log(JSON.stringify(envio.shipping_option ?? null, null, 2));
+  }
+
   console.log(
-    "\nO campo do PRAZO DE DESPACHO é o que aparecer em quase toda linha e cair",
+    "\nMe mande esta saída inteira. O que procuro: um campo de prazo com nome",
   );
   console.log(
-    "poucos dias DEPOIS da venda. Prazo de ENTREGA cai bem mais à frente — não é",
+    "diferente, ou uma DURAÇÃO de handling em segundos — com ela o limite sai de",
   );
-  console.log("esse. Me mande esta saída e eu ajusto `prazo-despacho.ts`.\n");
+  console.log("`date_created + handling`, sem depender de mais uma chamada de API.\n");
 }
 
 main()
