@@ -20,9 +20,12 @@
  *    avisa que a última etapa não fecha sem vínculo, em vez de deixar o
  *    operador tomar 409 `empresa_nao_vinculada` no fim do trabalho.
  *
- * 4. Desenquadramento é o único processo que altera cadastro: concluir a última
- *    etapa TROCA o regime da empresa. Então o modal exige o regime novo, explica
- *    o efeito e avisa que reabrir depois não desfaz a troca.
+ * 4. Desenquadramento é o único processo que pode alterar cadastro: concluir a
+ *    última etapa aplica o regime escolhido à empresa. O campo é OPCIONAL e o
+ *    padrão é MANTER o regime atual — desenquadramento de porte (ME -> EPP) e
+ *    saída do MEI não mudam de regime, e forçar a troca fazia o operador escolher
+ *    Lucro Presumido só para conseguir fechar o processo. O modal mostra o efeito
+ *    antes do campo e avisa que reabrir depois não desfaz a troca.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -327,19 +330,27 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
   const [motivoRegime, setMotivoRegime] = useState("");
   const [erroConcluir, setErroConcluir] = useState("");
 
-  const exigeRegime =
+  /**
+   * Última etapa do desenquadramento: é ela que pode aplicar o regime.
+   *
+   * OFERECE, não exige. O nome antigo era `exigeRegime` e o campo era
+   * obrigatório; ver a decisão 4 no topo do arquivo.
+   */
+  const ofereceRegime =
     !!ehDesenquadramento &&
     !!etapaConcluir &&
     !!processo &&
     ehUltimaAplicavel(etapaConcluir, processo.etapas);
 
-  const opcoesRegimeNovo = useMemo<Opcao[]>(
-    () =>
-      OPCOES_REGIME.filter(
-        (opcao) => opcao.valor !== processo?.empresa?.regime
-      ),
-    [processo?.empresa?.regime]
-  );
+  /**
+   * TODOS os regimes, inclusive o atual.
+   *
+   * Antes o regime atual era filtrado fora, e numa base com dois regimes isso
+   * deixava exatamente uma opção para escolher. Manter o atual na lista é o que
+   * permite registrar o desenquadramento que não muda regime — e escolher o atual
+   * tem o mesmo efeito de deixar em branco: a rota não escreve nada.
+   */
+  const opcoesRegimeNovo = OPCOES_REGIME;
 
   const abrirConcluir = useCallback((etapa: Etapa) => {
     setObsConcluir("");
@@ -352,12 +363,10 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
   async function concluirEtapa() {
     if (!processo || !etapaConcluir) return;
 
-    if (exigeRegime && !regimeNovo) {
-      setErroConcluir(
-        "Escolha o novo regime. Esta é a última etapa do desenquadramento e é ela que grava a mudança no cadastro da empresa."
-      );
-      return;
-    }
+    // Regime em branco é escolha válida ("manter o atual"), então não há nada a
+    // barrar aqui. `undefined` e não `""`: string vazia no corpo faria a rota
+    // tratar como regime informado e inválido.
+    const aplicaRegime = ofereceRegime && !!regimeNovo;
 
     setOcupado(true);
     setErroConcluir("");
@@ -366,9 +375,9 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
         `/api/tarefas/legalizacao/${processo.id}/etapa/concluir`,
         {
           observacao: obsConcluir.trim() || undefined,
-          regimeNovo: exigeRegime ? regimeNovo : undefined,
+          regimeNovo: aplicaRegime ? regimeNovo : undefined,
           motivoRegime:
-            exigeRegime && motivoRegime.trim() ? motivoRegime.trim() : undefined,
+            aplicaRegime && motivoRegime.trim() ? motivoRegime.trim() : undefined,
         }
       );
 
@@ -398,7 +407,9 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
       recarregar();
     } catch (falha) {
       if (falha instanceof ErroApi) {
-        // A rota exige o vínculo antes de fechar abertura e desenquadramento.
+        // Vínculo exigido para gravar o regime do desenquadramento. Só chega aqui
+        // quando um regime foi escolhido: sem regime, a conclusão não escreve em
+        // cadastro nenhum e passa.
         if (falha.code === "empresa_nao_vinculada") {
           setErroConcluir(
             `${falha.message} Vincule a empresa no aviso no topo da tela e conclua a etapa depois.`
@@ -1170,11 +1181,11 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
       {ehDesenquadramento && !encerrado && (
         <Aviso
           tom="info"
-          mensagem={`Concluir a última etapa deste processo TROCA o regime da empresa${
+          mensagem={`Na última etapa deste processo você escolhe o regime da empresa${
             processo.empresa
               ? ` (hoje ${REGIME_LABEL[processo.empresa.regime] ?? processo.empresa.regime})`
               : ""
-          } e cria a linha correspondente no histórico de regime. Reabrir o processo depois não desfaz a troca.`}
+          }. Escolher um regime diferente TROCA o cadastro e cria a linha no histórico de regime, e reabrir o processo depois não desfaz a troca. Manter o atual é opção válida: desenquadramento de porte e saída do MEI não mudam de regime.`}
         />
       )}
 
@@ -1571,7 +1582,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
         }
         descricao={etapaConcluir?.titulo}
         icone="CheckCircle2"
-        largura={exigeRegime ? "lg" : "md"}
+        largura={ofereceRegime ? "lg" : "md"}
         onFechar={() => setEtapaConcluir(null)}
         rodape={
           <>
@@ -1596,31 +1607,37 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
         <div className="space-y-4">
           {erroConcluir && <Aviso mensagem={erroConcluir} />}
 
-          {/* O aviso de troca de regime vem ANTES do campo, para a decisão ser
-              tomada sabendo o efeito, não descoberta depois no cadastro. */}
-          {exigeRegime && (
+          {/* O aviso do efeito vem ANTES do campo, para a decisão ser tomada
+              sabendo o que acontece, não descoberta depois no cadastro. */}
+          {ofereceRegime && (
             <Aviso
               tom="atencao"
-              mensagem="Esta é a última etapa do desenquadramento. Concluir TROCA o regime da empresa, fecha a vigência do regime atual e abre a do novo no histórico de regime. Reabrir o processo depois não desfaz a troca."
+              mensagem="Esta é a última etapa do desenquadramento. Se escolher um regime diferente do atual, concluir TROCA o regime da empresa: fecha a vigência do atual e abre a do novo no histórico. Reabrir o processo depois não desfaz a troca. Deixando em branco, o processo fecha sem alterar o cadastro."
             />
           )}
 
-          {exigeRegime && (
+          {ofereceRegime && (
             <>
               <Escolha
-                rotulo="Novo regime da empresa"
-                required
-                vazio="Selecione o novo regime"
+                rotulo="Regime da empresa após o desenquadramento"
+                vazio={
+                  processo.empresa
+                    ? `Manter o regime atual (${
+                        REGIME_LABEL[processo.empresa.regime] ??
+                        processo.empresa.regime
+                      })`
+                    : "Manter o regime atual"
+                }
                 opcoes={opcoesRegimeNovo}
                 value={regimeNovo}
                 onChange={(e) => setRegimeNovo(e.target.value)}
                 ajuda={
                   processo.empresa
-                    ? `Hoje a empresa está em ${
+                    ? `Opcional. Hoje a empresa está em ${
                         REGIME_LABEL[processo.empresa.regime] ??
                         processo.empresa.regime
-                      }. O regime atual não aparece na lista porque desenquadramento precisa mudar de regime.`
-                    : "Sem empresa vinculada a conclusão será recusada: não há cadastro para receber o novo regime."
+                      }. Desenquadramento de porte (ME para EPP) e saída do MEI não mudam de regime — nesses casos deixe em branco ou escolha o mesmo regime, que dá no mesmo.`
+                    : "Opcional. Sem empresa vinculada, escolher regime é recusado (não há cadastro para receber) — mas o processo fecha se você deixar em branco."
                 }
               />
               <Area
@@ -1629,7 +1646,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
                 value={motivoRegime}
                 onChange={(e) => setMotivoRegime(e.target.value)}
                 placeholder="Ultrapassou o limite de faturamento do Simples"
-                ajuda="Opcional. Vai para a linha do histórico de regime da empresa."
+                ajuda="Opcional. Vai para a linha do histórico de regime da empresa, e só é usado se houver troca."
               />
             </>
           )}

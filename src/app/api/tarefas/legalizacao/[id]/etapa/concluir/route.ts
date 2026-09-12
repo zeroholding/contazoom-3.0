@@ -125,23 +125,31 @@ export async function POST(
     const total = processo.etapas.length;
     const ehUltima = proxima === null;
 
-    // Desenquadramento é o único processo que termina alterando o cadastro:
-    // concluir a última etapa muda o regime da empresa. O regime novo tem de
-    // vir explícito porque é decisão contábil, não dedução do sistema.
+    // Desenquadramento é o único processo que PODE terminar alterando o cadastro:
+    // concluir a última etapa aplica o regime informado à empresa.
+    //
+    // O REGIME É OPCIONAL, e antes era obrigatório e tinha de ser DIFERENTE do
+    // atual. Estava errado: desenquadramento não é sinônimo de troca de regime
+    // tributário. Desenquadramento de porte (ME -> EPP) e saída do MEI mantêm a
+    // empresa no Simples Nacional, e como o sistema só conhece dois regimes, a
+    // regra antiga deixava uma única opção na tela — Lucro Presumido. Para fechar
+    // o processo, o operador tinha de escolher um regime que não é o da empresa, e
+    // isso reescrevia `Empresa.regime`, criava vigência falsa no histórico e
+    // trocava o fluxo mensal de apuração. Concluir sem tocar no cadastro é melhor
+    // que gravar dado falso para conseguir concluir.
+    //
+    // Regime IGUAL ao atual também é aceito: `aplicarNovoRegime` devolve null e
+    // nada é escrito, o mesmo efeito de não informar nada. Recusar seria um erro
+    // que o operador não tem como resolver a não serem mentir na escolha.
     const ehDesenquadramento = processo.tipo === TIPO_PROCESSO.DESENQUADRAMENTO;
-    if (ehUltima && ehDesenquadramento) {
+    if (ehUltima && ehDesenquadramento && regimeNovo) {
+      // Só exige o vínculo quando há regime a aplicar: sem mudança de regime, não
+      // há escrita em cadastro nenhum e o processo pode fechar sozinho.
       if (!processo.empresa) {
         return erro(
-          "Desenquadramento sem empresa vinculada não pode ser concluído: não há cadastro para receber o novo regime.",
+          "Para gravar o novo regime o processo precisa de empresa vinculada. Vincule a empresa, ou conclua sem informar regime — o processo fecha sem alterar cadastro.",
           409,
           "EMPRESA_NAO_VINCULADA"
-        );
-      }
-      if (!regimeNovo) {
-        return erro(
-          "Informe regimeNovo para concluir o desenquadramento. Concluir esta etapa fecha a vigência do regime atual e abre a do novo no histórico da empresa.",
-          400,
-          "REGIME_NOVO_OBRIGATORIO"
         );
       }
       if (!REGIMES_VALIDOS.includes(regimeNovo)) {
@@ -149,15 +157,6 @@ export async function POST(
           `Regime inválido: ${regimeNovo}. Valores aceitos: ${REGIMES_VALIDOS.join(", ")}.`,
           400,
           "REGIME_INVALIDO"
-        );
-      }
-      if (regimeNovo === processo.empresa.regime) {
-        return erro(
-          `A empresa já está em ${
-            REGIME_LABEL[regimeNovo] ?? regimeNovo
-          }. Desenquadramento precisa mudar de regime.`,
-          400,
-          "REGIME_IGUAL_AO_ATUAL"
         );
       }
     }

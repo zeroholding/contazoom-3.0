@@ -938,17 +938,39 @@ como rascunho para o escritório corrigir, não como especificação.
 
 ### 11.2 Encerramento / baixa de CNPJ
 
-| Nº | Etapa proposta | Responsável |
-|---|---|---|
-| 1 | Coleta de documentos e confirmação da decisão | Comercial C.Z |
-| 2 | Levantamento de pendências fiscais e obrigações em aberto | Escritório |
-| 3 | Regularização das pendências encontradas | Escritório |
-| 4 | Entrega das declarações finais | Escritório |
-| 5 | Distrato / ato de encerramento | Escritório |
-| 6 | Baixa na Receita Federal | Escritório |
-| 7 | Baixa estadual e municipal | Escritório |
-| 8 | Entrega dos comprovantes ao cliente | Comercial C.Z |
-| 9 | Encerramento do processo | Escritório |
+Estas 18 etapas são o fluxo INFORMADO PELO ESCRITÓRIO, não proposta: substituíram
+uma proposta de 9 etapas genéricas escrita quando não havia documento de origem.
+
+A fonte da verdade é `src/lib/tarefa-etapas.ts` (`ETAPAS_ENCERRAMENTO_CNPJ`). Esta
+tabela é registro do que foi pedido; divergindo as duas, vale o código, que é o que
+gera as etapas do processo.
+
+| Nº | Etapa | Responsável | Órgão |
+|---|---|---|---|
+| 1 | Confirmação de Baixa - Comercial | Comercial C.Z | — |
+| 2 | Levantamento Prévio das Pendências | Escritório | — |
+| 3 | Envio das Pendências | Ambos | — |
+| 4 | Confirmação sobre Pendências | Comercial C.Z | — |
+| 5 | DBE - Baixa CNPJ | Escritório | Receita Federal |
+| 6 | Conferência - DBE Baixa CNPJ | Escritório | Receita Federal |
+| 7 | Abertura do Registro Digital JUCESP | Escritório | Junta Comercial |
+| 8 | Preenchimento do Registro Digital JUCESP | Escritório | Junta Comercial |
+| 9 | Emissão do Distrato Social | Escritório | Junta Comercial |
+| 10 | Envio do Distrato Social via Autentique | Ambos | — |
+| 11 | Finalização do Registro Digital JUCESP | Escritório | Junta Comercial |
+| 12 | Protocolo de Registro Digital JUCESP enviado | Escritório | Junta Comercial |
+| 13 | Acompanhamento do Registro Digital JUCESP | Escritório | Junta Comercial |
+| 14 | Registro Digital JUCESP - DEFERIDO | Escritório | Junta Comercial |
+| 15 | Emissão dos Documentos - Aprovada (Aguardar até 24h) | Escritório | Junta Comercial |
+| 16 | Emissão dos Documentos Oficiais | Escritório | — |
+| 17 | Envio dos Documentos Oficiais ao Cliente | Comercial C.Z | — |
+| 18 | PROCESSO FINALIZADO | Escritório | — |
+
+Duas etapas do fluxo antigo saíram sem substituto, por não estarem na lista do
+escritório: "Entrega das declarações finais" e "Baixa estadual e municipal". A
+leitura adotada é que a primeira acontece dentro das etapas 2 a 4 e a segunda dentro
+do DBE. **A confirmar com o escritório** — se as duas são passo separado na prática,
+voltam como etapa própria.
 
 ### 11.3 Regularização de CNPJ
 
@@ -1002,10 +1024,18 @@ como rascunho para o escritório corrigir, não como especificação.
    `ProcessoLegalizacao.empresaId` é opcional e existe
    `identificacaoProvisoria`. Quando o CNPJ sai (etapa 5), a `Empresa` é criada e o processo
    passa a apontar para ela.
-4. **Desenquadramento muda o regime.** Ao concluir um processo de desenquadramento, o sistema
-   deve gravar uma linha em `EmpresaRegimeHistorico` e atualizar `Empresa.regime`. As
-   competências futuras passam a nascer com o fluxo do novo regime, e as passadas continuam
-   com o antigo. É aqui que o congelamento da seção 6.4 prova o valor.
+4. **Desenquadramento PODE mudar o regime.** Ao concluir um processo de desenquadramento, o
+   operador escolhe o regime da empresa. Escolhendo um regime diferente do atual, o sistema
+   grava uma linha em `EmpresaRegimeHistorico` e atualiza `Empresa.regime`: as competências
+   futuras passam a nascer com o fluxo do novo regime e as passadas continuam com o antigo — é
+   aqui que o congelamento da seção 6.4 prova o valor.
+
+   **O campo é OPCIONAL, e o padrão é manter o regime atual.** Desenquadramento não é sinônimo
+   de mudança de regime tributário: desenquadramento de porte (ME para EPP) e saída do MEI
+   mantêm a empresa no Simples Nacional. A primeira versão exigia regime DIFERENTE do atual e,
+   com dois regimes no sistema, sobrava uma opção só na tela — para fechar o processo o
+   operador tinha de escolher Lucro Presumido, reescrevendo o cadastro e trocando o fluxo
+   mensal de apuração de uma empresa que não mudou de regime.
 5. **Vários em paralelo.** A mesma empresa pode ter regularização e alteração em curso ao
    mesmo tempo. O Kanban de legalização é por processo, não por empresa.
 
