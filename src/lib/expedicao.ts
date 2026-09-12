@@ -548,6 +548,17 @@ export type ResultadoExpedicao = {
    * divergem — e é o de vendas que fecha com o painel do marketplace.
    */
   vendas: number;
+  /**
+   * LINHAS DE PRODUTO a separar no conjunto filtrado.
+   *
+   * A terceira contagem, e não um sinônimo das outras duas. `total` conta
+   * PACOTES (etiquetas a imprimir), `vendas` conta PEDIDOS (o número que fecha
+   * com o painel do marketplace) e `itens` conta LINHAS DE PRODUTO — o que se
+   * confere um a um na prateleira. Um pedido de três produtos diferentes é
+   * 1 pacote, 1 venda e 3 itens, e antes desta coluna a tela mostrava "1" no
+   * lugar do 3, escondendo dois produtos de quem separa.
+   */
+  itens: number;
   /** Somas do conjunto filtrado inteiro, não só da página. */
   unidades: number;
   valorTotal: number;

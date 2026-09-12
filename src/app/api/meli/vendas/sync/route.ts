@@ -735,13 +735,41 @@ async function fetchOrdersPage({
           return typeof order?.shipping === "object" ? order.shipping : null;
         }
         try {
-          const [res, costsRes] = await Promise.all([
+          // `/sla` É UM ENDPOINT SEPARADO, E ERA A CAUSA DE TODA VENDA FICAR SEM
+          // PRAZO DE DESPACHO.
+          //
+          // `extrairPrazoDespachoMeli` procura o prazo em três lugares, e o
+          // segundo é `sla.expected_date`. Mas `sla` NÃO faz parte da resposta de
+          // `/shipments/{id}` — ele vive em `/shipments/{id}/sla`, que ninguém
+          // chamava. Resultado: sobrava só o `shipping_option.estimated_handling_
+          // limit`, que o ML não devolve em COLETA nem em FLEX. Numa conta que
+          // vende por coleta, a fila inteira ficava com prazo NULL, a Expedição
+          // abria vazia no recorte padrão ("a despachar hoje") e os cartões de
+          // "Atrasados" e "Despachar Hoje" marcavam zero para sempre.
+          //
+          // `.catch(() => null)` como no `/costs`: o SLA responde 403/404 em
+          // alguns envios (FULL, envio já entregue), e derrubar a sincronização da
+          // venda inteira por causa disso seria trocar um defeito por um pior.
+          const [res, costsRes, slaRes] = await Promise.all([
             fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}`, { headers }, 3, userId),
-            fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/costs`, { headers }, 3, userId).catch(() => null)
+            fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/costs`, { headers }, 3, userId).catch(() => null),
+            fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/sla`, { headers }, 3, userId).catch(() => null)
           ]);
           
           if (!res.ok) return null;
           const shipmentData = await res.json();
+
+          // Enxertado DENTRO do shipment, com o nome que a API do SLA usa. É o
+          // que faz `extrairPrazoDespachoMeli` achar o campo sem precisar de um
+          // parâmetro novo, e o que faz o payload ir para `raw_data` — assim o
+          // backfill recupera o prazo do histórico sem tocar na API de novo.
+          if (slaRes && slaRes.ok) {
+            try {
+              shipmentData.sla = await slaRes.json();
+            } catch {
+              // Corpo não-JSON: segue sem SLA, e o prazo cai nas outras fontes.
+            }
+          }
           
           if (costsRes && costsRes.ok) {
             const costsData = await costsRes.json();
@@ -1387,13 +1415,27 @@ async function fetchOrdersInDateRange(
             const sid = o?.shipping?.id;
             if (!sid) return null;
             try {
-              const [r, costsRes] = await Promise.all([
+              // `/sla` junto, pelo mesmo motivo do outro caminho de
+              // sincronização — ver o comentário longo lá. Os DOIS precisam
+              // buscar o SLA: se só um buscar, o prazo passa a depender de qual
+              // rota sincronizou a venda, e a fila mistura vendas com prazo e sem
+              // prazo sem nada na tela explicando.
+              const [r, costsRes, slaRes] = await Promise.all([
                 fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}`, { headers }, 3, userId),
-                fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/costs`, { headers }, 3, userId).catch(() => null)
+                fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/costs`, { headers }, 3, userId).catch(() => null),
+                fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/sla`, { headers }, 3, userId).catch(() => null)
               ]);
               
               if (!r.ok) return null;
               const shipmentData = await r.json();
+
+              if (slaRes && slaRes.ok) {
+                try {
+                  shipmentData.sla = await slaRes.json();
+                } catch {
+                  // Corpo não-JSON: segue sem SLA.
+                }
+              }
               
               if (costsRes && costsRes.ok) {
                 const costsData = await costsRes.json();

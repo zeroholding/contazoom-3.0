@@ -508,7 +508,8 @@ export default function Expedicao({
         <div className="cz-nao-imprimir">
           <CartoesSeparacao
             pacotes={dados?.total ?? 0}
-            itens={dados?.vendas ?? 0}
+            itens={dados?.itens ?? 0}
+            vendas={dados?.vendas ?? 0}
             unidades={dados?.unidades ?? 0}
             atrasados={porUrgencia?.atrasado ?? 0}
             despacharHoje={porUrgencia?.hoje ?? 0}
@@ -520,9 +521,13 @@ export default function Expedicao({
         {/* ───────────────────────── A TABELA ───────────────────────── */}
         <section className="mt-5 overflow-hidden rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
           <div className="cz-nao-imprimir flex flex-wrap items-center justify-between gap-3 border-b border-[var(--cz-hairline)] px-4 py-3">
+            {/* Três contagens porque são três coisas: PACOTE é etiqueta a
+                imprimir, ITEM é linha de produto a conferir na prateleira, e
+                UNIDADE é peça a tirar. Um pedido de três produtos diferentes é 1
+                pacote, 1 venda e 3 itens. */}
             <span className="text-[13px] font-semibold text-[var(--cz-texto-suave)]">
-              {inteiro(dados?.total ?? 0)} pacotes · {inteiro(dados?.vendas ?? 0)} itens ·{" "}
-              {inteiro(dados?.unidades ?? 0)} unidades
+              {inteiro(dados?.total ?? 0)} pacotes · {inteiro(dados?.vendas ?? 0)} vendas ·{" "}
+              {inteiro(dados?.itens ?? 0)} itens · {inteiro(dados?.unidades ?? 0)} unidades
             </span>
 
             <label className="flex items-center gap-2 text-[13px] text-[var(--cz-texto-suave)]">

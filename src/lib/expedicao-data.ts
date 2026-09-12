@@ -143,6 +143,154 @@ const MODALIDADE_SP = Prisma.raw(`
   COALESCE(NULLIF(UPPER(TRIM(v.shipping_status)), ''), 'SHOPEE')
 `);
 
+/* -------------------------------------------------------------------------- */
+/*                  UMA LINHA POR PRODUTO VENDIDO                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ────────────────────────────────────────────────────────────────────────────
+ * O DEFEITO QUE ESTAS LATERAIS CONSERTAM
+ *
+ * `meli_venda` e `shopee_venda` têm `order_id` ÚNICO: uma linha por PEDIDO. E o
+ * sync grava, nessa linha, o título e o SKU do PRIMEIRO item do pedido, com a
+ * `quantidade` sendo a SOMA de todos os itens:
+ *
+ *     const firstItem = orderItems[0];                      // ← só o primeiro
+ *     titulo: firstItemTitle                                 // ← do primeiro
+ *     sku:    itemData?.seller_sku                            // ← do primeiro
+ *     quantidade: orderItems.reduce((s, i) => s + i.quantity) // ← soma de todos
+ *
+ * Consequência na tela de separação: um pedido de 1 Step Preto + 1 Azul + 1 Cinza
+ * aparecia como UMA linha, "3 un. — Step Preto". Quem separa pegava 3 Pretos e
+ * fechava a caixa. Os outros dois produtos não existiam em lugar nenhum da tela.
+ * A assinatura disso era visível nos cartões: 46 pacotes, 46 "itens" e 92
+ * unidades — 46 unidades sem título e sem SKU.
+ *
+ * O CONSERTO NÃO PRECISA DE MIGRAÇÃO: o payload cru do pedido inteiro já está em
+ * `raw_data`, com todos os itens. Estas laterais expandem esse array, e a fila
+ * passa a ter uma linha por PRODUTO VENDIDO — que é o que a tela sempre
+ * prometeu. É o mesmo formato do `unified_sales` do CyberDock, obtido sem
+ * duplicar a tabela de vendas.
+ *
+ * `LEFT JOIN LATERAL` e não `CROSS JOIN`: quando o array não existe (linha antiga,
+ * JSON truncado, pedido sem `order_items`), a função geradora devolve zero linhas
+ * e o `LEFT JOIN` mantém a venda com as colunas em NULL — e os `COALESCE` abaixo
+ * caem no valor da tabela. Com `CROSS JOIN` essas vendas DESAPARECERIAM da fila,
+ * trocando um defeito de contagem por trabalho invisível, que é pior.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+
+/** Itens do pedido do Mercado Livre, de `raw_data->'order'->'order_items'`. */
+const ITENS_ML = Prisma.raw(`
+  LEFT JOIN LATERAL (
+    SELECT
+      NULLIF(TRIM(oi->'item'->>'title'), '')                      AS titulo,
+      COALESCE(
+        NULLIF(TRIM(oi->'item'->>'seller_sku'), ''),
+        NULLIF(TRIM(oi->'item'->>'seller_custom_field'), '')
+      )                                                            AS sku,
+      (oi->>'quantity')::int                                       AS quantidade,
+      NULLIF(TRIM(oi->'item'->>'id'), '')                          AS item_id,
+      NULLIF(TRIM(oi->'item'->>'variation_id'), '')                AS variation_id,
+      ROUND(
+        (oi->>'quantity')::numeric * COALESCE((oi->>'unit_price')::numeric, 0), 2
+      )                                                            AS valor_total,
+      pos
+    FROM jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(v.raw_data -> 'order' -> 'order_items') = 'array'
+        THEN v.raw_data -> 'order' -> 'order_items'
+      END
+    ) WITH ORDINALITY AS t(oi, pos)
+    -- Item sem quantidade numérica é lixo de payload e não vira linha: sem este
+    -- teste, o cast estoura e a consulta INTEIRA aborta por causa de um pedido.
+    WHERE (oi ->> 'quantity') ~ '^[0-9]+$'
+      AND (oi ->> 'quantity')::int > 0
+  ) it ON TRUE
+`);
+
+/**
+ * Itens do pedido da Shopee, de `raw_data->'item_list'`.
+ *
+ * `raw_data` da Shopee é o pedido cru (`rawData: order`), então o array está na
+ * raiz — diferente do ML, onde o sync embrulha em `{ order, shipment, freight }`.
+ *
+ * A quantidade vem de `model_quantity_purchased` com `quantity_purchased` de
+ * reserva: a Shopee usa o primeiro em anúncio com variação (modelo) e o segundo
+ * em anúncio simples, e olhar só um deixa metade dos itens com quantidade nula.
+ */
+const ITENS_SP = Prisma.raw(`
+  LEFT JOIN LATERAL (
+    SELECT
+      NULLIF(TRIM(oi->>'item_name'), '')                           AS titulo,
+      COALESCE(
+        NULLIF(TRIM(oi->>'item_sku'), ''),
+        NULLIF(TRIM(oi->>'model_sku'), ''),
+        NULLIF(TRIM(oi->>'variation_sku'), '')
+      )                                                            AS sku,
+      COALESCE(
+        NULLIF(oi->>'model_quantity_purchased', '')::int,
+        NULLIF(oi->>'quantity_purchased', '')::int
+      )                                                            AS quantidade,
+      NULL::text                                                   AS item_id,
+      NULL::text                                                   AS variation_id,
+      NULL::numeric                                                AS valor_total,
+      pos
+    FROM jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(v.raw_data -> 'item_list') = 'array'
+        THEN v.raw_data -> 'item_list'
+      END
+    ) WITH ORDINALITY AS t(oi, pos)
+    WHERE COALESCE(
+            NULLIF(oi->>'model_quantity_purchased', ''),
+            NULLIF(oi->>'quantity_purchased', '')
+          ) ~ '^[0-9]+$'
+      AND COALESCE(
+            NULLIF(oi->>'model_quantity_purchased', '')::int,
+            NULLIF(oi->>'quantity_purchased', '')::int
+          ) > 0
+  ) it ON TRUE
+`);
+
+/**
+ * As colunas do ITEM, com a coluna da venda como reserva.
+ *
+ * Uma constante por campo, usada tanto no `SELECT` quanto nos filtros (busca,
+ * SKU) e na junção com o cadastro. Repetir a expressão em cada lugar é como o
+ * filtro de SKU passaria a olhar um campo e a coluna exibida outro.
+ */
+const TITULO_ITEM = Prisma.raw(`COALESCE(it.titulo, v.titulo)`);
+const SKU_ITEM_TXT = `COALESCE(it.sku, v.sku, '')`;
+const SKU_ITEM = Prisma.raw(`NULLIF(${SKU_ITEM_TXT}, '')`);
+const QTD_ITEM = Prisma.raw(`COALESCE(it.quantidade, v.quantidade)`);
+
+/**
+ * O valor do PEDIDO, atribuído a UMA linha só.
+ *
+ * Com uma linha por produto, somar `v.valor_total` em cada linha multiplicaria o
+ * valor do pedido pela quantidade de itens — um pedido de R$ 100 com três
+ * produtos apareceria como R$ 300 na fila.
+ *
+ * A saída não é ratear: é atribuir o valor inteiro ao PRIMEIRO item e zero aos
+ * demais. Assim `SUM` sobre as linhas devolve exatamente a soma dos pedidos, sem
+ * arredondamento acumulado, e sem depender de a plataforma informar preço
+ * unitário líquido por item (a Shopee não informa: o desconto é rateado dentro do
+ * `escrow_details`).
+ *
+ * O preço fica igual ao que a tela de Vendas mostra, porque é a MESMA coluna já
+ * auditada. Somar `quantity * unit_price` dos itens daria um número parecido e
+ * diferente, e duas telas do mesmo sistema discordando de centavos é pior que uma
+ * coluna de valor que não desce ao nível do item.
+ *
+ * `COALESCE(it.pos, 1)` cobre a venda sem `order_items` no `raw_data`: a lateral
+ * não produziu linha, `it.pos` é NULL, e existe exatamente uma linha — que tem de
+ * levar o valor.
+ */
+const VALOR_UMA_VEZ = Prisma.raw(
+  `CASE WHEN COALESCE(it.pos, 1) = 1 THEN v.valor_total ELSE 0 END`,
+);
+
 /**
  * Junção com o cadastro de SKU, para trazer a hierarquia.
  *
@@ -156,14 +304,35 @@ const MODALIDADE_SP = Prisma.raw(`
  * diferentes. Sem essa condição a junção casaria o SKU de um inquilino com a
  * venda de outro e multiplicaria as linhas do pacote.
  */
+/**
+ * A junção é feita no SKU DO ITEM, não no `v.sku` da venda.
+ *
+ * `v.sku` é o SKU do PRIMEIRO item do pedido (ver `ITENS_ML`), então juntar por
+ * ele trazia a categoria do primeiro produto para todos os itens do pedido — e o
+ * resumo por categoria contava o pedido inteiro na prateleira de um produto só.
+ */
 const JUNCAO_SKU = Prisma.raw(`
   LEFT JOIN sku k
     ON k.user_id = v.user_id
-   AND UPPER(TRIM(k.sku)) = UPPER(TRIM(v.sku))
+   AND UPPER(TRIM(k.sku)) = UPPER(TRIM(${SKU_ITEM_TXT}))
 `);
 
 const HIERARQUIA_1 = Prisma.raw(`NULLIF(TRIM(k.hierarquia_1), '')`);
 const HIERARQUIA_2 = Prisma.raw(`NULLIF(TRIM(k.hierarquia_2), '')`);
+
+/**
+ * Quantas PEÇAS cada unidade vendida tira da prateleira.
+ *
+ * `sku.quantidade` é o tamanho do kit: um anúncio cadastrado como "kit de 3"
+ * vende 1 unidade e o galpão separa 3 peças. Sem esta multiplicação a Expedição
+ * pedia 1 onde precisava de 3, que é erro de separação garantido em quem vende
+ * kit. É a mesma conta do NEXUS v2 (`quantity * quantity_sku`).
+ *
+ * `NULLIF(..., 0)` porque o padrão da coluna é `0` e zero aqui significa "não
+ * cadastrado", não "zero peças" — multiplicar por zero zeraria a fila inteira de
+ * quem nunca preencheu o campo.
+ */
+const KIT_SKU = Prisma.raw(`COALESCE(NULLIF(k.quantidade, 0), 1)`);
 
 /**
  * Chave do pacote.
@@ -229,10 +398,13 @@ function fragmentoBusca(busca: string): Prisma.Sql {
   if (limpo === "") return Prisma.empty;
 
   const alvo = `%${limpo.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  // Título e SKU do ITEM, com a coluna da venda como reserva: buscar em `v.sku`
+  // acharia só o primeiro produto do pedido, e o segundo — que está na tela —
+  // ficaria invisível para a busca.
   return Prisma.sql`AND (
     v.order_id ILIKE ${alvo}
-    OR v.titulo ILIKE ${alvo}
-    OR COALESCE(v.sku, '') ILIKE ${alvo}
+    OR ${TITULO_ITEM} ILIKE ${alvo}
+    OR ${Prisma.raw(SKU_ITEM_TXT)} ILIKE ${alvo}
     OR v.comprador ILIKE ${alvo}
     OR COALESCE(v.shipping_id, '') ILIKE ${alvo}
   )`;
@@ -374,7 +546,10 @@ function fragmentoSkus(valores: string[]): Prisma.Sql {
   if (valores.length === 0) return Prisma.empty;
   const alvos = valores.map((v) => v.trim().toUpperCase()).filter(Boolean);
   if (alvos.length === 0) return Prisma.empty;
-  return Prisma.sql`AND UPPER(TRIM(COALESCE(v.sku, ''))) IN (${lista(alvos)})`;
+  // No SKU DO ITEM. Agora que a fila tem uma linha por produto, escolher um SKU
+  // deixa na tela exatamente as linhas daquele código — e um pedido misto sobra
+  // com o item escolhido apenas, que é o que a promessa do filtro sempre foi.
+  return Prisma.sql`AND UPPER(TRIM(${Prisma.raw(SKU_ITEM_TXT)})) IN (${lista(alvos)})`;
 }
 
 /** Lista de textos para comparação em minúsculas/maiúsculas. */
@@ -434,19 +609,23 @@ function baseMeli(
       v.data_venda                               AS data_venda,
       v.prazo_despacho                           AS prazo_despacho,
       v.order_id                                 AS order_id,
-      v.titulo                                   AS titulo,
-      v.sku                                      AS sku,
-      v.quantidade                               AS quantidade,
-      v.valor_total                              AS valor_total,
+      -- Titulo, SKU e quantidade DO ITEM, com a coluna da venda como reserva.
+      -- Ver o bloco "UMA LINHA POR PRODUTO VENDIDO" no topo do arquivo.
+      ${TITULO_ITEM}                             AS titulo,
+      ${SKU_ITEM}                                AS sku,
+      ${QTD_ITEM}                                AS quantidade,
+      ${KIT_SKU}                                 AS kit,
+      ${VALOR_UMA_VEZ}                           AS valor_total,
       -- item_id e variation_id NAO aparecem na tela: servem para achar a FOTO da
       -- variacao no Mercado Livre e montar o link do anuncio. Sem a variacao, um
       -- anuncio de camiseta com seis cores mostraria a mesma capa nas seis
       -- linhas, e a foto deixaria de ajudar exatamente na conferencia.
-      v.item_id                                  AS item_id,
-      v.variation_id                             AS variation_id,
+      COALESCE(it.item_id, v.item_id)             AS item_id,
+      COALESCE(it.variation_id, v.variation_id)   AS variation_id,
       ${HIERARQUIA_1}                            AS hierarquia1,
       ${HIERARQUIA_2}                            AS hierarquia2
     FROM meli_venda v
+    ${ITENS_ML}
     ${JUNCAO_SKU}
     WHERE v.user_id = ${userId}
       ${fragmentoJanela(filtros.janelaDias)}
@@ -496,10 +675,11 @@ function baseShopee(
       v.data_venda                               AS data_venda,
       v.prazo_despacho                           AS prazo_despacho,
       v.order_id                                 AS order_id,
-      v.titulo                                   AS titulo,
-      v.sku                                      AS sku,
-      v.quantidade                               AS quantidade,
-      v.valor_total                              AS valor_total,
+      ${TITULO_ITEM}                             AS titulo,
+      ${SKU_ITEM}                                AS sku,
+      ${QTD_ITEM}                                AS quantidade,
+      ${KIT_SKU}                                 AS kit,
+      ${VALOR_UMA_VEZ}                           AS valor_total,
       -- A Shopee nao tem anuncio nem variacao no nosso modelo, mas as colunas
       -- precisam existir: e um UNION ALL, e o Postgres casa por POSICAO. Sem os
       -- NULL aqui, a hierarquia da Shopee cairia na coluna do item_id.
@@ -508,6 +688,7 @@ function baseShopee(
       ${HIERARQUIA_1}                            AS hierarquia1,
       ${HIERARQUIA_2}                            AS hierarquia2
     FROM shopee_venda v
+    ${ITENS_SP}
     ${JUNCAO_SKU}
     WHERE v.user_id = ${userId}
       ${fragmentoJanela(filtros.janelaDias)}
@@ -555,8 +736,20 @@ function montarCte(
         -- atrasada dentro parecer folgado.
         MIN(b.prazo_despacho)  AS prazo_despacho,
         MIN(b.data_venda)      AS data_venda,
-        COUNT(*)               AS pedidos,
-        SUM(b.quantidade)      AS unidades,
+        -- PEDIDOS conta vendas DISTINTAS, nao linhas. Era COUNT(*), e funcionava
+        -- porque havia uma linha por pedido; agora ha uma linha por PRODUTO, e
+        -- COUNT(*) passaria a contar itens no lugar de vendas -- fazendo a tela
+        -- dizer "3 vendas a despachar" num pedido unico de tres produtos.
+        COUNT(DISTINCT b.order_id) AS pedidos,
+        -- ITENS e a contagem de linhas de produto: e o numero que o galpao
+        -- confere item a item, e o que faltava na tela.
+        COUNT(*)               AS itens,
+        -- UNIDADES multiplica pelo tamanho do kit do SKU: um "kit de 3" vendido
+        -- uma vez tira tres pecas da prateleira. Ver KIT_SKU no topo do arquivo.
+        SUM(b.quantidade * b.kit) AS unidades,
+        -- Somavel porque VALOR_UMA_VEZ poe o valor do pedido numa linha so e zero
+        -- nas outras. Sem isso, um pedido de R$ 100 com tres produtos apareceria
+        -- como R$ 300.
         SUM(b.valor_total)     AS valor_total,
         -- Hierarquia do pacote = a do PRIMEIRO item, para o filtro e o resumo.
         -- Pacote com itens de categorias diferentes existe, e nesse caso a
@@ -569,7 +762,10 @@ function montarCte(
             'orderId',     b.order_id,
             'titulo',      b.titulo,
             'sku',         b.sku,
-            'quantidade',  b.quantidade,
+            -- UNIDADES do item, ja com o kit. E o numero que vai no badge de
+            -- Qtd. da tela: quem separa quer saber quantas PECAS pegar, nao
+            -- quantas unidades de anuncio foram vendidas.
+            'quantidade',  b.quantidade * b.kit,
             'valorTotal',  b.valor_total,
             'itemId',      b.item_id,
             'variationId', b.variation_id,
@@ -630,8 +826,9 @@ function montarCte(
     itens_fila AS (
       SELECT
         b.chave,
+        b.order_id,
         NULLIF(TRIM(b.sku), '') AS sku,
-        b.quantidade,
+        b.quantidade * b.kit AS quantidade,
         b.valor_total,
         f.urgencia,
         f.modalidade
@@ -827,9 +1024,12 @@ async function buscarResumoSku(
     ${cte}
     SELECT
       sku                   AS rotulo,
-      COUNT(DISTINCT chave) AS pacotes,
-      COUNT(*)              AS vendas,
-      SUM(quantidade)       AS unidades,
+      COUNT(DISTINCT chave)    AS pacotes,
+      -- DISTINCT no pedido: era COUNT(*), que valia enquanto havia uma linha por
+      -- venda. Com uma linha por PRODUTO, COUNT(*) contaria itens sob o rotulo
+      -- "Vendas" -- e um pedido com tres unidades do mesmo SKU viraria tres vendas.
+      COUNT(DISTINCT order_id) AS vendas,
+      SUM(quantidade)          AS unidades,
       SUM(valor_total)      AS valor_total
     FROM itens_fila
     WHERE TRUE ${recortes}
@@ -909,6 +1109,7 @@ export async function buscarExpedicao(
           -- (Sem acento e sem backtick de proposito: comentario SQL dentro de
           -- template literal, e backtick aqui encerra a string.)
           SUM(pedidos)       AS vendas,
+          SUM(itens)         AS itens,
           SUM(unidades)      AS unidades,
           SUM(valor_total)   AS valor_total
         FROM fila
@@ -927,6 +1128,7 @@ export async function buscarExpedicao(
 
   let total = 0;
   let vendas = 0;
+  let itensTotal = 0;
   let unidades = 0;
   let valorTotal = 0;
   const selecionadas =
@@ -940,6 +1142,7 @@ export async function buscarExpedicao(
     if (selecionadas === null || selecionadas.has(faixa)) {
       total += pacotes;
       vendas += numero(linha.vendas);
+      itensTotal += numero(linha.itens);
       unidades += numero(linha.unidades);
       valorTotal += numero(linha.valor_total);
     }
@@ -986,6 +1189,7 @@ export async function buscarExpedicao(
     totalPaginas: Math.max(1, Math.ceil(total / porPagina)),
     porUrgencia,
     vendas,
+    itens: itensTotal,
     unidades,
     valorTotal,
     resumoHierarquia1,

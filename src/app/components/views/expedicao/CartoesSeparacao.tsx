@@ -100,6 +100,7 @@ function Cartao({
 export default function CartoesSeparacao({
   pacotes,
   itens,
+  vendas,
   unidades,
   atrasados,
   despacharHoje,
@@ -107,7 +108,9 @@ export default function CartoesSeparacao({
   contas,
 }: {
   pacotes: number;
+  /** LINHAS DE PRODUTO. Ver o cartão "Itens" abaixo. */
   itens: number;
+  vendas: number;
   unidades: number;
   atrasados: number;
   despacharHoje: number;
@@ -123,12 +126,25 @@ export default function CartoesSeparacao({
         tom="azul"
         icone={<IconeCaixa className="h-[22px] w-[22px]" />}
       />
+      {/* VENDAS entrou entre Pacotes e Itens porque é o número que fecha com o
+          painel do marketplace — e porque ele torna visível a diferença que
+          explica os outros dois: 40 pacotes / 43 vendas / 51 itens diz, de uma
+          olhada, que há pedido juntado em etiqueta e pedido com mais de um
+          produto. Antes o cartão "Itens" mostrava as VENDAS com o rótulo "linhas
+          de SKU", e as duas coisas nunca batiam. */}
+      <Cartao
+        rotulo="Vendas"
+        valor={inteiro(vendas)}
+        dica="pedidos a despachar"
+        tom="azul"
+        icone={<IconeCerto className="h-[22px] w-[22px]" />}
+      />
       <Cartao
         rotulo="Itens"
         valor={inteiro(itens)}
-        dica="linhas de SKU"
+        dica="linhas de produto"
         tom="verde"
-        icone={<IconeCerto className="h-[22px] w-[22px]" />}
+        icone={<IconeCaixa className="h-[22px] w-[22px]" />}
       />
       <Cartao
         rotulo="Unidades"

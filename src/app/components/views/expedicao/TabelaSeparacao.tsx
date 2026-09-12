@@ -333,8 +333,11 @@ function LinhaItem({
               </span>
             </div>
 
-            {pacote.itens.map((i) => (
-              <BotaoCopiarId key={i.orderId} id={i.orderId} />
+            {/* Um botão por PEDIDO, não por item: agora que a fila tem uma linha
+                por produto, três produtos do mesmo pedido repetiriam o mesmo
+                número três vezes. O `Set` mantém a ordem de aparição. */}
+            {Array.from(new Set(pacote.itens.map((i) => i.orderId))).map((id) => (
+              <BotaoCopiarId key={id} id={id} />
             ))}
 
             {/* A etiqueta. Não existe na tela de separação do CyberDock (lá ela vive
