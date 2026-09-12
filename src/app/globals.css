@@ -1280,3 +1280,64 @@ select.error {
         animation-duration: 0.01ms !important;
     }
 }
+
+/* -------------------------------------------------------------------------- */
+/*            Folha de impressão da fila de separação (Expedição)             */
+/* -------------------------------------------------------------------------- */
+
+/* O "Imprimir PDF" da Expedição imprime a PRÓPRIA TABELA, e não um segundo
+   componente de relatório com o mesmo conteúdo. Uma cópia do conteúdo só para
+   imprimir é mais um lugar para sair de sincronia: a coluna que alguém acrescenta
+   na tela não aparece no papel, e ninguém descobre até o galpão reclamar.
+
+   `cz-nao-imprimir` marca o que não vai ao papel — cabeçalho, filtros, cartões,
+   paginação. `.cz-imprimir-fila` só existe enquanto o botão está imprimindo, mas
+   as regras ficam sob `@media print` de todo jeito: sem isso, um Ctrl+P direto na
+   página sairia com o menu lateral ocupando um terço da folha. */
+
+@media print {
+
+    /* Fundo branco e sem sombra: cinza claro na tela vira cinza sujo na
+       impressora, e sombra vira uma faixa borrada. */
+    body {
+        background: #fff !important;
+    }
+
+    .cz-nao-imprimir {
+        display: none !important;
+    }
+
+    /* A barra lateral e o topo são posicionados; some com eles e devolve a
+       margem, senão a tabela imprime deslocada 16rem para a direita. */
+    aside,
+    header[class*="cz-topbar"],
+    .cz-topbar {
+        display: none !important;
+    }
+
+    main {
+        margin-left: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* O cabeçalho da tabela REPETE em cada folha. Sem `display: table-header-group`
+       a folha 2 chega sem os nomes das colunas, e uma lista de separação sem
+       cabeçalho é uma coluna de números que ninguém sabe ler. */
+    thead {
+        display: table-header-group;
+    }
+
+    /* Nenhum pacote parte no meio: quebrar entre o cabeçalho azul do pacote e os
+       itens dele deixaria a folha seguinte começando com itens órfãos, sem dizer de
+       que caixa são. */
+    tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* O container de rolagem horizontal viraria um corte na folha. */
+    .cz-imprimir-fila *,
+    .cz-imprimir-fila {
+        overflow: visible !important;
+    }
+}
