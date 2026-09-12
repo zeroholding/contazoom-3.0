@@ -135,11 +135,54 @@ function niveisMeli(): Nivel[] {
    * cada nível: com a lista crescendo, era garantido esquecer um caminho num dos
    * níveis e o prazo passar a depender de qual formato a venda tem.
    */
-  const envios = (resto: string) => [
-    `v.raw_data -> 'shipment' -> ${resto}`,
-    `v.raw_data -> 'order' -> 'shipping' -> ${resto}`,
-    `v.raw_data -> 'shipping' -> ${resto}`,
+  const raizes = [
+    `v.raw_data -> 'shipment'`,
+    `v.raw_data -> 'order' -> 'shipping'`,
+    `v.raw_data -> 'shipping'`,
   ];
+
+  const envios = (resto: string) => raizes.map((r) => `${r} -> ${resto}`);
+
+  /**
+   * Criação do envio + tempo de MANUSEIO em horas.
+   *
+   * A tradução em SQL do nível `ml_handling_derivado` de `prazo-despacho.ts` —
+   * ler o docblock de lá, que é onde está o diagnóstico e a limitação assumida.
+   *
+   * Precisa da RAIZ do envio e não de um caminho, porque combina DOIS campos da
+   * mesma origem: `date_created` e `shipping_option.estimated_delivery_time.
+   * handling`. É por isso que este nível não usa o `envios()`.
+   *
+   * `jsonb_typeof = 'number'` antes do cast: o campo já veio como `null` nesta
+   * base, e `('null')::numeric` aborta o lote inteiro de 5000 linhas.
+   *
+   * `make_interval` em vez de `numeric * INTERVAL`: o Postgres não define a
+   * multiplicação de `numeric` por intervalo (só `double precision`), e o erro
+   * apareceria em produção, não aqui.
+   */
+  const derivadoDoHandling = (raiz: string) => {
+    const criado = `${raiz} ->> 'date_created'`;
+    const horas = `${raiz} -> 'shipping_option' -> 'estimated_delivery_time' -> 'handling'`;
+    const horasTxt = `${raiz} -> 'shipping_option' -> 'estimated_delivery_time' ->> 'handling'`;
+
+    return `CASE
+      WHEN ${criado} ~ '^\\d{4}-\\d{2}-\\d{2}'
+       AND jsonb_typeof(${horas}) = 'number'
+       AND (${horasTxt})::numeric >= 0
+      THEN CASE
+        -- handling = 0 significa "despachar no mesmo dia" (e o ML devolve isso em
+        -- Flex). Somar zero daria prazo ja vencido no instante da venda, e a fila
+        -- marcaria todo Flex como atrasado no minuto em que ele entra.
+        WHEN (${horasTxt})::numeric = 0
+        THEN (
+          ((${criado})::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date
+          + INTERVAL '1 day' - INTERVAL '1 second'
+        ) AT TIME ZONE 'America/Sao_Paulo'
+        ELSE (${criado})::timestamptz
+             + make_interval(hours => ROUND((${horasTxt})::numeric)::int)
+      END
+    END`;
+  };
 
   return [
     {
@@ -161,6 +204,12 @@ function niveisMeli(): Nivel[] {
         ...envios(`'shipping_option' -> 'estimated_schedule_limit' ->> 'date'`),
         ...envios(`'estimated_schedule_limit' ->> 'date'`),
       ].map(iso)),
+    },
+    {
+      // O nivel que funciona com o dado JA guardado. Ver o docblock gemeo em
+      // prazo-despacho.ts.
+      origem: "ml_handling_derivado",
+      expressao: primeiro(raizes.map(derivadoDoHandling)),
     },
     {
       origem: "ml_sla_expected",

@@ -48,7 +48,25 @@
  * fica com duas populações: as antigas sem prazo tendo o dado no JSON.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-export const PRAZO_ORIGEM_AUSENTE = "ausente:2";
+export const PRAZO_ORIGEM_AUSENTE = "ausente:3";
+
+/**
+ * Fim do dia civil de São Paulo em que o instante caiu.
+ *
+ * Serve ao caso `handling = 0`: o Mercado Livre está dizendo "não há tempo de
+ * manuseio", ou seja despacho no MESMO dia — é o que ele devolve em Flex. Somar
+ * zero hora à criação do envio daria um prazo já vencido no instante da venda, e
+ * a fila marcaria todo pedido Flex como atrasado no minuto em que ele entra.
+ *
+ * `-03:00` fixo: o Brasil não tem horário de verão desde 2019, e usar o fuso do
+ * servidor faria o corte do dia mudar conforme onde a aplicação está hospedada.
+ */
+function fimDoDiaSP(instante: Date): Date {
+  const dia = instante.toLocaleDateString("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  });
+  return new Date(`${dia}T23:59:59-03:00`);
+}
 
 export type PrazoDespacho = {
   prazo: Date | null;
@@ -177,6 +195,70 @@ export function extrairPrazoDespachoMeli(
         comoObjeto(f.estimated_schedule_limit).date,
     },
     {
+      /**
+       * DERIVADO: criação do envio + o TEMPO DE MANUSEIO, em horas.
+       *
+       * ────────────────────────────────────────────────────────────────────
+       * ESTE É O NÍVEL QUE FUNCIONA COM O DADO QUE JÁ TEMOS.
+       *
+       * Um diagnóstico sobre 200 envios reais mostrou que NENHUM campo de
+       * prazo em DATA existe no payload que o `/shipments/{id}` devolve para
+       * esta conta: `estimated_handling_limit`, `estimated_schedule_limit` e
+       * `sla` vêm ausentes ou nulos em 100% das linhas. O que existe, em
+       * 199 de 200, é a DURAÇÃO:
+       *
+       *     "estimated_delivery_time": {
+       *       "unit": "hour",
+       *       "handling": 48,     ← tempo de manuseio
+       *       "shipping": 72      ← tempo de transporte
+       *     }
+       *
+       * Conferido nas três modalidades, contra a entrega estimada do próprio
+       * payload:
+       *   coleta   handling 48 · criado 11/09 22:46 → 13/09 22:46 · entrega 17/09
+       *   agência  handling 24 · criado 11/09 15:21 → 12/09 15:21 · entrega 14/09
+       *   flex     handling  0 · entrega no mesmo dia
+       *
+       * LIMITAÇÃO ASSUMIDA: são horas CORRIDAS. O Mercado Livre conta o prazo
+       * de disponibilidade em dias ÚTEIS, então uma venda de sexta com 48h de
+       * manuseio vence na terça no painel dele e no domingo nesta conta. Erra
+       * para o lado seguro (mostra mais urgente do que é) e ordena a fila
+       * corretamente, que é a função da tela. O número exato vem do nível
+       * `ml_sla_expected`, logo abaixo, quando a venda for re-sincronizada.
+       * ────────────────────────────────────────────────────────────────────
+       */
+      origem: "ml_handling_derivado",
+      ler: (f) => {
+        const entrega = comoObjeto(
+          comoObjeto(f.shipping_option).estimated_delivery_time,
+        );
+        const horas = entrega.handling;
+        if (typeof horas !== "number" || !Number.isFinite(horas) || horas < 0) {
+          return null;
+        }
+
+        const criado = dataValida(f.date_created);
+        if (!criado) return null;
+
+        return horas === 0
+          ? fimDoDiaSP(criado)
+          : new Date(criado.getTime() + horas * 3_600_000);
+      },
+    },
+    {
+      /**
+       * O número OFICIAL, de `/shipments/{id}/sla`.
+       *
+       * É o campo que o CyberDock (`raw_api_data->'sla_data'->>'expected_date'`)
+       * e o NEXUS v2 (`shipment_delivery_sla`) usam como prazo — os dois chamam
+       * esse endpoint separado, que este projeto não chamava. O sync passou a
+       * chamar, então ele preenche a partir da próxima sincronização.
+       *
+       * Fica DEPOIS do derivado por um motivo prático, não de qualidade: o
+       * derivado foi verificado contra dado real desta base e o `sla` ainda não.
+       * Quando houver venda com os dois, basta comparar e, se o `sla` estiver
+       * certo, subir este nível para cima do derivado.
+       */
       origem: "ml_sla_expected",
       ler: (f) => comoObjeto(f.sla).expected_date,
     },
