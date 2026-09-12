@@ -741,9 +741,17 @@ function montarCte(
         -- COUNT(*) passaria a contar itens no lugar de vendas -- fazendo a tela
         -- dizer "3 vendas a despachar" num pedido unico de tres produtos.
         COUNT(DISTINCT b.order_id) AS pedidos,
-        -- ITENS e a contagem de linhas de produto: e o numero que o galpao
-        -- confere item a item, e o que faltava na tela.
-        COUNT(*)               AS itens,
+        -- Contagem de LINHAS DE PRODUTO: o numero que o galpao confere item a
+        -- item, e o que faltava na tela.
+        --
+        -- O nome NAO pode ser "itens": logo abaixo ha um JSON_AGG(...) AS itens
+        -- com a lista dos produtos, e duas colunas de mesmo nome na mesma CTE
+        -- fazem qualquer referencia sem qualificacao virar erro 42702
+        -- ("column reference is ambiguous") -- que foi o que derrubou a fila. Pior:
+        -- num SELECT * as duas chegariam ao driver com a mesma chave e uma
+        -- sobrescreveria a outra em silencio, trocando a lista de itens por um
+        -- numero.
+        COUNT(*)               AS qtd_itens,
         -- UNIDADES multiplica pelo tamanho do kit do SKU: um "kit de 3" vendido
         -- uma vez tira tres pecas da prateleira. Ver KIT_SKU no topo do arquivo.
         SUM(b.quantidade * b.kit) AS unidades,
@@ -1109,7 +1117,7 @@ export async function buscarExpedicao(
           -- (Sem acento e sem backtick de proposito: comentario SQL dentro de
           -- template literal, e backtick aqui encerra a string.)
           SUM(pedidos)       AS vendas,
-          SUM(itens)         AS itens,
+          SUM(qtd_itens)     AS itens_total,
           SUM(unidades)      AS unidades,
           SUM(valor_total)   AS valor_total
         FROM fila
@@ -1142,7 +1150,7 @@ export async function buscarExpedicao(
     if (selecionadas === null || selecionadas.has(faixa)) {
       total += pacotes;
       vendas += numero(linha.vendas);
-      itensTotal += numero(linha.itens);
+      itensTotal += numero(linha.itens_total);
       unidades += numero(linha.unidades);
       valorTotal += numero(linha.valor_total);
     }
