@@ -24,8 +24,31 @@
  * Os dois arquivos precisam ser alterados juntos.
  */
 
-/** Marcador de "processei e o payload não tinha prazo". Ver o schema. */
-export const PRAZO_ORIGEM_AUSENTE = "ausente";
+/**
+ * Marcador de "processei e o payload não tinha prazo", COM VERSÃO.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * O NÚMERO NO FIM É O QUE PERMITE CONSERTAR ESTE ARQUIVO
+ *
+ * O marcador era só `"ausente"`, e o backfill só olha linha com
+ * `prazo_despacho_origem IS NULL`. Junto, isso significa: uma vez marcada como
+ * "não tinha prazo", a venda NUNCA MAIS é reexaminada. E quando descobrimos que
+ * a lista de caminhos estava incompleta — o `sla` vinha de um endpoint que o sync
+ * não chamava, e coleta/agendado guardam o limite em outro campo — as vendas já
+ * marcadas ficaram presas: a tela continuava com "—" em tudo mesmo depois de o
+ * código aprender onde olhar.
+ *
+ * Com versão, ampliar a lista de caminhos é subir este número. O backfill passa a
+ * aceitar de volta toda linha marcada com versão ANTERIOR e sem prazo, examina de
+ * novo com as regras novas, e converge: quem continuar sem prazo é remarcado com
+ * a versão atual e sai da fila de trabalho de vez.
+ *
+ * QUEM ALTERAR `niveisMeli`/`niveisShopee` OU `extrairPrazoDespacho*` TEM DE
+ * SUBIR ESTE NÚMERO. Sem isso, o caminho novo só vale para venda nova, e a base
+ * fica com duas populações: as antigas sem prazo tendo o dado no JSON.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+export const PRAZO_ORIGEM_AUSENTE = "ausente:2";
 
 export type PrazoDespacho = {
   prazo: Date | null;
@@ -132,6 +155,28 @@ export function extrairPrazoDespachoMeli(
         comoObjeto(comoObjeto(f.shipping_option).estimated_handling_limit).date,
     },
     {
+      // O MESMO campo, mas na RAIZ do envio.
+      //
+      // O ML devolve `estimated_handling_limit` em dois lugares dependendo do
+      // envio, e só um deles estava sendo lido. Numa conta que despacha por
+      // coleta, era o motivo de a fila inteira aparecer sem prazo: o dado estava
+      // no JSON, um nível acima de onde o código procurava.
+      origem: "ml_handling_limit_raiz",
+      ler: (f) => comoObjeto(f.estimated_handling_limit).date,
+    },
+    {
+      // COLETA E ENVIO AGENDADO.
+      //
+      // Nesses modos o limite não é de "manuseio", é o do agendamento: a
+      // transportadora passa numa janela, e o que vale é estar pronto antes dela.
+      // É o campo que o painel do ML mostra ao vendedor de coleta, e não existia
+      // na lista — que é o caso exato de 44 pacotes em COLETA sem prazo.
+      origem: "ml_schedule_limit",
+      ler: (f) =>
+        comoObjeto(comoObjeto(f.shipping_option).estimated_schedule_limit).date ??
+        comoObjeto(f.estimated_schedule_limit).date,
+    },
+    {
       origem: "ml_sla_expected",
       ler: (f) => comoObjeto(f.sla).expected_date,
     },
@@ -140,6 +185,16 @@ export function extrairPrazoDespachoMeli(
       ler: (f) =>
         comoObjeto(comoObjeto(f.shipping_option).estimated_delivery_time)
           .shipping_limit_date,
+    },
+    {
+      // ÚLTIMA RESERVA, e é uma aproximação assumida: o limite de HANDLING dentro
+      // do prazo de entrega estimado. Fica no fim porque é o menos preciso — mas
+      // um prazo aproximado ordena a fila, e nenhum prazo joga o pacote para o fim
+      // dela junto com os que ninguém sabe quando vencem.
+      origem: "ml_delivery_handling",
+      ler: (f) =>
+        comoObjeto(comoObjeto(f.shipping_option).estimated_delivery_time)
+          .handling_limit_date,
     },
   ];
 

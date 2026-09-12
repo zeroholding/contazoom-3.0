@@ -31,6 +31,32 @@ const EPOCH_MAXIMO = 2_500_000_000;
 
 const LOTE_PADRAO = 5000;
 
+/**
+ * Quais linhas o backfill considera PENDENTES.
+ *
+ * Duas situações, e a segunda é a que conserta a base:
+ *
+ *   1. `origem IS NULL` — nunca examinada.
+ *   2. sem prazo E marcada com uma versão ANTERIOR de "ausente" — já foi
+ *      examinada, mas pelas regras antigas.
+ *
+ * Sem a segunda, ampliar a lista de caminhos não teria efeito nenhum sobre a base
+ * existente: as vendas ficaram marcadas `'ausente'` na primeira passada e o
+ * backfill nunca voltava nelas. Era o motivo de a coluna "Despachar" continuar com
+ * "—" em toda a fila mesmo depois de o código aprender onde procurar.
+ *
+ * `prazo_despacho IS NULL` no meio da condição é o que garante convergência: linha
+ * que JÁ tem prazo nunca é reprocessada, mesmo que a versão do marcador suba de
+ * novo. E quem continuar sem prazo é remarcado com a versão atual e sai da fila —
+ * então cada linha é reexaminada no máximo uma vez por versão.
+ *
+ * Ver `PRAZO_ORIGEM_AUSENTE` em `prazo-despacho.ts`.
+ */
+const PENDENTE_SQL = `(
+    v.prazo_despacho_origem IS NULL
+    OR (v.prazo_despacho IS NULL AND v.prazo_despacho_origem <> '${PRAZO_ORIGEM_AUSENTE}')
+  )`;
+
 /* -------------------------------------------------------------------------- */
 /*                         Construção das expressões                          */
 /* -------------------------------------------------------------------------- */
@@ -100,29 +126,61 @@ function montarExpressoes(niveis: Nivel[]): { prazo: string; origem: string } {
  * versões anteriores ficariam todas sem prazo.
  */
 function niveisMeli(): Nivel[] {
+  /**
+   * Os três lugares onde o envio pode estar dentro de `raw_data`.
+   *
+   * `shipment` é o caminho normal (o sync guarda `{ order, shipment, freight }`);
+   * `order.shipping` é a reserva de quando o `/shipments/{id}` falhou; `shipping`
+   * na raiz é formato de linha antiga. Uma função em vez de repetir os três em
+   * cada nível: com a lista crescendo, era garantido esquecer um caminho num dos
+   * níveis e o prazo passar a depender de qual formato a venda tem.
+   */
+  const envios = (resto: string) => [
+    `v.raw_data -> 'shipment' -> ${resto}`,
+    `v.raw_data -> 'order' -> 'shipping' -> ${resto}`,
+    `v.raw_data -> 'shipping' -> ${resto}`,
+  ];
+
   return [
     {
       origem: "ml_handling_limit",
+      expressao: primeiro(
+        envios(`'shipping_option' -> 'estimated_handling_limit' ->> 'date'`).map(iso),
+      ),
+    },
+    {
+      // O MESMO campo na RAIZ do envio. Ver o comentário gêmeo em
+      // `prazo-despacho.ts`: o ML devolve nos dois lugares e só um era lido.
+      origem: "ml_handling_limit_raiz",
+      expressao: primeiro(envios(`'estimated_handling_limit' ->> 'date'`).map(iso)),
+    },
+    {
+      // COLETA e envio AGENDADO. Era o campo que faltava.
+      origem: "ml_schedule_limit",
       expressao: primeiro([
-        iso(`v.raw_data -> 'shipment' -> 'shipping_option' -> 'estimated_handling_limit' ->> 'date'`),
-        iso(`v.raw_data -> 'order' -> 'shipping' -> 'shipping_option' -> 'estimated_handling_limit' ->> 'date'`),
-        iso(`v.raw_data -> 'shipping' -> 'shipping_option' -> 'estimated_handling_limit' ->> 'date'`),
-      ]),
+        ...envios(`'shipping_option' -> 'estimated_schedule_limit' ->> 'date'`),
+        ...envios(`'estimated_schedule_limit' ->> 'date'`),
+      ].map(iso)),
     },
     {
       origem: "ml_sla_expected",
-      expressao: primeiro([
-        iso(`v.raw_data -> 'shipment' -> 'sla' ->> 'expected_date'`),
-        iso(`v.raw_data -> 'order' -> 'shipping' -> 'sla' ->> 'expected_date'`),
-        iso(`v.raw_data -> 'shipping' -> 'sla' ->> 'expected_date'`),
-      ]),
+      expressao: primeiro(envios(`'sla' ->> 'expected_date'`).map(iso)),
     },
     {
       origem: "ml_shipping_limit",
-      expressao: primeiro([
-        iso(`v.raw_data -> 'shipment' -> 'shipping_option' -> 'estimated_delivery_time' ->> 'shipping_limit_date'`),
-        iso(`v.raw_data -> 'order' -> 'shipping' -> 'shipping_option' -> 'estimated_delivery_time' ->> 'shipping_limit_date'`),
-      ]),
+      expressao: primeiro(
+        envios(
+          `'shipping_option' -> 'estimated_delivery_time' ->> 'shipping_limit_date'`,
+        ).map(iso),
+      ),
+    },
+    {
+      origem: "ml_delivery_handling",
+      expressao: primeiro(
+        envios(
+          `'shipping_option' -> 'estimated_delivery_time' ->> 'handling_limit_date'`,
+        ).map(iso),
+      ),
     },
   ];
 }
@@ -166,7 +224,20 @@ export type BackfillPrazoResult = {
 
 /** Quantas vendas ainda não foram examinadas. */
 export async function contarPrazoPendente(userId?: string): Promise<number> {
-  const filtro = { prazoDespachoOrigem: null, ...(userId ? { userId } : {}) };
+  // A MESMA condição do `PENDENTE_SQL`, escrita no Prisma. Se as duas divergirem,
+  // a faixa de aviso da tela some enquanto ainda há trabalho — ou fica para
+  // sempre depois de o trabalho acabar.
+  const filtro = {
+    ...(userId ? { userId } : {}),
+    OR: [
+      { prazoDespachoOrigem: null },
+      {
+        prazoDespacho: null,
+        prazoDespachoOrigem: { not: PRAZO_ORIGEM_AUSENTE },
+      },
+    ],
+  };
+
   const [ml, sp] = await Promise.all([
     prisma.meliVenda.count({ where: filtro }),
     prisma.shopeeVenda.count({ where: filtro }),
@@ -202,7 +273,7 @@ async function processarTabela(
     WITH alvo AS (
       SELECT v.id, ${prazo} AS prazo, ${origem} AS origem
       FROM ${tabela} v
-      WHERE v.prazo_despacho_origem IS NULL ${filtroUsuario}
+      WHERE ${PENDENTE_SQL} ${filtroUsuario}
       ORDER BY v.data_venda DESC
       LIMIT $1
     )
@@ -220,7 +291,7 @@ async function processarTabela(
     WITH alvo AS (
       SELECT v.id
       FROM ${tabela} v
-      WHERE v.prazo_despacho_origem IS NULL
+      WHERE ${PENDENTE_SQL}
         AND (${prazo}) IS NULL
         ${filtroUsuario}
       ORDER BY v.data_venda DESC
