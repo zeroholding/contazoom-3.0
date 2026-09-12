@@ -372,33 +372,19 @@ export async function backfillPrazoChunk(
   };
 }
 
-/**
- * Roda lotes até acabar ou até bater o teto de tempo.
+/*
+ * AQUI EXISTIA `backfillPrazoAte(msMaximo)`, QUE RODAVA LOTES EM LAÇO ATÉ BATER UM
+ * TETO DE TEMPO. FOI REMOVIDA, E NÃO DEVE VOLTAR NESSE FORMATO.
  *
- * O teto existe porque isto é chamado de dentro de uma requisição (a rota da
- * tela): melhor devolver "ainda falta X" e deixar a próxima visita continuar do
- * que estourar o tempo e perder o trabalho. Cada lote é commitado, então parar no
- * meio não desperdiça nada.
+ * O teto era de TEMPO, mas o lote de cada volta era o `LOTE_PADRAO` de 5000 linhas
+ * — e o cronômetro só era testado ANTES da volta. Ou seja: qualquer chamada, mesmo
+ * com teto de 1 ms, entregava no mínimo 5000 linhas por tabela. A rota da tela
+ * chamava com 4 s, e o Postgres cobrou a conta: 120 MB de WAL e um checkpoint de
+ * 269 segundos escrevendo 46% dos buffers, que trava TODAS as consultas do banco.
+ *
+ * A lição é que o botão certo é o NÚMERO DE LINHAS, não o tempo: é ele que
+ * determina o tamanho da escrita. `backfillPrazoChunk(limite)` já expõe isso, e a
+ * convergência vem das visitas seguintes à tela — cada linha examinada fica
+ * resolvida para sempre, então repetir rodadas pequenas chega no mesmo lugar sem
+ * pico de escrita.
  */
-export async function backfillPrazoAte(
-  msMaximo = 8_000,
-  userId?: string,
-): Promise<BackfillPrazoResult> {
-  const inicio = Date.now();
-  const total: BackfillPrazoResult = {
-    preenchidas: 0,
-    semPrazo: 0,
-    restantes: await contarPrazoPendente(userId),
-  };
-
-  while (total.restantes > 0 && Date.now() - inicio < msMaximo) {
-    const rodada = await backfillPrazoChunk(LOTE_PADRAO, userId);
-    total.preenchidas += rodada.preenchidas;
-    total.semPrazo += rodada.semPrazo;
-    total.restantes = rodada.restantes;
-    // Nenhuma linha mudou: insistir seria laço infinito.
-    if (rodada.preenchidas === 0 && rodada.semPrazo === 0) break;
-  }
-
-  return total;
-}

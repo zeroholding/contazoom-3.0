@@ -180,6 +180,33 @@ const MODALIDADE_SP = Prisma.raw(`
  * ────────────────────────────────────────────────────────────────────────────
  */
 
+/**
+ * A CONDIÇÃO QUE FAZ A FILA VOLTAR A SER RÁPIDA.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * Expandir `raw_data` custa leitura de TOAST: o JSON guarda o pedido E o envio
+ * inteiros do Mercado Livre, dezenas de KB por linha, fora da página da tabela. A
+ * lateral com `ON TRUE` pagava esse preço em TODA venda da janela, e a fila levava
+ * minutos.
+ *
+ * `v.quantidade` é a SOMA das quantidades de todos os itens do pedido (ver
+ * `sync-prepare-sale-data.ts`). Então `quantidade = 1` prova que o pedido tem
+ * EXATAMENTE UM item — não existe pedido de dois itens cuja soma seja 1. E para
+ * pedido de um item só, as colunas da venda (`v.titulo`, `v.sku`) já são as desse
+ * item, porque o sync grava as do primeiro.
+ *
+ * Isto NÃO é aproximação, é equivalência: nas linhas em que a lateral não roda, os
+ * `COALESCE` caem em valores idênticos aos que ela devolveria. O JSON só é lido
+ * onde ele pode revelar algo — os pedidos com mais de uma peça, que são a minoria.
+ *
+ * TEXTO, e não `Prisma.raw`: isto é interpolado DENTRO de outro `Prisma.raw`, e
+ * `Prisma.raw` recebe string. Um objeto `Sql` aqui viraria o literal
+ * "[object Object]" no meio do SQL — erro de sintaxe no banco, e nada em tempo de
+ * compilação reclama. Mesma razão de `SKU_ITEM_TXT` mais abaixo ser string.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+const SO_SE_PUDER_TER_MAIS_DE_UM = `v.quantidade > 1`;
+
 /** Itens do pedido do Mercado Livre, de `raw_data->'order'->'order_items'`. */
 const ITENS_ML = Prisma.raw(`
   LEFT JOIN LATERAL (
@@ -206,7 +233,7 @@ const ITENS_ML = Prisma.raw(`
     -- teste, o cast estoura e a consulta INTEIRA aborta por causa de um pedido.
     WHERE (oi ->> 'quantity') ~ '^[0-9]+$'
       AND (oi ->> 'quantity')::int > 0
-  ) it ON TRUE
+  ) it ON ${SO_SE_PUDER_TER_MAIS_DE_UM}
 `);
 
 /**
@@ -250,7 +277,7 @@ const ITENS_SP = Prisma.raw(`
             NULLIF(oi->>'model_quantity_purchased', '')::int,
             NULLIF(oi->>'quantity_purchased', '')::int
           ) > 0
-  ) it ON TRUE
+  ) it ON ${SO_SE_PUDER_TER_MAIS_DE_UM}
 `);
 
 /**

@@ -31,10 +31,27 @@ import {
   type TemPrazo,
   type Urgencia,
 } from "@/lib/expedicao";
-import { backfillPrazoAte } from "@/lib/prazo-despacho-backfill";
 import { buscarAnuncioInfo, resolverMiniatura } from "@/lib/meli-anuncio-info";
+import { backfillPrazoChunk } from "@/lib/prazo-despacho-backfill";
 
 export const runtime = "nodejs";
+
+/**
+ * Quantas vendas o backfill de prazo examina por visita à tela, POR TABELA.
+ *
+ * O número não é sobre a velocidade do backfill: é sobre o tamanho da escrita que
+ * o banco recebe de uma vez. O lote anterior era de 5000 linhas por tabela por
+ * rodada, em laço — uma tela aberta em duas abas sujava dezenas de milhares de
+ * linhas, e o Postgres registrou o resultado: 120 MB de WAL e um checkpoint de 269
+ * segundos escrevendo 46% dos buffers. Checkpoint longo trava TODAS as consultas do
+ * banco, não só esta tela.
+ *
+ * 300 é escrita que passa despercebida, e converge em algumas visitas porque cada
+ * linha examinada fica resolvida para sempre (ou ganha prazo, ou recebe o marcador
+ * de ausente). Como o backfill saiu do caminho da resposta, precisar de mais
+ * rodadas não custa nada a quem olha a tela.
+ */
+const LOTE_BACKFILL_PRAZO = 300;
 
 /**
  * Vinte segundos.
@@ -394,18 +411,38 @@ export async function GET(req: NextRequest) {
       if (emCache) return NextResponse.json(emCache);
     }
 
-    // Backfill do prazo, em fatia curta e best-effort.
+    // Backfill do prazo: fatia CURTA, e sem bloquear a resposta.
     //
     // Sem prazo a fila cai na data da venda, que é a ordenação ERRADA para esta
     // tela — o módulo funcionaria mentindo. Exigir que alguém rode um script à mão
     // para a tela dizer a verdade seria transformar detalhe de implementação em
-    // tarefa do usuário. Falhar aqui não derruba a resposta: a tela mostra quantas
-    // vendas ainda faltam (`prazoPendente`) e segue com o que já tem.
-    try {
-      await backfillPrazoAte(4_000, session.sub);
-    } catch (err) {
+    // tarefa do usuário.
+    //
+    // ERA `await backfillPrazoAte(4_000)`, E ISSO TRAVOU A TELA POR MINUTOS.
+    //
+    // Duas coisas somadas. O `await` punha o backfill no caminho crítico da
+    // resposta: a tela só desenhava depois de o banco terminar de escrever. E a
+    // subida da versão do marcador ("ausente" -> "ausente:3") fez o conjunto
+    // pendente voltar a ser o histórico INTEIRO em vez de algumas centenas.
+    //
+    // Cuidado com o nome da função antiga: o `4_000` era teto de TEMPO, não de
+    // linhas. `backfillPrazoAte` roda LOTES DE 5000 até o cronômetro estourar, e
+    // testa o cronômetro ANTES da primeira volta — ou seja, sempre entregava no
+    // mínimo um lote de 5000 linhas por tabela, por requisição. Baixar o número ali
+    // teria reduzido o tempo e mantido a escrita gigante.
+    //
+    // Por isso aqui é `backfillPrazoChunk`, que recebe o LIMITE DE LINHAS: uma
+    // rodada, curta e previsível. E `void` em vez de `await` para desacoplar da
+    // resposta — a fila aparece na hora, com o prazo que já existe, e o resto
+    // preenche em segundo plano. O container é um processo Node de vida longa (não é
+    // função serverless que morre no `return`), então a promessa termina sozinha.
+    //
+    // O `.catch` é OBRIGATÓRIO aqui: promessa solta que rejeita derruba o
+    // processo com `unhandledRejection`, e aí o backfill deixaria a aplicação de pé
+    // trocar por uma que caiu.
+    void backfillPrazoChunk(LOTE_BACKFILL_PRAZO, session.sub).catch((err) => {
       console.warn("[expedicao] backfill de prazo não rodou:", err);
-    }
+    });
 
     const resultado = await buscarExpedicao(session.sub, filtros);
     await preencherFotos(session.sub, resultado);
