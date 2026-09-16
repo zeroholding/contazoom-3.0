@@ -69,3 +69,18 @@ test-export.xlsx
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ---------------------------------------------------------------------------
+# XML FISCAL DE CLIENTE. NUNCA VERSIONAR.
+#
+# A pasta XML/ recebe export de NF-e/NFC-e/CT-e para análise e teste do módulo
+# fiscal. Cada arquivo tem CNPJ, endereço e nome do cliente, e o CPF ou CNPJ de
+# cada comprador — e o repositório é remoto. Um `git add -A` distraído publicaria
+# a base fiscal de um mês inteiro do grupo, e histórico do git não se apaga
+# pedindo desculpa.
+#
+# A pasta em si é intencional: é a entrada do `scripts/diagnostico-xml.ts`.
+# ---------------------------------------------------------------------------
+/XML/
+/uploads/
+*.zip

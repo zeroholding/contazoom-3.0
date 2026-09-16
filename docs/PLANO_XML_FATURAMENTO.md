@@ -172,18 +172,25 @@ própria chave. Isso dá duas coisas de graça:
 ## 4. O que conta como faturamento
 
 Aqui não há como o sistema adivinhar: são regras contábeis, e cada uma precisa de
-aval do escritório. A proposta:
+aval do escritório.
+
+> **Esta tabela foi CORRIGIDA depois de rodar o diagnóstico contra XML real. A
+> versão anterior errava por R$ 756,70 em R$ 63.270,86 (1,2%) numa única conta e num
+> único mês, porque contava as notas de remessa para o FULL como venda. Ver a seção
+> 12.** A linha do CFOP é a que mudou tudo.
 
 | Condição | Entra no faturamento? | Motivo |
 |---|---|---|
+| **CFOP fora da faixa 51xx / 61xx** | **Não.** | É esta linha que decide. Grupo 5.1/6.1 é "venda de produção própria ou de terceiros"; tudo fora é movimentação, remessa, retorno ou devolução. Ver 4.3. |
 | `tpAmb = 2` (homologação) | **Nunca.** Recusar na importação. | Nota de teste, valor fictício. É o erro mais comum de pasta de XML. |
-| `tpNF = 0` (entrada) | Não. Guardar, não somar. | É compra, não faturamento. Ver 4.1. |
+| `tpNF = 0` (entrada) | Não. Guardar, não somar. | É compra ou retorno, não faturamento. Ver 4.1. |
 | `cStat ≠ 100` (não autorizada) | Não. | Denegada/rejeitada não existe fiscalmente. |
-| Cancelada (evento 110111) | Não. | E o valor tem de SAIR do mês, não ficar. |
-| `finNFe = 4` (devolução) | Não soma como receita. | Devolução de mercadoria própria. |
+| Cancelada (evento 110111) | Não. | E o valor tem de SAIR do mês, não ficar. Ver 4.4. |
+| `finNFe = 4` (devolução) | Não soma como receita. | Devolução de mercadoria. |
 | `finNFe = 2` (complementar) | **Soma.** | Complemento de valor de nota anterior. |
 | `finNFe = 3` (ajuste) | **Não soma.** | Nota de ajuste não tem receita nova. |
 | `mod = 65` (NFC-e) | Soma. | Venda no balcão é receita igual. |
+| `mod = 57` (CT-e) | **Nunca.** | É frete, e emitido por OUTRA empresa. Ver 4.5. |
 
 ### 4.1 Nota de entrada e nota de terceiro na mesma pasta
 
@@ -197,6 +204,47 @@ Duas situações que a pasta do cliente traz garantido:
 A importação precisa dizer isso, não descartar em silêncio: "12 arquivos são notas
 de compra (a empresa é destinatária) e não entram no faturamento". Descarte
 silencioso é o que faz alguém achar que o sistema perdeu arquivo.
+
+### 4.3 CFOP é o discriminador. `natOp` não serve e `tpNF` não basta
+
+Verificado no dado real (seção 12): existem notas de **saída, autorizadas, em
+produção, `finNFe = 1`** que **não são receita** — a remessa de mercadoria para o
+depósito do Mercado Livre (FULL). Toda regra que olhe só `tpNF` + `finNFe` +
+`cStat` conta essas notas como venda.
+
+- **`natOp` não serve**: é texto livre. Na base analisada apareceram seis redações
+  diferentes, incluindo "Outras Saidas - Remessa para Deposito Temporario" e
+  "Venda de mercadoria para consumidor final". Depender de texto livre é depender
+  de o emissor não mudar a frase.
+- **CFOP serve**: é código. O grupo **5.1xx / 6.1xx** é "venda de produção própria
+  ou de terceiros" e é exatamente o conjunto de venda.
+- **A faixa é WHITELIST, não blacklist.** O CFOP `5949/6949` ("outra saída não
+  especificada") é lata de lixo: na base ele aparece nas remessas para o FULL, e
+  amanhã pode aparecer em outra coisa. Aceitar tudo menos uma lista de exclusão
+  deixaria toda saída desconhecida virar receita — errar para cima, que é o pior
+  lado para um documento que vai ao banco.
+
+**A nota pode ter itens com CFOP diferente.** A regra tem de olhar todos os itens,
+não o primeiro. Se uma nota tiver item de venda e item fora da faixa, ela precisa
+ser sinalizada para conferência humana em vez de resolvida por chute.
+
+### 4.4 O XML da nota cancelada continua dizendo "autorizada"
+
+Confirmado no dado real: nas três notas canceladas da amostra, o `cStat` dentro do
+próprio `procNFe` é **100 (autorizada)**. O cancelamento está **só** no arquivo de
+evento (`procEventoNFe`, `tpEvento 110111`), que é outro arquivo.
+
+Consequência: quem importar apenas os `procNFe` — mesmo os da pasta "Canceladas" —
+soma nota cancelada no faturamento. E a pasta não pode ser o critério: nome de
+pasta é convenção do exportador, muda sem avisar e não existe quando o arquivo vem
+por e-mail.
+
+### 4.5 CT-e na mesma pasta é documento de OUTRA empresa
+
+Na amostra havia 361 CT-e (mod 57) emitidos pelo próprio Mercado Livre contra a
+empresa. É **custo de frete**, e o emitente é outro CNPJ — nem sequer casa com a
+carteira. Precisam ser reconhecidos e recusados por modelo, com mensagem, não
+importados como documento órfão nem somados.
 
 ### 4.2 O aviso que precisa estar no relatório
 
@@ -328,7 +376,12 @@ despejar o que havia de verdade no dado.
 
 **Portanto, a primeira entrega deste módulo não é o parser: é
 `scripts/diagnostico-xml.ts`** — um script que recebe uma pasta de XML de verdade
-do escritório e imprime, sem gravar nada:
+do escritório e imprime, sem gravar nada.
+
+> **Já foi feito, e valeu a pena: a regra de faturamento que este documento
+> propunha estava errada por 1,2% na primeira pasta real. Resultado na seção 12.**
+
+O que ele mostra:
 
 - quantos arquivos, quais raízes (`nfeProc`, `NFe`, `procEventoNFe`, `nfeProcCanc`, NFS-e, outra);
 - distribuição de `mod`, `tpNF`, `tpAmb`, `finNFe`, `cStat`;
@@ -730,7 +783,7 @@ Predicados novos: `podeDefinirFaturamento`, `podeEmitirDeclaracao`.
 
 | Fase | Entrega | Verificável sem banco? |
 |---|---|---|
-| **0** | `scripts/diagnostico-xml.ts` — despeja o que existe numa pasta real | Sim, é só leitura de arquivo |
+| **0** ✅ | `scripts/diagnostico-xml.ts` — **feito**, resultado na seção 12 | Sim, é só leitura de arquivo |
 | **1** | Parser puro (`src/lib/nfe-xml.ts`): bytes → objeto tipado | **Sim**, com XML fixo em `scripts/teste-nfe-xml.ts` |
 | **2** | Classificador (`src/lib/faturamento-regras.ts`): documento → conta/não conta | **Sim**, função pura |
 | **3** | Migration + model | Não |
@@ -750,8 +803,13 @@ correção do módulo se prova — não na tela.
 
 Nenhuma delas é técnica, e todas mudam o número:
 
-1. **A regra da seção 4 está certa?** Especificamente: complementar soma, ajuste
-   não soma, devolução não soma (em vez de subtrair).
+0. **O faturamento de agosto/2026 da CINGAPURA é R$ 62.514,16 em 366 notas?** É o
+   que o XML diz pela regra da seção 4 corrigida. Conferir contra o PGDAS-D do mês é
+   o teste que valida o módulo inteiro — e, se divergir, a diferença é a informação
+   mais valiosa deste projeto.
+1. **A faixa de CFOP 51xx/61xx é a definição de venda?** É a regra que fecha ao
+   centavo com a classificação do Mercado Livre, mas vale para o resto da carteira?
+   E complementar soma, ajuste não soma, devolução não soma (em vez de subtrair)?
 2. **Devolução abate o faturamento do mês?** Há escritório que abate e há que não.
    A tabela atual não abate.
 3. **NFC-e entra junto com NF-e** no mesmo total, ou separado?
@@ -778,6 +836,119 @@ Nenhuma delas é técnica, e todas mudam o número:
 - **Números do ambiente medidos.** Todos os limites citados foram lidos em
   arquivo de configuração; nada foi medido contra o banco ou o container em
   produção.
+
+---
+
+## 12. Fase 0 executada: o que o XML real disse
+
+`scripts/diagnostico-xml.ts` rodado contra a pasta de agosto/2026 do grupo, conta
+**CINGAPURA** (Mercado Livre). Somente leitura, sem banco e sem rede.
+
+**822 arquivos XML, 5,8 MB.** Menor 4,9 KB, mediana 7,4 KB, maior 8,9 KB.
+
+### 12.1 O que a pasta tinha
+
+| Raiz do XML | Arquivos | Modelo |
+|---|---|---|
+| `nfeProc` | 458 | 55 (NF-e) |
+| `cteProc` | 361 | 57 (CT-e) |
+| `procEventoNFe` | 3 | — (evento) |
+
+O exportador do Mercado Livre já separa em pastas: `venda` (366), `CT-e` (361),
+`retiro simbólico` (63), `transferência` (21), `Canceladas` (6), `devolução` (5).
+Útil como conferência — **e não usado como regra**, por 4.4.
+
+### 12.2 Onde a minha regra estava errada
+
+Aplicando a regra da versão anterior da seção 4 (produção + saída + autorizada +
+não cancelada + `finNFe` 1 ou 2):
+
+```
+387 notas   R$ 63.270,86   <-- ERRADO
+```
+
+Aplicando com a faixa de CFOP 51xx/61xx:
+
+```
+366 notas   R$ 62.514,16   <-- bate com a pasta "NF-e de venda" AO CENTAVO
+```
+
+A diferença de **R$ 756,70** são 21 notas de "Remessa para Depósito Temporário" —
+mercadoria saindo para o galpão do Mercado Livre, que é movimentação de estoque
+próprio e não venda. Elas usam CFOP `5949`, `6949` e `6905`.
+
+Que o total por CFOP feche exatamente com a classificação independente do
+exportador é a melhor evidência disponível de que a regra está certa — são dois
+critérios diferentes chegando no mesmo centavo.
+
+### 12.3 Distribuições (458 NF-e)
+
+| Campo | O que apareceu |
+|---|---|
+| Emitente | **100%** `50506775000101` NEXUS GROUP LTDA |
+| CRT | **100%** `1` — Simples Nacional |
+| `tpAmb` | **100%** `1` produção. Nenhuma nota de homologação. |
+| `cStat` | **100%** `100` autorizada |
+| Série | **100%** série `2` |
+| Competência | **100%** `2026-08` |
+| `tpNF` | 390 saída (85,2%) · **68 entrada (14,8%)** |
+| `finNFe` | 453 normal · 5 devolução |
+| Destinatário | **329 CPF (71,8%)** · 129 CNPJ |
+| CFOP principal | `6108` em 240 notas (52,4%), R$ 46.556,37 |
+| `NFref` | **131 de 458** referenciam outra nota |
+| `vNF ≠ vProd` | 24 de 458 (há frete/desconto/ST) |
+
+### 12.4 Sete achados que mudam o modelo de dados
+
+1. **`cnpjDestinatario` está errado como nome de coluna.** 71,8% dos destinatários
+   são **CPF** (venda a consumidor final). A coluna tem de ser
+   `documentoDestinatario` aceitando 11 ou 14 dígitos, com `tipoDocumentoDestinatario`.
+2. **A ponte com `meli_venda` existe, e está no nome do arquivo.** Os 461 arquivos
+   do Mercado Livre são nomeados `<10 dígitos>_<chave de 44>-procNFe.xml`, e esse
+   prefixo é o número do pedido — 461 de 461, sem exceção. Isso permite uma coluna
+   `pedidoMarketplace` e liga documento fiscal a venda, ponte que **não existe em
+   nenhum lugar do banco hoje**. Falta confirmar contra `meli_venda.order_id`, o que
+   exige consulta ao banco.
+3. **Os grupos IBS/CBS da Reforma Tributária JÁ estão na base**: presentes em 361
+   dos 822 arquivos — exatamente os CT-e. A decisão de o parser ser tolerante a tag
+   desconhecida deixou de ser precaução e passou a ser requisito com evidência.
+4. **43,6% dos arquivos não declaram encoding** (são os CT-e). O padrão do XML é
+   UTF-8 quando ausente, e o leitor tem de assumir isso em vez de falhar.
+5. **Zero arquivos com DOCTYPE ou ENTITY.** A defesa proposta em 5.2 (recusar
+   DOCTYPE antes de parsear) não vai recusar nada legítimo nesta base.
+6. **A chave de acesso está 100% consistente** com as tags nas 458 notas — desde que
+   comparada como NÚMERO. A tag traz `<serie>2</serie>` e a chave `002`; a tag
+   `<nNF>7786</nNF>` e a chave `000007786`. Comparar como texto acusaria divergência
+   em todas as notas.
+7. **O CT-e do frete é emitido por seis CNPJs diferentes da mesma empresa**
+   (`03007331004996` e cinco filiais, EBAZARCOMBR LTDA — o Mercado Livre), somando
+   R$ 12.569,00. Nenhum casa com a carteira, e nem deveria.
+
+### 12.5 Extrapolação de volume
+
+Uma conta, um mês: 822 arquivos, 5,8 MB. O grupo tem 5 contas de Mercado Livre
+(BRUXELAS, CINGAPURA, ESTOCOLMO, MOSCOU, TOKYO) mais Shopee e TikTok — ainda em
+`.zip`, não analisadas.
+
+Na mesma ordem de grandeza: **~50 mil arquivos e ~350 MB por ano** só de Mercado
+Livre. Confirma duas decisões: o sharding de diretório de 5.5 é necessário (50 mil
+arquivos num diretório é problema operacional), e o teto de 1 MB por XML de 5.2 é
+folgado por duas ordens de grandeza.
+
+### 12.6 O que a Fase 0 ainda não respondeu
+
+- **Shopee e TikTok** continuam em `.zip` — não sei que documento eles trazem. Se
+  for NFS-e ou nota de outro emitente, muda a Fase 3.
+- **As outras quatro contas de ML** também estão em `.zip`. Espero o mesmo formato,
+  mas o valor deste script é justamente não supor.
+- **Se `50506775000101` está cadastrado em `Empresa`** — exige consulta ao banco,
+  que não fiz.
+- **Um mês só, uma conta só.** Nada aqui prova o comportamento de dezembro, de
+  nota com muitos itens ou de emissor que não seja o do Mercado Livre.
+
+> `XML/` foi acrescentado ao `.gitignore` nesta mesma passada. A pasta tinha 822
+> notas fiscais reais, com CNPJ e endereço do cliente e o CPF de 329 compradores,
+> **sem estar ignorada**, num repositório com remoto no GitHub.
 
 ---
 
