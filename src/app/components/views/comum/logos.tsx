@@ -84,15 +84,67 @@ export function LogoShopee({ className = "h-10 w-auto" }: PropsLogo) {
   );
 }
 
+/**
+ * TikTok Shop.
+ *
+ * A nota musical do TikTok é UM caminho repetido três vezes, em ciano, magenta e
+ * preto, deslocado alguns pixels — é o desenho oficial, e é o que dá o efeito de
+ * separação de cor da marca. Não é sombra: as três cópias são a marca.
+ *
+ * `viewBox` quadrado, diferente dos outros dois: aqui altura e largura mandam
+ * igual, e é por isso que `SeloCanal` contém o desenho numa caixa comum em vez de
+ * confiar na proporção de cada logo.
+ */
+export function LogoTikTok({ className = "h-10 w-auto" }: PropsLogo) {
+  const nota =
+    "M232.5 96.7c22.7 16.2 50.5 25.8 80.6 25.8V65.1c-5.7 0-11.3-.6-16.7-1.7v44.9c-30.1 0-57.9-9.6-80.6-25.8v116.2c0 58.2-47.2 105.3-105.4 105.3-21.7 0-41.9-6.6-58.7-17.8 19.2 19.6 45.9 31.8 75.5 31.8 58.2 0 105.4-47.2 105.4-105.3V96.7zM253.4 39.6c-11.6-12.7-19.2-29-20.9-47.1V-15h-16c4 23 17.8 42.6 36.9 54.6zM56.9 246.7a48.2 48.2 0 0 1 53-75.1v-58.1c-5.6-.8-11.3-1.1-16.9-1v44.9a48.2 48.2 0 0 0-36.1 89.3z";
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="-20 -20 360 360"
+      className={className}
+      role="img"
+      aria-label="TikTok Shop"
+    >
+      <path fill="#25F4EE" d={nota} transform="translate(-9 9)" />
+      <path fill="#FE2C55" d={nota} transform="translate(9 -9)" />
+      <path fill="#000000" d={nota} />
+    </svg>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*                              Selo de canal                                 */
 /* -------------------------------------------------------------------------- */
 
-export type CanalLogo = "ML" | "SP";
+export type CanalLogo = "ML" | "SP" | "TT";
 
 const NOME_CANAL: Record<CanalLogo, string> = {
   ML: "Mercado Livre",
   SP: "Shopee",
+  TT: "TikTok Shop",
+};
+
+/**
+ * O desenho e a caixa útil de cada canal, num mapa só.
+ *
+ * Era um ternário `canal === "ML" ? ML : Shopee`, e ternário com três canais cai
+ * silenciosamente no último: o TikTok apareceria como Shopee sem nada no código
+ * dizendo por quê. Mapa por chave não tem esse buraco, e acrescentar o quarto
+ * canal passa a ser uma linha.
+ *
+ * As caixas são diferentes porque as proporções são: o Mercado Livre é largo, a
+ * Shopee é alta e o TikTok é quadrado. Os três limites acima resultam na mesma
+ * área ótica dentro da caixa comum.
+ */
+const DESENHO_CANAL: Record<
+  CanalLogo,
+  { Logo: (p: PropsLogo) => React.ReactElement; selo: string; inline: string }
+> = {
+  ML: { Logo: LogoMercadoLivre, selo: "max-h-[15px] max-w-[20px]", inline: "max-h-[13px] max-w-[17px]" },
+  SP: { Logo: LogoShopee, selo: "max-h-[17px] max-w-[16px]", inline: "max-h-[14px] max-w-[13px]" },
+  TT: { Logo: LogoTikTok, selo: "max-h-[16px] max-w-[16px]", inline: "max-h-[13px] max-w-[13px]" },
 };
 
 /**
@@ -124,6 +176,7 @@ export function SeloCanal({
   className?: string;
 }) {
   const nome = NOME_CANAL[canal];
+  const { Logo, selo } = DESENHO_CANAL[canal];
 
   return (
     <span
@@ -132,11 +185,7 @@ export function SeloCanal({
       aria-label={nome}
     >
       <span className="grid size-7 shrink-0 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
-        {canal === "ML" ? (
-          <LogoMercadoLivre className="max-h-[15px] max-w-[20px]" />
-        ) : (
-          <LogoShopee className="max-h-[17px] max-w-[16px]" />
-        )}
+        <Logo className={selo} />
       </span>
       {comNome && (
         <span className="text-[12px] font-semibold text-[var(--cz-texto)]">{nome}</span>
@@ -159,9 +208,6 @@ export function LogoCanal({
   canal: CanalLogo;
   className?: string;
 }) {
-  return canal === "ML" ? (
-    <LogoMercadoLivre className={`max-h-[13px] max-w-[17px] ${className}`} />
-  ) : (
-    <LogoShopee className={`max-h-[14px] max-w-[13px] ${className}`} />
-  );
+  const { Logo, inline } = DESENHO_CANAL[canal];
+  return <Logo className={`${inline} ${className}`} />;
 }
