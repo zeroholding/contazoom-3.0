@@ -66,6 +66,10 @@ import {
   Paperclip,
   PauseCircle,
   Pencil,
+  Files,
+  FolderOpen,
+  MoreHorizontal,
+  UploadCloud,
   Percent,
   Phone,
   Play,
@@ -184,6 +188,16 @@ const MAPA: Record<string, React.ComponentType<LucideProps>> = {
   Phone,
   Store,
   Wallet,
+  // Faturamento por XML (/admin/tarefas/faturamento).
+  //
+  // `Files` para a contagem de documentos do período, `UploadCloud` para a área
+  // de arraste (o `Upload` já mapeado é a seta seca, que não lê como "solte o
+  // arquivo aqui"), `FolderOpen` para escolher arquivo do disco e
+  // `MoreHorizontal` para o menu de ações da linha da tabela.
+  Files,
+  FolderOpen,
+  MoreHorizontal,
+  UploadCloud,
 };
 
 type IconeProps = LucideProps & {

@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Shield,
   Users,
   ArrowLeft,
+  CalendarClock,
+  ChevronRight,
+  FileSpreadsheet,
   FileText,
   FolderOpen,
   ClipboardList,
@@ -21,7 +25,7 @@ import { useSessao } from "@/hooks/useSessao";
 import { papelLabel } from "@/lib/papeis";
 import { iniciais } from "@/app/components/views/ui/tarefas/formato";
 
-type ItemNav = {
+type Folha = {
   href: string;
   texto: string;
   icone: LucideIcon;
@@ -33,9 +37,40 @@ type ItemNav = {
   exato?: boolean;
 };
 
+/**
+ * Item com sub-itens.
+ *
+ * NÃO tem `href` próprio, e isso é deliberado. "Apuração fiscal" é uma ÁREA, não
+ * uma tela: o que existe são as competências e o faturamento por XML. Dar um href
+ * ao pai igual ao de um filho põe dois itens acesos ao mesmo tempo, porque o item
+ * ativo é escolhido por href — foi exatamente o defeito que o menu do NEXUS teve
+ * quando o filho "Dashboard" apontava para a rota do pai.
+ *
+ * `chave` existe para o estado de aberto/fechado ter um identificador estável
+ * quando não há href para usar no lugar.
+ */
+type Grupo = {
+  chave: string;
+  texto: string;
+  icone: LucideIcon;
+  filhos: Folha[];
+};
+
+type ItemNav = Folha | Grupo;
+
+const ehGrupo = (item: ItemNav): item is Grupo => "filhos" in item;
+
 const OPERACAO: ItemNav[] = [
   { href: "/admin/tarefas", texto: "Tarefas", icone: ClipboardList, exato: true },
-  { href: "/admin/tarefas/apuracao", texto: "Apuração fiscal", icone: Calculator },
+  {
+    chave: "apuracao-fiscal",
+    texto: "Apuração fiscal",
+    icone: Calculator,
+    filhos: [
+      { href: "/admin/tarefas/apuracao", texto: "Competências", icone: CalendarClock },
+      { href: "/admin/tarefas/faturamento", texto: "Faturamento (XML)", icone: FileSpreadsheet },
+    ],
+  },
   { href: "/admin/tarefas/legalizacao", texto: "Legalização", icone: Landmark },
   { href: "/admin/empresas", texto: "Empresas", icone: Building2 },
   { href: "/admin/tarefas/auditoria", texto: "Auditoria", icone: History },
@@ -45,7 +80,7 @@ const OPERACAO: ItemNav[] = [
   { href: "/admin/formulario", texto: "Formulário", icone: ClipboardCheck },
 ];
 
-const GESTAO: ItemNav[] = [
+const GESTAO: Folha[] = [
   { href: "/admin", texto: "Painel de Usuários", icone: Users, exato: true },
   { href: "/admin/documentos", texto: "Enviar Documentos", icone: FolderOpen },
   { href: "/admin/auditoria-documentos", texto: "Auditoria Docs", icone: FileText },
@@ -73,7 +108,7 @@ function ItemLink({
   ativo,
   collapsed,
 }: {
-  item: ItemNav;
+  item: Folha;
   ativo: boolean;
   collapsed: boolean;
 }) {
@@ -89,6 +124,102 @@ function ItemLink({
         <Icone aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
         {!collapsed && <span className="truncate">{item.texto}</span>}
       </Link>
+    </li>
+  );
+}
+
+/**
+ * Item com sub-itens.
+ *
+ * ABERTO/FECHADO É DERIVADO, com o gesto explícito por cima. Guardar só o clique
+ * (e não o estado de todos os grupos) é o que faz o menu acompanhar a navegação
+ * sozinho: entrar em `/admin/tarefas/faturamento` abre o grupo sem efeito e sem
+ * sincronização. Foi assim que o menu do NEXUS parou de fechar na cara de quem
+ * navegava.
+ *
+ * RECOLHIDO NÃO EXPANDE: vira um link direto para o primeiro filho. Sem isso, o
+ * grupo seria o único item da barra estreita que não leva a lugar nenhum — e
+ * abrir uma lista indentada num trilho de 4rem não caberia de todo modo.
+ */
+function GrupoLink({
+  grupo,
+  ativoHref,
+  aberto,
+  onAlternar,
+  collapsed,
+}: {
+  grupo: Grupo;
+  ativoHref: string | null;
+  aberto: boolean;
+  onAlternar: () => void;
+  collapsed: boolean;
+}) {
+  const Icone = grupo.icone;
+  const temFilhoAtivo = grupo.filhos.some((f) => f.href === ativoHref);
+
+  if (collapsed) {
+    return (
+      <li>
+        <Link
+          href={grupo.filhos[0].href}
+          title={grupo.texto}
+          aria-current={temFilhoAtivo ? "page" : undefined}
+          className="cz-nav-item"
+        >
+          <Icone aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+        </Link>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onAlternar}
+        aria-expanded={aberto}
+        aria-controls={`cz-sub-${grupo.chave}`}
+        // `aria-current` no pai fechado com filho ativo: é a única pista de onde
+        // a pessoa está quando o grupo está recolhido. Aberto, quem carrega a
+        // marca é o filho — dois itens marcados na mesma coluna confundem.
+        aria-current={temFilhoAtivo && !aberto ? "page" : undefined}
+        className="cz-nav-item w-full cursor-pointer text-left"
+      >
+        <Icone aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+        <span className="flex-1 truncate">{grupo.texto}</span>
+        <ChevronRight
+          aria-hidden="true"
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 ${
+            aberto ? "rotate-90" : ""
+          }`}
+        />
+      </button>
+
+      {aberto && (
+        // Fio vertical na altura dos filhos: uma lista indentada solta no branco
+        // não diz a quem pertence. O fio faz o trabalho que um recuo grande
+        // faria, ocupando 1px em vez de 24.
+        <ul
+          id={`cz-sub-${grupo.chave}`}
+          className="ml-[1.45rem] mt-0.5 space-y-0.5 border-l border-[var(--cz-hairline)] pl-2.5"
+        >
+          {grupo.filhos.map((filho) => {
+            const FilhoIcone = filho.icone;
+            return (
+              <li key={filho.href}>
+                <Link
+                  href={filho.href}
+                  aria-current={filho.href === ativoHref ? "page" : undefined}
+                  className="cz-nav-item"
+                >
+                  <FilhoIcone aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{filho.texto}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </li>
   );
 }
@@ -239,10 +370,34 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
 
   // Subrota mantém o item pai aceso: `/admin/tarefas/apuracao/<id>` continua
-  // marcando "Apuração fiscal", senão a pessoa perde a referência ao abrir um
+  // marcando "Competências", senão a pessoa perde a referência ao abrir um
   // registro.
   const estaAtivo = (href: string, exato = false) =>
     exato ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+
+  /**
+   * O href do item ATIVO: o mais específico que casa a rota.
+   *
+   * "Mais específico" é o mais longo. Sem esse desempate, `/admin/tarefas` (que
+   * é `exato`) e `/admin/tarefas/apuracao` disputariam a mesma rota, e num grupo
+   * o pai e o filho acenderiam juntos.
+   */
+  const ativoHref =
+    OPERACAO.flatMap((item) => (ehGrupo(item) ? item.filhos : [item]))
+      .filter((folha) => estaAtivo(folha.href, folha.exato))
+      .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
+
+  /** Grupo que contém a rota atual — nasce aberto. */
+  const grupoDaRota = OPERACAO.find(
+    (item) => ehGrupo(item) && item.filhos.some((f) => f.href === ativoHref),
+  );
+  const chaveDaRota = grupoDaRota && ehGrupo(grupoDaRota) ? grupoDaRota.chave : null;
+
+  // Só o que a pessoa clicou; o resto sai da rota. Ver o docblock de `GrupoLink`.
+  const [gesto, setGesto] = useState<Record<string, boolean>>({});
+  const estaAberto = (chave: string) => gesto[chave] ?? chave === chaveDaRota;
+  const alternar = (chave: string) =>
+    setGesto((g) => ({ ...g, [chave]: !(g[chave] ?? chave === chaveDaRota) }));
 
   // Recolhida, o container perde padding lateral para o tracinho do ativo cair
   // exatamente sobre a borda da barra — a folha global compensa `-0.5rem` aqui
@@ -290,14 +445,25 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
       >
         <RotuloSecao texto="Operação" collapsed={collapsed} />
         <ul className="space-y-0.5">
-          {OPERACAO.map((item) => (
-            <ItemLink
-              key={item.href}
-              item={item}
-              ativo={estaAtivo(item.href, item.exato)}
-              collapsed={collapsed}
-            />
-          ))}
+          {OPERACAO.map((item) =>
+            ehGrupo(item) ? (
+              <GrupoLink
+                key={item.chave}
+                grupo={item}
+                ativoHref={ativoHref}
+                aberto={estaAberto(item.chave)}
+                onAlternar={() => alternar(item.chave)}
+                collapsed={collapsed}
+              />
+            ) : (
+              <ItemLink
+                key={item.href}
+                item={item}
+                ativo={item.href === ativoHref}
+                collapsed={collapsed}
+              />
+            ),
+          )}
         </ul>
 
         <Divisoria />

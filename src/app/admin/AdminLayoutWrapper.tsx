@@ -53,6 +53,7 @@ const ROTULO_ROTA: Record<string, string> = {
   "/admin/auditoria-documentos": "Auditoria de documentos",
   "/admin/tarefas": "Tarefas",
   "/admin/tarefas/apuracao": "Apuração fiscal",
+  "/admin/tarefas/faturamento": "Faturamento (XML)",
   "/admin/tarefas/legalizacao": "Legalização",
   "/admin/tarefas/auditoria": "Auditoria",
   "/admin/formulario": "Formulários de abertura",
@@ -73,6 +74,8 @@ const SUBTITULO_ROTA: Record<string, string> = {
   "/admin/auditoria-documentos": "Quem acessou e baixou cada documento",
   "/admin/tarefas": "Visão geral das apurações e dos processos",
   "/admin/tarefas/apuracao": "Competências por empresa, etapa e prazo",
+  "/admin/tarefas/faturamento":
+    "Importação de XML e faturamento mensal apurado por CNPJ",
   "/admin/tarefas/legalizacao": "Aberturas, alterações e encerramentos de CNPJ",
   "/admin/tarefas/auditoria": "Histórico de alterações com autor e horário",
   "/admin/formulario": "Formulários enviados pelos clientes em /formulario",
