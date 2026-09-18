@@ -808,6 +808,11 @@ model Empresa {
   processos       ProcessoLegalizacao[]
   regimeHistorico EmpresaRegimeHistorico[]
 
+  documentosFiscais DocumentoFiscal[]
+  faturamentoMensal FaturamentoMensal[]
+  importacoesXml    ImportacaoXml[]
+  seriesCanal       EmpresaSerieCanal[]
+
   @@index([userId])
   @@index([regime])
   @@index([situacao])
@@ -1298,4 +1303,299 @@ model FormularioAberturaDocumento {
 
   @@index([formularioId, slot])
   @@map("formulario_abertura_documento")
+}
+
+// ============================================================================
+// APURAÇÃO FISCAL POR DOCUMENTO — importação de XML e faturamento
+//
+// Mesmas convenções do bloco contábil acima: cuid(), @map snake_case,
+// created_at/updated_at, nenhum enum (valores válidos em comentário, constantes
+// em src/lib/faturamento-regras.ts), competência como `ano Int` + `mes Int`.
+//
+// DUAS FUGAS DO PADRÃO, as duas deliberadas:
+//
+//   1. `onDelete: Restrict` na empresa, não Cascade. Todo o resto do bloco
+//      contábil cascateia; aqui seria errado. Apagar uma empresa apagaria as
+//      notas fiscais dela, que têm retenção legal de 5 anos e sustentam um
+//      número já declarado ao banco. Restrict faz a exclusão FALHAR com
+//      mensagem, e essa é a resposta certa para "quero apagar uma empresa com 4
+//      mil notas importadas".
+//
+//   2. `Decimal(14,2)` e não `(10,2)`. O padrão do projeto estoura em
+//      R$ 99.999.999,99, e nota fiscal de indústria passa disso.
+// ============================================================================
+
+/// Documento fiscal emitido, lido de XML. Uma linha por nota.
+///
+/// CHAVE NATURAL É A CHAVE DE ACESSO (44 dígitos), não o par série+número:
+/// série+número repete entre empresas e entre modelos, a chave não repete em
+/// lugar nenhum do país. É ela que faz reenviar a mesma pasta ser um no-op — e
+/// isso importa porque o contador VAI subir a mesma pasta duas vezes.
+model DocumentoFiscal {
+  id String @id @default(cuid())
+
+  /// 44 dígitos, sem o prefixo "NFe".
+  chave String @unique @db.VarChar(44)
+
+  /// Empresa emitente, casada por CNPJ.
+  ///
+  /// Nulo quando o CNPJ do emitente não está na carteira: nota de compra, ou
+  /// empresa ainda não cadastrada. A linha EXISTE nesse caso, de propósito — é o
+  /// que permite a tela dizer o que ignorou e por quê, em vez de o operador achar
+  /// que o sistema comeu arquivo.
+  empresaId String? @map("empresa_id")
+
+  /// CNPJ do emitente, só dígitos. Guardado mesmo com `empresaId` preenchido: é
+  /// o que permite revincular se a empresa for cadastrada depois.
+  cnpjEmitente String  @map("cnpj_emitente") @db.VarChar(14)
+  nomeEmitente String? @map("nome_emitente")
+
+  /// Documento do destinatário: CPF (11) ou CNPJ (14), só dígitos.
+  ///
+  /// NÃO se chama `cnpjDestinatario`, e isso é achado do diagnóstico e não
+  /// preferência: 71,8% dos destinatários da base real são CPF (venda a
+  /// consumidor final). Uma coluna VarChar(14) chamada cnpj recusaria a maioria
+  /// dos casos.
+  documentoDestinatario     String? @map("documento_destinatario") @db.VarChar(14)
+  /// CPF ou CNPJ. Sem isto, 11 dígitos num campo de 14 é ambíguo.
+  tipoDocumentoDestinatario String? @map("tipo_documento_destinatario") @db.VarChar(4)
+  nomeDestinatario          String? @map("nome_destinatario")
+
+  /// 55 = NF-e, 65 = NFC-e, 57 = CT-e (guardado, nunca somado), 13 = NFS-e (Fase 3)
+  modelo String @db.VarChar(2)
+  serie  String @db.VarChar(3)
+  numero Int
+
+  /// Emissão como veio no XML, com fuso. E a competência derivada dela.
+  emitidoEm DateTime @map("emitido_em")
+  ano       Int
+  mes       Int
+
+  /// 0 = entrada, 1 = saída
+  tipoOperacao String @map("tipo_operacao") @db.VarChar(1)
+  /// 1 normal, 2 complementar, 3 ajuste, 4 devolução
+  finalidade   String @db.VarChar(1)
+  /// natOp. Texto livre do emissor, guardado para conferência e NUNCA usado como
+  /// regra: na mesma pasta apareceram seis redações diferentes.
+  naturezaOperacao String? @map("natureza_operacao")
+
+  /// AUTORIZADA, CANCELADA, DENEGADA
+  situacao String @default("AUTORIZADA")
+  /// cStat do protocolo, cru, para auditar a decisão de situação.
+  statusSefaz String? @map("status_sefaz") @db.VarChar(3)
+  protocolo   String? @db.VarChar(20)
+
+  /// vNF (total da nota) e vProd (soma dos produtos), separados: a diferença é
+  /// frete/desconto/ST, e é a primeira coisa que se confere quando o total não
+  /// fecha com a expectativa do contador.
+  valorTotal    Decimal  @map("valor_total") @db.Decimal(14, 2)
+  valorProdutos Decimal? @map("valor_produtos") @db.Decimal(14, 2)
+
+  /// CFOP de TODOS os itens, sem repetição.
+  ///
+  /// Array e não coluna única: é o discriminador da regra de faturamento, e nota
+  /// com itens de CFOP diferente existe — guardar só o primeiro esconderia
+  /// exatamente o caso que precisa de conferência humana.
+  cfops String[]
+
+  /// Se ESTA linha soma no faturamento do mês.
+  ///
+  /// Coluna e não expressão calculada na consulta: é resultado de uma regra de
+  /// negócio que muda, e gravá-la permite a tela explicar POR QUE uma nota não
+  /// entrou.
+  contaFaturamento Boolean @default(false) @map("conta_faturamento")
+
+  /// Motivo de não somar. Valores em MOTIVO_EXCLUSAO (src/lib/faturamento-regras.ts):
+  /// HOMOLOGACAO, MODELO_NAO_APURADO, NAO_AUTORIZADA, CANCELADA, ENTRADA,
+  /// DEVOLUCAO, AJUSTE, EMPRESA_NAO_VINCULADA, TERCEIRO, CFOP_MISTO, SEM_CFOP,
+  /// FORA_DA_FAIXA_DE_VENDA. Nulo quando conta.
+  motivoExclusao String? @map("motivo_exclusao")
+
+  /// Pede olho humano. Hoje só no CFOP misto, onde resolver por chute erraria o
+  /// número nos dois sentidos possíveis.
+  precisaConferencia Boolean @default(false) @map("precisa_conferencia")
+
+  canceladoEm               DateTime? @map("cancelado_em")
+  justificativaCancelamento String?   @map("justificativa_cancelamento")
+
+  /// Número do pedido no marketplace.
+  ///
+  /// Vem do NOME DO ARQUIVO (`<order_id>_<chave>-procNFe.xml`), padrão do
+  /// exportador do Mercado Livre — 461 de 461 arquivos na base. É a única ponte
+  /// entre documento fiscal e venda de marketplace que existe no banco.
+  pedidoMarketplace String? @map("pedido_marketplace")
+
+  /// Caminho relativo dentro de UPLOAD_DIR: `xml/<cnpj>/<AAAA-MM>/<chave>.xml`.
+  ///
+  /// Derivável da chave, mas guardado: se a regra de nomes mudar, o arquivo
+  /// antigo continua sendo encontrado.
+  arquivo      String @unique
+  arquivoBytes Int    @map("arquivo_bytes")
+  /// SHA-256 do conteúdo. Mesma chave com hash diferente é XML editado, e isso
+  /// precisa aparecer em vez de passar como duplicata inofensiva.
+  arquivoHash String @map("arquivo_hash") @db.VarChar(64)
+
+  /// Autoria congelada, padrão do bloco (ver TarefaAnexo/TarefaLog).
+  importadoPorId   String   @map("importado_por_id")
+  importadoPorNome String   @map("importado_por_nome")
+  importadoEm      DateTime @default(now()) @map("importado_em")
+
+  importacaoId String? @map("importacao_id")
+
+  /// Versão da regra que classificou esta linha.
+  ///
+  /// Permite reclassificar em lote quando a regra mudar (`versaoRegra <` a atual),
+  /// sem reimportar XML que ninguém tem mais. Mesmo mecanismo do
+  /// PRAZO_ORIGEM_AUSENTE versionado da Expedição.
+  versaoRegra Int @default(1) @map("versao_regra")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  empresa    Empresa?       @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  importacao ImportacaoXml? @relation(fields: [importacaoId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, ano, mes])
+  @@index([empresaId, contaFaturamento, ano, mes])
+  @@index([cnpjEmitente, ano, mes])
+  @@index([situacao])
+  @@index([emitidoEm])
+  @@index([versaoRegra])
+  @@index([pedidoMarketplace])
+  @@index([importacaoId])
+  @@index([precisaConferencia])
+  @@map("documento_fiscal")
+}
+
+/// Faturamento de uma empresa numa competência.
+///
+/// EXISTE SEPARADO da soma dos documentos, e não é view, por dois motivos que
+/// view nenhuma resolve:
+///
+///   (a) o valor pode ser DIGITADO — mês anterior à adoção do sistema, receita
+///       sem nota, empresa de serviço antes de a NFS-e entrar;
+///   (b) o valor usado numa declaração assinada tem de ficar CONGELADO. Somar
+///       documento em tempo de consulta faria a declaração de janeiro mudar de
+///       valor quando alguém importasse um XML atrasado de janeiro.
+model FaturamentoMensal {
+  id        String @id @default(cuid())
+  empresaId String @map("empresa_id")
+  ano       Int
+  mes       Int
+
+  /// XML (somado dos documentos) | MANUAL (digitado) | MISTO
+  origem String @default("XML")
+
+  /// O valor que vale. Em MANUAL é o digitado; em XML é a soma apurada.
+  valor Decimal @db.Decimal(14, 2)
+
+  /// A soma apurada dos documentos, SEMPRE preenchida quando há documento —
+  /// inclusive com `origem = MANUAL`. É o que permite a tela mostrar "digitado
+  /// R$ 50.000, XML soma R$ 47.320" em vez de esconder a divergência.
+  valorApurado Decimal? @map("valor_apurado") @db.Decimal(14, 2)
+
+  /// Quantos documentos entraram na soma. Zero com valor > 0 é o caso manual.
+  documentos Int       @default(0)
+  apuradoEm  DateTime? @map("apurado_em")
+
+  /// Obrigatória quando `origem` != XML ou quando o valor difere do apurado.
+  /// Sem isto, ninguém sabe depois por que o número era outro.
+  observacao String?
+
+  /// Congelamento. Depois de entrar numa declaração emitida, o valor não muda
+  /// mais por reapuração. Precedente direto de `TarefaApuracao.concluidaEm`:
+  /// encerrar congela o valor entregue.
+  congeladoEm  DateTime? @map("congelado_em")
+  congeladoPor String?   @map("congelado_por")
+
+  definidoPorId   String @map("definido_por_id")
+  definidoPorNome String @map("definido_por_nome")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  /// Espelha `empresa_competencia` de TarefaApuracao de propósito: é a mesma
+  /// linguagem de competência do módulo. E NÃO há FK para TarefaApuracao —
+  /// aquela tabela cascateia, e faturamento sobrevive à competência (mês anterior
+  /// à adoção do sistema não tem TarefaApuracao nenhuma).
+  @@unique([empresaId, ano, mes], name: "empresa_competencia_faturamento")
+  @@index([empresaId, ano, mes])
+  @@index([origem])
+  @@index([congeladoEm])
+  @@map("faturamento_mensal")
+}
+
+/// Uma sessão de importação de XML.
+///
+/// Existe para a pergunta "o que entrou naquele dia, e o que foi recusado?" ter
+/// resposta depois de a tela fechar. Sem ela o relatório por arquivo morre junto
+/// com a resposta HTTP.
+model ImportacaoXml {
+  id String @id @default(cuid())
+
+  /// Nulo quando o lote traz CNPJ de mais de uma empresa (pasta misturada).
+  empresaId String? @map("empresa_id")
+
+  arquivosEnviados Int @map("arquivos_enviados")
+  importados       Int @default(0)
+  duplicados       Int @default(0)
+  ignorados        Int @default(0)
+  comErro          Int @default(0)
+
+  /// Relatório por arquivo: [{ arquivo, resultado, motivo, chave }].
+  /// JSON e não tabela filha: é lido inteiro, uma vez, como o `dados` de
+  /// FormularioAbertura.
+  relatorio Json?
+
+  /// CONCLUIDA | INTERROMPIDA (estourou o orçamento de arquivos da rodada)
+  situacao String @default("CONCLUIDA")
+
+  importadoPorId   String   @map("importado_por_id")
+  importadoPorNome String   @map("importado_por_nome")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  empresa    Empresa?          @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  documentos DocumentoFiscal[]
+
+  @@index([empresaId, createdAt])
+  @@index([createdAt])
+  @@map("importacao_xml")
+}
+
+/// Mapa série da nota -> canal de venda.
+///
+/// POR QUE ISTO EXISTE: a NF-e não tem campo de marketplace. Nenhum. O canal
+/// ("veio do Mercado Livre", "veio da Shopee") não é dado da nota — é
+/// convenção do emissor, que costuma reservar uma série por canal. Na base
+/// analisada 100% das notas são série 2.
+///
+/// Sem esta tabela, a única forma de mostrar canal na tela seria adivinhar pelo
+/// nome do arquivo ou pelo CFOP, e as duas erram em silêncio. Com ela, o
+/// escritório declara a convenção e a tela mostra um dado que alguém afirmou, não
+/// que o sistema deduziu.
+///
+/// Por EMPRESA, não global: cada cliente numera as séries como quiser, e série 2
+/// de um não tem relação com série 2 do outro.
+model EmpresaSerieCanal {
+  id        String @id @default(cuid())
+  empresaId String @map("empresa_id")
+
+  /// Série da nota, como aparece no XML (sem zero à esquerda: "2", não "002").
+  serie String @db.VarChar(3)
+
+  /// ML, SHOPEE, TIKTOK, SITE, OUTRO. Constantes em src/lib/faturamento-canais.ts.
+  canal String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  /// Uma série aponta para um canal só. Duas linhas para a mesma série faria a
+  /// mesma nota ser contada em dois canais.
+  @@unique([empresaId, serie], name: "empresa_serie")
+  @@index([empresaId])
+  @@map("empresa_serie_canal")
 }

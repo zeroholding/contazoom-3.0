@@ -109,6 +109,16 @@ export const apiPost = <T>(url: string, dados?: unknown) =>
 export const apiPatch = <T>(url: string, dados?: unknown) =>
   comCorpo<T>("PATCH", url, dados);
 
+/**
+ * PUT: substituição do recurso inteiro.
+ *
+ * Usado pela apuração fiscal, onde a semântica é essa mesma — definir o valor da
+ * competência e substituir o mapa de séries são operações que mandam o estado
+ * final, não um delta. PATCH ali daria a entender que campo omitido é preservado.
+ */
+export const apiPut = <T>(url: string, dados?: unknown) =>
+  comCorpo<T>("PUT", url, dados);
+
 export const apiDelete = <T>(url: string, dados?: unknown) =>
   comCorpo<T>("DELETE", url, dados);
 

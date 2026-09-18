@@ -784,12 +784,12 @@ Predicados novos: `podeDefinirFaturamento`, `podeEmitirDeclaracao`.
 | Fase | Entrega | Verificável sem banco? |
 |---|---|---|
 | **0** ✅ | `scripts/diagnostico-xml.ts` — **feito**, resultado na seção 12 | Sim, é só leitura de arquivo |
-| **1** | Parser puro (`src/lib/nfe-xml.ts`): bytes → objeto tipado | **Sim**, com XML fixo em `scripts/teste-nfe-xml.ts` |
-| **2** | Classificador (`src/lib/faturamento-regras.ts`): documento → conta/não conta | **Sim**, função pura |
-| **3** | Migration + model | Não |
-| **4** | Rota de importação + gravação em disco | Não |
-| **5** | Apuração mensal + reapuração em lote | Não |
-| **6** | Faturamento manual + congelamento | Não |
+| **1** ✅ | Parser puro (`src/lib/nfe-xml.ts`): bytes → objeto tipado | **Sim**, `scripts/teste-nfe-xml.ts` (76 asserções) |
+| **2** ✅ | Classificador (`src/lib/faturamento-regras.ts`): documento → conta/não conta | **Sim**, função pura, no mesmo teste |
+| **3** ✅ | Migration + model (`20260918120000_apuracao_fiscal_xml`) | Não |
+| **4** ✅ | Rota de importação + gravação em disco | Não |
+| **5** ✅ | Apuração mensal (`apurarCompetencia`) | Não |
+| **6** ◐ | Faturamento manual (feito) + congelamento (coluna existe, sem rota que congele) | Não |
 | **7** | Declaração 12 meses | Não |
 | **8** | NFS-e (layout nacional) | Fase 1 e 2 de novo, para o outro layout |
 
@@ -949,6 +949,70 @@ folgado por duas ordens de grandeza.
 > `XML/` foi acrescentado ao `.gitignore` nesta mesma passada. A pasta tinha 822
 > notas fiscais reais, com CNPJ e endereço do cliente e o CPF de 329 compradores,
 > **sem estar ignorada**, num repositório com remoto no GitHub.
+
+---
+
+---
+
+## 13. O que foi implementado, e onde divergiu deste plano
+
+Fases 1 a 6 entregues. A tela `/admin/tarefas/faturamento` deixou de ser maquete:
+importa, lista, apura e salva.
+
+**Arquivos novos**
+
+| Arquivo | O que é |
+|---|---|
+| `src/lib/nfe-xml.ts` | Parser: bytes → objeto tipado |
+| `src/lib/faturamento-regras.ts` | Classificador: documento → conta/não conta + motivo |
+| `src/lib/faturamento-canais.ts` | Vocabulário de canal (sem imports, serve aos dois lados) |
+| `src/lib/fiscal-xml-disco.ts` | Onde o XML mora |
+| `src/lib/fiscal-xml-import.ts` | Pipeline de importação e `apurarCompetencia` |
+| `src/lib/faturamento-consulta.ts` | Consultas que as rotas de leitura compartilham |
+| `scripts/teste-nfe-xml.ts` | 76 asserções, sem banco |
+| `prisma/migrations/20260918120000_apuracao_fiscal_xml/` | 4 tabelas |
+
+**Rotas:** `POST /api/fiscal/xml/importar`, `GET /api/fiscal/xml`,
+`GET /api/fiscal/xml/[id]`, `GET|PUT /api/fiscal/faturamento`,
+`GET|PUT /api/fiscal/series`.
+
+### 13.1 Três divergências deste documento, com motivo
+
+**1. O parser NÃO usa `fast-xml-parser`.** A seção 5.2 propunha a biblioteca com
+defesa em três camadas. Depois da Fase 0 a conclusão mudou, por evidência: o módulo
+precisa de doze tags, a biblioteca acumulou em 2026 uma família de CVEs de expansão
+de entidade e exaustão de pilha, o container não declara limite de memória, e a
+extração por tag rodou contra 822 arquivos reais com a chave batendo em 100% das 458
+notas. Extração por tag também é tolerante a tag desconhecida de graça — que é
+requisito, porque os grupos IBS/CBS já estão na base. Dependência a menos, superfície
+de ataque a menos.
+
+**2. Existe uma tabela que este plano não previu: `empresa_serie_canal`.** O
+documento não menciona a palavra "canal" uma única vez, mas a maquete agrupa
+faturamento por canal de venda — e a NF-e **não tem campo de marketplace**. Sem
+declarar a convenção série → canal, a única alternativa seria deduzir do nome do
+arquivo ou do CFOP, que erram em silêncio. A tabela é por empresa, porque cada
+cliente numera série como quer.
+
+**3. `cnpjDestinatario` virou `documentoDestinatario` + `tipoDocumentoDestinatario`.**
+Já estava previsto no achado 12.4.1 e foi aplicado: 71,8% dos destinatários são CPF.
+
+### 13.2 Limitações conhecidas, e não disfarçadas
+
+- **Cancelamento de nota ausente não fica pendente.** As notas do mesmo lote são
+  processadas antes dos eventos, então a pasta que traz os dois juntos funciona. Um
+  evento importado sozinho, sem a nota, é relatado como ignorado com a instrução de
+  reenviar depois — não existe fila de eventos órfãos.
+- **Congelamento não tem rota que congele.** A coluna existe e é respeitada
+  (reapuração não sobrescreve, `PUT` recusa com 409), mas quem congela será a
+  emissão da declaração, na Fase 7.
+- **Reclassificação em lote não existe ainda.** `versaoRegra` é gravada em toda
+  linha, que é o que torna a reclassificação possível; a rotina que varre
+  `versaoRegra < atual` é da Fase 7.
+- **Nada foi executado contra banco.** Verificação feita: `prisma validate`,
+  `prisma generate`, `tsc`, `eslint`, `next build` e as 76 asserções do parser e do
+  classificador. A migration **não foi aplicada** — ela roda no deploy, por
+  `scripts/build.js`.
 
 ---
 
