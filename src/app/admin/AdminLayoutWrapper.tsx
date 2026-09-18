@@ -457,15 +457,36 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
     : "Recolher o menu lateral";
 
   return (
+    // `fixed inset-0` E NÃO `h-screen`. É o que acaba com o SCROLL DUPLO do
+    // admin, e a diferença é sutil:
+    //
+    // `h-screen` é 100vh de altura, mas o bloco continua NO FLUXO do documento —
+    // ele contribui para a altura do `<body>`. E `globals.css` tem
+    // `html, body { overflow-x: hidden }`; pela especificação, `overflow` diferente
+    // de `visible` num eixo faz o OUTRO eixo computar para `auto`, então html e
+    // body viram containers de rolagem. Bastava 1px de sobra em qualquer lugar
+    // (borda, sombra, margem de um filho) para aparecer uma segunda barra vertical
+    // ao lado da do `<main>` — e, com a página rolada, a faixa escura do fundo do
+    // navegador embaixo do app.
+    //
+    // Com `fixed inset-0` o app sai do fluxo e passa a medir exatamente a janela.
+    // A altura do documento vira zero: não existe o que rolar fora do `<main>`.
+    //
+    // A sidebar continua `fixed inset-y-0 left-0`: dentro de um ancestral `fixed`
+    // ela resolve contra a caixa dele, que é a janela — mesmo resultado de antes.
     <div
       ref={containerRef}
-      className="cz-admin flex h-screen bg-[var(--cz-fundo)] font-sans"
+      className="cz-admin fixed inset-0 flex bg-[var(--cz-fundo)] font-sans"
     >
       <AdminSidebar collapsed={isSidebarCollapsed} />
 
       {/* A sidebar aparece em `md`, então a margem do conteúdo tem de começar em
           `md` também — em `lg` ela cobria o conteúdo entre 768px e 1024px. */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden md:ml-[var(--sidebar-w)] transition-all duration-200">
+      {/* `h-full` e não `h-screen`: agora a casca é `fixed inset-0` e já mede a
+          janela, então a coluna do conteúdo tem de seguir o PAI. Continuar em
+          100vh aqui daria o mesmo número hoje e passaria a divergir no instante em
+          que a casca ganhasse qualquer recuo. */}
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden transition-all duration-200 md:ml-[var(--sidebar-w)]">
         <header
           className={`z-20 flex h-[4.5rem] shrink-0 items-center justify-between gap-3 border-b border-[var(--cz-hairline)] bg-[var(--cz-superficie)] px-4 transition-shadow duration-200 sm:px-6 ${
             rolado ? "shadow-[var(--cz-elev-2)]" : "shadow-none"
@@ -506,10 +527,18 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
           </div>
         </header>
 
+        {/* `overflow-y-auto overflow-x-hidden`, e não `overflow-auto`.
+            `overflow-auto` vale para os DOIS eixos: qualquer conteúdo um pixel mais
+            largo (uma tabela, um painel com largura mínima) abria uma barra
+            HORIZONTAL no pé do conteúdo, e uma vertical + uma horizontal é o
+            "scroll duplo" que se vê na tela.
+            Aqui o eixo horizontal é cortado, e quem precisa de rolagem lateral —
+            só a tabela de notas — carrega o próprio `overflow-x-auto`, contido no
+            painel dela. */}
         <main
           ref={conteudoRef}
           onScroll={aoRolarConteudo}
-          className="cz-rolagem flex-1 overflow-auto"
+          className="cz-rolagem min-w-0 flex-1 overflow-y-auto overflow-x-hidden"
         >
           {children}
         </main>

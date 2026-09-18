@@ -1307,6 +1307,21 @@ select.error {
         display: none !important;
     }
 
+    /* A casca do admin e `position: fixed` na tela, para o app medir a janela e
+       existir UMA barra de rolagem so — ver o comentario em AdminLayoutWrapper.
+       Elemento fixo imprime uma vez, na primeira folha, e cortaria qualquer lista
+       maior que uma pagina. No papel ele volta a ser bloco normal, sem altura
+       travada e sem recorte. */
+    .cz-admin {
+        position: static !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    .cz-admin main {
+        overflow: visible !important;
+    }
+
     /* A barra lateral e o topo são posicionados; some com eles e devolve a
        margem, senão a tabela imprime deslocada 16rem para a direita. */
     aside,
