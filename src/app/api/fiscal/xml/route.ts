@@ -14,7 +14,11 @@ import { requireInterno } from "@/lib/api-guard";
 import prisma from "@/lib/prisma";
 import { carregarMapaSerieCanal, resolverCanal } from "@/lib/faturamento-consulta";
 import { SEM_SERIE_MAPEADA, ehCanalValido, normalizarSerie } from "@/lib/faturamento-canais";
-import { MOTIVO_EXCLUSAO_LABEL, type MotivoExclusao } from "@/lib/faturamento-regras";
+import {
+  MOTIVO_EXCLUSAO,
+  MOTIVO_EXCLUSAO_LABEL,
+  type MotivoExclusao,
+} from "@/lib/faturamento-regras";
 import { parseCompetencia } from "@/lib/tarefa-status";
 
 export const runtime = "nodejs";
@@ -59,11 +63,25 @@ export async function GET(req: NextRequest) {
   }
 
   const contaParam = texto(searchParams.get("conta"));
+  const motivoExclusao = texto(searchParams.get("motivoExclusao"));
+  if (
+    motivoExclusao &&
+    !(Object.values(MOTIVO_EXCLUSAO) as string[]).includes(motivoExclusao)
+  ) {
+    return erro("Motivo de exclusão inválido.", 400, "MOTIVO_INVALIDO");
+  }
   const busca = texto(searchParams.get("busca"));
 
-  const page = Math.max(1, Number(searchParams.get("page")) || 1);
-  const limitBruto = Number(searchParams.get("limit")) || LIMITE_PADRAO;
-  const limit = Math.min(LIMITE_MAXIMO, Math.max(1, limitBruto));
+  const pageRaw = Number(searchParams.get("page") ?? 1);
+  const limitRaw = Number(searchParams.get("limit") ?? LIMITE_PADRAO);
+  if (!Number.isInteger(pageRaw) || pageRaw < 1) {
+    return erro("Página inválida.", 400, "PAGINA_INVALIDA");
+  }
+  if (!Number.isInteger(limitRaw) || limitRaw < 1) {
+    return erro("Limite inválido.", 400, "LIMITE_INVALIDO");
+  }
+  const page = pageRaw;
+  const limit = Math.min(LIMITE_MAXIMO, limitRaw);
   const skip = (page - 1) * limit;
 
   const mapa = await carregarMapaSerieCanal(empresaId);
@@ -77,6 +95,7 @@ export async function GET(req: NextRequest) {
   if (situacao) where.situacao = situacao;
   if (contaParam === "sim") where.contaFaturamento = true;
   if (contaParam === "nao") where.contaFaturamento = false;
+  if (motivoExclusao) where.motivoExclusao = motivoExclusao;
   if (texto(searchParams.get("conferencia")) === "sim") where.precisaConferencia = true;
 
   /*

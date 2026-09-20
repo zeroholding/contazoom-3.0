@@ -1355,4 +1355,29 @@ select.error {
     .cz-imprimir-fila {
         overflow: visible !important;
     }
+
+    /* Declaração de faturamento: é um snapshot próprio, não a tela mensal. */
+    .cz-declaracao-pagina {
+        max-width: none !important;
+        padding: 0 !important;
+    }
+
+    .cz-declaracao-imprimir {
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        color: #0f172a !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .cz-declaracao-imprimir table {
+        width: 100% !important;
+    }
+
+    .cz-declaracao-imprimir footer {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
 }

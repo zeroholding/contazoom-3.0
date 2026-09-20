@@ -51,6 +51,20 @@ services:
       - "traefik.http.routers.contazoom.tls.certresolver=letsencrypt"
       - "traefik.http.services.contazoom.loadbalancer.server.port=3000"
 
+      # Rota específica do upload fiscal. O middleware Buffering recusa com 413
+      # ANTES de o Next executar request.formData() e materializar o multipart na
+      # heap. A API repete o mesmo teto depois do parse: proxy é a primeira
+      # barreira, aplicação é a segunda.
+      # https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/buffering/
+      - "traefik.http.routers.contazoom-fiscal-upload.entrypoints=https"
+      - "traefik.http.routers.contazoom-fiscal-upload.rule=(Host(`contazoom.com.br`) || Host(`app.contazoom.com.br`)) && Path(`/api/fiscal/xml/importar`)"
+      - "traefik.http.routers.contazoom-fiscal-upload.priority=100"
+      - "traefik.http.routers.contazoom-fiscal-upload.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.contazoom-fiscal-upload.service=contazoom"
+      - "traefik.http.routers.contazoom-fiscal-upload.middlewares=contazoom-fiscal-body"
+      - "traefik.http.middlewares.contazoom-fiscal-body.buffering.maxRequestBodyBytes=33554432"
+      - "traefik.http.middlewares.contazoom-fiscal-body.buffering.memRequestBodyBytes=4194304"
+
   postgres:
     image: postgres:17.6-alpine3.21
     restart: always

@@ -24,8 +24,14 @@
 
 import { join } from "path";
 
-/** `<cnpj>/<AAAA-MM>/<chave>.xml` — o formato exato que este módulo grava. */
-const FORMATO_RELATIVO = /^\d{14}\/\d{4}-\d{2}\/\d{44}\.xml$/;
+/** `<cnpj>/<AAAA-MM>/<chave>.xml` — nota. */
+const FORMATO_NOTA = /^\d{14}\/\d{4}-\d{2}\/\d{44}\.xml$/;
+/** `<cnpj>/<AAAA-MM>/ignorados/<chave>.xml` — CT-e/outro modelo. */
+const FORMATO_IGNORADO =
+  /^\d{14}\/\d{4}-\d{2}\/ignorados\/\d{44}\.xml$/;
+/** `<cnpj>/<AAAA-MM>/eventos/<chave>-evento-<tipo>-<seq>.xml` — evento. */
+const FORMATO_EVENTO =
+  /^\d{14}\/\d{4}-\d{2}\/eventos\/\d{44}-evento-\d{6}-\d+\.xml$/;
 
 /**
  * Diretório raiz dos XML fiscais.
@@ -57,6 +63,33 @@ export function caminhoRelativoDoXml(
   return `${cnpjEmitente}/${competencia}/${chave}.xml`;
 }
 
+export function caminhoRelativoDoIgnorado(
+  cnpjEmpresa: string,
+  ano: number,
+  mes: number,
+  chave: string,
+): string {
+  const competencia = `${ano}-${String(mes).padStart(2, "0")}`;
+  return `${cnpjEmpresa}/${competencia}/ignorados/${chave}.xml`;
+}
+
+/**
+ * Evento fica ao lado da competência que a CHAVE carrega, em subpasta própria.
+ * Não depende de a nota já existir: esse é justamente o caso que a persistência
+ * de evento pendente resolve.
+ */
+export function caminhoRelativoDoEvento(
+  cnpjEmitente: string,
+  ano: number,
+  mes: number,
+  chave: string,
+  tipoEvento: string,
+  sequencia: number,
+): string {
+  const competencia = `${ano}-${String(mes).padStart(2, "0")}`;
+  return `${cnpjEmitente}/${competencia}/eventos/${chave}-evento-${tipoEvento}-${sequencia}.xml`;
+}
+
 /**
  * Caminho absoluto, recusando qualquer coisa fora do formato esperado.
  *
@@ -71,6 +104,13 @@ export function caminhoRelativoDoXml(
  * pode ter sido gravada por uma versão anterior do código.
  */
 export function caminhoAbsolutoDoXml(relativo: string): string | null {
-  if (!relativo || !FORMATO_RELATIVO.test(relativo)) return null;
+  if (
+    !relativo ||
+    (!FORMATO_NOTA.test(relativo) &&
+      !FORMATO_EVENTO.test(relativo) &&
+      !FORMATO_IGNORADO.test(relativo))
+  ) {
+    return null;
+  }
   return join(diretorioXmlFiscal(), ...relativo.split("/"));
 }

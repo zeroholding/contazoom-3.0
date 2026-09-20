@@ -16,9 +16,11 @@
 import {
   ErroXmlFiscal,
   TAMANHO_MAXIMO_XML,
+  chaveDeAcessoValida,
   decomporChave,
+  eventoFoiRegistrado,
   extrairPedidoDoNome,
-  lerXmlFiscal,
+  lerXmlFiscal as lerXmlFiscalReal,
   type NotaFiscalLida,
 } from "../src/lib/nfe-xml";
 import {
@@ -27,6 +29,10 @@ import {
   ehCfopDeVenda,
   type EntradaClassificacao,
 } from "../src/lib/faturamento-regras";
+
+/** Fixtures são sintéticos e não possuem chave privada para gerar XMLDSig. */
+const lerXmlFiscal: typeof lerXmlFiscalReal = (bytes, nome) =>
+  lerXmlFiscalReal(bytes, nome, { validarAssinatura: false });
 
 /* ------------------------------- Infra mínima ----------------------------- */
 
@@ -63,7 +69,7 @@ function montarChave(opcoes: {
   numero?: string;
   aamm?: string;
 } = {}): string {
-  return (
+  const semDv =
     "41" +
     (opcoes.aamm ?? "2608") +
     (opcoes.cnpj ?? CNPJ_EMITENTE) +
@@ -71,9 +77,17 @@ function montarChave(opcoes: {
     (opcoes.serie ?? "002") +
     (opcoes.numero ?? "000007786") +
     "1" +
-    "12345678" +
-    "0"
-  );
+    "12345678";
+
+  let soma = 0;
+  let peso = 2;
+  for (let indice = semDv.length - 1; indice >= 0; indice -= 1) {
+    soma += Number(semDv[indice]) * peso;
+    peso = peso === 9 ? 2 : peso + 1;
+  }
+  const candidato = 11 - (soma % 11);
+  const dv = candidato === 10 || candidato === 11 ? 0 : candidato;
+  return `${semDv}${dv}`;
 }
 
 const CHAVE_PADRAO = montarChave();
@@ -89,6 +103,7 @@ type OpcoesNota = {
   cStat?: string;
   cfops?: string[];
   cnpjEmitente?: string;
+  emissao?: string;
   destinatario?: { tipo: "CPF" | "CNPJ"; documento: string } | null;
   encoding?: string;
   comNFref?: boolean;
@@ -128,7 +143,7 @@ function montarNotaXml(opcoes: OpcoesNota = {}): Buffer {
         <mod>${opcoes.modelo ?? "55"}</mod>
         <serie>${opcoes.serie ?? "2"}</serie>
         <nNF>${opcoes.numero ?? "7786"}</nNF>
-        <dhEmi>2026-08-01T09:15:00-03:00</dhEmi>
+        <dhEmi>${opcoes.emissao ?? "2026-08-01T09:15:00-03:00"}</dhEmi>
         <tpNF>${opcoes.tpNF ?? "1"}</tpNF>
         <tpAmb>${opcoes.tpAmb ?? "1"}</tpAmb>
         <finNFe>${opcoes.finNFe ?? "1"}</finNFe>
@@ -182,6 +197,9 @@ function montarEventoCancelamentoXml(chave = CHAVE_PADRAO): Buffer {
 <procEventoNFe versao="1.00">
   <evento versao="1.00">
     <infEvento Id="ID1101114126081234567890">
+      <tpAmb>1</tpAmb>
+      <CNPJ>${CNPJ_EMITENTE}</CNPJ>
+      <dhEvento>2026-08-03T10:55:00-03:00</dhEvento>
       <chNFe>${chave}</chNFe>
       <tpEvento>110111</tpEvento>
       <nSeqEvento>1</nSeqEvento>
@@ -193,6 +211,10 @@ function montarEventoCancelamentoXml(chave = CHAVE_PADRAO): Buffer {
   </evento>
   <retEvento versao="1.00">
     <infEvento>
+      <tpAmb>1</tpAmb>
+      <chNFe>${chave}</chNFe>
+      <tpEvento>110111</tpEvento>
+      <nSeqEvento>1</nSeqEvento>
       <cStat>135</cStat>
       <dhRegEvento>2026-08-03T11:00:00-03:00</dhRegEvento>
     </infEvento>
@@ -247,12 +269,17 @@ console.log("\n1) Chave de acesso");
 
 const decomposta = decomporChave(CHAVE_PADRAO);
 check("a chave montada tem 44 dígitos", CHAVE_PADRAO.length === 44, `${CHAVE_PADRAO.length}`);
+check("o dígito verificador da chave é válido", chaveDeAcessoValida(CHAVE_PADRAO));
 check("decompõe o CNPJ", decomposta?.cnpj === CNPJ_EMITENTE, decomposta?.cnpj);
 check("decompõe o modelo", decomposta?.modelo === "55", decomposta?.modelo);
 check("decompõe a série como número", decomposta?.serie === 2, String(decomposta?.serie));
 check("decompõe o número como número", decomposta?.numero === 7786, String(decomposta?.numero));
 check("decompõe a competência", decomposta?.ano === 2026 && decomposta?.mes === 8);
 check("recusa chave curta", decomporChave("123") === null);
+check(
+  "recusa chave de 44 dígitos com DV alterado",
+  !chaveDeAcessoValida(`${CHAVE_PADRAO.slice(0, -1)}${CHAVE_PADRAO.endsWith("9") ? "0" : "9"}`),
+);
 
 console.log("\n2) Leitura de NF-e");
 
@@ -298,6 +325,14 @@ check(
   (lerXmlFiscal(montarNotaXml({ encoding: "ISO-8859-1" })) as NotaFiscalLida).nomeEmitente === "NEXUS GROUP LTDA",
 );
 check("detecta NFref quando existe", (lerXmlFiscal(montarNotaXml({ comNFref: true })) as NotaFiscalLida).referenciaOutraNota === true);
+const viradaUtc = lerXmlFiscal(
+  montarNotaXml({ emissao: "2026-08-31T23:30:00-03:00" }),
+) as NotaFiscalLida;
+check(
+  "competência usa a data civil, mesmo quando o instante UTC cai no mês seguinte",
+  viradaUtc.ano === 2026 && viradaUtc.mes === 8 && viradaUtc.competencia === "2026-08",
+  `${viradaUtc.competencia} / ${viradaUtc.emitidoEm.toISOString()}`,
+);
 check("nota sem destinatário não quebra", (lerXmlFiscal(montarNotaXml({ destinatario: null })) as NotaFiscalLida).documentoDestinatario === null);
 check("pedido é null quando o nome não tem prefixo", extrairPedidoDoNome("nota.xml") === null);
 check("pedido é null quando o prefixo tem letra", extrairPedidoDoNome(`ABC123_${CHAVE_PADRAO}-procNFe.xml`) === null);
@@ -331,6 +366,24 @@ check(
   "recusa CNPJ divergente da chave",
   codigoDoErro(() => lerXmlFiscal(montarNotaXml({ cnpjEmitente: CNPJ_OUTRO }))) === "XML_DIVERGENTE",
 );
+check(
+  "recusa competência da emissão divergente da chave",
+  codigoDoErro(() =>
+    lerXmlFiscal(montarNotaXml({ emissao: "2026-09-01T00:01:00-03:00" })),
+  ) === "XML_DIVERGENTE",
+);
+check(
+  "recusa tpAmb ausente em vez de assumir produção",
+  codigoDoErro(() => lerXmlFiscal(montarNotaXml({ tpAmb: "" }))) === "DADO_FISCAL_INVALIDO",
+);
+check(
+  "recusa tpNF ausente em vez de assumir saída",
+  codigoDoErro(() => lerXmlFiscal(montarNotaXml({ tpNF: "" }))) === "DADO_FISCAL_INVALIDO",
+);
+check(
+  "recusa finNFe ausente em vez de assumir normal",
+  codigoDoErro(() => lerXmlFiscal(montarNotaXml({ finNFe: "" }))) === "DADO_FISCAL_INVALIDO",
+);
 
 console.log("\n5) Evento de cancelamento");
 
@@ -339,9 +392,12 @@ check("reconhece como evento", evento.tipo === "EVENTO", evento.tipo);
 if (evento.tipo === "EVENTO") {
   check("aponta a chave da nota cancelada", evento.chave === CHAVE_PADRAO);
   check("identifica o tipo 110111", evento.tipoEvento === "110111");
+  check("monta/lê uma identidade estável", evento.eventoId.length > 0);
   check("marca como cancelamento", evento.ehCancelamento === true);
   check("lê a justificativa", (evento.justificativa ?? "").startsWith("Pedido cancelado"));
   check("lê o status do registro", evento.statusSefaz === "135");
+  check("aceita cStat 155 (cancelamento homologado fora de prazo)", eventoFoiRegistrado("155"));
+  check("rejeita status que não confirma registro", !eventoFoiRegistrado("573"));
   check("lê a data do registro", evento.registradoEm !== null);
 }
 

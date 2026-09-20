@@ -88,6 +88,7 @@ export const MOTIVO_EXCLUSAO = {
   CFOP_MISTO: "CFOP_MISTO",
   SEM_CFOP: "SEM_CFOP",
   FORA_DA_FAIXA_DE_VENDA: "FORA_DA_FAIXA_DE_VENDA",
+  ASSINATURA_NAO_VALIDADA: "ASSINATURA_NAO_VALIDADA",
 } as const;
 
 export type MotivoExclusao = (typeof MOTIVO_EXCLUSAO)[keyof typeof MOTIVO_EXCLUSAO];
@@ -112,6 +113,7 @@ export const MOTIVO_EXCLUSAO_LABEL: Record<MotivoExclusao, string> = {
   CFOP_MISTO: "Itens de venda e de movimentação na mesma nota: precisa de conferência",
   SEM_CFOP: "Sem CFOP nos itens: não há como classificar a operação",
   FORA_DA_FAIXA_DE_VENDA: "Movimentação de estoque, remessa ou retorno, não venda",
+  ASSINATURA_NAO_VALIDADA: "XML ainda não validado pela assinatura digital; reimporte o arquivo",
 };
 
 /** Motivos que impedem a importação, em vez de só excluir da soma. */

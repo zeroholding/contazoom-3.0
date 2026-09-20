@@ -13,7 +13,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { readFile, stat } from "fs/promises";
+import { createHash } from "crypto";
+import { readFile } from "fs/promises";
 import { requireInterno } from "@/lib/api-guard";
 import prisma from "@/lib/prisma";
 import { caminhoAbsolutoDoXml } from "@/lib/fiscal-xml-disco";
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const documento = await prisma.documentoFiscal.findUnique({
     where: { id },
-    select: { chave: true, arquivo: true, arquivoBytes: true },
+    select: { chave: true, arquivo: true, arquivoBytes: true, arquivoHash: true },
   });
   if (!documento) {
     return erro("Documento não encontrado.", 404, "NAO_ENCONTRADO");
@@ -45,8 +46,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     return erro("Caminho do arquivo é inválido.", 400, "ARQUIVO_INVALIDO");
   }
 
+  let conteudo: Buffer;
   try {
-    await stat(caminho);
+    // Uma leitura só: `stat` seguido de `readFile` tinha janela em que o arquivo
+    // podia sumir entre as duas chamadas e virar 500.
+    conteudo = await readFile(caminho);
   } catch {
     /*
      * 410 e não 404: o REGISTRO existe, o arquivo se perdeu.
@@ -62,7 +66,24 @@ export async function GET(req: NextRequest, { params }: Params) {
     );
   }
 
-  const conteudo = await readFile(caminho);
+  /*
+   * O XML é chamado de "prova" do número, então é conferido NO DOWNLOAD, não só
+   * na entrada. Volume pode corromper, alguém pode substituir arquivo à mão e
+   * backup pode restaurar versão errada. Entregar bytes diferentes como original
+   * seria pior que falhar: daria aparência de evidência a um documento adulterado.
+   */
+  const hash = createHash("sha256").update(conteudo).digest("hex");
+  if (conteudo.length !== documento.arquivoBytes || hash !== documento.arquivoHash) {
+    console.error(
+      `[FISCAL] Integridade do XML ${documento.chave} falhou: ` +
+        `bytes ${conteudo.length}/${documento.arquivoBytes}, hash ${hash}/${documento.arquivoHash}`,
+    );
+    return erro(
+      "O arquivo armazenado não confere com o original importado. O download foi bloqueado.",
+      409,
+      "ARQUIVO_CORROMPIDO",
+    );
+  }
 
   return new NextResponse(new Uint8Array(conteudo), {
     headers: {

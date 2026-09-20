@@ -31,8 +31,13 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-/** Teto por arquivo. NF-e tem 5–15 KB; nota com 500 itens chega a centenas de KB. */
-export const TAMANHO_MAXIMO_XML = 1024 * 1024;
+import {
+  verificarAssinaturaXml,
+  type ResultadoAssinaturaXml,
+} from "./xml-assinatura";
+import { TAMANHO_MAXIMO_XML } from "./fiscal-limites";
+
+export { TAMANHO_MAXIMO_XML } from "./fiscal-limites";
 
 /** Modelos que este módulo sabe apurar. 13 (NFS-e nacional) entra na Fase 3. */
 export const MODELOS_SUPORTADOS = ["55", "65"] as const;
@@ -41,6 +46,15 @@ export const MODELOS_SUPORTADOS = ["55", "65"] as const;
 export const EVENTO_CANCELAMENTO = "110111";
 /** Cancelamento por substituição (NFC-e). Cancela do mesmo jeito. */
 export const EVENTO_CANCELAMENTO_SUBSTITUICAO = "110112";
+/** Retornos que confirmam registro/vinculação do evento na SEFAZ.
+ * 155 = cancelamento homologado fora de prazo; apareceu em 3 eventos reais. */
+export const STATUS_EVENTO_REGISTRADO = ["135", "136", "155"] as const;
+
+export function eventoFoiRegistrado(status: string | null): boolean {
+  return STATUS_EVENTO_REGISTRADO.includes(
+    status as (typeof STATUS_EVENTO_REGISTRADO)[number],
+  );
+}
 
 export type CodigoErroXml =
   | "XML_VAZIO"
@@ -52,6 +66,8 @@ export type CodigoErroXml =
   | "XML_DIVERGENTE"
   | "CNPJ_EMITENTE_AUSENTE"
   | "DATA_EMISSAO_INVALIDA"
+  | "DADO_FISCAL_INVALIDO"
+  | "ASSINATURA_INVALIDA"
   | "VALOR_AUSENTE";
 
 /** Erro de leitura com código estável, para a rota traduzir sem inspecionar texto. */
@@ -80,6 +96,12 @@ export type NotaFiscalLida = {
   serie: string;
   numero: number;
   emitidoEm: Date;
+  /** Competência CIVIL de dhEmi, antes da conversão para UTC. */
+  ano: number;
+  mes: number;
+  competencia: string;
+  /** A assinatura XMLDSig do infNFe foi verificada na importação real. */
+  assinaturaValida: boolean;
   /** "0" = entrada, "1" = saída. */
   tipoOperacao: string;
   /** "1" = produção, "2" = homologação. */
@@ -130,10 +152,16 @@ export type NotaFiscalLida = {
 /** Um arquivo de evento (cancelamento, carta de correção). */
 export type EventoFiscalLido = {
   tipo: "EVENTO";
+  /** Id oficial de infEvento, ou identidade estável montada quando ausente. */
+  eventoId: string;
   /** Chave da nota a que o evento se refere. */
   chave: string;
   tipoEvento: string;
-  sequencia: number | null;
+  sequencia: number;
+  ambiente: string;
+  documentoAutor: string | null;
+  /** A assinatura XMLDSig do infEvento foi verificada na importação real. */
+  assinaturaValida: boolean;
   justificativa: string | null;
   /** cStat do retorno. 135/136 = registrado. */
   statusSefaz: string | null;
@@ -156,7 +184,12 @@ export type OutroModeloLido = {
   chave: string | null;
   cnpjEmitente: string | null;
   nomeEmitente: string | null;
+  /** Todos os CNPJs que aparecem no documento, para validar a empresa escolhida. */
+  documentosRelacionados: string[];
   valorTotal: number;
+  emitidoEm: Date | null;
+  ano: number | null;
+  mes: number | null;
   raiz: string;
 };
 
@@ -188,26 +221,62 @@ export function decodificarXml(bytes: Buffer | Uint8Array): { texto: string; enc
   };
 }
 
-/** Conteúdo de uma tag simples, na primeira ocorrência. */
+/** Decodifica as cinco entidades XML predefinidas e referências numéricas. */
+function decodificarEntidades(valor: string): string {
+  return valor.replace(
+    /&(?:#x([0-9a-f]+)|#(\d+)|amp|lt|gt|quot|apos);/gi,
+    (entidade, hex: string | undefined, dec: string | undefined) => {
+      if (hex) return String.fromCodePoint(Number.parseInt(hex, 16));
+      if (dec) return String.fromCodePoint(Number.parseInt(dec, 10));
+      const fixas: Record<string, string> = {
+        "&amp;": "&",
+        "&lt;": "<",
+        "&gt;": ">",
+        "&quot;": '"',
+        "&apos;": "'",
+      };
+      return fixas[String(entidade).toLowerCase()] ?? entidade;
+    },
+  );
+}
+
+/**
+ * Nome de tag com prefixo de namespace opcional (`nfe:ide`).
+ * O layout normalmente usa namespace default, mas exportadores podem prefixar.
+ */
+const nomeXml = (nome: string) => `(?:[A-Za-z_][\\w.-]*:)?${nome}`;
+
+/** Conteúdo de uma tag simples, na primeira ocorrência. Ignora tags em comentário. */
 function tag(xml: string, nome: string): string | null {
-  const achado = xml.match(new RegExp(`<${nome}(?:\\s[^>]*)?>([^<]*)</${nome}>`));
-  const valor = achado ? achado[1].trim() : null;
-  return valor ? valor : null;
+  const padrao = new RegExp(
+    `<${nomeXml(nome)}(?:\\s[^>]*)?>([\\s\\S]*?)</${nomeXml(nome)}>`,
+  );
+  const achado = xml.match(padrao);
+  if (!achado) return null;
+  let valor = achado[1].trim();
+  const cdata = valor.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
+  if (cdata) valor = cdata[1].trim();
+  // Tag simples não pode conter estrutura filha. Isso impede capturar por engano
+  // um bloco inteiro quando o XML está malformado.
+  if (/<(?:[A-Za-z_][\w.-]*:)?[A-Za-z_]/.test(valor)) return null;
+  return valor ? decodificarEntidades(valor) : null;
 }
 
 /** Conteúdo de um bloco `<nome>...</nome>`, não-guloso. */
 function bloco(xml: string, nome: string): string | null {
-  const achado = xml.match(new RegExp(`<${nome}(?:\\s[^>]*)?>([\\s\\S]*?)</${nome}>`));
+  const achado = xml.match(
+    new RegExp(`<${nomeXml(nome)}(?:\\s[^>]*)?>([\\s\\S]*?)</${nomeXml(nome)}>`),
+  );
   return achado ? achado[1] : null;
 }
 
-/** Primeira tag depois do prólogo: é o que separa nota, evento e CT-e. */
+/** Primeira tag depois do prólogo: separa nota, evento e CT-e. */
 function raizDoXml(texto: string): string {
   const encontrada = texto
-    .match(/<\s*([A-Za-z][\w.:-]*)[\s>]/g)
+    .match(/<\s*([A-Za-z_][\w.:-]*)[\s>]/g)
     ?.map((t) => t.replace(/[<>\s/]/g, ""))
     .find((t) => t !== "?xml" && t.toLowerCase() !== "xml");
-  return encontrada ?? "(desconhecida)";
+  return (encontrada ?? "(desconhecida)").split(":").pop() ?? "(desconhecida)";
 }
 
 /** Só os dígitos. Usado em CNPJ, CPF e chave. */
@@ -252,8 +321,25 @@ export type ChaveDecomposta = {
  * mesmo arquivo é no-op) e conferência (as tags têm de bater com o que a chave
  * carrega; quando não batem, o arquivo foi editado à mão).
  */
+export function chaveDeAcessoValida(chave: string): boolean {
+  if (!/^\d{44}$/.test(chave)) return false;
+
+  let soma = 0;
+  let peso = 2;
+  // O último dígito é o DV; pesos 2..9 da direita para a esquerda nos 43
+  // anteriores, conforme o Módulo 11 do leiaute NF-e.
+  for (let indice = 42; indice >= 0; indice -= 1) {
+    soma += Number(chave[indice]) * peso;
+    peso = peso === 9 ? 2 : peso + 1;
+  }
+  const resto = soma % 11;
+  const candidato = 11 - resto;
+  const esperado = candidato === 10 || candidato === 11 ? 0 : candidato;
+  return Number(chave[43]) === esperado;
+}
+
 export function decomporChave(chave: string): ChaveDecomposta | null {
-  if (!/^\d{44}$/.test(chave)) return null;
+  if (!chaveDeAcessoValida(chave)) return null;
   return {
     uf: chave.slice(0, 2),
     ano: 2000 + Number(chave.slice(2, 4)),
@@ -263,6 +349,82 @@ export function decomporChave(chave: string): ChaveDecomposta | null {
     serie: Number(chave.slice(22, 25)),
     numero: Number(chave.slice(25, 34)),
   };
+}
+
+function lerEmissaoCivil(
+  valor: string,
+): { instante: Date; ano: number; mes: number; competencia: string } | null {
+  const partes = valor.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
+  if (!partes) return null;
+
+  const ano = Number(partes[1]);
+  const mes = Number(partes[2]);
+  const dia = Number(partes[3]);
+  const civil = new Date(Date.UTC(ano, mes - 1, dia));
+  if (
+    civil.getUTCFullYear() !== ano ||
+    civil.getUTCMonth() + 1 !== mes ||
+    civil.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+
+  // `dEmi` antigo traz apenas a data; dhEmi traz instante com offset.
+  const instante = valor.includes("T")
+    ? new Date(valor)
+    : new Date(`${valor}T00:00:00.000Z`);
+  if (Number.isNaN(instante.getTime())) return null;
+
+  return {
+    instante,
+    ano,
+    mes,
+    competencia: `${ano}-${String(mes).padStart(2, "0")}`,
+  };
+}
+
+function exigirValorFiscal(
+  nome: string,
+  valor: string | null,
+  permitidos: readonly string[],
+): string {
+  if (!valor || !permitidos.includes(valor)) {
+    throw new ErroXmlFiscal(
+      "DADO_FISCAL_INVALIDO",
+      `${nome} inválido ou ausente: ${valor ?? "(ausente)"}.`,
+    );
+  }
+  return valor;
+}
+
+type CertificadoAssinatura = Extract<
+  ResultadoAssinaturaXml,
+  { ok: true }
+>["certificado"];
+
+function validarCertificadoFiscal(
+  certificado: CertificadoAssinatura,
+  documento: string | null,
+  instante: Date,
+): void {
+  if (!certificado.aparentaIcpBrasil) {
+    throw new ErroXmlFiscal(
+      "ASSINATURA_INVALIDA",
+      "O certificado da assinatura não se identifica como certificado ICP-Brasil de pessoa jurídica.",
+    );
+  }
+  if (!documento || !certificado.cnpjs.includes(documento)) {
+    throw new ErroXmlFiscal(
+      "ASSINATURA_INVALIDA",
+      `O certificado da assinatura não pertence ao CNPJ ${documento ?? "(ausente)"}.`,
+    );
+  }
+  if (instante < certificado.validoDe || instante > certificado.validoAte) {
+    throw new ErroXmlFiscal(
+      "ASSINATURA_INVALIDA",
+      "O certificado não estava dentro da validade na data do documento fiscal.",
+    );
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -278,6 +440,7 @@ export function decomporChave(chave: string): ChaveDecomposta | null {
 export function lerXmlFiscal(
   bytes: Buffer | Uint8Array,
   nomeArquivo?: string,
+  opcoes: { validarAssinatura?: boolean } = {},
 ): ArquivoFiscalLido {
   if (!bytes || bytes.length === 0) {
     throw new ErroXmlFiscal("XML_VAZIO", "O arquivo está vazio.");
@@ -289,7 +452,13 @@ export function lerXmlFiscal(
     );
   }
 
-  const { texto } = decodificarXml(bytes);
+  const { texto: textoOriginal } = decodificarXml(bytes);
+
+  /**
+   * Comentário não é dado. Remover antes de qualquer extração impede que
+   * `<vNF>999999</vNF>` escrito num comentário seja lido antes da tag real.
+   */
+  const texto = textoOriginal.replace(/<!--[\s\S]*?-->/g, "");
 
   /**
    * DOCTYPE recusado ANTES de qualquer outra coisa.
@@ -312,38 +481,122 @@ export function lerXmlFiscal(
     throw new ErroXmlFiscal("XML_INVALIDO", "O arquivo não é um XML.");
   }
 
+  const validarAssinatura = opcoes.validarAssinatura !== false;
+
   // Evento vem antes: é outro documento, com outra raiz, e não tem <ide>.
-  if (/<(?:procEventoNFe|evento|infEvento)[\s>]/.test(texto)) {
-    return lerEvento(texto);
+  if (new RegExp(`<(?:${nomeXml("procEventoNFe")}|${nomeXml("evento")}|${nomeXml("infEvento")})[\\s>]`).test(texto)) {
+    return lerEvento(texto, textoOriginal, validarAssinatura);
   }
 
-  return lerDocumento(texto, raiz, nomeArquivo);
+  return lerDocumento(texto, raiz, nomeArquivo, textoOriginal, validarAssinatura);
 }
 
-function lerEvento(texto: string): EventoFiscalLido {
-  const info = bloco(texto, "infEvento") ?? texto;
-  const retorno = bloco(texto, "retEvento") ?? "";
+function lerEvento(
+  texto: string,
+  textoOriginal: string,
+  validarAssinatura: boolean,
+): EventoFiscalLido {
+  let info = bloco(texto, "infEvento") ?? texto;
+  let certificadoAssinatura: CertificadoAssinatura | null = null;
+  let idOficial = texto.match(
+    new RegExp(`<${nomeXml("infEvento")}\\b[^>]*\\bId=["']([^"']+)["']`),
+  )?.[1] ?? "";
+
+  if (validarAssinatura) {
+    const assinatura = verificarAssinaturaXml(textoOriginal, {
+      elemento: "infEvento",
+    });
+    if (!assinatura.ok) {
+      throw new ErroXmlFiscal(
+        "ASSINATURA_INVALIDA",
+        `A assinatura digital do evento não pôde ser validada: ${assinatura.motivo}`,
+      );
+    }
+    // Daqui em diante chave, tipo, sequência, ambiente e autor saem SOMENTE do
+    // nó autenticado. Ler o documento original depois de validar permitiria
+    // wrapping attack com um infEvento falso antes do assinado.
+    info = assinatura.conteudoAssinado;
+    idOficial = assinatura.idAssinado;
+    certificadoAssinatura = assinatura.certificado;
+  }
 
   const chave = digitos(tag(info, "chNFe"));
   if (!chave) {
     throw new ErroXmlFiscal("CHAVE_AUSENTE", "O evento não informa a chave da nota (chNFe).");
   }
-  if (!/^\d{44}$/.test(chave)) {
-    throw new ErroXmlFiscal("CHAVE_INVALIDA", `A chave do evento não tem 44 dígitos: ${chave}`);
+  if (!decomporChave(chave)) {
+    throw new ErroXmlFiscal(
+      "CHAVE_INVALIDA",
+      `A chave do evento não é uma chave NF-e válida: ${chave}`,
+    );
   }
 
-  const tipoEvento = tag(info, "tpEvento") ?? "";
+  const tipoEvento = tag(info, "tpEvento");
+  if (!tipoEvento || !/^\d{6}$/.test(tipoEvento)) {
+    throw new ErroXmlFiscal(
+      "DADO_FISCAL_INVALIDO",
+      `Tipo do evento inválido ou ausente: ${tipoEvento ?? "(ausente)"}.`,
+    );
+  }
+
+  const sequenciaValor = decimal(tag(info, "nSeqEvento"));
+  if (!Number.isInteger(sequenciaValor) || (sequenciaValor ?? 0) <= 0) {
+    throw new ErroXmlFiscal(
+      "DADO_FISCAL_INVALIDO",
+      "O evento não traz uma sequência inteira positiva.",
+    );
+  }
+  const sequencia = sequenciaValor as number;
+  const ambiente = exigirValorFiscal("tpAmb do evento", tag(info, "tpAmb"), ["1", "2"]);
+  const documentoAutor = digitos(tag(info, "CNPJ")) ?? digitos(tag(info, "CPF"));
+  const dataEventoBruta = tag(info, "dhEvento");
+  const dataEvento = dataEventoBruta ? new Date(dataEventoBruta) : null;
+  if (!dataEvento || Number.isNaN(dataEvento.getTime())) {
+    throw new ErroXmlFiscal(
+      "DADO_FISCAL_INVALIDO",
+      "O evento assinado não traz uma data válida (dhEvento).",
+    );
+  }
+  if (certificadoAssinatura) {
+    validarCertificadoFiscal(certificadoAssinatura, documentoAutor, dataEvento);
+  }
+
+  const retornoContainer = bloco(texto, "retEvento") ?? "";
+  const retorno = bloco(retornoContainer, "infEvento") ?? retornoContainer;
+
+  // Solicitação assinada e retorno precisam falar do MESMO evento. Conferir só
+  // o cStat permitiria colar um retorno 135 de outra chave.
+  const divergencias: string[] = [];
+  const chaveRetorno = digitos(tag(retorno, "chNFe"));
+  const tipoRetorno = tag(retorno, "tpEvento");
+  const sequenciaRetorno = decimal(tag(retorno, "nSeqEvento"));
+  const ambienteRetorno = tag(retorno, "tpAmb");
+  if (chaveRetorno && chaveRetorno !== chave) divergencias.push("chave do retorno");
+  if (tipoRetorno && tipoRetorno !== tipoEvento) divergencias.push("tipo do retorno");
+  if (sequenciaRetorno !== null && sequenciaRetorno !== sequencia) {
+    divergencias.push("sequência do retorno");
+  }
+  if (ambienteRetorno && ambienteRetorno !== ambiente) divergencias.push("ambiente do retorno");
+  if (divergencias.length > 0) {
+    throw new ErroXmlFiscal(
+      "XML_DIVERGENTE",
+      `A solicitação assinada e o retorno divergem em: ${divergencias.join(", ")}.`,
+    );
+  }
+
   const registro = tag(retorno, "dhRegEvento") ?? tag(texto, "dhRegEvento");
   const registradoEm = registro ? new Date(registro) : null;
 
   return {
     tipo: "EVENTO",
+    eventoId: idOficial || `${chave}:${tipoEvento}:${sequencia}`,
     chave,
     tipoEvento,
-    sequencia: decimal(tag(info, "nSeqEvento")),
-    // xJust fica em detEvento; procurar no texto todo cobre as duas posições que
-    // o layout admite sem depender de qual delas o emissor usou.
-    justificativa: tag(texto, "xJust"),
+    sequencia,
+    ambiente,
+    documentoAutor,
+    assinaturaValida: validarAssinatura,
+    justificativa: tag(info, "xJust"),
     statusSefaz: tag(retorno, "cStat") ?? null,
     registradoEm: registradoEm && !Number.isNaN(registradoEm.getTime()) ? registradoEm : null,
     ehCancelamento:
@@ -354,38 +607,83 @@ function lerEvento(texto: string): EventoFiscalLido {
 function lerDocumento(
   texto: string,
   raiz: string,
-  nomeArquivo?: string,
+  nomeArquivo: string | undefined,
+  textoOriginal: string,
+  validarAssinatura: boolean,
 ): NotaFiscalLida | OutroModeloLido {
-  const ide = bloco(texto, "ide") ?? "";
-  const emit = bloco(texto, "emit") ?? "";
-  const dest = bloco(texto, "dest") ?? "";
-  // ICMSTot na NF-e; vPrest no CT-e. O segundo só serve para relatar o CT-e.
-  const totais = bloco(texto, "ICMSTot") ?? bloco(texto, "vPrest") ?? "";
+  let conteudoFiscal = texto;
+  let certificadoAssinatura: CertificadoAssinatura | null = null;
+  let ide = bloco(conteudoFiscal, "ide") ?? "";
+  let emit = bloco(conteudoFiscal, "emit") ?? "";
+  let dest = bloco(conteudoFiscal, "dest") ?? "";
+  let totais = bloco(conteudoFiscal, "ICMSTot") ?? bloco(conteudoFiscal, "vPrest") ?? "";
+  let modelo = tag(ide, "mod");
 
-  const modelo = tag(ide, "mod");
-  const chaveAtributo = texto.match(/Id="(?:NFe|CTe|NFS)?(\d{44})"/)?.[1] ?? null;
-  const chave = chaveAtributo ?? digitos(tag(texto, "chNFe")) ?? digitos(tag(texto, "chCTe"));
-
-  // Modelo fora do escopo sai aqui, com o que der para relatar. Sem exigir chave
-  // nem valor: o objetivo é dizer "isto é um CT-e de frete", não apurá-lo.
+  // Modelo fora do escopo sai sem validação de assinatura: CT-e não é persistido
+  // nem apurado; só aparece no relatório como custo de frete ignorado.
   if (!modelo || !MODELOS_SUPORTADOS.includes(modelo as (typeof MODELOS_SUPORTADOS)[number])) {
+    const chaveAtributo = texto.match(/\bId=["'](?:NFe|CTe|NFS)?(\d{44})["']/)?.[1] ?? null;
+    const chave = chaveAtributo ?? digitos(tag(texto, "chNFe")) ?? digitos(tag(texto, "chCTe"));
+    const emissaoBruta = tag(ide, "dhEmi") ?? tag(ide, "dEmi");
+    const emissao = emissaoBruta ? lerEmissaoCivil(emissaoBruta) : null;
     return {
       tipo: "OUTRO_MODELO",
       modelo,
       chave,
       cnpjEmitente: digitos(tag(emit, "CNPJ")),
       nomeEmitente: tag(emit, "xNome"),
+      documentosRelacionados: [
+        ...new Set(
+          [...texto.matchAll(/<(?:[A-Za-z_][\w.-]*:)?CNPJ>(\d{14})<\/(?:[A-Za-z_][\w.-]*:)?CNPJ>/g)]
+            .map((item) => item[1]),
+        ),
+      ],
       valorTotal: decimal(tag(totais, "vNF") ?? tag(totais, "vTPrest")) ?? 0,
+      emitidoEm: emissao?.instante ?? null,
+      ano: emissao?.ano ?? null,
+      mes: emissao?.mes ?? null,
       raiz,
     };
   }
+
+  if (validarAssinatura) {
+    const assinatura = verificarAssinaturaXml(textoOriginal, { elemento: "infNFe" });
+    if (!assinatura.ok) {
+      throw new ErroXmlFiscal(
+        "ASSINATURA_INVALIDA",
+        `A assinatura digital da nota não pôde ser validada: ${assinatura.motivo}`,
+      );
+    }
+    // Todos os dados econômicos passam a sair SOMENTE do nó autenticado. Isso
+    // bloqueia tanto edição de vNF/CFOP quanto wrapping attack.
+    conteudoFiscal = assinatura.conteudoAssinado;
+    certificadoAssinatura = assinatura.certificado;
+    ide = bloco(conteudoFiscal, "ide") ?? "";
+    emit = bloco(conteudoFiscal, "emit") ?? "";
+    dest = bloco(conteudoFiscal, "dest") ?? "";
+    totais = bloco(conteudoFiscal, "ICMSTot") ?? "";
+    modelo = tag(ide, "mod");
+  }
+
+  if (!modelo || !MODELOS_SUPORTADOS.includes(modelo as (typeof MODELOS_SUPORTADOS)[number])) {
+    throw new ErroXmlFiscal(
+      "DADO_FISCAL_INVALIDO",
+      `O conteúdo assinado informa modelo inválido: ${modelo ?? "(ausente)"}.`,
+    );
+  }
+
+  const chaveAtributo = conteudoFiscal.match(/\bId=["']NFe(\d{44})["']/)?.[1] ?? null;
+  const chave = chaveAtributo ?? digitos(tag(texto, "chNFe"));
 
   if (!chave) {
     throw new ErroXmlFiscal("CHAVE_AUSENTE", "O XML não traz a chave de acesso.");
   }
   const dentroDaChave = decomporChave(chave);
   if (!dentroDaChave) {
-    throw new ErroXmlFiscal("CHAVE_INVALIDA", `A chave não tem 44 dígitos: ${chave}`);
+    throw new ErroXmlFiscal(
+      "CHAVE_INVALIDA",
+      `A chave não tem 44 dígitos válidos ou o dígito verificador está errado: ${chave}`,
+    );
   }
 
   const cnpjEmitente = digitos(tag(emit, "CNPJ"));
@@ -400,23 +698,48 @@ function lerDocumento(
   if (!emissaoBruta) {
     throw new ErroXmlFiscal("DATA_EMISSAO_INVALIDA", "O XML não traz a data de emissão.");
   }
-  const emitidoEm = new Date(emissaoBruta);
-  if (Number.isNaN(emitidoEm.getTime())) {
+  const emissao = lerEmissaoCivil(emissaoBruta);
+  if (!emissao) {
     throw new ErroXmlFiscal(
       "DATA_EMISSAO_INVALIDA",
       `Data de emissão em formato não reconhecido: ${emissaoBruta}`,
     );
   }
-
-  const serie = tag(ide, "serie") ?? "0";
-  const numeroTag = decimal(tag(ide, "nNF"));
-  if (numeroTag === null) {
-    throw new ErroXmlFiscal("XML_INVALIDO", "O XML não traz o número da nota (nNF).");
+  if (certificadoAssinatura) {
+    validarCertificadoFiscal(
+      certificadoAssinatura,
+      cnpjEmitente,
+      emissao.instante,
+    );
   }
 
+  const serieBruta = tag(ide, "serie");
+  if (!serieBruta || !/^\d{1,3}$/.test(serieBruta)) {
+    throw new ErroXmlFiscal(
+      "DADO_FISCAL_INVALIDO",
+      `Série inválida ou ausente: ${serieBruta ?? "(ausente)"}.`,
+    );
+  }
+  const serie = String(Number(serieBruta));
+
+  const numeroTag = decimal(tag(ide, "nNF"));
+  if (!Number.isInteger(numeroTag) || (numeroTag ?? 0) <= 0) {
+    throw new ErroXmlFiscal(
+      "DADO_FISCAL_INVALIDO",
+      "O XML não traz um número de nota inteiro positivo (nNF).",
+    );
+  }
+
+  // Validação POSITIVA. O código antigo só rejeitava tpAmb=2, tpNF=0 e
+  // finNFe=3/4; valor ausente virava string vazia e uma nota com CFOP de venda
+  // podia SOMAR mesmo sem dizer que era produção, saída ou finalidade normal.
+  const ambiente = exigirValorFiscal("tpAmb", tag(ide, "tpAmb") ?? tag(conteudoFiscal, "tpAmb"), ["1", "2"]);
+  const tipoOperacao = exigirValorFiscal("tpNF", tag(ide, "tpNF"), ["0", "1"]);
+  const finalidade = exigirValorFiscal("finNFe", tag(ide, "finNFe"), ["1", "2", "3", "4"]);
+
   const valorTotal = decimal(tag(totais, "vNF"));
-  if (valorTotal === null) {
-    throw new ErroXmlFiscal("VALOR_AUSENTE", "O XML não traz o valor total da nota (vNF).");
+  if (valorTotal === null || valorTotal < 0) {
+    throw new ErroXmlFiscal("VALOR_AUSENTE", "O XML não traz um valor total válido (vNF).");
   }
 
   /*
@@ -430,6 +753,7 @@ function lerDocumento(
    * documento adulterado é pior que perder o arquivo, porque o número vai para
    * uma declaração assinada.
    */
+  const protocolo = bloco(texto, "infProt") ?? "";
   const divergencias: string[] = [];
   if (dentroDaChave.serie !== Number(serie)) {
     divergencias.push(`série ${serie} na tag e ${dentroDaChave.serie} na chave`);
@@ -437,11 +761,20 @@ function lerDocumento(
   if (dentroDaChave.numero !== numeroTag) {
     divergencias.push(`número ${numeroTag} na tag e ${dentroDaChave.numero} na chave`);
   }
+  if (dentroDaChave.ano !== emissao.ano || dentroDaChave.mes !== emissao.mes) {
+    divergencias.push(
+      `competência ${emissao.competencia} na emissão e ${dentroDaChave.ano}-${String(dentroDaChave.mes).padStart(2, "0")} na chave`,
+    );
+  }
   if (dentroDaChave.cnpj !== cnpjEmitente) {
     divergencias.push(`CNPJ ${cnpjEmitente} na tag e ${dentroDaChave.cnpj} na chave`);
   }
   if (dentroDaChave.modelo !== modelo) {
     divergencias.push(`modelo ${modelo} na tag e ${dentroDaChave.modelo} na chave`);
+  }
+  const chaveProtocolo = digitos(tag(protocolo, "chNFe"));
+  if (chaveProtocolo && chaveProtocolo !== chave) {
+    divergencias.push("chave do protocolo diferente da nota assinada");
   }
   if (divergencias.length > 0) {
     throw new ErroXmlFiscal(
@@ -451,7 +784,6 @@ function lerDocumento(
     );
   }
 
-  const protocolo = bloco(texto, "infProt") ?? "";
   const documentoDestinatario = digitos(tag(dest, "CNPJ")) ?? digitos(tag(dest, "CPF"));
 
   return {
@@ -459,11 +791,15 @@ function lerDocumento(
     chave,
     modelo,
     serie,
-    numero: numeroTag,
-    emitidoEm,
-    tipoOperacao: tag(ide, "tpNF") ?? "",
-    ambiente: tag(ide, "tpAmb") ?? tag(texto, "tpAmb") ?? "",
-    finalidade: tag(ide, "finNFe") ?? "",
+    numero: numeroTag as number,
+    emitidoEm: emissao.instante,
+    ano: emissao.ano,
+    mes: emissao.mes,
+    competencia: emissao.competencia,
+    assinaturaValida: validarAssinatura,
+    tipoOperacao,
+    ambiente,
+    finalidade,
     naturezaOperacao: tag(ide, "natOp"),
     statusSefaz: tag(protocolo, "cStat"),
     protocolo: tag(protocolo, "nProt"),
@@ -475,8 +811,13 @@ function lerDocumento(
     nomeDestinatario: tag(dest, "xNome"),
     valorTotal,
     valorProdutos: decimal(tag(totais, "vProd")),
-    cfops: [...new Set([...texto.matchAll(/<CFOP>(\d{4})<\/CFOP>/g)].map((m) => m[1]))].sort(),
-    referenciaOutraNota: /<NFref[\s>]/.test(ide),
+    cfops: [
+      ...new Set(
+        [...conteudoFiscal.matchAll(/<(?:[A-Za-z_][\w.-]*:)?CFOP>(\d{4})<\/(?:[A-Za-z_][\w.-]*:)?CFOP>/g)]
+          .map((m) => m[1]),
+      ),
+    ].sort(),
+    referenciaOutraNota: new RegExp(`<${nomeXml("NFref")}[\\s>]`).test(ide),
     pedidoMarketplace: extrairPedidoDoNome(nomeArquivo),
   };
 }

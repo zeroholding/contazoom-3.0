@@ -74,7 +74,13 @@ export async function resumirPorCanal(
 ): Promise<ResumoCanal[]> {
   const porSerie = await prisma.documentoFiscal.groupBy({
     by: ["serie"],
-    where: { empresaId, ano, mes, contaFaturamento: true },
+    where: {
+      empresaId,
+      ano,
+      mes,
+      contaFaturamento: true,
+      assinaturaValida: true,
+    },
     _sum: { valorTotal: true },
     _count: { _all: true },
   });
@@ -159,38 +165,79 @@ export async function resumirForaDoFaturamento(
   ano: number,
   mes: number,
 ): Promise<LinhaForaDoFaturamento[]> {
-  const grupos = await prisma.documentoFiscal.groupBy({
-    by: ["motivoExclusao"],
-    where: { empresaId, ano, mes, contaFaturamento: false },
-    _sum: { valorTotal: true },
-    _count: { _all: true },
-  });
+  const [documentos, ignorados, eventos] = await Promise.all([
+    prisma.documentoFiscal.groupBy({
+      by: ["motivoExclusao"],
+      where: { empresaId, ano, mes, contaFaturamento: false },
+      _sum: { valorTotal: true },
+      _count: { _all: true },
+    }),
+    prisma.arquivoFiscalIgnorado.groupBy({
+      by: ["motivoExclusao"],
+      where: { empresaId, ano, mes },
+      _sum: { valorTotal: true },
+      _count: { _all: true },
+    }),
+    prisma.eventoFiscal.count({ where: { empresaId, ano, mes } }),
+  ]);
 
-  return grupos
-    .filter((grupo) => grupo.motivoExclusao !== null)
-    .map((grupo) => ({
-      code: grupo.motivoExclusao as string,
-      quantos: grupo._count._all,
-      valor: Number(grupo._sum.valorTotal ?? 0),
-    }))
-    .sort((a, b) => b.quantos - a.quantos);
+  const acumulado = new Map<string, LinhaForaDoFaturamento>();
+  for (const grupo of [...documentos, ...ignorados]) {
+    if (!grupo.motivoExclusao) continue;
+    const atual = acumulado.get(grupo.motivoExclusao) ?? {
+      code: grupo.motivoExclusao,
+      quantos: 0,
+      valor: 0,
+    };
+    atual.quantos += grupo._count._all;
+    atual.valor += Number(grupo._sum.valorTotal ?? 0);
+    acumulado.set(grupo.motivoExclusao, atual);
+  }
+  if (eventos > 0) {
+    acumulado.set("ARQUIVO_EVENTO", {
+      code: "ARQUIVO_EVENTO",
+      quantos: eventos,
+      valor: 0,
+    });
+  }
+
+  return [...acumulado.values()].sort((a, b) => b.quantos - a.quantos);
 }
 
 /**
- * Competências que têm documento, para alimentar o seletor.
+ * Competências que têm documento OU valor mensal definido.
  *
- * Vem do dado e não de uma lista fixa de meses: oferecer competência vazia no
- * seletor faz a pessoa trocar o mês, ver tela vazia e achar que a importação
- * falhou.
+ * O código anterior consultava só `documento_fiscal`. Isso tornava o caminho
+ * manual inalcançável: o PUT criava o mês sem XML, mas ele não aparecia no
+ * seletor e sumia na próxima carga — exatamente o caso de empresa de serviço e
+ * mês anterior à adoção do sistema.
  */
 export async function competenciasComDocumento(
   empresaId: string,
 ): Promise<Array<{ ano: number; mes: number }>> {
-  const grupos = await prisma.documentoFiscal.groupBy({
-    by: ["ano", "mes"],
-    where: { empresaId },
-    orderBy: [{ ano: "desc" }, { mes: "desc" }],
-  });
+  const [documentos, ignorados, eventos, mensais] = await Promise.all([
+    prisma.documentoFiscal.groupBy({
+      by: ["ano", "mes"],
+      where: { empresaId },
+    }),
+    prisma.arquivoFiscalIgnorado.groupBy({
+      by: ["ano", "mes"],
+      where: { empresaId },
+    }),
+    prisma.eventoFiscal.groupBy({
+      by: ["ano", "mes"],
+      where: { empresaId },
+    }),
+    prisma.faturamentoMensal.findMany({
+      where: { empresaId },
+      select: { ano: true, mes: true },
+    }),
+  ]);
 
-  return grupos.map((grupo) => ({ ano: grupo.ano, mes: grupo.mes }));
+  const unicas = new Map<string, { ano: number; mes: number }>();
+  for (const item of [...documentos, ...ignorados, ...eventos, ...mensais]) {
+    unicas.set(`${item.ano}-${item.mes}`, { ano: item.ano, mes: item.mes });
+  }
+
+  return [...unicas.values()].sort((a, b) => b.ano - a.ano || b.mes - a.mes);
 }

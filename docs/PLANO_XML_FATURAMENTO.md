@@ -1,8 +1,11 @@
 # Importação de XML fiscal e apuração de faturamento
 
-Análise e plano de back-end. **Nenhuma linha de front-end é tratada aqui.**
+Análise, decisões e registro de implementação. O desenho inicial foi preservado
+para explicar o porquê; o estado final e as divergências estão na seção 13.
 
-Status: proposta técnica, nada implementado. Escrito depois de ler o módulo
+Status: fases 0–7 implementadas (diagnóstico, parser, regra, banco, importação,
+apuração, valor manual e declaração de 12 meses). Fase 8, NFS-e, continua futura.
+Escrito depois de ler o módulo
 contábil existente (`prisma/schema.prisma`, `src/lib/tarefa-*`, `src/app/api/tarefas/**`),
 a infraestrutura de upload (`src/lib/spreadsheet.ts`, `src/app/api/tarefas/anexos/`,
 `src/lib/tarefa-anexo-disco.ts`), os padrões de lote (`src/lib/prazo-despacho-backfill.ts`)
@@ -325,14 +328,15 @@ Detectar pela declaração e converter quando necessário; nunca confiar cegamen
 
 ### 5.4 `.zip`
 
-O projeto **não tem nenhuma biblioteca de zip** (o `xlsx` traz um leitor interno
-próprio, não reaproveitável) e roda **Node 20** (`Dockerfile.prod`), que não tem
-descompactação de zip nativa.
+O projeto usa **`fflate@0.8.3` fixado**. O ZIP é aberto no navegador e só os
+XMLs chegam ao servidor, em lotes sequenciais de 300. Isso evita expandir 3 mil
+arquivos dentro do container.
 
-Fase 1 aceita **N arquivos `.xml` de uma vez** (`formData.getAll`), que é o
-comportamento natural de "selecionar a pasta toda" no navegador. `.zip` fica para
-a Fase 2, com `fflate` (pequeno, sem dependência nativa) e com teto de expansão
-declarado — zip bomb é o mesmo problema do 5.2 por outro caminho.
+Limites contra zip bomb: 32 MiB comprimidos, 64 MiB expandidos, 1 MiB por XML,
+5.000 entradas e razão máxima 200:1. A API de stream preserva entradas físicas
+com o mesmo nome — requisito descoberto no ZIP real da Shopee, que tem 1.863 XMLs
+e 23 nomes repetidos (todos byte a byte idênticos). Caminho interno nunca é
+escrito em disco, eliminando ZIP slip.
 
 ### 5.5 Onde o arquivo mora
 
@@ -789,8 +793,8 @@ Predicados novos: `podeDefinirFaturamento`, `podeEmitirDeclaracao`.
 | **3** ✅ | Migration + model (`20260918120000_apuracao_fiscal_xml`) | Não |
 | **4** ✅ | Rota de importação + gravação em disco | Não |
 | **5** ✅ | Apuração mensal (`apurarCompetencia`) | Não |
-| **6** ◐ | Faturamento manual (feito) + congelamento (coluna existe, sem rota que congele) | Não |
-| **7** | Declaração 12 meses | Não |
+| **6** ✅ | Faturamento manual + congelamento/revisão auditável | Não |
+| **7** ✅ | Declaração 12 meses: snapshot, protocolo, substituição e impressão/PDF | Funções puras e build; emissão exige banco |
 | **8** | NFS-e (layout nacional) | Fase 1 e 2 de novo, para o outro layout |
 
 As fases 1 e 2 são funções puras e testáveis com `npx tsx`, no mesmo formato de
@@ -937,14 +941,14 @@ folgado por duas ordens de grandeza.
 
 ### 12.6 O que a Fase 0 ainda não respondeu
 
-- **Shopee e TikTok** continuam em `.zip` — não sei que documento eles trazem. Se
-  for NFS-e ou nota de outro emitente, muda a Fase 3.
-- **As outras quatro contas de ML** também estão em `.zip`. Espero o mesmo formato,
-  mas o valor deste script é justamente não supor.
-- **Se `50506775000101` está cadastrado em `Empresa`** — exige consulta ao banco,
-  que não fiz.
-- **Um mês só, uma conta só.** Nada aqui prova o comportamento de dezembro, de
-  nota com muitos itens ou de emissor que não seja o do Mercado Livre.
+- **Shopee e TikTok foram abertos e validados.** Ambos entregam NF-e modelo 55;
+  na amostra, Shopee usa série 5 e TikTok série 6 do CNPJ correspondente.
+- **As outras quatro contas do Mercado Livre foram abertas.** Duas amostras de
+  cada ZIP (venda, FULL, devolução e CT-e) passaram no parser de produção.
+- **A linha de base inteira foi confirmada:** 822 arquivos, 458 NF-e, 361 CT-e,
+  3 eventos, 3 cancelamentos, 366 notas somando R$ 62.514,16 e zero erro.
+- **Ainda falta a resposta contábil:** se o total de referência bate com o
+  PGDAS-D e se a whitelist 51xx/61xx vale para toda a carteira.
 
 > `XML/` foi acrescentado ao `.gitignore` nesta mesma passada. A pasta tinha 822
 > notas fiscais reais, com CNPJ e endereço do cliente e o CPF de 329 compradores,
@@ -978,14 +982,11 @@ importa, lista, apura e salva.
 
 ### 13.1 Três divergências deste documento, com motivo
 
-**1. O parser NÃO usa `fast-xml-parser`.** A seção 5.2 propunha a biblioteca com
-defesa em três camadas. Depois da Fase 0 a conclusão mudou, por evidência: o módulo
-precisa de doze tags, a biblioteca acumulou em 2026 uma família de CVEs de expansão
-de entidade e exaustão de pilha, o container não declara limite de memória, e a
-extração por tag rodou contra 822 arquivos reais com a chave batendo em 100% das 458
-notas. Extração por tag também é tolerante a tag desconhecida de graça — que é
-requisito, porque os grupos IBS/CBS já estão na base. Dependência a menos, superfície
-de ataque a menos.
+**1. A extração econômica NÃO usa `fast-xml-parser`.** O DOM entra somente para
+validar XMLDSig com `xml-crypto` + `@xmldom/xmldom`, ambos fixados. Depois da
+assinatura, valor/CFOP/CNPJ são lidos exclusivamente do nó autenticado; adulterar
+`vNF` é recusado. A extração continua por tags tolerantes a grupos novos, porque
+IBS/CBS já aparece na base. DOCTYPE/ENTITY é recusado antes do DOM.
 
 **2. Existe uma tabela que este plano não previu: `empresa_serie_canal`.** O
 documento não menciona a palavra "canal" uma única vez, mas a maquete agrupa
@@ -999,20 +1000,24 @@ Já estava previsto no achado 12.4.1 e foi aplicado: 71,8% dos destinatários s�
 
 ### 13.2 Limitações conhecidas, e não disfarçadas
 
-- **Cancelamento de nota ausente não fica pendente.** As notas do mesmo lote são
-  processadas antes dos eventos, então a pasta que traz os dois juntos funciona. Um
-  evento importado sozinho, sem a nota, é relatado como ignorado com a instrução de
-  reenviar depois — não existe fila de eventos órfãos.
-- **Congelamento não tem rota que congele.** A coluna existe e é respeitada
-  (reapuração não sobrescreve, `PUT` recusa com 409), mas quem congela será a
-  emissão da declaração, na Fase 7.
-- **Reclassificação em lote não existe ainda.** `versaoRegra` é gravada em toda
-  linha, que é o que torna a reclassificação possível; a rotina que varre
-  `versaoRegra < atual` é da Fase 7.
-- **Nada foi executado contra banco.** Verificação feita: `prisma validate`,
-  `prisma generate`, `tsc`, `eslint`, `next build` e as 76 asserções do parser e do
-  classificador. A migration **não foi aplicada** — ela roda no deploy, por
-  `scripts/build.js`.
+- **Evento órfão agora fica pendente.** `evento_fiscal` guarda bytes, hash,
+  assinatura, cStat e sequência; ao chegar a nota, cancelamentos 135/136/155 são
+  aplicados automaticamente.
+- **Congelamento é atômico com a declaração.** Os 12 meses e o snapshot nascem no
+  mesmo commit. Correção libera o mês com histórico append-only e nova emissão
+  substitui a anterior sem reescrever o papel antigo.
+- **ZIP é suportado e testado nos 22 arquivos reais.** O maior tem 3.139 XMLs.
+- **CT-e é arquivado separadamente.** Assim o contador fecha 822 arquivos sem
+  inventar campos de NF-e num documento de transporte.
+- **Reclassificação em lote por `versaoRegra` continua futura.** A coluna e os
+  índices já permitem fazê-la sem reimportar os XMLs.
+- **Validação criptográfica não é consulta SEFAZ.** O conteúdo econômico vem do
+  nó XMLDSig assinado pelo certificado folha embutido, com CNPJ e validade
+  conferidos. A cadeia/revogação até a AC Raiz ICP-Brasil não é validada e o
+  webservice da SEFAZ não é consultado em tempo real.
+- **NFS-e continua fora.** Empresa de serviço usa valor manual com justificativa.
+- **O PDF é impressão do navegador.** O snapshot/hash/protocolo ficam no banco;
+  não há assinatura digital do arquivo PDF gerado.
 
 ---
 

@@ -74,6 +74,7 @@ import {
   Phone,
   Play,
   Plus,
+  Printer,
   RefreshCw,
   RotateCcw,
   Save,
@@ -157,6 +158,7 @@ const MAPA: Record<string, React.ComponentType<LucideProps>> = {
   TrendingUp,
   Upload,
   Download,
+  Printer,
   Trash2,
   // Entidades
   Building2,

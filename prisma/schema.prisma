@@ -808,9 +808,13 @@ model Empresa {
   processos       ProcessoLegalizacao[]
   regimeHistorico EmpresaRegimeHistorico[]
 
-  documentosFiscais DocumentoFiscal[]
-  faturamentoMensal FaturamentoMensal[]
-  importacoesXml    ImportacaoXml[]
+  documentosFiscais       DocumentoFiscal[]
+  arquivosFiscaisIgnorados ArquivoFiscalIgnorado[]
+  eventosFiscais          EventoFiscal[]
+  faturamentoMensal      FaturamentoMensal[]
+  historicoFaturamento   FaturamentoMensalHistorico[]
+  declaracoesFaturamento DeclaracaoFaturamento[]
+  importacoesXml         ImportacaoXml[]
   seriesCanal       EmpresaSerieCanal[]
 
   @@index([userId])
@@ -1345,6 +1349,10 @@ model DocumentoFiscal {
   /// que o sistema comeu arquivo.
   empresaId String? @map("empresa_id")
 
+  /// Como a empresa se relaciona com a nota: EMITENTE ou DESTINATARIO.
+  /// O segundo caso é documento de compra e nunca soma no faturamento emitido.
+  vinculoEmpresa String @default("EMITENTE") @map("vinculo_empresa")
+
   /// CNPJ do emitente, só dígitos. Guardado mesmo com `empresaId` preenchido: é
   /// o que permite revincular se a empresa for cadastrada depois.
   cnpjEmitente String  @map("cnpj_emitente") @db.VarChar(14)
@@ -1367,7 +1375,7 @@ model DocumentoFiscal {
   numero Int
 
   /// Emissão como veio no XML, com fuso. E a competência derivada dela.
-  emitidoEm DateTime @map("emitido_em")
+  emitidoEm DateTime @map("emitido_em") @db.Timestamptz(3)
   ano       Int
   mes       Int
 
@@ -1384,6 +1392,7 @@ model DocumentoFiscal {
   /// cStat do protocolo, cru, para auditar a decisão de situação.
   statusSefaz String? @map("status_sefaz") @db.VarChar(3)
   protocolo   String? @db.VarChar(20)
+  assinaturaValida Boolean @default(false) @map("assinatura_valida")
 
   /// vNF (total da nota) e vProd (soma dos produtos), separados: a diferença é
   /// frete/desconto/ST, e é a primeira coisa que se confere quando o total não
@@ -1396,7 +1405,7 @@ model DocumentoFiscal {
   /// Array e não coluna única: é o discriminador da regra de faturamento, e nota
   /// com itens de CFOP diferente existe — guardar só o primeiro esconderia
   /// exatamente o caso que precisa de conferência humana.
-  cfops String[]
+  cfops String[] @default([])
 
   /// Se ESTA linha soma no faturamento do mês.
   ///
@@ -1408,14 +1417,14 @@ model DocumentoFiscal {
   /// Motivo de não somar. Valores em MOTIVO_EXCLUSAO (src/lib/faturamento-regras.ts):
   /// HOMOLOGACAO, MODELO_NAO_APURADO, NAO_AUTORIZADA, CANCELADA, ENTRADA,
   /// DEVOLUCAO, AJUSTE, EMPRESA_NAO_VINCULADA, TERCEIRO, CFOP_MISTO, SEM_CFOP,
-  /// FORA_DA_FAIXA_DE_VENDA. Nulo quando conta.
+  /// FORA_DA_FAIXA_DE_VENDA, ASSINATURA_NAO_VALIDADA. Nulo quando conta.
   motivoExclusao String? @map("motivo_exclusao")
 
   /// Pede olho humano. Hoje só no CFOP misto, onde resolver por chute erraria o
   /// número nos dois sentidos possíveis.
   precisaConferencia Boolean @default(false) @map("precisa_conferencia")
 
-  canceladoEm               DateTime? @map("cancelado_em")
+  canceladoEm               DateTime? @map("cancelado_em") @db.Timestamptz(3)
   justificativaCancelamento String?   @map("justificativa_cancelamento")
 
   /// Número do pedido no marketplace.
@@ -1454,6 +1463,7 @@ model DocumentoFiscal {
 
   empresa    Empresa?       @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   importacao ImportacaoXml? @relation(fields: [importacaoId], references: [id], onDelete: SetNull)
+  eventos    EventoFiscal[]
 
   @@index([empresaId, ano, mes])
   @@index([empresaId, contaFaturamento, ano, mes])
@@ -1465,6 +1475,109 @@ model DocumentoFiscal {
   @@index([importacaoId])
   @@index([precisaConferencia])
   @@map("documento_fiscal")
+}
+
+/// Evento recebido em arquivo separado da nota (cancelamento, carta de correção).
+///
+/// APPEND-ONLY no fato: cada evento físico é guardado com bytes e hash. `situacao`
+/// muda de PENDENTE para APLICADO quando a nota chega depois, mas o conteúdo do
+/// evento nunca é reescrito.
+///
+/// Existe separado porque o arquivo pode chegar ANTES da nota e até em outro lote.
+/// Sem esta tabela, um cancelamento legítimo se perde e a nota continua somando.
+model EventoFiscal {
+  id String @id @default(cuid())
+
+  /// Id do `<infEvento Id="...">`. Quando o emissor omite, o parser monta uma
+  /// identidade estável a partir de chave + tipo + sequência.
+  eventoId String @unique @map("evento_id")
+
+  chaveDocumento String @map("chave_documento") @db.VarChar(44)
+  ano Int
+  mes Int
+  tipoEvento     String @map("tipo_evento") @db.VarChar(6)
+  sequencia      Int
+
+  /// 135/136 = registrado. Solicitação sem retorno ou evento rejeitado é
+  /// arquivado como REJEITADO e NUNCA altera a nota.
+  statusSefaz String? @map("status_sefaz") @db.VarChar(3)
+  ambiente String @db.VarChar(1)
+  documentoAutor String? @map("documento_autor") @db.VarChar(14)
+  assinaturaValida Boolean @default(false) @map("assinatura_valida")
+  registradoEm DateTime? @map("registrado_em") @db.Timestamptz(3)
+  justificativa String?
+
+  /// PENDENTE | APLICADO | IGNORADO | REJEITADO
+  situacao String @default("PENDENTE")
+  motivo   String?
+
+  /// A empresa selecionada no upload. Fica preenchida mesmo enquanto a nota não
+  /// existe, para o evento pendente continuar visível no histórico correto.
+  empresaId String? @map("empresa_id")
+
+  /// Preenchido quando o evento é aplicado. Opcional porque a nota pode chegar
+  /// em outro lote ou outro dia.
+  documentoId String? @map("documento_id")
+  importacaoId String? @map("importacao_id")
+
+  arquivo      String @unique
+  arquivoBytes Int    @map("arquivo_bytes")
+  arquivoHash  String @map("arquivo_hash") @db.VarChar(64)
+
+  importadoPorId   String @map("importado_por_id")
+  importadoPorNome String @map("importado_por_nome")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  empresa    Empresa?         @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  documento  DocumentoFiscal? @relation(fields: [documentoId], references: [id], onDelete: Restrict)
+  importacao ImportacaoXml?   @relation(fields: [importacaoId], references: [id], onDelete: SetNull)
+
+  /// Idempotência fiscal: a mesma chave, tipo e sequência é o mesmo evento.
+  @@unique([chaveDocumento, tipoEvento, sequencia], name: "evento_fiscal_identidade")
+  @@index([chaveDocumento, situacao])
+  @@index([empresaId, ano, mes])
+  @@index([empresaId, createdAt])
+  @@index([documentoId])
+  @@index([importacaoId])
+  @@map("evento_fiscal")
+}
+
+/// Arquivo fiscal reconhecido, mas fora do escopo da apuração (CT-e, por exemplo).
+///
+/// Separado de DocumentoFiscal para não inventar série/número/tpNF de NF-e em um
+/// layout que não tem esses campos. Persistir é o que faz a conta fechar:
+/// 822 arquivos lidos = 458 NF-e + 361 CT-e + 3 eventos.
+model ArquivoFiscalIgnorado {
+  id String @id @default(cuid())
+  empresaId String @map("empresa_id")
+  importacaoId String? @map("importacao_id")
+
+  chave String? @unique @db.VarChar(44)
+  modelo String? @db.VarChar(2)
+  cnpjEmitente String? @map("cnpj_emitente") @db.VarChar(14)
+  nomeEmitente String? @map("nome_emitente")
+  emitidoEm DateTime? @map("emitido_em") @db.Timestamptz(3)
+  ano Int
+  mes Int
+  valorTotal Decimal @map("valor_total") @db.Decimal(14, 2)
+  motivoExclusao String @map("motivo_exclusao")
+
+  arquivo String @unique
+  arquivoBytes Int @map("arquivo_bytes")
+  arquivoHash String @map("arquivo_hash") @db.VarChar(64)
+  importadoPorId String @map("importado_por_id")
+  importadoPorNome String @map("importado_por_nome")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  importacao ImportacaoXml? @relation(fields: [importacaoId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId, ano, mes])
+  @@index([motivoExclusao])
+  @@index([importacaoId])
+  @@map("arquivo_fiscal_ignorado")
 }
 
 /// Faturamento de uma empresa numa competência.
@@ -1515,6 +1628,7 @@ model FaturamentoMensal {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  historico FaturamentoMensalHistorico[]
 
   /// Espelha `empresa_competencia` de TarefaApuracao de propósito: é a mesma
   /// linguagem de competência do módulo. E NÃO há FK para TarefaApuracao —
@@ -1527,6 +1641,95 @@ model FaturamentoMensal {
   @@map("faturamento_mensal")
 }
 
+/// Histórico append-only de cada alteração e liberação de mês congelado.
+model FaturamentoMensalHistorico {
+  id String @id @default(cuid())
+  faturamentoId String @map("faturamento_id")
+  empresaId String @map("empresa_id")
+  ano Int
+  mes Int
+
+  /// DEFINIDO | ALTERADO | LIBERADO_PARA_REVISAO
+  acao String
+  origemAnterior String? @map("origem_anterior")
+  origemNova String @map("origem_nova")
+  valorAnterior Decimal? @map("valor_anterior") @db.Decimal(14, 2)
+  valorNovo Decimal @map("valor_novo") @db.Decimal(14, 2)
+  detalhe String?
+
+  autorId String @map("autor_id")
+  autorNome String @map("autor_nome")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  faturamento FaturamentoMensal @relation(fields: [faturamentoId], references: [id], onDelete: Restrict)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  @@index([faturamentoId, createdAt])
+  @@index([empresaId, ano, mes, createdAt])
+  @@map("faturamento_mensal_historico")
+}
+
+/// Declaração de faturamento emitida, com as competências congeladas num snapshot.
+///
+/// APPEND-ONLY. Correção não edita o documento emitido: cria outro protocolo e
+/// marca o anterior como SUBSTITUIDA. O conteúdo impresso é sempre `linhas`, nunca
+/// uma nova consulta ao faturamento atual — XML importado amanhã não reescreve o
+/// documento que o banco recebeu hoje.
+model DeclaracaoFaturamento {
+  id String @id @default(cuid())
+
+  /// Legível para ditar e procurar. Não autoriza acesso; a página é interna.
+  protocolo String @unique @db.VarChar(20)
+  /// Duplo clique/retry da mesma emissão devolve o mesmo documento.
+  idempotencyKey String @unique @map("idempotency_key") @db.VarChar(100)
+
+  empresaId String @map("empresa_id")
+
+  anoInicio Int @map("ano_inicio")
+  mesInicio Int @map("mes_inicio")
+  anoFim    Int @map("ano_fim")
+  mesFim    Int @map("mes_fim")
+
+  /// [{ idMensal, ano, mes, competencia, valor, valorApurado, origem,
+  ///    documentos, observacao, atualizadoEm }]
+  linhas Json
+
+  valorTotal Decimal @map("valor_total") @db.Decimal(14, 2)
+  mediaMensal Decimal @map("media_mensal") @db.Decimal(14, 2)
+
+  /// Snapshot da empresa no dia da emissão. Razão social, regime e até CNPJ
+  /// podem mudar depois; a declaração precisa continuar dizendo o que dizia.
+  razaoSocialNaEmissao String @map("razao_social_na_emissao")
+  cnpjNaEmissao        String @map("cnpj_na_emissao") @db.VarChar(14)
+  regimeNaEmissao      String @map("regime_na_emissao")
+
+  finalidade String?
+
+  /// VIGENTE | SUBSTITUIDA
+  situacao String @default("VIGENTE")
+  substituidaPorId String? @map("substituida_por_id")
+
+  emitidaPorId   String @map("emitida_por_id")
+  emitidaPorNome String @map("emitida_por_nome")
+
+  /// SHA-256 do JSON canônico do snapshot + cabeçalho. Detecta qualquer
+  /// alteração direta no banco antes de renderizar a página impressa.
+  conteudoHash String @map("conteudo_hash") @db.VarChar(64)
+  versaoTemplate Int @default(1) @map("versao_template")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+
+  substituidaPor DeclaracaoFaturamento?  @relation("DeclaracaoSubstituicao", fields: [substituidaPorId], references: [id], onDelete: Restrict)
+  substitui      DeclaracaoFaturamento[] @relation("DeclaracaoSubstituicao")
+
+  @@index([empresaId, createdAt])
+  @@index([empresaId, anoInicio, mesInicio, anoFim, mesFim])
+  @@index([situacao])
+  @@map("declaracao_faturamento")
+}
+
 /// Uma sessão de importação de XML.
 ///
 /// Existe para a pergunta "o que entrou naquele dia, e o que foi recusado?" ter
@@ -1534,6 +1737,14 @@ model FaturamentoMensal {
 /// com a resposta HTTP.
 model ImportacaoXml {
   id String @id @default(cuid())
+
+  /// Uma seleção de XML/ZIP no navegador atravessa vários lotes HTTP. Esta chave
+  /// mantém todos na mesma sessão e impede emitir declaração no meio do ZIP.
+  sessaoId String? @unique @map("sessao_id") @db.VarChar(100)
+  lotes Int @default(0)
+  lotesAtivos Int @default(0) @map("lotes_ativos")
+  encerrarQuandoOciosa Boolean @default(false) @map("encerrar_quando_ociosa")
+  finalizadoEm DateTime? @map("finalizado_em")
 
   /// Nulo quando o lote traz CNPJ de mais de uma empresa (pasta misturada).
   empresaId String? @map("empresa_id")
@@ -1543,21 +1754,26 @@ model ImportacaoXml {
   duplicados       Int @default(0)
   ignorados        Int @default(0)
   comErro          Int @default(0)
+  naoProcessados   Int @default(0) @map("nao_processados")
+  eventosAplicados Int @default(0) @map("eventos_aplicados")
 
   /// Relatório por arquivo: [{ arquivo, resultado, motivo, chave }].
   /// JSON e não tabela filha: é lido inteiro, uma vez, como o `dados` de
   /// FormularioAbertura.
   relatorio Json?
 
-  /// CONCLUIDA | INTERROMPIDA (estourou o orçamento de arquivos da rodada)
-  situacao String @default("CONCLUIDA")
+  /// PROCESSANDO | CONCLUIDA | PARCIAL | FALHA | INTERROMPIDA
+  situacao String @default("PROCESSANDO")
 
   importadoPorId   String   @map("importado_por_id")
   importadoPorNome String   @map("importado_por_nome")
   createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   empresa    Empresa?          @relation(fields: [empresaId], references: [id], onDelete: SetNull)
   documentos DocumentoFiscal[]
+  eventos    EventoFiscal[]
+  arquivosIgnorados ArquivoFiscalIgnorado[]
 
   @@index([empresaId, createdAt])
   @@index([createdAt])
