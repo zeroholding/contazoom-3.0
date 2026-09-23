@@ -17,7 +17,7 @@ import {
 import { COLUNAS_PADRAO, type ColunasVisiveis } from "./colunasVendas";
 import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
 import { useToast } from "./toaster";
-import { useVendas } from "@/hooks/useVendas";
+import { ehMarketplace, useVendas, type PlataformaVendas } from "@/hooks/useVendas";
 import {
   calculateShopeeFinancials,
   SHOPEE_FINANCIAL_RULE_VERSION,
@@ -197,9 +197,13 @@ export default function TabelaVendas({
         variant: "info",
         title: "Conectar contas",
         description:
-          "Para conectar contas, acesse as páginas individuais do Shopee ou Mercado Livre.",
+          "Para conectar contas, acesse as páginas individuais do Mercado Livre, Shopee ou TikTok Shop.",
       });
-    } else if (platform !== "Mercado Livre" && platform !== "Shopee") {
+    } else if (!ehMarketplace(platform)) {
+      // A checagem passou a ser por INCLUSÃO (`ehMarketplace`) em vez da dupla
+      // negação `!== "Mercado Livre" && !== "Shopee"`: com a terceira plataforma,
+      // aquela condição era VERDADEIRA para o TikTok e o botão respondia
+      // "Integração com TikTok Shop ainda não disponível" — sendo que está.
       toast({
         variant: "warning",
         title: "Integração não disponível",
@@ -994,7 +998,7 @@ export default function TabelaVendas({
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
             colunasVisiveis={colunasVisiveis}
-            platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
+            platform={platform as PlataformaVendas}
             managePage
           />
           <VendasPagination

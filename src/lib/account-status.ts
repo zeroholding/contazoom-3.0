@@ -1,7 +1,7 @@
 
 import prisma from "@/lib/prisma";
 
-export type AccountPlatform = 'meli' | 'shopee' | 'bling';
+export type AccountPlatform = 'meli' | 'shopee' | 'tiktok' | 'bling';
 
 /**
  * Limpa a marcação de inválido de uma conta
@@ -21,6 +21,12 @@ export async function clearAccountInvalidMark(
         break;
       case 'shopee':
         await prisma.shopeeAccount.update({
+          where: { id: accountId },
+          data: { refresh_token_invalid_until: null }
+        });
+        break;
+      case 'tiktok':
+        await prisma.tiktokAccount.update({
           where: { id: accountId },
           data: { refresh_token_invalid_until: null }
         });
@@ -59,6 +65,12 @@ export async function markAccountAsInvalid(
         break;
       case 'shopee':
         await prisma.shopeeAccount.update({
+          where: { id: accountId },
+          data: { refresh_token_invalid_until: invalidUntil }
+        });
+        break;
+      case 'tiktok':
+        await prisma.tiktokAccount.update({
           where: { id: accountId },
           data: { refresh_token_invalid_until: invalidUntil }
         });

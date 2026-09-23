@@ -24,10 +24,14 @@ type Option = {
   label: string;
 };
 
+// Os `id` são os mesmos que `canalIncluiPlataforma` e `getCanalWhere` esperam na
+// query string (ver src/lib/dashboard-filters.ts). Mudar um aqui sem mudar lá faz
+// o filtro ser ignorado em silêncio, não dar erro.
 const canalOptions: Option[] = [
   { id: "todos", label: "Todos os Canais" },
   { id: "mercado_livre", label: "Mercado Livre" },
   { id: "shopee", label: "Shopee" },
+  { id: "tiktok", label: "TikTok Shop" },
 ];
 
 const statusOptions: Option[] = [

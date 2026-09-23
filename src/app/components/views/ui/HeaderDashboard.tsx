@@ -6,8 +6,23 @@ import FiltrosDashboard, { FiltroPeriodo } from "./FiltrosDashboard";
 import FiltrosDashboardExtra, { type FiltroCanal, type FiltroStatus, type FiltroTipoAnuncio, type FiltroModalidadeEnvio } from "./FiltrosDashboardExtra";
 import FiltroSKU, { type FiltroAgrupamentoSKU } from "./FiltroSKU";
 import BotaoSincronizarDashboard from "./BotaoSincronizarDashboard";
-import { LogoCanal } from "../comum/logos";
+import { LogoCanal, type CanalLogo } from "../comum/logos";
 import { API_CONFIG } from "@/lib/api-config";
+
+/** Plataforma da conta escolhida no dropdown (`todos` = sem filtro de conta). */
+type PlataformaConta = 'meli' | 'shopee' | 'tiktok' | 'todos';
+
+/**
+ * A plataforma da conta -> o canal do logo.
+ *
+ * Era `platform === 'meli' ? 'ML' : 'SP'`, e ternário binário com TRÊS canais cai
+ * silenciosamente no último ramo: o TikTok aparecia com o logo da Shopee.
+ */
+const CANAL_DA_PLATAFORMA: Record<'meli' | 'shopee' | 'tiktok', CanalLogo> = {
+  meli: 'ML',
+  shopee: 'SP',
+  tiktok: 'TT',
+};
 
 interface HeaderDashboardProps {
   periodoAtivo: FiltroPeriodo;
@@ -24,8 +39,8 @@ interface HeaderDashboardProps {
   agrupamentoSKUAtivo: FiltroAgrupamentoSKU;
   onAgrupamentoSKUChange: (v: FiltroAgrupamentoSKU) => void;
   onForceRefresh: () => void;
-  selectedAccount?: { platform: 'meli' | 'shopee' | 'todos'; id?: string; label?: string };
-  onAccountChange?: (account: { platform: 'meli' | 'shopee' | 'todos'; id?: string; label?: string }) => void;
+  selectedAccount?: { platform: PlataformaConta; id?: string; label?: string };
+  onAccountChange?: (account: { platform: PlataformaConta; id?: string; label?: string }) => void;
 }
 
 export default function HeaderDashboard({
@@ -56,6 +71,7 @@ export default function HeaderDashboard({
   });
   const [contasML, setContasML] = useState<Array<{ id: string; nickname: string | null; ml_user_id: number; expires_at: string }>>([]);
   const [contasShopee, setContasShopee] = useState<Array<{ id: string; shop_id: string; shop_name: string | null; expires_at: string }>>([]);
+  const [contasTiktok, setContasTiktok] = useState<Array<{ id: string; shop_id: string; shop_name: string | null; expires_at: string }>>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
 
   useEffect(() => {
@@ -78,10 +94,18 @@ export default function HeaderDashboard({
           const rowsShopee = await resShopee.json();
           if (!aborted) setContasShopee(rowsShopee || []);
         }
+
+        // Carregar contas do TikTok Shop
+        const resTiktok = await API_CONFIG.fetch('/api/tiktok/accounts', { cache: 'no-store', credentials: 'include' });
+        if (resTiktok.ok) {
+          const rowsTiktok = await resTiktok.json();
+          if (!aborted) setContasTiktok(rowsTiktok || []);
+        }
       } catch {
         if (!aborted) {
           setContasML([]);
           setContasShopee([]);
+          setContasTiktok([]);
         }
       } finally {
         if (!aborted) setIsLoadingAccounts(false);
@@ -156,8 +180,8 @@ export default function HeaderDashboard({
                   marketplace é a conta selecionada sem gastar palavra nenhuma —
                   hoje ele mostrava só o apelido, e apelido de loja não diz o
                   canal. Sem seleção, volta o ícone de contas. */}
-              {selectedAccount?.platform === 'meli' || selectedAccount?.platform === 'shopee' ? (
-                <LogoCanal canal={selectedAccount.platform === 'meli' ? 'ML' : 'SP'} />
+              {selectedAccount && selectedAccount.platform !== 'todos' ? (
+                <LogoCanal canal={CANAL_DA_PLATAFORMA[selectedAccount.platform]} />
               ) : (
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -191,7 +215,7 @@ export default function HeaderDashboard({
                     </button>
                   </div>
                   {/* O nome do marketplace com o LOGO ao lado, em vez de só o
-                      texto. As duas listas ficam uma embaixo da outra e são
+                      texto. As três listas ficam uma embaixo da outra e são
                       tipograficamente idênticas; o logo é o que faz a pessoa
                       achar a seção certa antes de ler qualquer coisa. */}
                   <div>
@@ -250,6 +274,37 @@ export default function HeaderDashboard({
                             >
                               <LogoCanal canal="SP" className="shrink-0" />
                               <span className="truncate">{c.shop_name || `Shop ${c.shop_id}`}</span>
+                            </button>
+                            <span className={`ml-2 shrink-0 px-2 py-0.5 rounded-full ${new Date(c.expires_at).getTime() > Date.now() ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {new Date(c.expires_at).getTime() > Date.now() ? 'Ativa' : 'Inativa'}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-gray-900">
+                      <LogoCanal canal="TT" />
+                      TikTok Shop
+                    </h3>
+                    {isLoadingAccounts ? (
+                      <div className="text-xs text-gray-600">Carregando...</div>
+                    ) : contasTiktok.length === 0 ? (
+                      <div className="text-xs text-gray-600">Nenhuma conta conectada</div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {contasTiktok.map((c) => (
+                          <li key={c.id} className="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-gray-50">
+                            <button
+                              className={`flex min-w-0 flex-1 items-center gap-1.5 text-left ${selectedAccount?.platform === 'tiktok' && selectedAccount?.id === c.id ? 'font-semibold text-gray-900' : 'text-gray-800'}`}
+                              onClick={() => {
+                                onAccountChange && onAccountChange({ platform: 'tiktok', id: c.id, label: c.shop_name || `Loja ${c.shop_id}` });
+                                setShowContasDropdown(false);
+                              }}
+                            >
+                              <LogoCanal canal="TT" className="shrink-0" />
+                              <span className="truncate">{c.shop_name || `Loja ${c.shop_id}`}</span>
                             </button>
                             <span className={`ml-2 shrink-0 px-2 py-0.5 rounded-full ${new Date(c.expires_at).getTime() > Date.now() ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                               {new Date(c.expires_at).getTime() > Date.now() ? 'Ativa' : 'Inativa'}

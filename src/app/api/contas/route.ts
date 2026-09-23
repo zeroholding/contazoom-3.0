@@ -6,7 +6,7 @@
  * Duas razões, e a segunda é a que importa.
  *
  * 1. Aquelas rotas devolvem uma conta por plataforma e nada além do cadastro. A
- *    tela precisa do CONJUNTO (as duas plataformas de uma vez) e de dados que só
+ *    tela precisa do CONJUNTO (as três plataformas de uma vez) e de dados que só
  *    existem cruzando com as vendas: quantas foram sincronizadas, qual a última,
  *    quando o sync rodou. Sem isso, "dados da conta" seria só o que já está no
  *    nome do cartão.
@@ -89,10 +89,17 @@ export async function GET(req: NextRequest) {
   const userId = session.sub;
 
   try {
-    // `groupBy` e não uma contagem por conta dentro de um laço: com três contas
-    // seriam sete idas ao banco em vez de quatro, e a tela abre com todas as
-    // plataformas de uma vez.
-    const [contasMeli, contasShopee, vendasMeli, vendasShopee] = await Promise.all([
+    // `groupBy` e não uma contagem por conta dentro de um laço: a contagem por
+    // laço cresceria com o número de CONTAS, enquanto isto são sempre seis idas
+    // ao banco — duas por plataforma — e a tela abre com todas de uma vez.
+    const [
+      contasMeli,
+      contasShopee,
+      contasTiktok,
+      vendasMeli,
+      vendasShopee,
+      vendasTiktok,
+    ] = await Promise.all([
       prisma.meliAccount.findMany({
         where: { userId },
         // `select` explícito, e é o ponto principal desta rota: sem ele o Prisma
@@ -121,6 +128,19 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { created_at: "desc" },
       }),
+      prisma.tiktokAccount.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          shop_id: true,
+          shop_name: true,
+          expires_at: true,
+          refresh_token_invalid_until: true,
+          created_at: true,
+          updated_at: true,
+        },
+        orderBy: { created_at: "desc" },
+      }),
       prisma.meliVenda.groupBy({
         by: ["meliAccountId"],
         where: { userId },
@@ -133,10 +153,17 @@ export async function GET(req: NextRequest) {
         _count: { _all: true },
         _max: { dataVenda: true, sincronizadoEm: true },
       }),
+      prisma.tiktokVenda.groupBy({
+        by: ["tiktokAccountId"],
+        where: { userId },
+        _count: { _all: true },
+        _max: { dataVenda: true, sincronizadoEm: true },
+      }),
     ]);
 
     const porContaMeli = new Map(vendasMeli.map((v) => [v.meliAccountId, v]));
     const porContaShopee = new Map(vendasShopee.map((v) => [v.shopeeAccountId, v]));
+    const porContaTiktok = new Map(vendasTiktok.map((v) => [v.tiktokAccountId, v]));
 
     const contas: ContaPlataforma[] = [
       ...contasMeli.map((c) => {
@@ -162,6 +189,22 @@ export async function GET(req: NextRequest) {
         return {
           id: c.id,
           canal: "SP" as CanalConta,
+          nome: c.shop_name?.trim() || `Loja ${c.shop_id}`,
+          identificador: c.shop_id,
+          situacao: situacao(c.expires_at, c.refresh_token_invalid_until),
+          tokenExpiraEm: iso(c.expires_at),
+          conectadaEm: iso(c.created_at),
+          tokenAtualizadoEm: iso(c.updated_at),
+          vendas: agg?._count._all ?? 0,
+          ultimaVenda: iso(agg?._max.dataVenda),
+          ultimoSync: iso(agg?._max.sincronizadoEm),
+        };
+      }),
+      ...contasTiktok.map((c) => {
+        const agg = porContaTiktok.get(c.id);
+        return {
+          id: c.id,
+          canal: "TT" as CanalConta,
           nome: c.shop_name?.trim() || `Loja ${c.shop_id}`,
           identificador: c.shop_id,
           situacao: situacao(c.expires_at, c.refresh_token_invalid_until),

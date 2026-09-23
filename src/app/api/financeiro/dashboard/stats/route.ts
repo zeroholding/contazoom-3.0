@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getDashboardFiltersWhere, getStatusWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere, getStatusWhere } from "@/lib/dashboard-filters";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 import { cache, createCacheKey } from "@/lib/cache";
@@ -57,13 +57,13 @@ export async function GET(req: NextRequest) {
     const periodoParam = url.searchParams.get("periodo");
     const dataInicioParam = url.searchParams.get("dataInicio");
     const dataFimParam = url.searchParams.get("dataFim");
-    const canalParam = url.searchParams.get("canal"); // mercado_livre | shopee
+    const canalParam = url.searchParams.get("canal"); // mercado_livre | shopee | tiktok
     const statusParam = url.searchParams.get("status"); // pagos | cancelados | todos
     const tipoAnuncioParam = url.searchParams.get("tipoAnuncio"); // catalogo | proprio
     const modalidadeParam = url.searchParams.get("modalidade"); // me | full | flex
     const tipoVisualizacao = url.searchParams.get("tipo") || "caixa"; // caixa | competencia
     const now = new Date();
-    const accountPlatformParam = url.searchParams.get("accountPlatform"); // 'meli' | 'shopee'
+    const accountPlatformParam = url.searchParams.get("accountPlatform"); // 'meli' | 'shopee' | 'tiktok'
     const accountIdParam = url.searchParams.get("accountId");
 
     // 🔑 Cache em memória por usuário + combinação de filtros (período/canal/status/conta)
@@ -225,13 +225,23 @@ export async function GET(req: NextRequest) {
       status: statusParam,
       canal: canalParam,
     });
+    // TikTok Shop não tem tipoAnuncio nem modalidade (exclusivos do ML)
+    const dashboardWhereTiktok = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
 
     // Helper for trend calculations (apenas vendas pagas/completas)
     const paidOnly = getStatusWhere('pagos');
 
-    // Buscar vendas do Mercado Livre e Shopee em PARALELO para melhor performance
-    const [vendasMeli, vendasShopee] = await Promise.all([
-      prisma.meliVenda.findMany({
+    // Buscar vendas do Mercado Livre, Shopee e TikTok Shop em PARALELO para melhor performance
+    //
+    // O guard é por INCLUSÃO. O `canalParam === "shopee" ? [] : ...` de antes
+    // funcionava com duas plataformas porque "não é Shopee" equivalia a "é ML";
+    // com três, filtrar por `tiktok` não exclui o ML e o painel somaria Mercado
+    // Livre dentro de um filtro de TikTok.
+    const [vendasMeli, vendasShopee, vendasTiktok] = await Promise.all([
+      canalIncluiPlataforma(canalParam, 'meli') ? prisma.meliVenda.findMany({
         where: useRange
           ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli }
           : { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli },
@@ -250,8 +260,8 @@ export async function GET(req: NextRequest) {
         },
         distinct: ['orderId'],
         orderBy: { dataVenda: "desc" },
-      }),
-      prisma.shopeeVenda.findMany({
+      }) : [],
+      canalIncluiPlataforma(canalParam, 'shopee') ? prisma.shopeeVenda.findMany({
         where: useRange
           ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee }
           : { userId: session.sub, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee },
@@ -269,24 +279,41 @@ export async function GET(req: NextRequest) {
         },
         distinct: ['orderId'],
         orderBy: { dataVenda: "desc" },
-      })
+      }) : [],
+      canalIncluiPlataforma(canalParam, 'tiktok') ? prisma.tiktokVenda.findMany({
+        where: useRange
+          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}), ...dashboardWhereTiktok }
+          : { userId: session.sub, ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}), ...dashboardWhereTiktok },
+        select: {
+          orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
+          tiktokAccountId: true,
+          valorTotal: true,
+          taxaPlataforma: true,
+          frete: true,
+          quantidade: true,
+          sku: true,
+          conta: true,
+          plataforma: true,
+          dataVenda: true,
+        },
+        distinct: ['orderId'],
+        orderBy: { dataVenda: "desc" },
+      }) : [],
     ]);
 
-    // Consolidar vendas baseado no filtro de canal
-    let vendas;
-    if (canalParam === 'mercado_livre') {
-      vendas = vendasMeli;
-    } else if (canalParam === 'shopee') {
-      vendas = vendasShopee;
-    } else {
-      // Se 'todos' ou não especificado, combinar ambas
-      vendas = [...vendasMeli, ...vendasShopee];
-    }
+    // Consolidar as vendas das plataformas incluídas no filtro de canal
+    // (as excluídas já vieram como lista vazia do guard acima)
+    let vendas = [...vendasMeli, ...vendasShopee, ...vendasTiktok];
 
     // ⚠️ DEDUPLICAÇÃO ADICIONAL: Garantir que nenhum orderId seja contado duas vezes
     // O distinct do Prisma pode não funcionar perfeitamente em todos os casos
+    //
+    // A chave é PLATAFORMA + orderId, não o orderId solto: `order_id` é @unique em
+    // cada tabela, então duplicata dentro de uma plataforma não existe. Um Set
+    // global de orderId só disparava com o MESMO número em plataformas DIFERENTES
+    // — e aí descartava uma venda real.
     const vendasDeduplicadas: typeof vendas = [];
-    const orderIdsVistos = new Set<string>();
+    const chavesVistas = new Set<string>();
     
     for (const venda of vendas) {
       const orderId = (venda as any).orderId;
@@ -297,8 +324,15 @@ export async function GET(req: NextRequest) {
         continue;
       }
       
-      if (!orderIdsVistos.has(orderId)) {
-        orderIdsVistos.add(orderId);
+      const plataformaChave = 'meliAccountId' in venda
+        ? 'meli'
+        : 'shopeeAccountId' in venda
+          ? 'shopee'
+          : 'tiktok';
+      const chave = `${plataformaChave}:${orderId}`;
+
+      if (!chavesVistas.has(chave)) {
+        chavesVistas.add(chave);
         vendasDeduplicadas.push(venda);
       }
     }
@@ -336,8 +370,9 @@ export async function GET(req: NextRequest) {
       const custoUnit = v.sku ? costMap.getCostAtDate(v.sku, v.dataVenda) : 0;
       const cmv = custoUnit * qtd;
 
+      // Flex é só do Mercado Livre: Shopee e TikTok Shop usam o frete original
       const fr =
-        v.plataforma === "Shopee"
+        v.plataforma === "Shopee" || v.plataforma === "TikTok Shop"
           ? freteOriginal
           : calculateMeliFlexShipping({
               frete: freteOriginal,
@@ -399,7 +434,7 @@ export async function GET(req: NextRequest) {
           mesAno: string;
           conta: string;
           accountId: string;
-          plataforma: "meli" | "shopee";
+          plataforma: "meli" | "shopee" | "tiktok";
           faturamento: number;
         }
       >();
@@ -413,8 +448,17 @@ export async function GET(req: NextRequest) {
         const conta = v.conta.trim();
         if (!conta) continue;
         const isMeli = "meliAccountId" in v;
-        const accountId = isMeli ? v.meliAccountId : v.shopeeAccountId;
-        const plataforma = isMeli ? "meli" : "shopee";
+        const isShopee = "shopeeAccountId" in v;
+        const accountId = isMeli
+          ? v.meliAccountId
+          : isShopee
+            ? v.shopeeAccountId
+            : v.tiktokAccountId;
+        const plataforma: "meli" | "shopee" | "tiktok" = isMeli
+          ? "meli"
+          : isShopee
+            ? "shopee"
+            : "tiktok";
         const valorTotal = toNumber(v.valorTotal);
 
         const key = `${mesAno}\u0000${plataforma}\u0000${accountId}`;
@@ -468,8 +512,10 @@ export async function GET(req: NextRequest) {
     const [
       vendasMeliUltimoMes,
       vendasShopeeUltimoMes,
+      vendasTiktokUltimoMes,
       vendasMeliPenultimoMes,
-      vendasShopeePenultimoMes
+      vendasShopeePenultimoMes,
+      vendasTiktokPenultimoMes
     ] = await Promise.all([
       prisma.meliVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
@@ -481,12 +527,22 @@ export async function GET(req: NextRequest) {
         select: { valorTotal: true },
         distinct: ['orderId'],
       }),
+      prisma.tiktokVenda.findMany({
+        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
+        select: { valorTotal: true },
+        distinct: ['orderId'],
+      }),
       prisma.meliVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
         select: { valorTotal: true },
         distinct: ['orderId'],
       }),
       prisma.shopeeVenda.findMany({
+        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
+        select: { valorTotal: true },
+        distinct: ['orderId'],
+      }),
+      prisma.tiktokVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
         select: { valorTotal: true },
         distinct: ['orderId'],
@@ -511,10 +567,12 @@ export async function GET(req: NextRequest) {
 
     const faturamentoPrev =
       vendasMeliPenultimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
-      vendasShopeePenultimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0);
+      vendasShopeePenultimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
+      vendasTiktokPenultimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0);
     const faturamentoUltimo =
       vendasMeliUltimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
-      vendasShopeeUltimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0);
+      vendasShopeeUltimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
+      vendasTiktokUltimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0);
     const faturamentoTendencia = faturamentoPrev > 0
       ? ((faturamentoUltimo - faturamentoPrev) / Math.abs(faturamentoPrev)) * 100
       : 0;
@@ -522,8 +580,10 @@ export async function GET(req: NextRequest) {
     // Separar taxas e frete por plataforma
     const mercadoLivreTaxa = taxasPorPlataforma.get("Mercado Livre") || 0;
     const shopeeTaxa = taxasPorPlataforma.get("Shopee") || 0;
+    const tiktokTaxa = taxasPorPlataforma.get("TikTok Shop") || 0;
     const mercadoLivreFrete = fretePorPlataforma.get("Mercado Livre") || 0;
     const shopeeFrete = fretePorPlataforma.get("Shopee") || 0;
+    const tiktokFrete = fretePorPlataforma.get("TikTok Shop") || 0;
 
     // Garantir que todos os valores são números válidos (não NaN, Infinity, etc)
     const safeNumber = (val: number) => {
@@ -539,11 +599,13 @@ export async function GET(req: NextRequest) {
         total: safeNumber(taxasTotalAbs),
         mercadoLivre: safeNumber(mercadoLivreTaxa),
         shopee: safeNumber(shopeeTaxa),
+        tiktok: safeNumber(tiktokTaxa),
       },
       custoFrete: {
         total: safeNumber(freteTotalLiquido),
-        mercadoLivre: safeNumber(fretePorPlataforma.get("Mercado Livre") || 0),
-        shopee: safeNumber(fretePorPlataforma.get("Shopee") || 0),
+        mercadoLivre: safeNumber(mercadoLivreFrete),
+        shopee: safeNumber(shopeeFrete),
+        tiktok: safeNumber(tiktokFrete),
       },
       receitaLiquida: safeNumber(receitaLiquida), // Receita líquida após taxas e frete
       cmv: safeNumber(cmvTotal),

@@ -9,24 +9,27 @@
  * constante de verdade dali.
  */
 
-export type CanalConta = "ML" | "SP";
+export type CanalConta = "ML" | "SP" | "TT";
 
-export const CANAIS_CONTA: CanalConta[] = ["ML", "SP"];
+export const CANAIS_CONTA: CanalConta[] = ["ML", "SP", "TT"];
 
 export const CANAL_CONTA_NOME: Record<CanalConta, string> = {
   ML: "Mercado Livre",
   SP: "Shopee",
+  TT: "TikTok Shop",
 };
 
 export const CANAL_CONTA_DESCRICAO: Record<CanalConta, string> = {
   ML: "Vendas, anúncios, estoque Full e expedição.",
   SP: "Vendas, repasses e expedição.",
+  TT: "Vendas e liquidação. O financeiro fecha quando o pedido liquida.",
 };
 
 /** Como cada plataforma chama o identificador da conta. */
 export const CANAL_CONTA_ID_ROTULO: Record<CanalConta, string> = {
   ML: "ID do vendedor",
   SP: "ID da loja",
+  TT: "ID da loja",
 };
 
 /**

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
@@ -91,6 +91,11 @@ export async function GET(req: NextRequest) {
       status: statusParam,
       canal: canalParam,
     });
+    // TikTok Shop não tem tipoAnuncio nem modalidade (exclusivos do ML)
+    const dashboardWhereTiktok = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
 
     const whereMeli = {
       userId: session.sub,
@@ -106,28 +111,46 @@ export async function GET(req: NextRequest) {
       ...dashboardWhereShopee,
     };
 
+    const whereTiktok = {
+      userId: session.sub,
+      ...(useRange ? { dataVenda: { gte: start, lte: end } } : {}),
+      ...(accountPlatformParam === "tiktok" && accountIdParam ? { tiktokAccountId: accountIdParam } : {}),
+      ...dashboardWhereTiktok,
+    };
+
     // Agregação no banco via groupBy (substitui findMany + loop em JS).
     // orderId é @unique em cada tabela, então não há duplicatas para deduplicar.
-    const [gruposMeli, gruposShopee] = await Promise.all([
-      canalParam === "shopee" ? [] : prisma.meliVenda.groupBy({
+    //
+    // Guard por INCLUSÃO: `canalParam === "shopee" ? []` funcionava com duas
+    // plataformas porque "não é Shopee" equivalia a "é ML". Com três, filtrar por
+    // `tiktok` não exclui o ML e o painel somaria Mercado Livre dentro de um filtro
+    // de TikTok.
+    const [gruposMeli, gruposShopee, gruposTiktok] = await Promise.all([
+      canalIncluiPlataforma(canalParam, "meli") ? prisma.meliVenda.groupBy({
         by: ["conta"],
         where: whereMeli,
         _sum: { valorTotal: true, quantidade: true },
         _count: { _all: true },
-      }),
-      canalParam === "mercado_livre" ? [] : prisma.shopeeVenda.groupBy({
+      }) : [],
+      canalIncluiPlataforma(canalParam, "shopee") ? prisma.shopeeVenda.groupBy({
         by: ["conta"],
         where: whereShopee,
         _sum: { valorTotal: true, quantidade: true },
         _count: { _all: true },
-      }),
+      }) : [],
+      canalIncluiPlataforma(canalParam, "tiktok") ? prisma.tiktokVenda.groupBy({
+        by: ["conta"],
+        where: whereTiktok,
+        _sum: { valorTotal: true, quantidade: true },
+        _count: { _all: true },
+      }) : [],
     ]);
 
-    // Agrupar por conta (mescla meli + shopee por nome de conta)
+    // Agrupar por conta (mescla meli + shopee + tiktok por nome de conta)
     const mapa = new Map<string, { faturamento: number; quantidade: number }>();
     let totalVendas = 0;
 
-    for (const g of [...gruposMeli, ...gruposShopee]) {
+    for (const g of [...gruposMeli, ...gruposShopee, ...gruposTiktok]) {
       const conta = g.conta?.trim() || "Sem conta";
       const atual = mapa.get(conta) ?? { faturamento: 0, quantidade: 0 };
       mapa.set(conta, {

@@ -10,7 +10,12 @@ const MELI_API_BASE =
   process.env.MELI_API_BASE?.replace(/\/$/, "") ||
   "https://api.mercadolibre.com";
 
-type Marketplace = "Mercado Livre" | "Shopee";
+/**
+ * Vira texto em `observacoes` e valor em `tags` do SKU criado, então o rótulo é
+ * o nome por extenso da plataforma — o mesmo que `TiktokVenda.plataforma` usa
+ * como default, para as duas pontas dizerem a mesma coisa.
+ */
+type Marketplace = "Mercado Livre" | "Shopee" | "TikTok Shop";
 
 export type SkuDiscoveryCandidate = {
   sku: string | null | undefined;
@@ -360,6 +365,55 @@ export function collectSkuCandidatesFromShopeeOrders(
             ? `${item.item_id}:${item.model_id}`
             : item?.item_id
               ? String(item.item_id)
+              : null,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * SKUs vistos nos pedidos do TikTok Shop.
+ *
+ * ⚠️  Diferença em relação à Shopee: no TikTok cada `line_item` é UMA UNIDADE,
+ * não um item com quantidade. Um pedido de 3 unidades do mesmo SKU gera 3
+ * candidatos idênticos — o que não é problema, porque `uniqueCandidates` já
+ * deduplica antes de tocar o banco.
+ *
+ * `seller_sku` é o código que o vendedor cadastrou e é o que interessa; `sku_id`
+ * é o identificador interno do TikTok e entra só como último recurso, para o
+ * pedido não ficar sem SKU nenhum.
+ */
+export function collectSkuCandidatesFromTiktokOrders(
+  orders: unknown[],
+  account: { shop_id: string; shop_name?: string | null },
+): SkuDiscoveryCandidate[] {
+  const candidates: SkuDiscoveryCandidate[] = [];
+  const accountName = account.shop_name || account.shop_id;
+
+  for (const order of orders) {
+    const lineItems = Array.isArray((order as any)?.line_items)
+      ? (order as any).line_items
+      : [];
+
+    for (const item of lineItems) {
+      const sku =
+        normalizeDiscoveredSku(item?.seller_sku) ||
+        normalizeDiscoveredSku(item?.sku_id);
+
+      if (!sku) continue;
+
+      candidates.push({
+        sku,
+        produto: item?.product_name || "Produto TikTok Shop",
+        plataforma: "TikTok Shop",
+        conta: accountName,
+        externalId:
+          item?.product_id && item?.sku_id
+            ? `${item.product_id}:${item.sku_id}`
+            : item?.product_id
+              ? String(item.product_id)
               : null,
       });
     }

@@ -121,7 +121,7 @@ interface VendasTableProps {
    * fazia nada. Ver o cabeçalho de `colunasVendas.ts`.
    */
   colunasVisiveis?: Partial<ColunasVisiveis>;
-  platform?: "Mercado Livre" | "Shopee" | "Geral";
+  platform?: "Mercado Livre" | "Shopee" | "TikTok Shop" | "Geral";
   managePage?: boolean;
 }
 

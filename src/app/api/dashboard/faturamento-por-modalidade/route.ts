@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
@@ -97,12 +97,18 @@ export async function GET(req: NextRequest) {
 
     // Para Meli, agrupar por logisticType no banco (groupBy).
     // orderId é @unique, então não há duplicatas a deduplicar.
-    const gruposMeli = canalParam === "shopee" ? [] : await prisma.meliVenda.groupBy({
+    //
+    // Modalidade de envio é atributo só do Mercado Livre — Shopee e TikTok Shop
+    // ficam de fora desta rota. O guard é por INCLUSÃO: `canalParam === "shopee"`
+    // funcionava com duas plataformas porque "não é Shopee" equivalia a "é ML";
+    // com três, filtrar por `tiktok` não excluía o ML e a rota respondia com as
+    // modalidades do Mercado Livre dentro de um filtro de TikTok.
+    const gruposMeli = canalIncluiPlataforma(canalParam, "meli") ? await prisma.meliVenda.groupBy({
       by: ["logisticType"],
       where: whereMeli,
       _sum: { valorTotal: true, quantidade: true },
       _count: { _all: true },
-    });
+    }) : [];
 
     const mapa = new Map<string, { faturamento: number; quantidade: number }>();
     let totalVendas = 0;

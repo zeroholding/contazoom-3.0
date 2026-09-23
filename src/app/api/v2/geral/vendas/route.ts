@@ -6,8 +6,25 @@ import { Prisma } from "@prisma/client";
 import { calculateShopeeFinancials } from "@/lib/shopee-finance";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
+import {
+  applyTiktokSettlement,
+  calculateTiktokEstimatedFinancials,
+} from "@/lib/tiktok-finance";
 
 export const runtime = "nodejs";
+
+/**
+ * Rótulo de plataforma do `UNION ALL` -> chave usada em
+ * `AliquotaImposto.plataforma` (o `tipo` de `listTaxAccounts`).
+ *
+ * As duas pontas precisam falar a mesma língua, senão a alíquota cadastrada para
+ * uma conta nunca casa com a venda dela.
+ */
+const PLATAFORMA_ALIQUOTA: Record<string, string> = {
+  "Mercado Livre": "meli",
+  Shopee: "shopee",
+  "TikTok Shop": "tiktok",
+};
 
 function roundCurrency(value: number): number {
   const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
@@ -44,6 +61,10 @@ export async function GET(req: NextRequest) {
     
   const contaShopeeCondition = contaFilter
     ? Prisma.sql`AND "shopee_account_id" = ${contaFilter}`
+    : Prisma.empty;
+
+  const contaTiktokCondition = contaFilter
+    ? Prisma.sql`AND "tiktok_account_id" = ${contaFilter}`
     : Prisma.empty;
 
   const dateCondition = dataVendaMin && dataVendaMax
@@ -127,7 +148,45 @@ export async function GET(req: NextRequest) {
       ${dateCondition}
       ${statusCondition}
       ${contaShopeeCondition}
-      
+
+      UNION ALL
+
+      SELECT
+        'TikTok Shop' as plataforma,
+        "order_id" as "orderId",
+        "data_venda" as "dataVenda",
+        "status",
+        "conta",
+        "tiktok_account_id" as "accountId",
+        "valor_total" as "valorTotal",
+        "quantidade",
+        "valor_unitario" as "unitario",
+        "taxa_plataforma" as "taxaPlataforma",
+        "valor_frete" as "frete",
+        "frete_ajuste" as "freteAjuste",
+        "titulo",
+        "sku",
+        "comprador",
+        "logistic_type" as "logisticType",
+        "envio_mode" as "envioMode",
+        "shipping_status" as "shippingStatus",
+        "shipping_id" as "shippingId",
+        NULL as "exposicao",
+        NULL as "tipoAnuncio",
+        NULL as "ads",
+        "canal",
+        "sincronizado_em" as "sincronizadoEm",
+        "latitude",
+        "longitude",
+        "raw_data" as "rawData",
+        "payment_details" as "paymentDetails",
+        "shipment_details" as "shipmentDetails"
+      FROM tiktok_venda
+      WHERE "user_id" = ${session.sub}
+      ${dateCondition}
+      ${statusCondition}
+      ${contaTiktokCondition}
+
       ORDER BY "dataVenda" DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -137,7 +196,7 @@ export async function GET(req: NextRequest) {
     // do período/conta selecionados. A deduplicação é feita por tabela via
     // SELECT DISTINCT sobre "order_id" (order_id é @unique dentro de cada tabela);
     // a coluna "src" mantém separados eventuais order_ids iguais entre meli e
-    // shopee, que representam vendas distintas em plataformas diferentes.
+    // shopee/tiktok, que representam vendas distintas em plataformas diferentes.
     const counts: any[] = await prisma.$queryRaw`
       SELECT 
         COUNT(*) as total,
@@ -149,6 +208,9 @@ export async function GET(req: NextRequest) {
         UNION ALL
         SELECT DISTINCT 'shopee' AS src, "order_id", "status" FROM shopee_venda 
         WHERE "user_id" = ${session.sub} ${dateCondition} ${contaShopeeCondition}
+        UNION ALL
+        SELECT DISTINCT 'tiktok' AS src, "order_id", "status" FROM tiktok_venda
+        WHERE "user_id" = ${session.sub} ${dateCondition} ${contaTiktokCondition}
       ) AS t
     `;
 
@@ -170,6 +232,9 @@ export async function GET(req: NextRequest) {
             UNION ALL
             SELECT DISTINCT 'shopee' AS src, "order_id" FROM shopee_venda 
             WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaShopeeCondition}
+            UNION ALL
+            SELECT DISTINCT 'tiktok' AS src, "order_id" FROM tiktok_venda
+            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaTiktokCondition}
           ) AS t
         `
       : counts;
@@ -221,17 +286,37 @@ export async function GET(req: NextRequest) {
             })
           : null;
 
+      /*
+       * TikTok Shop: estimado a partir do pedido cru e, se o extrato já estiver
+       * guardado em `paymentDetails.statement`, o real por cima. Sem o segundo
+       * passo um pedido liquidado voltaria ao estimado e a comissão de afiliado
+       * (que só existe no extrato) desapareceria do consolidado.
+       */
+      const tiktokFinancials = (() => {
+        if (venda.plataforma !== "TikTok Shop") return null;
+        const estimado = calculateTiktokEstimatedFinancials(venda.rawData ?? {});
+        const statement = (venda.paymentDetails as Record<string, unknown> | null)
+          ?.statement as Record<string, unknown> | undefined;
+        return (statement ? applyTiktokSettlement(estimado, statement) : null) ?? estimado;
+      })();
+
       const valorTotal = shopeeFinancials
         ? shopeeFinancials.effectiveProductSubtotal
-        : Number(venda.valorTotal);
+        : tiktokFinancials
+          ? tiktokFinancials.effectiveProductSubtotal
+          : Number(venda.valorTotal);
       const taxaPlataforma = shopeeFinancials
         ? (shopeeFinancials.platformFee ?? 0)
-        : venda.taxaPlataforma
-          ? Number(venda.taxaPlataforma)
-          : 0;
+        : tiktokFinancials
+          ? tiktokFinancials.platformFee
+          : venda.taxaPlataforma
+            ? Number(venda.taxaPlataforma)
+            : 0;
       const frete = shopeeFinancials
         ? shopeeFinancials.freight
-        : Number(venda.frete);
+        : tiktokFinancials
+          ? tiktokFinancials.freight
+          : Number(venda.frete);
       const flex =
         venda.plataforma === "Mercado Livre"
           ? calculateMeliFlexShipping({
@@ -246,12 +331,26 @@ export async function GET(req: NextRequest) {
       const dataVenda = new Date(venda.dataVenda);
       const contaNormalizada = (venda.conta || "").trim().toLocaleLowerCase("pt-BR");
       const accountId = venda.accountId || "";
-      const plataformaMatch = venda.plataforma === "Mercado Livre" ? "meli" : "shopee";
+      /*
+       * Rótulo por extenso -> chave de `AliquotaImposto.plataforma`.
+       *
+       * Era um ternário binário (`=== "Mercado Livre" ? "meli" : "shopee"`), que
+       * com a terceira plataforma passaria a classificar TODA venda do TikTok
+       * como Shopee: a alíquota da Shopee seria aplicada ao faturamento do TikTok
+       * e a do TikTok nunca casaria. Mapa explícito não tem esse ramo cego.
+       */
+      const plataformaMatch = PLATAFORMA_ALIQUOTA[venda.plataforma] ?? null;
       
       const aliquotaMes = aliquotas.find((aliq: any) => {
         const aliqInicio = new Date(aliq.dataInicio);
         const aliqFim = new Date(aliq.dataFim);
-        const matchesStableAccount = aliq.accountId === accountId && aliq.plataforma === plataformaMatch;
+        // `plataformaMatch !== null` na frente: plataforma desconhecida não deve
+        // casar com alíquota que também tenha `plataforma` nula, senão um rótulo
+        // novo herdaria a alíquota de um cadastro legado por acidente.
+        const matchesStableAccount =
+          plataformaMatch !== null &&
+          aliq.accountId === accountId &&
+          aliq.plataforma === plataformaMatch;
         const matchesLegacyAccount = !aliq.accountId && String(aliq.conta).trim().toLocaleLowerCase("pt-BR") === contaNormalizada;
 
         return (
@@ -293,14 +392,18 @@ export async function GET(req: NextRequest) {
         quantidade: venda.quantidade,
         unitario: shopeeFinancials
           ? shopeeFinancials.unitPrice
-          : Number(venda.unitario),
+          : tiktokFinancials
+            ? tiktokFinancials.unitPrice
+            : Number(venda.unitario),
         imposto,
         aliquotaImposto,
         taxaPlataforma: shopeeFinancials
           ? shopeeFinancials.platformFee
-          : venda.taxaPlataforma
-            ? Number(venda.taxaPlataforma)
-            : null,
+          : tiktokFinancials
+            ? tiktokFinancials.platformFee
+            : venda.taxaPlataforma
+              ? Number(venda.taxaPlataforma)
+              : null,
         frete,
         freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
         receitaFlex: flex?.isFlex ? flex.receitaFlex : null,
@@ -311,6 +414,9 @@ export async function GET(req: NextRequest) {
         cmv,
         margemContribuicao,
         isMargemReal,
+        // Só o TikTok tem estado intermediário: enquanto o pedido não liquida, a
+        // taxa da plataforma é estimada. ML e Shopee já entregam número final.
+        financeiroLiquidado: tiktokFinancials ? tiktokFinancials.isReal : true,
         titulo: venda.titulo,
         sku: venda.sku,
         comprador: venda.comprador,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
@@ -187,9 +187,18 @@ export async function GET(req: NextRequest) {
       status: statusParam,
       canal: canalParam,
     });
+    // TikTok Shop não tem tipoAnuncio nem modalidade (exclusivos do ML)
+    const dashboardWhereTiktok = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
 
-    const [vendasMeli, vendasShopee] = await Promise.all([
-      canalParam === "shopee" ? [] : prisma.meliVenda.findMany({
+    // Guard por INCLUSÃO: `canalParam === "shopee" ? []` funcionava com duas
+    // plataformas porque "não é Shopee" equivalia a "é ML". Com três, filtrar por
+    // `tiktok` não exclui o ML e o mapa somaria Mercado Livre dentro de um filtro
+    // de TikTok.
+    const [vendasMeli, vendasShopee, vendasTiktok] = await Promise.all([
+      canalIncluiPlataforma(canalParam, "meli") ? prisma.meliVenda.findMany({
         where: useRange
           ? { userId: session.sub, dataVenda: { gte: start, lte: end },
               ...dashboardWhereMeli,
@@ -198,8 +207,8 @@ export async function GET(req: NextRequest) {
               ...(accountPlatformParam === "meli" && accountIdParam ? { meliAccountId: accountIdParam } : {}) },
         select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
         distinct: ["orderId"],
-      }),
-      canalParam === "mercado_livre" ? [] : prisma.shopeeVenda.findMany({
+      }) : [],
+      canalIncluiPlataforma(canalParam, "shopee") ? prisma.shopeeVenda.findMany({
         where: useRange
           ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereShopee,
               ...(accountPlatformParam === "shopee" && accountIdParam ? { shopeeAccountId: accountIdParam } : {}) }
@@ -207,10 +216,19 @@ export async function GET(req: NextRequest) {
               ...(accountPlatformParam === "shopee" && accountIdParam ? { shopeeAccountId: accountIdParam } : {}) },
         select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
         distinct: ["orderId"],
-      }),
+      }) : [],
+      canalIncluiPlataforma(canalParam, "tiktok") ? prisma.tiktokVenda.findMany({
+        where: useRange
+          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereTiktok,
+              ...(accountPlatformParam === "tiktok" && accountIdParam ? { tiktokAccountId: accountIdParam } : {}) }
+          : { userId: session.sub, ...dashboardWhereTiktok,
+              ...(accountPlatformParam === "tiktok" && accountIdParam ? { tiktokAccountId: accountIdParam } : {}) },
+        select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
+        distinct: ["orderId"],
+      }) : [],
     ]);
 
-    const todas = [...vendasMeli, ...vendasShopee];
+    const todas = [...vendasMeli, ...vendasShopee, ...vendasTiktok];
     const mapaEstados = new Map<string, { quantidade: number; valor: number }>();
 
     let semCoordenadas = 0;

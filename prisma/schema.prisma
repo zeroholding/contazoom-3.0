@@ -29,6 +29,8 @@ model User {
   shopeeAccounts      ShopeeAccount[]
   shopeeOauthStates   ShopeeOauthState[]
   shopeeVendas        ShopeeVenda[]
+  tiktokAccounts      TiktokAccount[]
+  tiktokVendas        TiktokVenda[]
   skus                SKU[]
   skuCustoHistorico   SKUCustoHistorico[]
   notifications       SyncNotification[]
@@ -111,6 +113,118 @@ model ShopeeOauthState {
 
   @@index([expires_at])
   @@map("shopee_oauth_state")
+}
+
+/// Loja do TikTok Shop conectada por um usuário.
+///
+/// Segue a forma de `ShopeeAccount`, com duas colunas que não existem em nenhuma
+/// das outras plataformas:
+///
+/// - `shop_cipher`: o TikTok exige esse identificador em TODA chamada com escopo
+///   de loja, e ele entra no cálculo da assinatura HMAC. Sem ele guardado não se
+///   busca um pedido. Vem de `/authorization/202309/shops`, não do OAuth.
+/// - `refresh_expires_at`: a API informa o prazo do refresh token (observado em
+///   ~100 anos). Guardamos o que ela diz em vez de assumir que é eterno.
+///
+/// Não existe `TiktokOauthState` de propósito: as tabelas `meli_oauth_state` e
+/// `shopee_oauth_state` existem no schema e estão órfãs — nenhuma rota de OAuth
+/// as usa, porque o `state` viaja em cookie HttpOnly. Criar a terceira só
+/// acrescentaria tabela morta.
+model TiktokAccount {
+  id                          String        @id @default(cuid())
+  userId                      String        @map("user_id")
+  shop_id                     String
+  shop_cipher                 String?       @map("shop_cipher")
+  shop_name                   String?       @map("shop_name")
+  seller_name                 String?       @map("seller_name")
+  region                      String?
+  access_token                String
+  refresh_token               String
+  expires_at                  DateTime
+  refresh_expires_at          DateTime?     @map("refresh_expires_at")
+  refresh_token_invalid_until DateTime?
+  created_at                  DateTime      @default(now())
+  updated_at                  DateTime      @updatedAt
+  user                        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tiktokVendas                TiktokVenda[]
+
+  @@unique([userId, shop_id], name: "userId_shop_id")
+  @@map("tiktok_account")
+}
+
+/// Venda do TikTok Shop.
+///
+/// Espelha `ShopeeVenda` nas colunas comuns, para a agregação de `/api/vendas` e
+/// o `UNION ALL` de `/api/v2/geral/vendas` alinharem sem caso especial.
+///
+/// `isMargemReal` tem peso maior aqui do que nas outras duas: no TikTok o
+/// financeiro só fica DEFINITIVO quando o pedido liquida (entrega + ~7 dias no
+/// Brasil). O sync grava primeiro o ESTIMADO, para a venda aparecer na hora, e um
+/// segundo passo troca pelo valor do extrato e marca `true`. Enquanto for `false`,
+/// a margem é projeção.
+model TiktokVenda {
+  id                 String        @id @default(cuid())
+  orderId            String        @unique @map("order_id")
+  userId             String        @map("user_id")
+  tiktokAccountId    String        @map("tiktok_account_id")
+  dataVenda          DateTime      @map("data_venda")
+  status             String
+  conta              String
+  valorTotal         Decimal       @map("valor_total") @db.Decimal(10, 2)
+  quantidade         Int
+  unitario           Decimal       @map("valor_unitario") @db.Decimal(10, 2)
+  taxaPlataforma     Decimal?      @map("taxa_plataforma") @db.Decimal(10, 2)
+  frete              Decimal       @map("valor_frete") @db.Decimal(10, 2)
+  freteAjuste        Decimal?      @map("frete_ajuste") @db.Decimal(12, 2)
+  cmv                Decimal?      @map("cmv") @db.Decimal(10, 2)
+  margemContribuicao Decimal?      @map("margem_contribuicao") @db.Decimal(10, 2)
+  isMargemReal       Boolean       @default(false) @map("is_margem_real")
+  titulo             String
+  sku                String?
+  comprador          String
+  itemId             String?       @map("item_id") @db.VarChar(64)
+  logisticType       String?       @map("logistic_type")
+  envioMode          String?       @map("envio_mode")
+  shippingStatus     String?       @map("shipping_status")
+  shippingId         String?       @map("shipping_id")
+
+  /// Prazo para despachar o pedido. Contraparte do campo de mesmo nome em
+  /// `MeliVenda` e `ShopeeVenda` — ver o docblock completo em `MeliVenda`.
+  ///
+  /// No TikTok vem de `rts_time`/`ship_by_date` do pedido, como epoch em
+  /// SEGUNDOS. Mesmo cuidado da Shopee: `0` é "não se aplica" e tem de virar
+  /// NULL, senão a tela anuncia atraso desde 1970.
+  prazoDespacho      DateTime?     @map("prazo_despacho") @db.Timestamptz(3)
+
+  /// Origem do prazo e marcador de "já olhei". Ver `MeliVenda.prazoDespachoOrigem`.
+  /// Valores: `tt_rts_time`, `tt_ship_by_date`, `ausente`.
+  prazoDespachoOrigem String?      @map("prazo_despacho_origem") @db.VarChar(32)
+
+  latitude           Decimal?      @db.Decimal(10, 7)
+  longitude          Decimal?      @db.Decimal(10, 7)
+  shipmentDetails    Json?         @map("shipment_details")
+  paymentDetails     Json?         @map("payment_details")
+  plataforma         String        @default("TikTok Shop")
+  canal              String        @default("TT")
+  tags               Json?
+  internalTags       Json?         @map("internal_tags")
+  rawData            Json?         @map("raw_data")
+  sincronizadoEm     DateTime      @default(now()) @map("sincronizado_em")
+  atualizadoEm       DateTime      @updatedAt @map("atualizado_em")
+  tiktokAccount      TiktokAccount @relation(fields: [tiktokAccountId], references: [id], onDelete: Cascade)
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tiktokAccountId])
+  @@index([dataVenda])
+  @@index([orderId])
+  @@index([userId, dataVenda(sort: Desc)])
+  @@index([sku])
+  @@index([status])
+  @@index([userId, prazoDespacho])
+  /// Fila do passo de liquidação: só os pedidos que ainda não têm financeiro real.
+  @@index([tiktokAccountId, isMargemReal])
+  @@map("tiktok_venda")
 }
 
 model BlingAccount {

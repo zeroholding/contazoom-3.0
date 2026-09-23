@@ -17,7 +17,7 @@ interface FaturamentoPorExposicaoProps {
   modalidadeEnvioAtiva?: FiltroModalidadeEnvio;
   agrupamentoSKUAtivo?: FiltroAgrupamentoSKU;
   refreshKey?: number;
-  selectedAccount?: { platform: 'meli' | 'shopee' | 'todos'; id?: string };
+  selectedAccount?: { platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string };
 }
 
 type DadosExposicao = {

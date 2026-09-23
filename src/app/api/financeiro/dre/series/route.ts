@@ -103,10 +103,17 @@ export async function GET(req: NextRequest) {
         { status: { contains: "pickup_done", mode: "insensitive" as const } },
         { status: { contains: "arranging_shipment", mode: "insensitive" as const } },
         { status: { contains: "first_mile_arrived", mode: "insensitive" as const } },
+        // TikTok Shop: `COMPLETED`/`DELIVERED` já entram pelas linhas acima; estes
+        // são os estados intermediários que só existem lá. `UNPAID` fica de fora
+        // de propósito (pedido criado e não pago) e `CANCELLED` é cancelamento.
+        { status: { contains: "awaiting_shipment", mode: "insensitive" as const } },
+        { status: { contains: "awaiting_collection", mode: "insensitive" as const } },
+        { status: { contains: "partially_shipping", mode: "insensitive" as const } },
+        { status: { contains: "in_transit", mode: "insensitive" as const } },
       ]
     };
 
-    const [vendasMeli, vendasShopee] = await Promise.all([
+    const [vendasMeli, vendasShopee, vendasTiktok] = await Promise.all([
       prisma.meliVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: minDate, lte: maxDate }, ...paidOnly },
         select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, logisticType: true, dataVenda: true },
@@ -116,11 +123,16 @@ export async function GET(req: NextRequest) {
         where: { userId: session.sub, dataVenda: { gte: minDate, lte: maxDate }, ...paidOnly },
         select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, dataVenda: true },
         distinct: ['orderId'],
+      }),
+      prisma.tiktokVenda.findMany({
+        where: { userId: session.sub, dataVenda: { gte: minDate, lte: maxDate }, ...paidOnly },
+        select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, dataVenda: true },
+        distinct: ['orderId'],
       })
     ]);
 
     // Calcular custos
-    const skusUnicos = Array.from(new Set([...vendasMeli, ...vendasShopee].map(v => v.sku).filter(Boolean))) as string[];
+    const skusUnicos = Array.from(new Set([...vendasMeli, ...vendasShopee, ...vendasTiktok].map(v => v.sku).filter(Boolean))) as string[];
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
 
     const flexConfig = await loadActiveFlexShippingConfig(session.sub);
@@ -128,38 +140,52 @@ export async function GET(req: NextRequest) {
     // Inicializar objetos de resposta
     const receitaBrutaMeliPorMes: Record<string, number> = {};
     const receitaBrutaShopeePorMes: Record<string, number> = {};
+    const receitaBrutaTiktokPorMes: Record<string, number> = {};
     const deducoesMeliPorMes: Record<string, number> = {};
     const deducoesShopeePorMes: Record<string, number> = {};
+    const deducoesTiktokPorMes: Record<string, number> = {};
     const taxasMeliPorMes: Record<string, number> = {};
     const taxasShopeePorMes: Record<string, number> = {};
+    const taxasTiktokPorMes: Record<string, number> = {};
     const freteMeliPorMes: Record<string, number> = {};
     const freteShopeePorMes: Record<string, number> = {};
+    const freteTiktokPorMes: Record<string, number> = {};
     const cmvPorMes: Record<string, number> = {};
     
     // Iniciar com 0 para todos os meses solicitados
     for (const m of mesesStr) {
       receitaBrutaMeliPorMes[m] = 0;
       receitaBrutaShopeePorMes[m] = 0;
+      receitaBrutaTiktokPorMes[m] = 0;
       deducoesMeliPorMes[m] = 0; // Se precisarmos de deduções de devoluções no futuro
       deducoesShopeePorMes[m] = 0;
+      deducoesTiktokPorMes[m] = 0;
       taxasMeliPorMes[m] = 0;
       taxasShopeePorMes[m] = 0;
+      taxasTiktokPorMes[m] = 0;
       freteMeliPorMes[m] = 0;
       freteShopeePorMes[m] = 0;
+      freteTiktokPorMes[m] = 0;
       cmvPorMes[m] = 0;
     }
 
-    const orderIdsVistos = new Set<string>();
+    const chavesVistas = new Set<string>();
 
-    const processarVendas = (vendas: any[], plataforma: "meli" | "shopee") => {
+    const processarVendas = (vendas: any[], plataforma: "meli" | "shopee" | "tiktok") => {
       for (const v of vendas) {
         if (!v.dataVenda) continue;
         
         // Deduplicação em JavaScript (garantir que orderIds não sejam somados duplamente)
+        //
+        // A chave é PLATAFORMA + orderId, não o orderId solto: `order_id` é @unique
+        // em cada tabela, então duplicata dentro de uma plataforma não existe. Um
+        // Set global de orderId só disparava com o MESMO número em plataformas
+        // DIFERENTES — e aí descartava uma venda real do DRE.
         const orderId = v.orderId;
         if (orderId) {
-          if (orderIdsVistos.has(orderId)) continue;
-          orderIdsVistos.add(orderId);
+          const chave = `${plataforma}:${orderId}`;
+          if (chavesVistas.has(chave)) continue;
+          chavesVistas.add(chave);
         }
 
         const d = new Date(v.dataVenda);
@@ -185,14 +211,20 @@ export async function GET(req: NextRequest) {
               }).freteLiquidoFlex
             : freteOriginal;
 
+        // Cada plataforma tem sua própria linha no DRE. Sem o ramo explícito do
+        // TikTok Shop, o `else` jogaria as vendas dele na linha da Shopee.
         if (plataforma === "meli") {
           receitaBrutaMeliPorMes[mKey] += vt;
           taxasMeliPorMes[mKey] += taxa;
           freteMeliPorMes[mKey] += fr;
-        } else {
+        } else if (plataforma === "shopee") {
           receitaBrutaShopeePorMes[mKey] += vt;
           taxasShopeePorMes[mKey] += taxa;
           freteShopeePorMes[mKey] += fr;
+        } else {
+          receitaBrutaTiktokPorMes[mKey] += vt;
+          taxasTiktokPorMes[mKey] += taxa;
+          freteTiktokPorMes[mKey] += fr;
         }
         cmvPorMes[mKey] += cmv;
       }
@@ -200,6 +232,7 @@ export async function GET(req: NextRequest) {
 
     processarVendas(vendasMeli, "meli");
     processarVendas(vendasShopee, "shopee");
+    processarVendas(vendasTiktok, "tiktok");
 
     // Buscar Contas a Pagar (Despesas)
     let whereQuery: any = { userId: session.sub, categoria: { tipo: "DESPESA" } };
@@ -256,30 +289,34 @@ export async function GET(req: NextRequest) {
 
     // Calcular Totais
     const totals = {
-      receitaBrutaMeli: 0, receitaBrutaShopee: 0, receitaBrutaTotal: 0,
-      deducoesMeli: 0, deducoesShopee: 0, deducoesTotal: 0,
-      taxasMeli: 0, taxasShopee: 0, taxasTotal: 0,
-      freteMeli: 0, freteShopee: 0, freteTotal: 0,
+      receitaBrutaMeli: 0, receitaBrutaShopee: 0, receitaBrutaTiktok: 0, receitaBrutaTotal: 0,
+      deducoesMeli: 0, deducoesShopee: 0, deducoesTiktok: 0, deducoesTotal: 0,
+      taxasMeli: 0, taxasShopee: 0, taxasTiktok: 0, taxasTotal: 0,
+      freteMeli: 0, freteShopee: 0, freteTiktok: 0, freteTotal: 0,
       cmv: 0, despesas: 0
     };
 
     for (const m of mesesStr) {
       totals.receitaBrutaMeli += receitaBrutaMeliPorMes[m];
       totals.receitaBrutaShopee += receitaBrutaShopeePorMes[m];
+      totals.receitaBrutaTiktok += receitaBrutaTiktokPorMes[m];
       totals.deducoesMeli += deducoesMeliPorMes[m];
       totals.deducoesShopee += deducoesShopeePorMes[m];
+      totals.deducoesTiktok += deducoesTiktokPorMes[m];
       totals.taxasMeli += taxasMeliPorMes[m];
       totals.taxasShopee += taxasShopeePorMes[m];
+      totals.taxasTiktok += taxasTiktokPorMes[m];
       totals.freteMeli += freteMeliPorMes[m];
       totals.freteShopee += freteShopeePorMes[m];
+      totals.freteTiktok += freteTiktokPorMes[m];
       totals.cmv += cmvPorMes[m];
       totals.despesas += despesasPorMes[m];
     }
     
-    totals.receitaBrutaTotal = totals.receitaBrutaMeli + totals.receitaBrutaShopee;
-    totals.deducoesTotal = totals.deducoesMeli + totals.deducoesShopee;
-    totals.taxasTotal = totals.taxasMeli + totals.taxasShopee;
-    totals.freteTotal = totals.freteMeli + totals.freteShopee;
+    totals.receitaBrutaTotal = totals.receitaBrutaMeli + totals.receitaBrutaShopee + totals.receitaBrutaTiktok;
+    totals.deducoesTotal = totals.deducoesMeli + totals.deducoesShopee + totals.deducoesTiktok;
+    totals.taxasTotal = totals.taxasMeli + totals.taxasShopee + totals.taxasTiktok;
+    totals.freteTotal = totals.freteMeli + totals.freteShopee + totals.freteTiktok;
 
     const responsePayload = {
       months,
@@ -287,12 +324,16 @@ export async function GET(req: NextRequest) {
       valoresPorCategoriaMes,
       receitaBrutaMeliPorMes,
       receitaBrutaShopeePorMes,
+      receitaBrutaTiktokPorMes,
       deducoesMeliPorMes,
       deducoesShopeePorMes,
+      deducoesTiktokPorMes,
       taxasMeliPorMes,
       taxasShopeePorMes,
+      taxasTiktokPorMes,
       freteMeliPorMes,
       freteShopeePorMes,
+      freteTiktokPorMes,
       despesasPorMes,
       cmvPorMes,
       totals

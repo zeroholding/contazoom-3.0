@@ -11,6 +11,11 @@ import {
   flexConfigVersion,
 } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
+import {
+  applyTiktokSettlement,
+  calculateTiktokEstimatedFinancials,
+  TIKTOK_FINANCIAL_RULE_VERSION,
+} from "@/lib/tiktok-finance";
 
 export const runtime = "nodejs";
 
@@ -44,10 +49,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const flexConfig = await loadActiveFlexShippingConfig(session.sub);
+    // A versão de regra de CADA plataforma entra na chave: sem a do TikTok, uma
+    // correção na regra dele continuaria servindo o número antigo do cache até o
+    // TTL vencer.
     const cacheKey = createCacheKey(
       "vendas-geral",
       session.sub,
       SHOPEE_FINANCIAL_RULE_VERSION,
+      TIKTOK_FINANCIAL_RULE_VERSION,
       flexConfigVersion(flexConfig),
     );
     const cachedData = cache.get<any>(cacheKey, 300000);
@@ -67,8 +76,8 @@ export async function GET(req: NextRequest) {
     console.log(`[Vendas Gerais] Filtrando vendas a partir de: ${dataInicio.toISOString()}`);
     console.log(`[Vendas Gerais] Buscando vendas para userId: ${session.sub}`);
 
-    // Buscar vendas do Mercado Livre e Shopee em PARALELO para melhor performance
-    const [vendasMeli, vendasShopee] = await Promise.all([
+    // Buscar vendas das três plataformas em PARALELO para melhor performance
+    const [vendasMeli, vendasShopee, vendasTiktok] = await Promise.all([
       prisma.meliVenda.findMany({
         where: { 
           userId: session.sub,
@@ -152,17 +161,59 @@ export async function GET(req: NextRequest) {
           rawData: true,
         },
         orderBy: { dataVenda: "desc" },
+      }),
+      prisma.tiktokVenda.findMany({
+        where: {
+          userId: session.sub,
+          dataVenda: {
+            gte: dataInicio, // Filtrar vendas >= data de início (últimos 6 meses)
+          }
+        },
+        select: {
+          orderId: true,
+          dataVenda: true,
+          status: true,
+          conta: true,
+          tiktokAccountId: true,
+          valorTotal: true,
+          quantidade: true,
+          unitario: true,
+          taxaPlataforma: true,
+          frete: true,
+          freteAjuste: true,
+          cmv: true,
+          titulo: true,
+          sku: true,
+          comprador: true,
+          logisticType: true,
+          envioMode: true,
+          shippingStatus: true,
+          shippingId: true,
+          plataforma: true,
+          canal: true,
+          tags: true,
+          internalTags: true,
+          sincronizadoEm: true,
+          latitude: true,
+          longitude: true,
+          paymentDetails: true,
+          shipmentDetails: true,
+          rawData: true,
+        },
+        orderBy: { dataVenda: "desc" },
       })
     ]);
 
     console.log(`[Vendas Gerais] ✅ Mercado Livre: ${vendasMeli.length} vendas encontradas`);
     console.log(`[Vendas Gerais] ✅ Shopee: ${vendasShopee.length} vendas encontradas`);
+    console.log(`[Vendas Gerais] ✅ TikTok Shop: ${vendasTiktok.length} vendas encontradas`);
 
     // Buscar SKUs únicos para cálculo de CMV
     const skusUnicos = Array.from(
       new Set([
         ...vendasMeli.map((v) => v.sku).filter(Boolean) as string[],
         ...vendasShopee.map((v) => v.sku).filter(Boolean) as string[],
+        ...vendasTiktok.map((v) => v.sku).filter(Boolean) as string[],
       ]),
     );
 
@@ -266,6 +317,9 @@ export async function GET(req: NextRequest) {
         cmv,
         margemContribuicao,
         isMargemReal,
+        // O ML fecha o repasse junto com o pedido, então não existe estado
+        // "estimado" a acompanhar. Ver o campo em TikTok Shop.
+        financeiroLiquidado: true,
         titulo: venda.titulo,
         sku: venda.sku,
         comprador: venda.comprador,
@@ -357,6 +411,9 @@ export async function GET(req: NextRequest) {
         cmv,
         margemContribuicao,
         isMargemReal,
+        // O escrow da Shopee já é o valor final do repasse, então não existe
+        // estado "estimado" a acompanhar. Ver o campo em TikTok Shop.
+        financeiroLiquidado: true,
         titulo: venda.titulo,
         sku: venda.sku,
         comprador: venda.comprador,
@@ -422,36 +479,172 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // Formatar vendas do TikTok Shop
+    const vendasTiktokFormatted = vendasTiktok.map((venda) => {
+      let cmv: number | null = null;
+      if (venda.sku) {
+        const custoUnitario = costMap.getCostAtDate(venda.sku, venda.dataVenda);
+        if (custoUnitario > 0) {
+          cmv = roundCurrency(custoUnitario * venda.quantidade);
+        }
+      }
+
+      const rawData = (venda.rawData as Record<string, unknown>) ?? {};
+      const paymentDetails = (venda.paymentDetails as Record<string, unknown>) ?? {};
+
+      /*
+       * Dois tempos, igual à rota `/api/tiktok/vendas`: estimado a partir do
+       * pedido cru e, se o extrato já estiver guardado, o real por cima. Sem o
+       * segundo passo uma venda JÁ LIQUIDADA voltaria ao valor estimado aqui, e o
+       * consolidado divergiria da tela do TikTok justamente nos pedidos com
+       * comissão de afiliado — que só existe no extrato.
+       */
+      const estimado = calculateTiktokEstimatedFinancials(rawData);
+      const statement =
+        (paymentDetails.statement as Record<string, unknown> | undefined) ?? null;
+      const financials = (statement ? applyTiktokSettlement(estimado, statement) : null) ?? estimado;
+
+      const valorTotal = financials.effectiveProductSubtotal;
+      const taxaPlataforma = financials.platformFee;
+      // Sempre 0 no Programa de Frete: o frete não é custo do vendedor, ele já
+      // está dentro dos 6% de SFP que entram em `taxaPlataforma`.
+      const frete = financials.freight;
+
+      const temCmv = cmv !== null && cmv > 0;
+      const margemContribuicao = temCmv
+        ? roundCurrency(valorTotal + taxaPlataforma + frete - cmv!)
+        : roundCurrency(valorTotal + taxaPlataforma + frete);
+
+      const paymentDetailsEnriquecido = {
+        ...paymentDetails,
+        ...financials.breakdown,
+        financialRuleVersion: TIKTOK_FINANCIAL_RULE_VERSION,
+        platformFeeBreakdown: {
+          sfp_service_fee: financials.breakdown.sfp_service_fee ?? null,
+          per_item_fee_total: financials.breakdown.per_item_fee_total ?? null,
+          affiliate_commission: financials.breakdown.affiliate_commission ?? null,
+        },
+      };
+
+      return {
+        id: venda.orderId,
+        dataVenda: venda.dataVenda.toISOString(),
+        status: venda.status,
+        conta: venda.conta,
+        valorTotal,
+        quantidade: venda.quantidade,
+        unitario: financials.unitPrice,
+        taxaPlataforma,
+        frete,
+        freteAjuste: venda.freteAjuste ? Number(venda.freteAjuste) : null,
+        receitaFlex: null,
+        custoFlex: null,
+        freteLiquidoFlex: null,
+        cobrancasFlex: null,
+        flexConfigApplied: false,
+        cmv,
+        margemContribuicao,
+        /*
+         * `isMargemReal` segue o significado que ML e Shopee já dão nesta rota:
+         * "a margem embute o custo real do produto". Manter igual importa porque a
+         * mesma tabela na tela lê as três plataformas com este campo.
+         */
+        isMargemReal: temCmv,
+        /*
+         * O estado de LIQUIDAÇÃO é outra coisa, e é exclusividade do TikTok:
+         * enquanto o pedido não liquida, a taxa da plataforma é estimada e a
+         * comissão de afiliado nem existe no payload. ML e Shopee já entregam
+         * número final na primeira leitura, então para eles isto é sempre `true`.
+         *
+         * Campo separado, e não um segundo sentido para `isMargemReal`, porque os
+         * dois podem divergir: um pedido liquidado sem custo cadastrado tem
+         * financeiro confirmado e margem incompleta.
+         */
+        financeiroLiquidado: financials.isReal,
+        titulo: venda.titulo,
+        sku: venda.sku,
+        comprador: venda.comprador,
+        logisticType: venda.logisticType,
+        envioMode: venda.envioMode,
+        shippingStatus: venda.shippingStatus,
+        shippingId: venda.shippingId,
+        exposicao: null, // TikTok Shop não tem exposição
+        tipoAnuncio: null, // TikTok Shop não tem tipo de anúncio
+        ads: null, // TikTok Shop não tem ADS
+        plataforma: venda.plataforma,
+        canal: venda.canal,
+        tags: venda.tags,
+        internalTags: venda.internalTags,
+        latitude: venda.latitude !== null && venda.latitude !== undefined
+          ? Number(venda.latitude)
+          : null,
+        longitude: venda.longitude !== null && venda.longitude !== undefined
+          ? Number(venda.longitude)
+          : null,
+        raw: {
+          listing_type_id: null,
+          tags: venda.tags,
+          internal_tags: venda.internalTags,
+          paymentDetails: paymentDetailsEnriquecido,
+          shipmentDetails: venda.shipmentDetails ?? {},
+        },
+        paymentDetails: paymentDetailsEnriquecido,
+        shipmentDetails: venda.shipmentDetails ?? {},
+        preco: valorTotal,
+        shipping: {},
+        shipment: null,
+        receiverAddress: null,
+        sincronizadoEm: venda.sincronizadoEm.toISOString(),
+      };
+    });
+
     // Combinar e ordenar todas as vendas por data
-    const todasVendas = [...vendasMeliFormatted, ...vendasShopeeFormatted].sort(
+    const todasVendas = [
+      ...vendasMeliFormatted,
+      ...vendasShopeeFormatted,
+      ...vendasTiktokFormatted,
+    ].sort(
       (a, b) => new Date(b.dataVenda).getTime() - new Date(a.dataVenda).getTime()
     );
 
-    // Buscar última sincronização geral
-    const ultimaSyncMeli = vendasMeli.length > 0 ? vendasMeli[0].sincronizadoEm : null;
-    const ultimaSyncShopee = vendasShopee.length > 0 ? vendasShopee[0].sincronizadoEm : null;
-    
-    let ultimaSyncGeral = null;
-    if (ultimaSyncMeli && ultimaSyncShopee) {
-      ultimaSyncGeral = ultimaSyncMeli > ultimaSyncShopee ? ultimaSyncMeli : ultimaSyncShopee;
-    } else if (ultimaSyncMeli) {
-      ultimaSyncGeral = ultimaSyncMeli;
-    } else if (ultimaSyncShopee) {
-      ultimaSyncGeral = ultimaSyncShopee;
-    }
+    /*
+     * Última sincronização geral: a mais recente entre as plataformas.
+     *
+     * Virou redução em vez da cadeia de `if/else if`: com duas fontes a cadeia
+     * tinha três ramos, com três teria sete, e o ramo que falta é invisível —
+     * produz uma data velha, não um erro.
+     */
+    const ultimaSyncGeral = [
+      vendasMeli[0]?.sincronizadoEm,
+      vendasShopee[0]?.sincronizadoEm,
+      vendasTiktok[0]?.sincronizadoEm,
+    ].reduce<Date | null>(
+      (maior, atual) => (atual && (!maior || atual > maior) ? atual : maior),
+      null,
+    );
 
-    // Consolidar e deduplicar vendas
+    /*
+     * Consolidar e deduplicar vendas.
+     *
+     * A chave é CANAL + orderId, não o orderId solto. `order_id` é `@unique` em
+     * cada tabela, então duplicata dentro de uma plataforma não existe — o único
+     * caso em que um Set global de orderId disparava era com o MESMO número em
+     * plataformas DIFERENTES, e aí ele descartava uma venda real. Com duas
+     * plataformas isso já era possível; com três fica mais provável, porque cada
+     * uma numera do seu jeito.
+     */
     const vendasDeduplicadas: typeof todasVendas = [];
-    const orderIdsVistos = new Set<string>();
-    
+    const chavesVistas = new Set<string>();
+
     for (const venda of todasVendas) {
       if (!venda.id) {
         vendasDeduplicadas.push(venda);
         continue;
       }
-      
-      if (!orderIdsVistos.has(venda.id)) {
-        orderIdsVistos.add(venda.id);
+
+      const chave = `${venda.canal ?? "?"}:${venda.id}`;
+      if (!chavesVistas.has(chave)) {
+        chavesVistas.add(chave);
         vendasDeduplicadas.push(venda);
       }
     }
@@ -470,7 +663,7 @@ export async function GET(req: NextRequest) {
     // Armazenar no cache
     cache.set(cacheKey, response);
     console.log(`[Cache Miss] Vendas gerais (${todasVendas.length} vendas) salvas no cache`);
-    console.log(`[Vendas Gerais] ✅ Retornando ${vendasDeduplicadas.length} vendas combinadas (ML: ${vendasMeliFormatted.length}, Shopee: ${vendasShopeeFormatted.length})`);
+    console.log(`[Vendas Gerais] ✅ Retornando ${vendasDeduplicadas.length} vendas combinadas (ML: ${vendasMeliFormatted.length}, Shopee: ${vendasShopeeFormatted.length}, TikTok: ${vendasTiktokFormatted.length})`);
 
     return NextResponse.json(response, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },

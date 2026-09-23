@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
 import { cache, createCacheKey } from "@/lib/cache";
@@ -158,7 +158,7 @@ export async function GET(req: NextRequest) {
     const statusParam = url.searchParams.get("status");
     const tipoAnuncioParam = url.searchParams.get("tipoAnuncio");
     const modalidadeParam = url.searchParams.get("modalidade");
-    const accountPlatformParam = url.searchParams.get("accountPlatform"); // 'meli' | 'shopee'
+    const accountPlatformParam = url.searchParams.get("accountPlatform"); // 'meli' | 'shopee' | 'tiktok'
     const accountIdParam = url.searchParams.get("accountId");
 
     // Cache em memória por usuário + combinação de filtros (TTL 60s)
@@ -227,6 +227,11 @@ export async function GET(req: NextRequest) {
       status: statusParam,
       canal: canalParam,
     });
+    // TikTok Shop não tem tipoAnuncio nem modalidade (exclusivos do ML)
+    const dashboardWhereTiktok = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
     // WhereClause para Mercado Livre (com tipoAnuncio e modalidade)
     const whereClauseMeli = usarTodasVendas
       ? { 
@@ -255,38 +260,78 @@ export async function GET(req: NextRequest) {
           ...dashboardWhereShopee
         };
 
+    // WhereClause para TikTok Shop (sem tipoAnuncio e modalidade)
+    const whereClauseTiktok = usarTodasVendas
+      ? { 
+          userId: session.sub, 
+          ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}),
+          ...dashboardWhereTiktok
+        }
+      : { 
+          userId: session.sub, 
+          dataVenda: { gte: start, lte: end }, 
+          ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}),
+          ...dashboardWhereTiktok
+        };
+
     // Buscar vendas do Mercado Livre
-    const vendasMeli = await prisma.meliVenda.findMany({
-      where: whereClauseMeli,
-      select: {
-        dataVenda: true,
-        valorTotal: true,
-        taxaPlataforma: true,
-        frete: true,
-        quantidade: true,
-        sku: true,
-        logisticType: true,
-      },
-      distinct: ['orderId'],
-      orderBy: { dataVenda: "asc" },
-    });
+    //
+    // O guard é por INCLUSÃO: o antigo `if (canalParam === 'shopee')` da
+    // consolidação funcionava com duas plataformas porque "não é Shopee" equivalia
+    // a "é ML". Com três, filtrar por `tiktok` não exclui o ML e a série somaria
+    // Mercado Livre dentro de um filtro de TikTok.
+    const vendasMeli = canalIncluiPlataforma(canalParam, 'meli')
+      ? await prisma.meliVenda.findMany({
+          where: whereClauseMeli,
+          select: {
+            dataVenda: true,
+            valorTotal: true,
+            taxaPlataforma: true,
+            frete: true,
+            quantidade: true,
+            sku: true,
+            logisticType: true,
+          },
+          distinct: ['orderId'],
+          orderBy: { dataVenda: "asc" },
+        })
+      : [];
 
     // Buscar vendas do Shopee
-    const vendasShopee = await prisma.shopeeVenda.findMany({
-      where: whereClauseShopee,
-      select: {
-        dataVenda: true,
-        valorTotal: true,
-        taxaPlataforma: true,
-        frete: true,
-        quantidade: true,
-        sku: true,
-      },
-      distinct: ['orderId'],
-      orderBy: { dataVenda: "asc" },
-    });
+    const vendasShopee = canalIncluiPlataforma(canalParam, 'shopee')
+      ? await prisma.shopeeVenda.findMany({
+          where: whereClauseShopee,
+          select: {
+            dataVenda: true,
+            valorTotal: true,
+            taxaPlataforma: true,
+            frete: true,
+            quantidade: true,
+            sku: true,
+          },
+          distinct: ['orderId'],
+          orderBy: { dataVenda: "asc" },
+        })
+      : [];
 
-    // Consolidar vendas baseado no filtro de canal
+    // Buscar vendas do TikTok Shop
+    const vendasTiktok = canalIncluiPlataforma(canalParam, 'tiktok')
+      ? await prisma.tiktokVenda.findMany({
+          where: whereClauseTiktok,
+          select: {
+            dataVenda: true,
+            valorTotal: true,
+            taxaPlataforma: true,
+            frete: true,
+            quantidade: true,
+            sku: true,
+          },
+          distinct: ['orderId'],
+          orderBy: { dataVenda: "asc" },
+        })
+      : [];
+
+    // Consolidar as vendas das plataformas incluídas no filtro de canal
     const vendasMeliNormalizadas = vendasMeli.map((venda) => ({
       ...venda,
       marketplace: "meli" as const,
@@ -296,18 +341,21 @@ export async function GET(req: NextRequest) {
       logisticType: null,
       marketplace: "shopee" as const,
     }));
-    let vendas: Array<
+    // TikTok Shop não tem Flex, então logisticType não entra no cálculo de frete
+    const vendasTiktokNormalizadas = vendasTiktok.map((venda) => ({
+      ...venda,
+      logisticType: null,
+      marketplace: "tiktok" as const,
+    }));
+    const vendas: Array<
       | (typeof vendasMeliNormalizadas)[number]
       | (typeof vendasShopeeNormalizadas)[number]
-    >;
-    if (canalParam === 'mercado_livre') {
-      vendas = vendasMeliNormalizadas;
-    } else if (canalParam === 'shopee') {
-      vendas = vendasShopeeNormalizadas;
-    } else {
-      // Se 'todos' ou não especificado, combinar ambas
-      vendas = [...vendasMeliNormalizadas, ...vendasShopeeNormalizadas];
-    }
+      | (typeof vendasTiktokNormalizadas)[number]
+    > = [
+      ...vendasMeliNormalizadas,
+      ...vendasShopeeNormalizadas,
+      ...vendasTiktokNormalizadas,
+    ];
 
     // Se não há vendas, retornar array vazio
     if (vendas.length === 0) {

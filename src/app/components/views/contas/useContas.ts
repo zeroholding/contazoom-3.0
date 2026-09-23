@@ -87,12 +87,42 @@ function origemAuth(): string {
   return origem || "";
 }
 
+/* -------------------------------------------------------------------------- */
+/*                        Endpoints por canal, num mapa                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * As três rotas de cada plataforma, por canal.
+ *
+ * Existe porque os ternários `canal === "ML" ? rotaML : rotaShopee` que estavam
+ * aqui não têm ramo para um terceiro canal: com `TT`, o `else` mandava a conta do
+ * TikTok para o endpoint da Shopee — renovando o token errado, apagando a conta
+ * errada e abrindo o consentimento errado, tudo sem erro na tela.
+ */
+const ROTA_AUTH: Record<CanalConta, string> = {
+  ML: "/api/meli/auth",
+  SP: "/api/shopee/auth",
+  TT: "/api/tiktok/auth",
+};
+
+const ROTA_REFRESH: Record<CanalConta, string> = {
+  ML: "/api/meli/refresh-token",
+  SP: "/api/shopee/refresh-token",
+  TT: "/api/tiktok/refresh-token",
+};
+
+const ROTA_ACCOUNTS: Record<CanalConta, string> = {
+  ML: "/api/meli/accounts",
+  SP: "/api/shopee/accounts",
+  TT: "/api/tiktok/accounts",
+};
+
 /**
  * Inicia a conexão de uma conta.
  *
- * Mercado Livre navega a aba inteira; Shopee abre janela. A diferença não é
- * estética: o consentimento da Shopee recusa ser carregado dentro de outra página
- * e o fluxo dela devolve o resultado por `postMessage`, que precisa de uma janela
+ * Mercado Livre navega a aba inteira; Shopee e TikTok Shop abrem janela. A
+ * diferença não é estética: esses consentimentos recusam ser carregados dentro de
+ * outra página e devolvem o resultado por `postMessage`, que precisa de uma janela
  * separada para ter para onde responder.
  *
  * Devolve `false` quando o navegador barrou a janela, para a tela poder explicar
@@ -106,6 +136,12 @@ export function conectarConta(canal: CanalConta): boolean {
     return true;
   }
 
+  // Shopee e TikTok Shop usam o mesmo fluxo de janela. O endpoint sai do mapa
+  // acima porque com três canais a URL fixa no código deixaria de ser óbvia: o
+  // `canal` recebido diria TT e o popup abriria a autorização da Shopee.
+  const rota = ROTA_AUTH[canal];
+  const nomeJanela = `${canal.toLowerCase()}_connect`;
+
   const largura = 520;
   const altura = 720;
   const esquerdaTela = window.screenLeft ?? window.screenX ?? 0;
@@ -118,8 +154,8 @@ export function conectarConta(canal: CanalConta): boolean {
   const topo = topoTela + (alturaVisivel - altura) / (2 * zoom);
 
   const janela = window.open(
-    "/api/shopee/auth?popup=1",
-    "shopee_connect",
+    `${rota}?popup=1`,
+    nomeJanela,
     [
       "scrollbars=yes",
       `width=${largura}`,
@@ -132,7 +168,7 @@ export function conectarConta(canal: CanalConta): boolean {
   if (!janela) {
     // Reserva: sem janela, navega a aba. Melhor perder o estado da tela do que
     // deixar o botão sem efeito nenhum.
-    window.location.href = "/api/shopee/auth";
+    window.location.href = rota;
     return false;
   }
 
@@ -149,8 +185,7 @@ export async function renovarToken(
   canal: CanalConta,
   contaId: string,
 ): Promise<{ ok: boolean; mensagem: string; precisaReconectar: boolean }> {
-  const endpoint =
-    canal === "ML" ? "/api/meli/refresh-token" : "/api/shopee/refresh-token";
+  const endpoint = ROTA_REFRESH[canal];
 
   try {
     const res = await fetch(endpoint, {
@@ -191,7 +226,7 @@ export async function excluirConta(
   canal: CanalConta,
   contaId: string,
 ): Promise<{ ok: boolean; mensagem: string }> {
-  const base = canal === "ML" ? "/api/meli/accounts" : "/api/shopee/accounts";
+  const base = ROTA_ACCOUNTS[canal];
 
   const controle =
     typeof AbortController !== "undefined" ? new AbortController() : null;

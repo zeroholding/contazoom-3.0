@@ -96,6 +96,64 @@ export interface MeliOrdersResponse {
   };
 }
 
+/** Rótulo por extenso da plataforma. "Geral" = as três juntas, vindas do banco. */
+export type PlataformaVendas =
+  | "Mercado Livre"
+  | "Shopee"
+  | "TikTok Shop"
+  | "Geral";
+
+/** Os marketplaces que têm conta, sync e progresso próprios ("Geral" não tem). */
+const MARKETPLACES: readonly PlataformaVendas[] = [
+  "Mercado Livre",
+  "Shopee",
+  "TikTok Shop",
+];
+
+/**
+ * A plataforma tem conta, sync e progresso próprios?
+ *
+ * Exportada porque as tabelas de venda faziam a mesma pergunta pela dupla negação
+ * `platform !== "Mercado Livre" && platform !== "Shopee"` — que, com a terceira
+ * plataforma, passou a dar VERDADEIRO para o TikTok e a anunciar "integração não
+ * disponível" numa integração que existe. Uma função só, por inclusão, não tem
+ * como ficar desatualizada em relação a `MARKETPLACES`.
+ */
+export const ehMarketplace = (plataforma: string) =>
+  MARKETPLACES.includes(plataforma as PlataformaVendas);
+
+/**
+ * As rotas de cada plataforma, em mapas por rótulo.
+ *
+ * Eram cadeias de `if/else if` sobre o rótulo. Com TRÊS marketplaces, a cadeia sem
+ * o ramo novo não dá erro: ela cai no `else` e usa a rota de outra plataforma (ou a
+ * genérica `/api/vendas`), então a tela mostra dados errados em silêncio.
+ */
+const ROTA_AUTH: Record<"Mercado Livre" | "Shopee" | "TikTok Shop", string> = {
+  "Mercado Livre": "/api/meli/auth",
+  Shopee: "/api/shopee/auth",
+  "TikTok Shop": "/api/tiktok/auth",
+};
+
+const ROTA_CONTAS: Record<"Mercado Livre" | "Shopee" | "TikTok Shop", string> = {
+  "Mercado Livre": "/api/meli/accounts",
+  Shopee: "/api/shopee/accounts",
+  "TikTok Shop": "/api/tiktok/accounts",
+};
+
+const ROTA_VENDAS: Record<PlataformaVendas, string> = {
+  "Mercado Livre": "/api/meli/vendas",
+  Shopee: "/api/shopee/vendas",
+  "TikTok Shop": "/api/tiktok/vendas",
+  Geral: "/api/vendas",
+};
+
+/** Sync de resposta síncrona (o Mercado Livre é fire-and-forget e fica de fora). */
+const ROTA_SYNC: Record<"Shopee" | "TikTok Shop", string> = {
+  Shopee: "/api/shopee/vendas/sync",
+  "TikTok Shop": "/api/tiktok/vendas/sync",
+};
+
 // Hook customizado para gerenciar vendas
 export function useVendas(
   platform: string = "Mercado Livre",
@@ -121,7 +179,7 @@ export function useVendas(
   // Conectar SSE automaticamente para acompanhar sincronizações em background (ex.: cron)
   useEffect(() => {
     if (!autoConnectSSE) return;
-    if (platform !== "Mercado Livre" && platform !== "Shopee") return;
+    if (!ehMarketplace(platform)) return;
 
     connect();
     return () => {
@@ -173,9 +231,9 @@ export function useVendas(
     };
   }, [isSyncing, platform]);
 
-  // Atualizar progresso quando receber eventos SSE (Mercado Livre e Shopee)
+  // Atualizar progresso quando receber eventos SSE (Mercado Livre, Shopee e TikTok Shop)
   useEffect(() => {
-    if (progress && (platform === "Mercado Livre" || platform === "Shopee")) {
+    if (progress && ehMarketplace(platform)) {
       console.log(`[useVendas] Progresso SSE recebido (${platform}):`, progress);
 
       // Se receber progresso de sincronização ativa, marcar como syncing
@@ -252,19 +310,14 @@ export function useVendas(
 
   const handleConnectAccount = () => {
     const authOrigin = resolveAuthOrigin();
+    const rotaAuth = ROTA_AUTH[platform as "Mercado Livre" | "Shopee" | "TikTok Shop"];
 
-    if (platform === "Mercado Livre") {
-      // Redirecionar para autenticacao do Mercado Livre
-      const url = `${authOrigin}/api/meli/auth`;
-      // window.location.href = url;
-      window.location.assign(url);
-    } else if (platform === "Shopee") {
-      // Redirecionar para autenticacao da Shopee
-      const url = `${authOrigin}/api/shopee/auth`;
-      window.location.href = url;
+    if (rotaAuth) {
+      // Redirecionar para autenticacao do marketplace
+      window.location.assign(`${authOrigin}${rotaAuth}`);
     } else if (platform === "Geral") {
       // Para vendas gerais, nao ha conexao direta - usar as paginas individuais
-      console.log("Para conectar contas, acesse as paginas individuais do Shopee ou Mercado Livre.");
+      console.log("Para conectar contas, acesse as paginas individuais do Shopee, Mercado Livre ou TikTok Shop.");
     } else {
       console.log(`Integracao com ${platform} ainda nao disponivel.`);
     }
@@ -282,7 +335,7 @@ export function useVendas(
       setSyncErrors([]);
 
       // IMPORTANTE: Sempre conectar SSE para Mercado Livre
-      if (platform === "Mercado Livre" || platform === "Shopee") {
+      if (ehMarketplace(platform)) {
         console.log(`[useVendas] 🔌 Status SSE antes de conectar: isConnected=${isConnected}`);
         if (!isConnected) {
           console.log('[useVendas] 🔌 SSE não está conectado, conectando agora...');
@@ -364,7 +417,11 @@ export function useVendas(
         await loadVendasFromDatabase();
 
         return;
-      } else if (platform === "Shopee") {
+      } else if (platform === "Shopee" || platform === "TikTok Shop") {
+        // Shopee e TikTok Shop compartilham o fluxo: UMA chamada que responde com os
+        // totais (o Mercado Livre é o único fire-and-forget). Só a rota muda, e ela
+        // vem do mapa — ramo faltando aqui sincronizaria a plataforma errada.
+        const rotaSync = ROTA_SYNC[platform];
         const body: any = {};
         if (accountIds && accountIds.length > 0) {
           body.accountIds = accountIds;
@@ -375,7 +432,7 @@ export function useVendas(
         
         // Sincronização completa em uma única chamada (com paginação automática interna)
         console.log(`[useVendas] 🔗 Usando backend: ${API_CONFIG.baseURL || 'local'}`);
-        res = await API_CONFIG.fetch("/api/shopee/vendas/sync", {
+        res = await API_CONFIG.fetch(rotaSync, {
           method: "POST",
           cache: "no-store",
           credentials: "include",
@@ -405,14 +462,14 @@ export function useVendas(
         await new Promise(resolve => setTimeout(resolve, 500));
         
         // Carregar vendas atualizadas do banco
-        console.log(`[useVendas] Shopee: Recarregando vendas do banco após sincronização...`);
+        console.log(`[useVendas] ${platform}: Recarregando vendas do banco após sincronização...`);
         await loadVendasFromDatabase();
         
         // Resetar estados
         setIsSyncing(false);
         setIsTableLoading(false);
         
-        // Finalizar sincronização do Shopee
+        // Finalizar sincronização
         return;
       } else if (platform === "Geral") {
         // Para vendas gerais, não há sincronização - apenas carrega dados existentes
@@ -456,19 +513,15 @@ export function useVendas(
       console.log(`[useVendas] Carregando contas conectadas para plataforma: ${platform}`);
       
       // Determinar a URL da API baseada na plataforma
-      let apiUrl = "";
-      
-      if (platform === "Mercado Livre") {
-        apiUrl = "/api/meli/accounts";
-      } else if (platform === "Shopee") {
-        apiUrl = "/api/shopee/accounts";
-      } else if (platform === "Geral") {
+      if (platform === "Geral") {
         // Para "Geral", combinar contas de ambas plataformas
         console.log(`[useVendas] Plataforma Geral: não há contas específicas`);
         setContasConectadas([]);
         setIsLoadingAccounts(false);
         return;
       }
+
+      const apiUrl = ROTA_CONTAS[platform as "Mercado Livre" | "Shopee" | "TikTok Shop"] ?? "";
 
       console.log(`[useVendas] Chamando API de contas: ${apiUrl}`);
       console.log(`[useVendas] 🔗 Usando backend: ${API_CONFIG.baseURL || 'local'}`);
@@ -511,9 +564,7 @@ export function useVendas(
 
       console.log(`[useVendas] Iniciando carregamento de vendas para plataforma: ${platform}`);
 
-      let apiUrl = '/api/vendas';
-      if (platform === 'Mercado Livre') apiUrl = '/api/meli/vendas';
-      else if (platform === 'Shopee') apiUrl = '/api/shopee/vendas';
+      const apiUrl = ROTA_VENDAS[platform as PlataformaVendas] ?? '/api/vendas';
 
       // Fazer UMA única requisição que retorna TODAS as vendas
       // Backend já está configurado para retornar todos os registros sem paginação
@@ -555,7 +606,7 @@ export function useVendas(
 
   // Carrega dados quando a plataforma mudar
   useEffect(() => {
-    if (platform !== "Mercado Livre" && platform !== "Shopee" && platform !== "Geral") {
+    if (!ehMarketplace(platform) && platform !== "Geral") {
       setVendas([]);
       setContasConectadas([]);
       setSyncErrors([]);

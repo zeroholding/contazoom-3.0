@@ -4,14 +4,42 @@ import { useState } from 'react'
 import { X, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
 import { useNotification } from '@/contexts/NotificationContext'
 
+/** Plataforma da conta. */
+type TipoConta = 'meli' | 'shopee' | 'tiktok'
+
 interface SyncModalProps {
   isOpen: boolean
   onClose: () => void
   accounts?: Array<{
     id: string
-    type: 'meli' | 'shopee'
+    type: TipoConta
     name: string
   }>
+}
+
+/** A chamada de sync de cada plataforma, num mapa só.
+    Era `type === 'meli' ? meli : shopee`, e ternário binário com três canais cai
+    silenciosamente no último ramo: o TikTok sincronizaria pela Shopee.
+    A rota do TikTok recebe as contas no CORPO (`accountIds`), não na query. */
+const CHAMADA_SYNC: Record<TipoConta, (accountId: string) => { url: string; init: RequestInit }> = {
+  meli: (accountId) => ({ url: `/api/meli/sync?accountId=${accountId}`, init: { method: 'POST' } }),
+  shopee: (accountId) => ({ url: `/api/shopee/sync?accountId=${accountId}`, init: { method: 'POST' } }),
+  tiktok: (accountId) => ({
+    url: '/api/tiktok/vendas/sync',
+    init: {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountIds: [accountId] }),
+    },
+  }),
+}
+
+/** Sigla e cor do avatar de cada plataforma (mesmo motivo do mapa acima). */
+const SELO_CONTA: Record<TipoConta, { sigla: string; fundo: string }> = {
+  meli: { sigla: 'ML', fundo: 'bg-yellow-100' },
+  shopee: { sigla: 'SP', fundo: 'bg-orange-100' },
+  tiktok: { sigla: 'TT', fundo: 'bg-zinc-200' },
 }
 
 export function SyncModal({ isOpen, onClose, accounts = [] }: SyncModalProps) {
@@ -32,11 +60,9 @@ export function SyncModal({ isOpen, onClose, accounts = [] }: SyncModalProps) {
 
     for (const account of accounts) {
       try {
-        const endpoint = account.type === 'meli'
-          ? `/api/meli/sync?accountId=${account.id}`
-          : `/api/shopee/sync?accountId=${account.id}`
+        const { url, init } = CHAMADA_SYNC[account.type](account.id)
 
-        const response = await fetch(endpoint, { method: 'POST' })
+        const response = await fetch(url, init)
         const data = await response.json()
 
         results.push({
@@ -90,11 +116,9 @@ export function SyncModal({ isOpen, onClose, accounts = [] }: SyncModalProps) {
     setIsSyncing(true)
 
     try {
-      const endpoint = account.type === 'meli'
-        ? `/api/meli/sync?accountId=${account.id}`
-        : `/api/shopee/sync?accountId=${account.id}`
+      const { url, init } = CHAMADA_SYNC[account.type](account.id)
 
-      const response = await fetch(endpoint, { method: 'POST' })
+      const response = await fetch(url, init)
       const data = await response.json()
 
       if (response.ok) {
@@ -191,11 +215,9 @@ export function SyncModal({ isOpen, onClose, accounts = [] }: SyncModalProps) {
                   return (
                     <div key={account.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          account.type === 'meli' ? 'bg-yellow-100' : 'bg-orange-100'
-                        }`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${SELO_CONTA[account.type].fundo}`}>
                           <span className="text-sm font-semibold">
-                            {account.type === 'meli' ? 'ML' : 'SP'}
+                            {SELO_CONTA[account.type].sigla}
                           </span>
                         </div>
                         <div>

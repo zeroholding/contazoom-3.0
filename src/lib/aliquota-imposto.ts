@@ -1,6 +1,15 @@
 import prisma from "@/lib/prisma";
 
-export type TaxPlatform = "meli" | "shopee";
+export type TaxPlatform = "meli" | "shopee" | "tiktok";
+
+/** Vale como `plataforma` num payload de alíquota. */
+const TAX_PLATFORMS: readonly TaxPlatform[] = ["meli", "shopee", "tiktok"];
+
+function asTaxPlatform(value: unknown): TaxPlatform | null {
+  return typeof value === "string" && (TAX_PLATFORMS as readonly string[]).includes(value)
+    ? (value as TaxPlatform)
+    : null;
+}
 
 export type TaxAccount = {
   id: string;
@@ -58,13 +67,18 @@ export function parseTaxPeriod(dataInicio: unknown, dataFim: unknown) {
 }
 
 export async function listTaxAccounts(userId: string): Promise<TaxAccount[]> {
-  const [meliAccounts, shopeeAccounts] = await Promise.all([
+  const [meliAccounts, shopeeAccounts, tiktokAccounts] = await Promise.all([
     prisma.meliAccount.findMany({
       where: { userId },
       select: { id: true, nickname: true, ml_user_id: true },
       orderBy: { created_at: "desc" },
     }),
     prisma.shopeeAccount.findMany({
+      where: { userId },
+      select: { id: true, shop_name: true, shop_id: true },
+      orderBy: { created_at: "desc" },
+    }),
+    prisma.tiktokAccount.findMany({
       where: { userId },
       select: { id: true, shop_name: true, shop_id: true },
       orderBy: { created_at: "desc" },
@@ -84,6 +98,12 @@ export async function listTaxAccounts(userId: string): Promise<TaxAccount[]> {
       plataforma: "Shopee",
       tipo: "shopee" as const,
     })),
+    ...tiktokAccounts.map((account) => ({
+      id: account.id,
+      nome: account.shop_name?.trim() || account.shop_id,
+      plataforma: "TikTok Shop",
+      tipo: "tiktok" as const,
+    })),
   ].sort((a, b) =>
     `${a.plataforma} ${a.nome}`.localeCompare(
       `${b.plataforma} ${b.nome}`,
@@ -98,10 +118,10 @@ export async function resolveTaxAccount(
 ): Promise<TaxAccount | null> {
   const accountId =
     typeof input.accountId === "string" ? input.accountId.trim() : "";
-  const plataforma =
-    input.plataforma === "meli" || input.plataforma === "shopee"
-      ? input.plataforma
-      : null;
+  // Lista em vez de comparação encadeada: com três plataformas a cadeia de `||`
+  // já passou do ponto em que esquecer uma é erro silencioso — a conta
+  // simplesmente não seria encontrada, e a alíquota não se aplicaria.
+  const plataforma = asTaxPlatform(input.plataforma);
 
   const accounts = await listTaxAccounts(userId);
   if (accountId && plataforma) {

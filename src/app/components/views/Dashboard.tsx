@@ -31,6 +31,19 @@ const RAIL_W = "4rem";
 const LS_KEY = "cz_sidebar_collapsed";
 const SKU_ALERT_DISMISS_KEY = "cz_dashboard_sku_alert_dismissed_count";
 
+/**
+ * A plataforma da conta escolhida -> o `canal` que as APIs de dashboard esperam.
+ *
+ * Os valores são os mesmos `id` de `canalOptions` (ver FiltrosDashboardExtra) e de
+ * `canalIncluiPlataforma` em `src/lib/dashboard-filters.ts`.
+ */
+const CANAL_DA_PLATAFORMA: Record<'meli' | 'shopee' | 'tiktok' | 'todos', FiltroCanal> = {
+  meli: "mercado_livre",
+  shopee: "shopee",
+  tiktok: "tiktok",
+  todos: "todos",
+};
+
 // useLayoutEffect no browser; fallback para useEffect no SSR
 const useIsoLayout =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
@@ -78,7 +91,7 @@ export default function Dashboard() {
   const [modalidadeEnvioAtiva, setModalidadeEnvioAtiva] = useState<FiltroModalidadeEnvio>("todos");
   const [agrupamentoSKUAtivo, setAgrupamentoSKUAtivo] = useState<FiltroAgrupamentoSKU>("mlb");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
+  const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
 
   useEffect(() => {
     fetch('/api/sku/stats')
@@ -305,10 +318,11 @@ export default function Dashboard() {
             selectedAccount={selectedAccount}
             onAccountChange={(acc) => {
               setSelectedAccount(acc);
-              // Ajusta canal automaticamente ao escolher plataforma específica
-              if (acc.platform === 'meli') setCanalAtivo('mercado_livre');
-              else if (acc.platform === 'shopee') setCanalAtivo('shopee');
-              else setCanalAtivo('todos');
+              // Ajusta canal automaticamente ao escolher plataforma específica.
+              // Mapa e não cadeia de if/else: são os mesmos `id` de
+              // `canalOptions`/`dashboard-filters`, e com três canais um ramo
+              // faltando deixaria o filtro em 'todos' sem dar erro.
+              setCanalAtivo(CANAL_DA_PLATAFORMA[acc.platform]);
               setRefreshKey((v) => v + 1);
             }}
           />

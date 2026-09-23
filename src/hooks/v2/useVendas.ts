@@ -68,7 +68,7 @@ export interface ContaConectada {
   shop_id?: string;
   shop_name?: string | null;
   merchant_id?: string | null;
-  platform?: "Mercado Livre" | "Shopee";
+  platform?: "Mercado Livre" | "Shopee" | "TikTok Shop";
   expires_at: string;
 }
 
@@ -113,6 +113,65 @@ const countVendaInitialData: CountVenda = {
   cancelled: 0,
 };
 
+/** Rótulo por extenso da plataforma. "Geral" = as três juntas, vindas do banco. */
+export type PlataformaVendas =
+  | "Mercado Livre"
+  | "Shopee"
+  | "TikTok Shop"
+  | "Geral";
+
+/** Um marketplace de verdade ("Geral" não é: não tem conta nem auth próprios). */
+type Marketplace = "Mercado Livre" | "Shopee" | "TikTok Shop";
+
+const MARKETPLACES: readonly PlataformaVendas[] = [
+  "Mercado Livre",
+  "Shopee",
+  "TikTok Shop",
+];
+
+/**
+ * A plataforma tem conta, sync e progresso próprios?
+ *
+ * Exportada porque as tabelas de venda faziam a mesma pergunta pela dupla negação
+ * `platform !== "Mercado Livre" && platform !== "Shopee"` — que, com a terceira
+ * plataforma, passou a dar VERDADEIRO para o TikTok e a anunciar "integração não
+ * disponível" numa integração que existe.
+ */
+export const ehMarketplace = (plataforma: string) =>
+  MARKETPLACES.includes(plataforma as PlataformaVendas);
+
+/**
+ * As rotas de cada plataforma, em mapas por rótulo.
+ *
+ * Eram cadeias de `if/else if` sobre o rótulo. Com TRÊS marketplaces, a cadeia sem
+ * o ramo novo não dá erro: ela cai no `else` e usa a rota de outra plataforma (ou a
+ * genérica `/api/vendas`), então a tela mostra dados errados em silêncio.
+ */
+const ROTA_AUTH: Record<Marketplace, string> = {
+  "Mercado Livre": "/api/meli/auth",
+  Shopee: "/api/shopee/auth",
+  "TikTok Shop": "/api/tiktok/auth",
+};
+
+const ROTA_CONTAS: Record<Marketplace, string> = {
+  "Mercado Livre": "/api/meli/accounts",
+  Shopee: "/api/shopee/accounts",
+  "TikTok Shop": "/api/tiktok/accounts",
+};
+
+/** Listagem de vendas das plataformas que NÃO têm rota v2 paginada.
+    Atenção: não existe `/api/v2/tiktok/vendas` — o TikTok usa a rota v1. */
+const ROTA_VENDAS_V1: Record<"Shopee" | "TikTok Shop", string> = {
+  Shopee: "/api/shopee/vendas",
+  "TikTok Shop": "/api/tiktok/vendas",
+};
+
+/** Sync de resposta síncrona (o Mercado Livre é fire-and-forget e fica de fora). */
+const ROTA_SYNC: Record<"Shopee" | "TikTok Shop", string> = {
+  Shopee: "/api/shopee/vendas/sync",
+  "TikTok Shop": "/api/tiktok/vendas/sync",
+};
+
 // Hook customizado para gerenciar vendas
 export function useVendasV2(
   platform: string = "Mercado Livre",
@@ -151,11 +210,7 @@ export function useVendasV2(
   // Conectar SSE automaticamente para acompanhar sincronizações em background (ex.: cron)
   useEffect(() => {
     if (!autoConnectSSE) return;
-    if (
-      platform !== "Mercado Livre" &&
-      platform !== "Shopee" &&
-      platform !== "Geral"
-    ) {
+    if (!ehMarketplace(platform) && platform !== "Geral") {
       return;
     }
 
@@ -220,14 +275,9 @@ export function useVendasV2(
     };
   }, [isSyncing, platform]);
 
-  // Atualizar progresso quando receber eventos SSE (Mercado Livre e Shopee)
+  // Atualizar progresso quando receber eventos SSE (os três marketplaces e "Geral")
   useEffect(() => {
-    if (
-      progress &&
-      (platform === "Mercado Livre" ||
-        platform === "Shopee" ||
-        platform === "Geral")
-    ) {
+    if (progress && (ehMarketplace(platform) || platform === "Geral")) {
       console.log(
         `[useVendas] Progresso SSE recebido (${platform}):`,
         progress,
@@ -331,20 +381,15 @@ export function useVendasV2(
 
   const handleConnectAccount = () => {
     const authOrigin = resolveAuthOrigin();
+    const rotaAuth = ROTA_AUTH[platform as Marketplace];
 
-    if (platform === "Mercado Livre") {
-      // Redirecionar para autenticacao do Mercado Livre
-      const url = `${authOrigin}/api/meli/auth`;
-      // window.location.href = url;
-      window.location.assign(url);
-    } else if (platform === "Shopee") {
-      // Redirecionar para autenticacao da Shopee
-      const url = `${authOrigin}/api/shopee/auth`;
-      window.location.href = url;
+    if (rotaAuth) {
+      // Redirecionar para autenticacao do marketplace
+      window.location.assign(`${authOrigin}${rotaAuth}`);
     } else if (platform === "Geral") {
       // Para vendas gerais, nao ha conexao direta - usar as paginas individuais
       console.log(
-        "Para conectar contas, acesse as paginas individuais do Shopee ou Mercado Livre.",
+        "Para conectar contas, acesse as paginas individuais do Shopee, Mercado Livre ou TikTok Shop.",
       );
     } else {
       console.log(`Integracao com ${platform} ainda nao disponivel.`);
@@ -374,11 +419,7 @@ export function useVendasV2(
       setSyncErrors([]);
 
       // IMPORTANTE: Sempre conectar SSE para Mercado Livre
-      if (
-        platform === "Mercado Livre" ||
-        platform === "Shopee" ||
-        platform === "Geral"
-      ) {
+      if (ehMarketplace(platform) || platform === "Geral") {
         console.log(
           `[useVendas] 🔌 Status SSE antes de conectar: isConnected=${isConnected}`,
         );
@@ -485,7 +526,11 @@ export function useVendasV2(
         await loadVendasFromDatabase();
 
         return;
-      } else if (platform === "Shopee") {
+      } else if (platform === "Shopee" || platform === "TikTok Shop") {
+        // Shopee e TikTok Shop compartilham o fluxo: UMA chamada que responde com os
+        // totais (o Mercado Livre é o único fire-and-forget). Só a rota muda, e ela
+        // vem do mapa — ramo faltando aqui sincronizaria a plataforma errada.
+        const rotaSync = ROTA_SYNC[platform];
         const body: any = {};
         if (accountIds && accountIds.length > 0) {
           body.accountIds = accountIds;
@@ -498,7 +543,7 @@ export function useVendasV2(
         console.log(
           `[useVendas] 🔗 Usando backend: ${API_CONFIG.baseURL || "local"}`,
         );
-        res = await API_CONFIG.fetch("/api/shopee/vendas/sync", {
+        res = await API_CONFIG.fetch(rotaSync, {
           method: "POST",
           cache: "no-store",
           credentials: "include",
@@ -534,7 +579,7 @@ export function useVendasV2(
 
         // Carregar vendas atualizadas do banco
         console.log(
-          `[useVendas] Shopee: Recarregando vendas do banco após sincronização...`,
+          `[useVendas] ${platform}: Recarregando vendas do banco após sincronização...`,
         );
         await loadVendasFromDatabase();
 
@@ -542,25 +587,33 @@ export function useVendasV2(
         setIsSyncing(false);
         setIsTableLoading(false);
 
-        // Finalizar sincronização do Shopee
+        // Finalizar sincronização
         return;
       } else if (platform === "Geral") {
-        const [meliAccountsRes, shopeeAccountsRes] = await Promise.all([
-          API_CONFIG.fetch("/api/meli/accounts", {
-            cache: "no-store",
-            credentials: "include",
-          }),
-          API_CONFIG.fetch("/api/shopee/accounts", {
-            cache: "no-store",
-            credentials: "include",
-          }),
-        ]);
+        const [meliAccountsRes, shopeeAccountsRes, tiktokAccountsRes] =
+          await Promise.all([
+            API_CONFIG.fetch(ROTA_CONTAS["Mercado Livre"], {
+              cache: "no-store",
+              credentials: "include",
+            }),
+            API_CONFIG.fetch(ROTA_CONTAS.Shopee, {
+              cache: "no-store",
+              credentials: "include",
+            }),
+            API_CONFIG.fetch(ROTA_CONTAS["TikTok Shop"], {
+              cache: "no-store",
+              credentials: "include",
+            }),
+          ]);
 
         const meliAccounts = meliAccountsRes.ok
           ? await meliAccountsRes.json()
           : [];
         const shopeeAccounts = shopeeAccountsRes.ok
           ? await shopeeAccountsRes.json()
+          : [];
+        const tiktokAccounts = tiktokAccountsRes.ok
+          ? await tiktokAccountsRes.json()
           : [];
         const meliAccountIds = (Array.isArray(meliAccounts)
           ? meliAccounts
@@ -572,9 +625,15 @@ export function useVendasV2(
           : [])
           .map((account: ContaConectada) => account.id)
           .filter(Boolean);
+        const tiktokAccountIds = (Array.isArray(tiktokAccounts)
+          ? tiktokAccounts
+          : [])
+          .map((account: ContaConectada) => account.id)
+          .filter(Boolean);
         const jobs =
           (meliAccountIds.length > 0 ? 1 : 0) +
-          (shopeeAccountIds.length > 0 ? 1 : 0);
+          (shopeeAccountIds.length > 0 ? 1 : 0) +
+          (tiktokAccountIds.length > 0 ? 1 : 0);
 
         if (jobs === 0) {
           throw new Error("Nenhuma conta conectada para sincronizar vendas.");
@@ -619,7 +678,7 @@ export function useVendasV2(
         }
 
         if (shopeeAccountIds.length > 0) {
-          const shopeeRes = await API_CONFIG.fetch("/api/shopee/vendas/sync", {
+          const shopeeRes = await API_CONFIG.fetch(ROTA_SYNC.Shopee, {
             method: "POST",
             cache: "no-store",
             credentials: "include",
@@ -633,6 +692,26 @@ export function useVendasV2(
             } else {
               throw new Error(
                 payload?.message || `Erro ${shopeeRes.status}`,
+              );
+            }
+          }
+        }
+
+        if (tiktokAccountIds.length > 0) {
+          const tiktokRes = await API_CONFIG.fetch(ROTA_SYNC["TikTok Shop"], {
+            method: "POST",
+            cache: "no-store",
+            credentials: "include",
+            body: JSON.stringify({ accountIds: tiktokAccountIds }),
+          });
+
+          if (!tiktokRes.ok) {
+            const payload = await tiktokRes.json().catch(() => ({}));
+            if (payload?.alreadyRunning) {
+              handleAlreadyRunning();
+            } else {
+              throw new Error(
+                payload?.message || `Erro ${tiktokRes.status}`,
               );
             }
           }
@@ -682,25 +761,24 @@ export function useVendasV2(
       );
 
       // Determinar a URL da API baseada na plataforma
-      let apiUrl = "";
-
-      if (platform === "Mercado Livre") {
-        apiUrl = "/api/meli/accounts";
-      } else if (platform === "Shopee") {
-        apiUrl = "/api/shopee/accounts";
-      } else if (platform === "Geral") {
-        const [meliRes, shopeeRes] = await Promise.all([
-          API_CONFIG.fetch("/api/meli/accounts", {
+      if (platform === "Geral") {
+        const [meliRes, shopeeRes, tiktokRes] = await Promise.all([
+          API_CONFIG.fetch(ROTA_CONTAS["Mercado Livre"], {
             cache: "no-store",
             credentials: "include",
           }),
-          API_CONFIG.fetch("/api/shopee/accounts", {
+          API_CONFIG.fetch(ROTA_CONTAS.Shopee, {
+            cache: "no-store",
+            credentials: "include",
+          }),
+          API_CONFIG.fetch(ROTA_CONTAS["TikTok Shop"], {
             cache: "no-store",
             credentials: "include",
           }),
         ]);
         const meliAccounts = meliRes.ok ? await meliRes.json() : [];
         const shopeeAccounts = shopeeRes.ok ? await shopeeRes.json() : [];
+        const tiktokAccounts = tiktokRes.ok ? await tiktokRes.json() : [];
         const contas = [
           ...(Array.isArray(meliAccounts) ? meliAccounts : []).map(
             (account: ContaConectada) => ({
@@ -719,14 +797,26 @@ export function useVendasV2(
               platform: "Shopee" as const,
             }),
           ),
+          ...(Array.isArray(tiktokAccounts) ? tiktokAccounts : []).map(
+            (account: ContaConectada) => ({
+              ...account,
+              nickname:
+                account.nickname ||
+                account.shop_name ||
+                `TikTok ${account.shop_id ?? ""}`,
+              platform: "TikTok Shop" as const,
+            }),
+          ),
         ];
 
-        // Para "Geral", combinar contas de ambas plataformas
+        // Para "Geral", combinar contas das três plataformas
         console.log(`[useVendas] Plataforma Geral: não há contas específicas`);
         setContasConectadas(contas);
         setIsLoadingAccounts(false);
         return;
       }
+
+      const apiUrl = ROTA_CONTAS[platform as Marketplace] ?? "";
 
       console.log(`[useVendas] Chamando API de contas: ${apiUrl}`);
       console.log(
@@ -818,8 +908,11 @@ export function useVendasV2(
       } else {
         setIsTableLoading(true);
 
-        let apiUrl = "/api/vendas";
-        if (platform === "Shopee") apiUrl = "/api/shopee/vendas";
+        // Shopee e TikTok Shop não têm rota v2 paginada: caem na v1, que devolve
+        // `{ vendas }` de uma vez. O mapa evita o `else` silencioso que mandaria o
+        // TikTok para `/api/vendas` (vendas de TODOS os canais).
+        const apiUrl =
+          ROTA_VENDAS_V1[platform as "Shopee" | "TikTok Shop"] ?? "/api/vendas";
 
         // Fazer UMA única requisição que retorna TODAS as vendas
         // Backend já está configurado para retornar todos os registros sem paginação
@@ -858,11 +951,7 @@ export function useVendasV2(
 
   // Carrega dados quando a plataforma mudar
   useEffect(() => {
-    if (
-      platform !== "Mercado Livre" &&
-      platform !== "Shopee" &&
-      platform !== "Geral"
-    ) {
+    if (!ehMarketplace(platform) && platform !== "Geral") {
       setVendas([]);
       setContasConectadas([]);
       setSyncErrors([]);

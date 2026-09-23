@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
@@ -153,6 +153,11 @@ export async function GET(req: NextRequest) {
       status: statusParam,
       canal: canalParam,
     });
+    // TikTok Shop não tem tipoAnuncio nem modalidade (exclusivos do ML)
+    const dashboardWhereTiktok = getDashboardFiltersWhere({
+      status: statusParam,
+      canal: canalParam,
+    });
 
     // WhereClause para Mercado Livre (com tipoAnuncio e modalidade)
     const whereClauseMeli = usarTodasVendas
@@ -164,26 +169,43 @@ export async function GET(req: NextRequest) {
       ? { userId: session.sub, ...dashboardWhereShopee }
       : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereShopee };
 
+    // WhereClause para TikTok Shop (sem tipoAnuncio e modalidade)
+    const whereClauseTiktok = usarTodasVendas
+      ? { userId: session.sub, ...dashboardWhereTiktok }
+      : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereTiktok };
+
     // Agregação no banco. Mercado Livre: groupBy por `ads` (bucketizado em JS).
-    // Shopee: sempre "Sem ADS", então basta um aggregate (soma + contagem).
+    // Shopee e TikTok Shop: sempre "Sem ADS", então basta um aggregate (soma + contagem).
     // orderId é @unique em cada tabela, então não há duplicatas a deduplicar.
     // Respeita o filtro de canal para evitar queries desnecessárias.
-    const [gruposMeliAds, aggShopee] = await Promise.all([
-      canalParam === 'shopee'
-        ? []
-        : prisma.meliVenda.groupBy({
+    //
+    // Guard por INCLUSÃO: `canalParam === 'shopee' ? []` funcionava com duas
+    // plataformas porque "não é Shopee" equivalia a "é ML". Com três, filtrar por
+    // `tiktok` não exclui o ML e o painel somaria Mercado Livre dentro de um filtro
+    // de TikTok.
+    const [gruposMeliAds, aggShopee, aggTiktok] = await Promise.all([
+      canalIncluiPlataforma(canalParam, 'meli')
+        ? prisma.meliVenda.groupBy({
             by: ['ads'],
             where: whereClauseMeli,
             _sum: { valorTotal: true },
             _count: { _all: true },
-          }),
-      canalParam === 'mercado_livre'
-        ? null
-        : prisma.shopeeVenda.aggregate({
+          })
+        : [],
+      canalIncluiPlataforma(canalParam, 'shopee')
+        ? prisma.shopeeVenda.aggregate({
             where: whereClauseShopee,
             _sum: { valorTotal: true },
             _count: { _all: true },
-          }),
+          })
+        : null,
+      canalIncluiPlataforma(canalParam, 'tiktok')
+        ? prisma.tiktokVenda.aggregate({
+            where: whereClauseTiktok,
+            _sum: { valorTotal: true },
+            _count: { _all: true },
+          })
+        : null,
     ]);
 
     // Agrupar por origem (Com ADS vs Sem ADS)
@@ -215,6 +237,12 @@ export async function GET(req: NextRequest) {
     if (aggShopee) {
       faturamentoSemAds += toNumber(aggShopee._sum.valorTotal);
       quantidadeSemAds += aggShopee._count._all;
+    }
+
+    // TikTok Shop também não tem ADS neste modelo: entra inteiro como "Sem ADS"
+    if (aggTiktok) {
+      faturamentoSemAds += toNumber(aggTiktok._sum.valorTotal);
+      quantidadeSemAds += aggTiktok._count._all;
     }
 
     const faturamentoTotal = faturamentoComAds + faturamentoSemAds;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere } from "@/lib/dashboard-filters";
 import { cache, createCacheKey } from "@/lib/cache";
 
 export const runtime = "nodejs";
@@ -158,12 +158,18 @@ export async function GET(req: NextRequest) {
 
     // Agregação no banco via groupBy por exposicao (substitui findMany + loop).
     // orderId é @unique, então não há duplicatas a deduplicar.
-    const gruposExposicao = await prisma.meliVenda.groupBy({
+    //
+    // Exposição é atributo só do Mercado Livre: Shopee já era ignorada aqui e
+    // TikTok Shop também não tem o campo. O guard é por INCLUSÃO, não por exclusão:
+    // perguntar "não é Shopee" equivalia a "é ML" só enquanto existiam duas
+    // plataformas — com três, um filtro de `tiktok` deixaria a consulta do ML
+    // passar.
+    const gruposExposicao = canalIncluiPlataforma(canalParam, 'meli') ? await prisma.meliVenda.groupBy({
       by: ['exposicao'],
       where: whereClauseMeli,
       _sum: { valorTotal: true },
       _count: { _all: true },
-    });
+    }) : [];
 
     // Agrupar por tipo de exposição (Premium vs Clássico) - apenas Mercado Livre
     let faturamentoPremium = 0;

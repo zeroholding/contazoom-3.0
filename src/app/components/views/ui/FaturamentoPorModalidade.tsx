@@ -21,7 +21,7 @@ interface Props {
   tipoAnuncioAtivo: FiltroTipoAnuncio;
   modalidadeEnvioAtiva: FiltroModalidadeEnvio;
   agrupamentoSKUAtivo: FiltroAgrupamentoSKU;
-  selectedAccount: { platform: "meli" | "shopee" | "todos"; id?: string; label?: string };
+  selectedAccount: { platform: "meli" | "shopee" | "tiktok" | "todos"; id?: string; label?: string };
   refreshKey: number;
 }
 

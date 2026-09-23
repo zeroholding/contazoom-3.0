@@ -15,6 +15,7 @@
     "test:anexo": "node --experimental-strip-types scripts/test-anexo.mjs",
     "test:exclusao": "node --experimental-strip-types scripts/test-exclusao.mjs",
     "test:tarefas": "npm run test:dias-uteis && npm run test:documento && npm run test:anexo && npm run test:exclusao",
+    "test:tiktok:finance": "tsx scripts/teste-tiktok-finance.ts",
     "test:fiscal:parser": "tsx scripts/teste-nfe-xml.ts",
     "test:fiscal:zip": "tsx scripts/teste-zip-fiscal.ts",
     "test:fiscal:declaracao": "tsx scripts/teste-declaracao-faturamento.ts",

@@ -51,7 +51,7 @@ interface FiltrosVendasProps {
   colunasVisiveis?: ColunasVisiveisTipo;
   onColunasChange?: (colunas: ColunasVisiveisTipo) => void;
   // Platform
-  platform?: "Mercado Livre" | "Shopee" | "Geral";
+  platform?: "Mercado Livre" | "Shopee" | "TikTok Shop" | "Geral";
 }
 
 

@@ -70,6 +70,7 @@ import {
 import { invalidarSessao, useSessao } from "@/hooks/useSessao";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
+import { LogoTikTok } from "@/app/components/views/comum/logos";
 
 /* -------------------------------------------------------------------------- */
 /*                            Contratos das rotas                             */
@@ -164,10 +165,13 @@ function CirculoIniciais({ nome }: { nome: string | null }) {
   );
 }
 
-/** Marca do marketplace. Provider desconhecido cai num ícone neutro do kit. */
+/** Marca do marketplace. Provider desconhecido cai num ícone neutro do kit.
+    Os `provider` são os de `GET /api/admin/users`; o do TikTok reusa o `LogoTikTok`
+    de `comum/logos.tsx` porque a família `components/icons` não tem esse desenho. */
 function IconeProvedor({ provider }: { provider: string }) {
   if (provider === "mercado-livre") return <MeliIcon className="h-4 w-4" />;
   if (provider === "shopee") return <ShopeeIcon className="h-4 w-4" />;
+  if (provider === "tiktok") return <LogoTikTok className="h-4 w-4" />;
   return <Icone nome="Link2" className="h-4 w-4 text-gray-400" />;
 }
 
@@ -678,6 +682,7 @@ export default function UsuariosView() {
     let contas = 0;
     let meli = 0;
     let shopee = 0;
+    let tiktok = 0;
 
     for (const usuario of usuarios) {
       if (ehInterno(usuario.role)) internos += 1;
@@ -688,10 +693,11 @@ export default function UsuariosView() {
       for (const conta of lista) {
         if (conta.provider === "mercado-livre") meli += 1;
         else if (conta.provider === "shopee") shopee += 1;
+        else if (conta.provider === "tiktok") tiktok += 1;
       }
     }
 
-    return { internos, clientes, contas, meli, shopee };
+    return { internos, clientes, contas, meli, shopee, tiktok };
   }, [usuarios]);
 
   const temFiltro = filtroPapel !== "" || escopo !== ESCOPO.TODOS || busca !== "";
@@ -832,7 +838,7 @@ export default function UsuariosView() {
               valor={resumo.contas}
               icone="Link2"
               tom="verde"
-              detalhe={`${resumo.meli} no Mercado Livre · ${resumo.shopee} na Shopee`}
+              detalhe={`${resumo.meli} no Mercado Livre · ${resumo.shopee} na Shopee · ${resumo.tiktok} no TikTok Shop`}
             />
           </div>
 

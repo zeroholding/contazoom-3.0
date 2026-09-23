@@ -34,7 +34,7 @@ interface FiltrosVendasProps {
   totalVendas?: number;
   vendasPagas?: number;
   vendasCanceladas?: number;
-  platform?: "Mercado Livre" | "Shopee" | "Geral";
+  platform?: "Mercado Livre" | "Shopee" | "TikTok Shop" | "Geral";
   colunasVisiveis?: ColunasVisiveisTipo;
 
   filters: VendaFilters;

@@ -5,20 +5,23 @@ import { createPortal } from "react-dom";
 import { API_CONFIG } from "@/lib/api-config";
 import { useToast } from "./toaster";
 
+/** Plataforma de uma conta listada no modal. */
+type PlataformaConta = 'meli' | 'shopee' | 'tiktok';
+
 interface ContaInfo {
   id: string;
   nickname?: string | null;
   ml_user_id?: number;
   shop_id?: string;
   shop_name?: string | null;
-  platform: 'meli' | 'shopee';
+  platform: PlataformaConta;
   newOrdersCount?: number;
 }
 
 interface SyncStep {
   accountId: string;
   accountName: string;
-  platform: 'meli' | 'shopee';
+  platform: PlataformaConta;
   status: 'pending' | 'syncing' | 'completed' | 'error';
   progress: number;
   count?: number;
@@ -28,9 +31,42 @@ interface SyncStep {
 interface ModalSyncVendasDashboardProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedPlatform: 'todos' | 'mercado_livre' | 'shopee';
+  selectedPlatform: 'todos' | 'mercado_livre' | 'shopee' | 'tiktok';
   onSyncComplete?: () => void;
 }
+
+/** A rota de sync de cada plataforma, num mapa só.
+    Era `platform === 'meli' ? ... : '/api/shopee/...'`, e ternário binário com três
+    canais cai silenciosamente no último ramo: o TikTok sincronizaria pela Shopee. */
+const ROTA_SYNC: Record<PlataformaConta, string> = {
+  meli: '/api/v2/meli/sync-trigger',
+  shopee: '/api/shopee/vendas/sync',
+  tiktok: '/api/tiktok/vendas/sync',
+};
+
+/** O nome de exibição da conta, por plataforma (cada API tem campo próprio). */
+const NOME_CONTA: Record<PlataformaConta, (conta: ContaInfo) => string> = {
+  meli: (conta) => conta.nickname || `Usuário ${conta.ml_user_id}`,
+  shopee: (conta) => conta.shop_name || `Shop ${conta.shop_id}`,
+  tiktok: (conta) => conta.shop_name || `Loja ${conta.shop_id}`,
+};
+
+/** O subtítulo do cabeçalho, por escolha de plataforma. Era uma cadeia de dois
+    ternários terminando em 'Shopee', então `tiktok` viraria "Shopee" na tela. */
+const SUBTITULO_PLATAFORMA: Record<'todos' | 'mercado_livre' | 'shopee' | 'tiktok', string> = {
+  todos: 'Mercado Livre + Shopee + TikTok Shop',
+  mercado_livre: 'Mercado Livre',
+  shopee: 'Shopee',
+  tiktok: 'TikTok Shop',
+};
+
+/** Nome e cor da pastilha de cada plataforma. O TikTok fica em zinc: a marca é
+    preto/branco, e amarelo e laranja já estão ocupados pelos outros dois. */
+const PASTILHA_PLATAFORMA: Record<PlataformaConta, { nome: string; classes: string }> = {
+  meli: { nome: 'Mercado Livre', classes: 'bg-yellow-100 text-yellow-800' },
+  shopee: { nome: 'Shopee', classes: 'bg-orange-100 text-orange-800' },
+  tiktok: { nome: 'TikTok Shop', classes: 'bg-zinc-200 text-zinc-800' },
+};
 
 export default function ModalSyncVendasDashboard({
   isOpen,
@@ -131,6 +167,23 @@ export default function ModalSyncVendasDashboard({
         }
       }
 
+      // TikTok Shop
+      if (selectedPlatform === 'todos' || selectedPlatform === 'tiktok') {
+        const resTiktok = await API_CONFIG.fetch('/api/tiktok/accounts', { cache: 'no-store', credentials: 'include' });
+        if (resTiktok.ok) {
+          const accountsTiktok = await resTiktok.json();
+          accountsTiktok.forEach((acc: any) => {
+            contasCarregadas.push({
+              id: acc.id,
+              shop_id: acc.shop_id,
+              shop_name: acc.shop_name,
+              platform: 'tiktok',
+              newOrdersCount: 0
+            });
+          });
+        }
+      }
+
       if (contasCarregadas.length === 0) {
         setError('Nenhuma conta conectada encontrada');
         setIsVerifying(false);
@@ -169,6 +222,9 @@ export default function ModalSyncVendasDashboard({
             conta.newOrdersCount = 0;
           }
         }
+        // TikTok Shop não tem `/vendas/check` no back-end: a conta entra na lista
+        // com 0 vendas novas e o texto abaixo já cobre esse caso ("você ainda pode
+        // forçar a sincronização").
       }
 
       const totalNew = contasCarregadas.reduce((sum, c) => sum + (c.newOrdersCount || 0), 0);
@@ -225,7 +281,7 @@ export default function ModalSyncVendasDashboard({
       .filter(c => selectedAccountIds.includes(c.id))
       .map(c => ({
         accountId: c.id,
-        accountName: c.platform === 'meli' ? (c.nickname || `Usuário ${c.ml_user_id}`) : (c.shop_name || `Shop ${c.shop_id}`),
+        accountName: NOME_CONTA[c.platform](c),
         platform: c.platform,
         status: 'pending' as const,
         progress: 0
@@ -277,7 +333,7 @@ export default function ModalSyncVendasDashboard({
         ));
 
         try {
-          const apiUrl = conta.platform === 'meli' ? '/api/v2/meli/sync-trigger' : '/api/shopee/vendas/sync';
+          const apiUrl = ROTA_SYNC[conta.platform];
           const body = { accountIds: [conta.id] };
 
           const res = await fetch(apiUrl, {
@@ -351,24 +407,13 @@ export default function ModalSyncVendasDashboard({
     }, 2500);
   };
 
-  const getDisplayName = (conta: ContaInfo) => {
-    if (conta.platform === 'meli') {
-      return conta.nickname || `Usuário ${conta.ml_user_id}`;
-    }
-    return conta.shop_name || `Shop ${conta.shop_id}`;
-  };
+  const getDisplayName = (conta: ContaInfo) => NOME_CONTA[conta.platform](conta);
 
-  const getPlatformBadge = (platform: 'meli' | 'shopee') => {
-    if (platform === 'meli') {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
-          Mercado Livre
-        </span>
-      );
-    }
+  const getPlatformBadge = (platform: PlataformaConta) => {
+    const { nome, classes } = PASTILHA_PLATAFORMA[platform];
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-        Shopee
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${classes}`}>
+        {nome}
       </span>
     );
   };
@@ -461,8 +506,7 @@ export default function ModalSyncVendasDashboard({
                       Sincronizar Vendas
                     </h2>
                     <p className="text-xs text-gray-600">
-                      {selectedPlatform === 'todos' ? 'Mercado Livre + Shopee' : 
-                       selectedPlatform === 'mercado_livre' ? 'Mercado Livre' : 'Shopee'}
+                      {SUBTITULO_PLATAFORMA[selectedPlatform]}
                     </p>
                   </div>
                 </div>

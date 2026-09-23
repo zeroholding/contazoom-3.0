@@ -354,20 +354,26 @@ export default function Contas() {
   /**
    * Retorno do OAuth.
    *
-   * As duas plataformas voltam com parâmetros na URL. Eles são LIMPOS depois de
+   * As três plataformas voltam com parâmetros na URL. Eles são LIMPOS depois de
    * lidos, com `replaceState`: sem isso, recarregar a página mostraria de novo
    * "conta conectada" sem nada ter acontecido, e o cartão reabriria sozinho.
    */
   useEffect(() => {
     const mlOk = searchParams.get("meli_connected") === "true";
     const spOk = searchParams.get("shopee_connected") === "true";
-    if (!mlOk && !spOk) return;
+    const ttOk = searchParams.get("tiktok_connected") === "true";
+    if (!mlOk && !spOk && !ttOk) return;
 
-    const canal: CanalConta = mlOk ? "ML" : "SP";
+    const canal: CanalConta = mlOk ? "ML" : spOk ? "SP" : "TT";
     const nome = mlOk
       ? searchParams.get("meli_nickname") ||
         `Vendedor ${searchParams.get("meli_user_id") ?? ""}`.trim()
-      : `Loja ${searchParams.get("shopee_shop_id") ?? ""}`.trim();
+      : spOk
+        ? `Loja ${searchParams.get("shopee_shop_id") ?? ""}`.trim()
+        // O callback do TikTok não devolve o id na URL: uma autorização pode
+        // liberar VÁRIAS lojas de uma vez, e escolher uma para o texto daria a
+        // impressão de que só ela entrou. A lista recarregada abaixo mostra todas.
+        : "A loja";
 
     toast({
       variant: "success",
@@ -388,6 +394,7 @@ export default function Contas() {
         "shopee_connected",
         "shopee_shop_id",
         "shopee_merchant_id",
+        "tiktok_connected",
       ]) {
         url.searchParams.delete(chave);
       }
@@ -396,37 +403,65 @@ export default function Contas() {
   }, [searchParams, toast, abrir, atualizar]);
 
   /**
-   * Resultado da janela da Shopee.
+   * Resultado da janela da Shopee e do TikTok Shop.
    *
    * A checagem de `event.origin` não é formalidade: sem ela, qualquer página
    * aberta em outra aba poderia mandar uma mensagem e a tela reagiria como se a
-   * Shopee tivesse respondido.
+   * plataforma tivesse respondido.
+   *
+   * O prefixo do evento identifica quem respondeu (`shopee:auth:*` /
+   * `tiktok:auth:*`). Tratar os dois no mesmo lugar, por tabela, evita a versão
+   * com dois blocos quase idênticos — que é onde um `abrir("SP")` esquecido
+   * abriria o cartão da Shopee depois de conectar o TikTok.
    */
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const canalPorPrefixo: Record<string, CanalConta> = {
+      shopee: "SP",
+      tiktok: "TT",
+    };
+
     function aoReceber(evento: MessageEvent) {
       if (evento.origin !== window.location.origin) return;
       const dado = evento.data;
-      if (!dado || typeof dado !== "object") return;
+      if (!dado || typeof dado !== "object" || typeof dado.type !== "string") return;
 
-      if (dado.type === "shopee:auth:success") {
+      const [prefixo, escopo, resultado] = dado.type.split(":");
+      if (escopo !== "auth") return;
+
+      const canal = canalPorPrefixo[prefixo];
+      if (!canal) return;
+
+      const nomePlataforma = CANAL_CONTA_NOME[canal];
+
+      if (resultado === "success") {
+        // A Shopee devolve uma loja; o TikTok pode devolver várias na mesma
+        // autorização, então o texto se adapta em vez de afirmar "uma loja".
         const loja = dado.data?.shopId ?? dado.data?.shop_id;
+        const lojas = Array.isArray(dado.data?.shops) ? dado.data.shops : null;
+
+        const descricao = lojas
+          ? `${lojas.length} loja(s) entraram na lista.`
+          : loja
+            ? `Loja ${loja} entrou na lista.`
+            : "Loja conectada.";
+
         toast({
           variant: "success",
-          title: "Conta Shopee conectada",
-          description: loja ? `Loja ${loja} entrou na lista.` : "Loja conectada.",
+          title: `Conta ${nomePlataforma} conectada`,
+          description: descricao,
           duration: 5000,
         });
-        abrir("SP");
+        abrir(canal);
         atualizar();
         return;
       }
 
-      if (dado.type === "shopee:auth:error") {
+      if (resultado === "error") {
         toast({
           variant: "error",
-          title: "Falha ao conectar a Shopee",
+          title: `Falha ao conectar o ${nomePlataforma}`,
           description:
             typeof dado.message === "string" && dado.message
               ? dado.message

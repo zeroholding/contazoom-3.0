@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Download, History, Search, Trash2, AlertTriangle, X, ArrowLeft } from "lucide-react";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
+import { LogoTikTok } from "@/app/components/views/comum/logos";
 
 type UserData = {
   id: string;
@@ -11,6 +12,17 @@ type UserData = {
   email: string;
   connectedAccounts: { provider: string; label: string }[];
 };
+
+/** Marca do marketplace pelo `provider` de `GET /api/admin/users`.
+    Era `provider === 'shopee' ? Shopee : Meli`, e ternário binário com três canais
+    cai silenciosamente no último ramo: loja do TikTok aparecia com o logo do
+    Mercado Livre. O TikTok reusa o `LogoTikTok` de `comum/logos.tsx`, que é a fonte
+    canônica — a família `components/icons` não tem esse desenho. */
+function IconeProvedor({ provider, className }: { provider: string; className: string }) {
+  if (provider === 'shopee') return <ShopeeIcon className={className} />;
+  if (provider === 'tiktok') return <LogoTikTok className={className} />;
+  return <MeliIcon className={className} />;
+}
 
 type DocumentLog = {
   id: string;
@@ -348,6 +360,12 @@ export default function AdminDocumentos() {
                         {u.connectedAccounts.filter(a => a.provider === 'shopee').length}
                       </div>
                     )}
+                    {u.connectedAccounts.filter(a => a.provider === 'tiktok').length > 0 && (
+                      <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm">
+                        <LogoTikTok className="w-2.5 h-2.5" />
+                        {u.connectedAccounts.filter(a => a.provider === 'tiktok').length}
+                      </div>
+                    )}
                   </div>
                 )}
               </button>
@@ -536,9 +554,7 @@ export default function AdminDocumentos() {
                             sel ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-white border-[var(--cz-hairline)] text-gray-500 hover:bg-gray-50'
                           }`}
                         >
-                          {acc.provider === 'shopee' 
-                            ? <ShopeeIcon className={`w-3.5 h-3.5 mr-1 ${!sel && 'opacity-50 grayscale'}`} /> 
-                            : <MeliIcon className={`w-3.5 h-3.5 mr-1 ${!sel && 'opacity-50 grayscale'}`} />}
+                          <IconeProvedor provider={acc.provider} className={`w-3.5 h-3.5 mr-1 ${!sel && 'opacity-50 grayscale'}`} />
                           {acc.label}
                         </button>
                       );

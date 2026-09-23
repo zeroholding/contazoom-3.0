@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Users, UserPlus, Shield, Loader2, Store, ShoppingBag, X } from "lucide-react";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
+import { LogoTikTok } from "@/app/components/views/comum/logos";
 
 type UserData = {
   id: string;
@@ -13,6 +14,17 @@ type UserData = {
   createdAt: string;
   connectedAccounts: { provider: string; label: string }[];
 };
+
+/** Marca do marketplace pelo `provider` de `GET /api/admin/users`.
+    Era `provider === 'shopee' ? Shopee : Meli`, e ternário binário com três canais
+    cai silenciosamente no último ramo: conta do TikTok aparecia com o logo do
+    Mercado Livre. O TikTok reusa o `LogoTikTok` de `comum/logos.tsx`, que é a fonte
+    canônica — a família `components/icons` não tem esse desenho. */
+function IconeProvedor({ provider, className }: { provider: string; className: string }) {
+  if (provider === "shopee") return <ShopeeIcon className={className} />;
+  if (provider === "tiktok") return <LogoTikTok className={className} />;
+  return <MeliIcon className={className} />;
+}
 
 export default function AdminPanel() {
   const [users, setUsers] = useState<UserData[]>([]);
@@ -163,11 +175,7 @@ export default function AdminPanel() {
                       ) : (
                         user.connectedAccounts.map((acc, i) => (
                           <div key={i} className="flex items-center text-xs px-2.5 py-1.5 rounded-md border bg-gray-50 border-[var(--cz-hairline)] text-gray-700 hover:bg-gray-100 transition-colors">
-                            {acc.provider === 'shopee' ? (
-                              <ShopeeIcon className="w-4 h-4 mr-2" />
-                            ) : (
-                              <MeliIcon className="w-4 h-4 mr-2" />
-                            )}
+                            <IconeProvedor provider={acc.provider} className="w-4 h-4 mr-2" />
                             <span className="font-medium truncate max-w-[120px]" title={acc.label}>{acc.label}</span>
                           </div>
                         ))

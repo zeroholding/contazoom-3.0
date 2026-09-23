@@ -21,7 +21,7 @@ interface Aliquota {
   id: string;
   conta: string;
   accountId?: string | null;
-  plataforma?: "meli" | "shopee" | null;
+  plataforma?: "meli" | "shopee" | "tiktok" | null;
   aliquota: number;
   dataInicio: string;
   dataFim: string;

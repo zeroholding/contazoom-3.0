@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
         role: true,
         createdAt: true,
         meliAccounts: { select: { id: true, nickname: true } },
-        shopeeAccounts: { select: { id: true, shop_name: true } }
+        shopeeAccounts: { select: { id: true, shop_name: true } },
+        tiktokAccounts: { select: { id: true, shop_name: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -34,6 +35,10 @@ export async function GET(req: NextRequest) {
       
       user.shopeeAccounts?.forEach(acc => {
         connectedAccounts.push({ provider: "shopee", label: acc.shop_name || "Loja Shopee" });
+      });
+
+      user.tiktokAccounts?.forEach(acc => {
+        connectedAccounts.push({ provider: "tiktok", label: acc.shop_name || "Loja TikTok Shop" });
       });
 
       return {

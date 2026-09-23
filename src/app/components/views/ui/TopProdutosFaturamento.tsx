@@ -17,7 +17,7 @@ interface TopProdutosFaturamentoProps {
   modalidadeEnvioAtiva?: FiltroModalidadeEnvio;
   agrupamentoSKUAtivo?: FiltroAgrupamentoSKU;
   refreshKey?: number;
-  selectedAccount?: { platform: 'meli' | 'shopee' | 'todos'; id?: string; label?: string };
+  selectedAccount?: { platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string; label?: string };
 }
 
 type ProdutoFaturamento = {

@@ -7,7 +7,11 @@ import VendasPagination from "../VendasPagination";
 import ResumoPorConta, { type LinhaResumoConta } from "../ResumoPorConta";
 import type { ColunasVisiveis } from "../colunasVendas";
 import { useToast } from "../toaster";
-import { useVendasV2 } from "@/hooks/v2/useVendas";
+import {
+  ehMarketplace,
+  useVendasV2,
+  type PlataformaVendas,
+} from "@/hooks/v2/useVendas";
 import { PaginationMeta } from "@/validation/validation.interface";
 import { Venda } from "@/hooks/useVendas";
 import { useVendasContext } from "@/hooks/v2/useVendasContext";
@@ -54,9 +58,12 @@ export default function TabelaVendasV2({
         variant: "info",
         title: "Conectar contas",
         description:
-          "Para conectar contas, acesse as páginas individuais do Shopee ou Mercado Livre.",
+          "Para conectar contas, acesse as páginas individuais do Mercado Livre, Shopee ou TikTok Shop.",
       });
-    } else if (platform !== "Mercado Livre" && platform !== "Shopee") {
+    } else if (!ehMarketplace(platform)) {
+      // Checagem por INCLUSÃO, e não a dupla negação `!== "Mercado Livre" &&
+      // !== "Shopee"`: com a terceira plataforma aquela condição era VERDADEIRA
+      // para o TikTok e o botão dizia que a integração não existe — sendo que existe.
       toast({
         variant: "warning",
         title: "Integração não disponível",
@@ -572,7 +579,7 @@ export default function TabelaVendasV2({
             currentPage={pagination.page}
             itemsPerPage={pagination.limit}
             colunasVisiveis={colunasVisiveis}
-            platform={platform as "Mercado Livre" | "Shopee" | "Geral"}
+            platform={platform as PlataformaVendas}
           />
           <VendasPagination
             currentPage={pagination.page}
