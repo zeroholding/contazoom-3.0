@@ -197,7 +197,9 @@ model TiktokVenda {
   prazoDespacho      DateTime?     @map("prazo_despacho") @db.Timestamptz(3)
 
   /// Origem do prazo e marcador de "já olhei". Ver `MeliVenda.prazoDespachoOrigem`.
-  /// Valores: `tt_rts_time`, `tt_ship_by_date`, `ausente`.
+  /// Valores: `tt_rts_time`, `tt_ship_by_date`, `tt_collection_due` e o marcador
+  /// versionado `PRAZO_ORIGEM_AUSENTE` (`ausente:N`), o MESMO de ML e Shopee —
+  /// é ele que o backfill usa para saber se a linha já passou pelas regras atuais.
   prazoDespachoOrigem String?      @map("prazo_despacho_origem") @db.VarChar(32)
 
   latitude           Decimal?      @db.Decimal(10, 7)

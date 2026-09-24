@@ -7,7 +7,7 @@ import DatePicker from "react-datepicker";
 export type FiltroPeriodo = "todos" | "hoje" | "ontem" | "ultimos_7d" | "ultimos_30d" | "ultimos_12m" | "mes_passado" | "este_mes" | "personalizado";
 
 // Novos filtros do Dashboard
-type FiltroCanal = "todos" | "mercado_livre" | "shopee";
+type FiltroCanal = "todos" | "mercado_livre" | "shopee" | "tiktok";
 type FiltroStatus = "todos" | "pagos" | "cancelados";
 type FiltroTipoAnuncio = "todos" | "catalogo" | "proprio";
 type FiltroModalidadeEnvio = "todos" | "me" | "full" | "flex";
@@ -146,6 +146,7 @@ export default function FiltrosDashboard({
       case "todos": return "Todos os Canais";
       case "mercado_livre": return "Mercado Livre";
       case "shopee": return "Shopee";
+      case "tiktok": return "TikTok Shop";
       default: return "Todos os Canais";
     }
   };

@@ -1,6 +1,6 @@
 /**
- * Preenche `prazo_despacho` em `meli_venda` e `shopee_venda` a partir do
- * `raw_data` que já está no banco.
+ * Preenche `prazo_despacho` em `meli_venda`, `shopee_venda` e `tiktok_venda` a
+ * partir do `raw_data` que já está no banco.
  *
  * NENHUMA CHAMADA DE API — mesmo raciocínio de `estoque-full-backfill.ts` e
  * `anuncios-backfill.ts`: o prazo sempre chegou no sync e era descartado, mas o
@@ -258,6 +258,35 @@ function niveisShopee(): Nivel[] {
   ];
 }
 
+/**
+ * TikTok Shop.
+ *
+ * `raw_data` é o pedido inteiro como veio de `/order/202309/orders/get`, então os
+ * prazos estão na raiz — e todos como epoch em SEGUNDOS, com o mesmo `0` de "não
+ * se aplica" da Shopee (por isso `epoch()`, não `iso()`).
+ *
+ * Os três níveis são a tradução de `resolvePrazoDespacho` em
+ * `src/lib/tiktok-sync.ts`, na mesma ordem: pronto-para-envio, limite de postagem
+ * e limite da coleta.
+ *
+ * A reserva em `shipment_details` existe porque o sync copia esses mesmos campos
+ * para lá (ver o bloco `shipmentDetails`), o que dá um segundo lugar onde o prazo
+ * pode estar caso o `raw_data` de uma linha antiga tenha vindo podado.
+ */
+function niveisTiktok(): Nivel[] {
+  const daRaizOuDoEnvio = (campo: string) =>
+    primeiro([
+      epoch(`v.raw_data ->> '${campo}'`),
+      epoch(`v.shipment_details ->> '${campo}'`),
+    ]);
+
+  return [
+    { origem: "tt_rts_time", expressao: daRaizOuDoEnvio("rts_sla_time") },
+    { origem: "tt_ship_by_date", expressao: daRaizOuDoEnvio("shipping_due_time") },
+    { origem: "tt_collection_due", expressao: daRaizOuDoEnvio("collection_due_time") },
+  ];
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                  Execução                                  */
 /* -------------------------------------------------------------------------- */
@@ -267,7 +296,7 @@ export type BackfillPrazoResult = {
   preenchidas: number;
   /** Linhas em que o JSON não tinha prazo, marcadas para sair da fila. */
   semPrazo: number;
-  /** Quanto ainda falta depois desta rodada (ML + Shopee). */
+  /** Quanto ainda falta depois desta rodada (ML + Shopee + TikTok). */
   restantes: number;
 };
 
@@ -287,11 +316,12 @@ export async function contarPrazoPendente(userId?: string): Promise<number> {
     ],
   };
 
-  const [ml, sp] = await Promise.all([
+  const [ml, sp, tt] = await Promise.all([
     prisma.meliVenda.count({ where: filtro }),
     prisma.shopeeVenda.count({ where: filtro }),
+    prisma.tiktokVenda.count({ where: filtro }),
   ]);
-  return ml + sp;
+  return ml + sp + tt;
 }
 
 /**
@@ -306,7 +336,7 @@ export async function contarPrazoPendente(userId?: string): Promise<number> {
  * estava no JSON. É o mesmo cuidado do backfill de variação.
  */
 async function processarTabela(
-  tabela: "meli_venda" | "shopee_venda",
+  tabela: "meli_venda" | "shopee_venda" | "tiktok_venda",
   niveis: Nivel[],
   limite: number,
   userId?: string,
@@ -357,17 +387,18 @@ async function processarTabela(
   return { preenchidas, semPrazo };
 }
 
-/** Uma rodada nas duas tabelas. Idempotente: só toca em `origem IS NULL`. */
+/** Uma rodada nas três tabelas. Idempotente: só toca em linha pendente. */
 export async function backfillPrazoChunk(
   limite: number = LOTE_PADRAO,
   userId?: string,
 ): Promise<BackfillPrazoResult> {
   const ml = await processarTabela("meli_venda", niveisMeli(), limite, userId);
   const sp = await processarTabela("shopee_venda", niveisShopee(), limite, userId);
+  const tt = await processarTabela("tiktok_venda", niveisTiktok(), limite, userId);
 
   return {
-    preenchidas: ml.preenchidas + sp.preenchidas,
-    semPrazo: ml.semPrazo + sp.semPrazo,
+    preenchidas: ml.preenchidas + sp.preenchidas + tt.preenchidas,
+    semPrazo: ml.semPrazo + sp.semPrazo + tt.semPrazo,
     restantes: await contarPrazoPendente(userId),
   };
 }

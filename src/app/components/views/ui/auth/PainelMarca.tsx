@@ -29,7 +29,7 @@ import {
 const CAPACIDADES = [
   {
     icone: ShoppingBag,
-    titulo: "Vendas de Mercado Livre e Shopee",
+    titulo: "Mercado Livre, Shopee e TikTok Shop",
     texto: "Pedidos, frete e comissão de cada canal em um só lugar.",
   },
   {

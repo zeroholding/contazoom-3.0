@@ -12,6 +12,11 @@
  * componente. Assim ele serve igual no servidor (para um resumo renderizado no
  * servidor) e no navegador, sem duas cópias da mesma tabela de rótulos.
  *
+ * O `import type` abaixo não quebra essa regra: tipo é apagado na compilação e
+ * não gera importação nenhuma no pacote. Ele existe para `statusEnvio` deixar de
+ * repetir a união de canais à mão — era `"ML" | "SP"` escrito aqui, e um canal
+ * novo em `expedicao.ts` não dava erro nenhum neste arquivo.
+ *
  * ┌────────────────────────────────────────────────────────────────────────┐
  * │ ARMADILHA: `shipping_status` SIGNIFICA COISAS DIFERENTES POR CANAL     │
  * ├────────────────────────────────────────────────────────────────────────┤
@@ -37,8 +42,16 @@
  * │ então nunca daria erro nem apareceria em teste de tipo.                │
  * │ `expedicao-data.ts` já convive com isso: a MODALIDADE da Shopee é lida │
  * │ de `shipping_status` justamente por ser a transportadora.              │
+ * │                                                                        │
+ * │ TIKTOK SHOP — MESMA armadilha da Shopee: `shipping_status` guarda      │
+ * │   `shipping_provider_name` (ver `src/lib/tiktok-sync.ts`). O estado do │
+ * │   envio está em `status` (`AWAITING_SHIPMENT`, `AWAITING_COLLECTION`,  │
+ * │   `PARTIALLY_SHIPPING`, `IN_TRANSIT`, `DELIVERED`, `COMPLETED`,        │
+ * │   `CANCELLED`, `UNPAID`). Use `transportadoraTiktok` para a outra.     │
  * └────────────────────────────────────────────────────────────────────────┘
  */
+
+import type { Canal } from "@/lib/expedicao";
 
 /* -------------------------------------------------------------------------- */
 /*                                    Tom                                     */
@@ -283,6 +296,50 @@ const SP_SEM_STATUS: StatusEnvio = {
   explicacao: "A Shopee não devolveu o status deste pedido no último sync.",
 };
 
+/**
+ * Estados do pedido no TikTok Shop.
+ *
+ * O enum é curto e fechado, diferente do ML. `AWAITING_SHIPMENT` e
+ * `AWAITING_COLLECTION` são os dois que põem trabalho no galpão e a diferença
+ * entre eles importa: no primeiro é o vendedor que despacha; no segundo o pacote
+ * já está pronto e espera a transportadora buscar — quem separa não precisa mexer.
+ *
+ * `UNPAID` é `critico` pelo mesmo motivo do ML: pedido sem pagamento que aparece
+ * na fila é trabalho que pode ser desfeito.
+ */
+const TT_STATUS: Record<string, StatusEnvio> = {
+  awaiting_shipment: {
+    rotulo: "A despachar",
+    tom: "alerta",
+    explicacao: "O pacote precisa ser separado e despachado pelo vendedor.",
+  },
+  awaiting_collection: {
+    rotulo: "Aguardando coleta",
+    tom: "neutro",
+    explicacao: "Já despachado; a transportadora ainda não coletou.",
+  },
+  partially_shipping: {
+    rotulo: "Envio parcial",
+    tom: "alerta",
+    explicacao: "Parte do pedido saiu e parte continua na prateleira.",
+  },
+  in_transit: { rotulo: "Em trânsito", tom: "neutro" },
+  delivered: { rotulo: "Entregue", tom: "bom" },
+  completed: { rotulo: "Concluído", tom: "bom" },
+  cancelled: { rotulo: "Cancelado", tom: "critico" },
+  unpaid: {
+    rotulo: "Não pago",
+    tom: "critico",
+    explicacao: "Pedido criado e ainda não pago. Não deve ser separado.",
+  },
+};
+
+const TT_SEM_STATUS: StatusEnvio = {
+  rotulo: "Status não informado",
+  tom: "neutro",
+  explicacao: "O TikTok Shop não devolveu o status deste pedido no último sync.",
+};
+
 /* -------------------------------------------------------------------------- */
 /*                              API pública                                   */
 /* -------------------------------------------------------------------------- */
@@ -301,7 +358,7 @@ const SP_SEM_STATUS: StatusEnvio = {
  *   transportadora. Para lê-la, use `transportadoraShopee`.
  */
 export function statusEnvio(
-  canal: "ML" | "SP",
+  canal: Canal,
   shippingStatus: string | null,
   statusVenda: string,
 ): StatusEnvio {
@@ -309,6 +366,15 @@ export function statusEnvio(
     const chave = normalizar(statusVenda);
     if (chave === "") return SP_SEM_STATUS;
     return SP_STATUS[chave] ?? cru(statusVenda);
+  }
+
+  // O TikTok cai na MESMA armadilha da Shopee: `shipping_status` guarda a
+  // transportadora (`shipping_provider_name`), não o estado do envio. Quem manda
+  // é `status`. Ver `transportadoraTiktok` para ler a outra coluna.
+  if (canal === "TT") {
+    const chave = normalizar(statusVenda);
+    if (chave === "") return TT_SEM_STATUS;
+    return TT_STATUS[chave] ?? cru(statusVenda);
   }
 
   const chave = normalizar(shippingStatus);
@@ -333,6 +399,14 @@ export function statusEnvio(
  * ("Shopee Xpress", "J&T Express") e maiusculizar só dificultaria a leitura.
  * `null` quando vazio, para a tela poder omitir o campo em vez de desenhar um
  * rótulo sem conteúdo.
+ */
+export function transportadoraTiktok(shippingStatus: string | null): string | null {
+  return transportadoraShopee(shippingStatus);
+}
+
+/**
+ * Transportadora da Shopee. Ver o aviso acima; a do TikTok tem a mesma armadilha
+ * e reusa esta função por `transportadoraTiktok`.
  */
 export function transportadoraShopee(shippingStatus: string | null): string | null {
   if (shippingStatus === null || shippingStatus === undefined) return null;

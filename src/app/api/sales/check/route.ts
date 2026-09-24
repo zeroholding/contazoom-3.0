@@ -19,23 +19,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
     }
 
-    // Verificar se há vendas do Mercado Livre
-    const meliSalesCount = await prisma.meliVenda.count({
-      where: { userId: user.id }
-    });
+    // Uma contagem por canal, em paralelo: as três são independentes e o
+    // encadeamento anterior somava a latência de cada uma sem motivo.
+    const [meliSalesCount, shopeeSalesCount, tiktokSalesCount] = await Promise.all([
+      prisma.meliVenda.count({ where: { userId: user.id } }),
+      prisma.shopeeVenda.count({ where: { userId: user.id } }),
+      prisma.tiktokVenda.count({ where: { userId: user.id } }),
+    ]);
 
-    // Verificar se há vendas da Shopee
-    const shopeeSalesCount = await prisma.shopeeVenda.count({
-      where: { userId: user.id }
-    });
-
-    const hasSales = meliSalesCount > 0 || shopeeSalesCount > 0;
+    const totalSales = meliSalesCount + shopeeSalesCount + tiktokSalesCount;
 
     return NextResponse.json({
-      hasSales,
+      hasSales: totalSales > 0,
       meliSales: meliSalesCount,
       shopeeSales: shopeeSalesCount,
-      totalSales: meliSalesCount + shopeeSalesCount
+      tiktokSales: tiktokSalesCount,
+      totalSales
     });
   } catch (error) {
     console.error('Erro ao verificar vendas:', error);

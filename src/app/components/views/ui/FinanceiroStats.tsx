@@ -27,8 +27,11 @@ type Stats = {
   // Apenas os KPIs específicos do financeiro
   faturamentoBruto: number;
   deducoesReceita?: number;
-  taxasPlataformas: { total: number; mercadoLivre: number; shopee: number };
-  custoFrete: { total: number; mercadoLivre: number; shopee: number };
+  // `tiktok` existe na resposta de `/api/financeiro/dashboard/stats` desde que o
+  // TikTok Shop entrou como canal. Declarado aqui para o valor deixar de ser
+  // invisível ao tipo — os cartões mostram o `total`, que já o inclui.
+  taxasPlataformas: { total: number; mercadoLivre: number; shopee: number; tiktok: number };
+  custoFrete: { total: number; mercadoLivre: number; shopee: number; tiktok: number };
   receitaLiquida: number;
   receitaOperacionalLiquida?: number;
   cmv: number;
@@ -41,8 +44,8 @@ const DEFAULT_STATS: Stats = {
   // Apenas os KPIs específicos do financeiro
   faturamentoBruto: 0,
   deducoesReceita: 0,
-  taxasPlataformas: { total: 0, mercadoLivre: 0, shopee: 0 },
-  custoFrete: { total: 0, mercadoLivre: 0, shopee: 0 },
+  taxasPlataformas: { total: 0, mercadoLivre: 0, shopee: 0, tiktok: 0 },
+  custoFrete: { total: 0, mercadoLivre: 0, shopee: 0, tiktok: 0 },
   receitaLiquida: 0,
   receitaOperacionalLiquida: 0,
   cmv: 0,

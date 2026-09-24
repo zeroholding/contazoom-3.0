@@ -7,6 +7,9 @@ import {
 } from "@/lib/sku-discovery";
 import { buildPendingSkuSummary } from "@/lib/sku-pending";
 
+/** Os rótulos que `SkuDiscoveryCandidate.plataforma` aceita, por extenso. */
+const MARKETPLACE_VALIDO = ["Mercado Livre", "Shopee", "TikTok Shop"] as const;
+
 export async function GET(request: NextRequest) {
   try {
     const sessionCookie = request.cookies.get("session")?.value;
@@ -48,8 +51,14 @@ export async function POST(request: NextRequest) {
         return {
           sku: normalizedSku,
           produto: sku?.produto || `SKU ${normalizedSku}`,
-          plataforma:
-            sku?.plataforma === "Shopee" ? "Shopee" : "Mercado Livre",
+          // Lista branca com o ML como reserva, e não um ternário binário: com
+          // três canais, `plataforma === "Shopee" ? "Shopee" : "Mercado Livre"`
+          // cadastrava todo SKU do TikTok com a tag e a observação do Mercado
+          // Livre — e é dessa observação que `sku-image.ts` tira a plataforma
+          // para buscar a miniatura, então a imagem também vinha errada.
+          plataforma: MARKETPLACE_VALIDO.includes(sku?.plataforma)
+            ? (sku.plataforma as (typeof MARKETPLACE_VALIDO)[number])
+            : "Mercado Livre",
           conta: sku?.conta || null,
           externalId: sku?.externalId || null,
         } satisfies SkuDiscoveryCandidate;

@@ -35,10 +35,45 @@ interface SyncProgress {
   }[];
 }
 
+type PlataformaSync = "Mercado Livre" | "Shopee" | "TikTok Shop";
+
+/**
+ * Rotas por plataforma, em mapa e não em ternário.
+ *
+ * O ternário binário (`platform === "Mercado Livre" ? meli : shopee`) mandava
+ * QUALQUER plataforma que não fosse o ML para a rota da Shopee. Com o TikTok Shop
+ * como terceiro canal isso deixaria de ser um detalhe: o modal abriria as contas da
+ * Shopee na tela do TikTok, sem erro nenhum aparecer.
+ */
+const ROTA_CONTAS: Record<PlataformaSync, string> = {
+  "Mercado Livre": "/api/meli/accounts",
+  Shopee: "/api/shopee/accounts",
+  "TikTok Shop": "/api/tiktok/accounts",
+};
+
+/**
+ * Checagem prévia de vendas novas. `null` = a plataforma não tem essa rota.
+ *
+ * O TikTok é `null` de propósito, e não uma URL inventada: o sync dele é
+ * idempotente (upsert por `order_id`) com janela incremental por `update_time`,
+ * então não há pré-contagem a fazer. Sem o `null`, o ternário antigo mandaria o
+ * TikTok para a rota da SHOPEE e a contagem viria da loja errada.
+ *
+ * Aviso de estado real: `/api/shopee/vendas/check` também não existe hoje. A URL
+ * fica aqui porque é o comportamento que já estava no ar (a resposta não vem `ok`,
+ * a checagem é pulada e o sync segue) e trocá-la agora mudaria a Shopee junto — o
+ * dia em que a rota for criada, ela passa a valer sozinha.
+ */
+const ROTA_CHECK: Record<PlataformaSync, string | null> = {
+  "Mercado Livre": "/api/meli/vendas/check",
+  Shopee: "/api/shopee/vendas/check",
+  "TikTok Shop": null,
+};
+
 interface ModalSyncVendasProps {
   isOpen: boolean;
   onClose: () => void;
-  platform: "Mercado Livre" | "Shopee";
+  platform: PlataformaSync;
   contas: ContaInfo[];
   onStartSync: (accountIds?: string[], orderIdsByAccount?: Record<string, string[]>) => void;
   isSyncing: boolean;
@@ -120,19 +155,26 @@ export default function ModalSyncVendas({
     }
   }, [isSyncing, step]);
 
-  // Estratégia secundária: detectar quando sincronização termina pelo estado isSyncing (fallback para Shopee)
+  // Estratégia secundária: detectar o fim da sincronização pelo estado `isSyncing`.
+  //
+  // Vale para Shopee E TikTok Shop, e não só para a Shopee: nos dois o sync é UMA
+  // chamada que só responde no fim (o `ROTA_SYNC` de `useVendas`), então o
+  // `sync_complete` do SSE pode nem chegar e o modal ficaria girando para sempre. O
+  // Mercado Livre fica de fora porque lá o sync é fire-and-forget e quem manda é o
+  // evento.
   const wasSyncingRef = useRef(false);
   useEffect(() => {
-    if (platform === "Shopee" && step === "syncing") {
+    const syncSincrono = platform === "Shopee" || platform === "TikTok Shop";
+    if (syncSincrono && step === "syncing") {
       if (isSyncing) {
         wasSyncingRef.current = true;
-        console.log('[ModalSyncVendas] Shopee sincronizando...');
+        console.log(`[ModalSyncVendas] ${platform} sincronizando...`);
       } else if (wasSyncingRef.current && !isSyncing) {
         // Estava sincronizando e agora parou
-        console.log('[ModalSyncVendas] Shopee: Sincronização terminou (detectado via isSyncing). Fechando em 2s...');
+        console.log(`[ModalSyncVendas] ${platform}: Sincronização terminou (detectado via isSyncing). Fechando em 2s...`);
         wasSyncingRef.current = false;
         setTimeout(() => {
-          console.log('[ModalSyncVendas] Fechando modal do Shopee (fallback)');
+          console.log(`[ModalSyncVendas] Fechando modal do ${platform} (fallback)`);
           onClose();
         }, 2000);
       }
@@ -202,12 +244,7 @@ export default function ModalSyncVendas({
       if (!contasDisponiveis || contasDisponiveis.length === 0) {
         setVerificationLog('Buscando contas conectadas...');
         console.log('[ModalSync] Contas vazias nas props, buscando da API...');
-        const accountsApiUrl =
-          platform === "Mercado Livre"
-            ? "/api/meli/accounts"
-            : "/api/shopee/accounts";
-
-        const accountsRes = await fetch(accountsApiUrl, {
+        const accountsRes = await fetch(ROTA_CONTAS[platform], {
           cache: "no-store",
           credentials: "include",
         });
@@ -230,12 +267,7 @@ export default function ModalSyncVendas({
 
       // TODO: implementar rota de checagem, foi removido pois estava bloqueando o processo. 
 
-      // const apiUrl =
-      //   platform === "Mercado Livre"
-      //     ? "/api/meli/vendas/check"
-      //     : "/api/shopee/vendas/check";
-
-      // const res = await fetch(apiUrl, {
+      // const res = await fetch(ROTA_CHECK[platform]!, {
       //   cache: "no-store",
       //   credentials: "include",
       // });
@@ -313,17 +345,15 @@ export default function ModalSyncVendas({
     // Verificar novamente antes de sincronizar
     setIsChecking(true);
     try {
-      const apiUrl =
-        platform === "Mercado Livre"
-          ? "/api/meli/vendas/check"
-          : "/api/shopee/vendas/check";
+      const apiUrl = ROTA_CHECK[platform];
+      // Sem rota de checagem (TikTok): vai direto para o sync, que é idempotente.
+      // Antes isso cairia na rota da Shopee e a contagem de "vendas novas" do
+      // TikTok viria da loja errada.
+      const res = apiUrl
+        ? await fetch(apiUrl, { cache: "no-store", credentials: "include" })
+        : null;
 
-      const res = await fetch(apiUrl, {
-        cache: "no-store",
-        credentials: "include",
-      });
-
-      if (res.ok) {
+      if (res?.ok) {
         const result = await res.json();
         const newCount = result.totals?.new || 0;
         

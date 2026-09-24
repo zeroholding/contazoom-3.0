@@ -129,7 +129,10 @@ export type DefinicaoColuna = {
    * anuncia uma informação que a coluna não mostra mais.
    */
   curto: string;
-  /** Só faz sentido no Mercado Livre. A Shopee não tem ADS, exposição nem tipo. */
+  /**
+   * Só faz sentido no Mercado Livre. Nem a Shopee nem o TikTok Shop têm ADS,
+   * exposição ou tipo de anúncio.
+   */
   somenteMeli?: boolean;
 };
 
@@ -197,14 +200,24 @@ export function normalizarColunas(
 /**
  * As colunas oferecidas para uma plataforma.
  *
- * A Shopee não tem ADS, exposição nem tipo de anúncio: `VendasTable` já não
- * desenha esses selos para ela (`!isShopee`). Oferecer as caixas de seleção
- * mesmo assim seria repetir o defeito que este arquivo existe para corrigir —
- * um controle que promete algo que a tela não faz.
+ * Só o Mercado Livre tem ADS, exposição e tipo de anúncio: `VendasTable` não
+ * desenha esses selos para os outros canais. Oferecer as caixas de seleção mesmo
+ * assim seria repetir o defeito que este arquivo existe para corrigir — um
+ * controle que promete algo que a tela não faz.
+ *
+ * A checagem é por INCLUSÃO (só o ML recebe a lista cheia) e não por exclusão da
+ * Shopee. Com o TikTok Shop entrando como terceiro canal, `platform === "Shopee"`
+ * deixaria o TikTok cair no `return` de baixo e reapareceria exatamente o
+ * problema descrito acima. O mesmo raciocínio de `canalIncluiPlataforma` em
+ * `dashboard-filters.ts`.
  */
 export function colunasDaPlataforma(platform: string | undefined): DefinicaoColuna[] {
-  if (platform === "Shopee") return COLUNAS_VENDAS.filter((c) => !c.somenteMeli);
-  return COLUNAS_VENDAS;
+  const ehMeli =
+    platform === undefined ||
+    platform === "Mercado Livre" ||
+    platform === "ML" ||
+    platform === "Geral";
+  return ehMeli ? COLUNAS_VENDAS : COLUNAS_VENDAS.filter((c) => !c.somenteMeli);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,5 +1,11 @@
 /**
- * Extração do PRAZO DE DESPACHO a partir dos payloads crus de ML e Shopee.
+ * Extração do PRAZO DE DESPACHO a partir dos payloads crus das plataformas.
+ *
+ * O TikTok Shop é a exceção de lugar, não de regra: a extração dele vive em
+ * `resolvePrazoDespacho`, dentro de `src/lib/tiktok-sync.ts`, porque o sync do
+ * TikTok tem UM caminho de gravação só (não os dois do ML) e os helpers de epoch
+ * já estavam em `tiktok.ts`. O que ele COMPARTILHA é o que importa aqui: o
+ * marcador `PRAZO_ORIGEM_AUSENTE` abaixo e a tradução em SQL no backfill.
  *
  * Prazo de despacho é o horário limite para o VENDEDOR postar/entregar o pacote
  * à transportadora. Não é o prazo de ENTREGA ao comprador, que é dias depois e
@@ -43,9 +49,10 @@
  * novo com as regras novas, e converge: quem continuar sem prazo é remarcado com
  * a versão atual e sai da fila de trabalho de vez.
  *
- * QUEM ALTERAR `niveisMeli`/`niveisShopee` OU `extrairPrazoDespacho*` TEM DE
- * SUBIR ESTE NÚMERO. Sem isso, o caminho novo só vale para venda nova, e a base
- * fica com duas populações: as antigas sem prazo tendo o dado no JSON.
+ * QUEM ALTERAR `niveisMeli`/`niveisShopee`/`niveisTiktok`, `extrairPrazoDespacho*`
+ * OU `resolvePrazoDespacho` (tiktok-sync) TEM DE SUBIR ESTE NÚMERO. Sem isso, o
+ * caminho novo só vale para venda nova, e a base fica com duas populações: as
+ * antigas sem prazo tendo o dado no JSON.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export const PRAZO_ORIGEM_AUSENTE = "ausente:3";

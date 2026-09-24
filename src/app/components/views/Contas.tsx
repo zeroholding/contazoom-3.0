@@ -42,7 +42,7 @@ import {
   MolduraTela,
 } from "./comum/shell";
 import { inteiro } from "./comum/formato";
-import { LogoMercadoLivre, LogoShopee } from "./comum/logos";
+import { LOGO_POR_CANAL } from "./comum/logos";
 import {
   conectarConta,
   excluirConta,
@@ -69,12 +69,17 @@ import { useToast } from "./ui/toaster";
 /*                                   Peças                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * O logo do canal, em tamanho de cartão.
+ *
+ * Era `canal === "ML" ? <LogoMercadoLivre/> : <LogoShopee/>`, e ternário binário
+ * com três canais cai no último ramo: o cartão do TikTok Shop vinha com a sacola
+ * da Shopee. O mapa mora em `comum/logos.tsx`, junto dos desenhos, para não haver
+ * um segundo lugar onde esquecer de acrescentar um canal.
+ */
 function Logo({ canal, className }: { canal: CanalConta; className?: string }) {
-  return canal === "ML" ? (
-    <LogoMercadoLivre className={className} />
-  ) : (
-    <LogoShopee className={className} />
-  );
+  const Desenho = LOGO_POR_CANAL[canal];
+  return <Desenho className={className} />;
 }
 
 function Seta({ aberto }: { aberto: boolean }) {
@@ -567,7 +572,7 @@ export default function Contas() {
     <MolduraTela>
       <Cabecalho
         titulo="Contas de plataforma"
-        descricao="Conexões com o Mercado Livre e a Shopee. Abra uma plataforma para ver os dados de cada conta, o estado da autorização e o histórico de sincronização."
+        descricao="Conexões com o Mercado Livre, a Shopee e o TikTok Shop. Abra uma plataforma para ver os dados de cada conta, o estado da autorização e o histórico de sincronização."
         acao={
           <BotaoAtualizar
             onClick={atualizar}

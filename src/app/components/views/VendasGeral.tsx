@@ -266,7 +266,7 @@ function VendasGeralContent() {
             <UserGuidanceNotification
               type="warning"
               title="Bem-vindo ao ContaZoom"
-              message="Para começar, você precisa conectar suas contas do Mercado Livre e Shopee. Após conectar, você poderá sincronizar e visualizar todas as suas vendas."
+              message="Para começar, você precisa conectar suas contas do Mercado Livre, Shopee ou TikTok Shop. Após conectar, você poderá sincronizar e visualizar todas as suas vendas."
               actionLabel="Conectar Contas"
               actionHref="/contas"
               dismissible={true}

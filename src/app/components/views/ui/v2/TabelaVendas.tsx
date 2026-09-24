@@ -522,7 +522,7 @@ export default function TabelaVendasV2({
             title="Nenhuma venda encontrada"
             description={
               platform === "Geral"
-                ? "Nenhuma venda sincronizada encontrada. Sincronize vendas nas páginas individuais do Shopee ou Mercado Livre."
+                ? "Nenhuma venda sincronizada encontrada. Sincronize vendas nas páginas individuais do Mercado Livre, Shopee ou TikTok Shop."
                 : `Use o botão "Sincronizar Vendas" para atualizar ou conecte uma nova conta do ${platform}.`
             }
             icons={emptyStateIcons}

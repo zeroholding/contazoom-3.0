@@ -29,6 +29,7 @@
 import { Prisma } from "@prisma/client";
 
 import { pMap } from "@/lib/concorrencia";
+import { PRAZO_ORIGEM_AUSENTE } from "@/lib/prazo-despacho";
 import prisma from "@/lib/prisma";
 import { buildHistoricalCostMap } from "@/lib/sku-cost-history";
 import {
@@ -250,9 +251,19 @@ function firstLineItem(order: AnyRec): AnyRec {
  * Contraparte do `ship_by_date` da Shopee. O TikTok tem mais de um campo de
  * prazo e eles não significam a mesma coisa: `rts_sla_time` é o prazo para
  * deixar o pedido pronto para envio (Ready To Ship), que é o que a operação
- * precisa cumprir; `shipping_due_time` é o limite de postagem. Usamos o primeiro
- * e caímos no segundo, registrando qual dos dois valeu — sem isso, um pedido sem
- * prazo fica indistinguível de um que nunca foi olhado.
+ * precisa cumprir; `shipping_due_time` é o limite de postagem; e
+ * `collection_due_time` é o limite da coleta, que é o que vale nos pedidos em que
+ * a transportadora busca na loja e os dois primeiros vêm vazios (o mesmo caso que
+ * no ML obrigou o nível `ml_schedule_limit`). Registramos qual dos três valeu —
+ * sem isso, um pedido sem prazo fica indistinguível de um que nunca foi olhado.
+ *
+ * ⚠️  ESTA ORDEM ESTÁ TRADUZIDA EM SQL em `niveisTiktok()`
+ * (`src/lib/prazo-despacho-backfill.ts`). Alterar aqui sem alterar lá faz venda
+ * antiga e venda nova tirarem o prazo de campos diferentes.
+ *
+ * A marca de "não tem prazo" é o `PRAZO_ORIGEM_AUSENTE` compartilhado com ML e
+ * Shopee, e não um `"ausente"` solto: é o marcador COM VERSÃO que o backfill usa
+ * para decidir se a linha já foi examinada pelas regras atuais.
  */
 function resolvePrazoDespacho(order: AnyRec): {
   prazo: Date | null;
@@ -264,7 +275,10 @@ function resolvePrazoDespacho(order: AnyRec): {
   const shipBy = epochSecondsToDate(order.shipping_due_time);
   if (shipBy) return { prazo: shipBy, origem: "tt_ship_by_date" };
 
-  return { prazo: null, origem: "ausente" };
+  const coleta = epochSecondsToDate(order.collection_due_time);
+  if (coleta) return { prazo: coleta, origem: "tt_collection_due" };
+
+  return { prazo: null, origem: PRAZO_ORIGEM_AUSENTE };
 }
 
 type CostMap = Awaited<ReturnType<typeof buildHistoricalCostMap>>;

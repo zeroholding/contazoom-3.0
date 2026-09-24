@@ -192,7 +192,7 @@ function TabelaResumo({
  * cópias e não nas outras. O que muda entre elas é literalmente o título, a
  * descrição, e se o filtro de canal aparece.
  */
-const TEXTOS: Record<"geral" | "ML" | "SP", { titulo: string; descricao: string }> = {
+const TEXTOS: Record<"geral" | Canal, { titulo: string; descricao: string }> = {
   geral: {
     titulo: "Separação de Itens",
     descricao: "Gerencie e acompanhe os itens separados para despacho.",
@@ -206,6 +206,11 @@ const TEXTOS: Record<"geral" | "ML" | "SP", { titulo: string; descricao: string 
     titulo: "Separação de Itens — Shopee",
     descricao:
       "Gerencie e acompanhe os itens separados para despacho na Shopee. Entram os pedidos prontos para envio, processados e em nova tentativa.",
+  },
+  TT: {
+    titulo: "Separação de Itens — TikTok Shop",
+    descricao:
+      "Gerencie e acompanhe os itens separados para despacho no TikTok Shop. Entram os pedidos a despachar, aguardando coleta e com envio parcial. Pedido não pago fica de fora.",
   },
 };
 

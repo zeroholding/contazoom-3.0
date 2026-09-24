@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
-import { clearAccountInvalidMark } from "@/lib/account-status";
+import { clearAccountInvalidMark, type AccountPlatform } from "@/lib/account-status";
+
+const PLATAFORMAS: AccountPlatform[] = ["meli", "shopee", "tiktok", "bling"];
 
 export const runtime = "nodejs";
 
@@ -19,16 +21,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!['meli', 'shopee', 'bling'].includes(platform)) {
+    if (!PLATAFORMAS.includes(platform)) {
       return NextResponse.json(
-        { error: "Platform deve ser 'meli', 'shopee' ou 'bling'" },
+        { error: `Platform deve ser um de: ${PLATAFORMAS.join(", ")}` },
         { status: 400 }
       );
     }
 
     // Verificar se a conta pertence ao usuário
     let account = null;
-    switch (platform) {
+    switch (platform as AccountPlatform) {
       case 'meli':
         account = await prisma.meliAccount.findFirst({
           where: { id: accountId, userId: session.sub },
@@ -36,6 +38,11 @@ export async function POST(req: NextRequest) {
         break;
       case 'shopee':
         account = await prisma.shopeeAccount.findFirst({
+          where: { id: accountId, userId: session.sub },
+        });
+        break;
+      case 'tiktok':
+        account = await prisma.tiktokAccount.findFirst({
           where: { id: accountId, userId: session.sub },
         });
         break;
@@ -54,7 +61,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Limpar a marcação de inválida
-    await clearAccountInvalidMark(accountId, platform as 'meli' | 'shopee' | 'bling');
+    await clearAccountInvalidMark(accountId, platform as AccountPlatform);
 
     console.log(`[${platform}][clear-invalid] Marcação de inválida removida para conta ${accountId}`);
 

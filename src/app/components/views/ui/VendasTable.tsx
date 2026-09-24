@@ -451,7 +451,13 @@ export default function VendasTable({
               
                 const dateParts = formatDateTime(venda.dataVenda);
                 const isShopee = venda.plataforma === "Shopee" || venda.canal === "SP" || venda.canal === "Shopee";
-                const hasFlexDetails = !isShopee
+                // O TikTok NÃO entra em `isShopee`: os detalhamentos de frete e
+                // financeiro presos àquela bandeira são cálculos do escrow da
+                // Shopee (`calculateShopeeFinancials`) e não valem aqui. O que os
+                // dois compartilham é só a leitura da modalidade de envio — ver a
+                // célula "Mod. envio" abaixo.
+                const isTiktok = venda.plataforma === "TikTok Shop" || venda.canal === "TT";
+                const hasFlexDetails = !isShopee && !isTiktok
                   && (venda.logisticType?.toLowerCase() === "flex" || venda.logisticType === "self_service")
                   && venda.flexConfigApplied === true
                   && venda.freteLiquidoFlex !== undefined
@@ -536,7 +542,10 @@ export default function VendasTable({
                           ) : (
                             <span className="text-[10px] text-gray-400 font-mono">- Sem SKU -</span>
                           ))}
-                          {!isShopee && (
+                          {/* Selos exclusivos do Mercado Livre. Shopee e TikTok Shop
+                              não têm ADS, exposição nem tipo de anúncio — é a mesma
+                              lista que `colunasDaPlataforma` deixa de oferecer. */}
+                          {!isShopee && !isTiktok && (
                             <>
                               {cols.ads && venda.ads === "ADS" && (
                                 <span className="inline-flex px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-50 text-red-700 border border-red-200">
@@ -598,11 +607,30 @@ export default function VendasTable({
                         <div className={cols.comprador ? "mt-1" : ""}>
                           {cols.envioMode && (() => {
                             const logistic = (venda.logisticType || venda.envioMode || "").toLowerCase();
-                            if (isShopee) {
+                            if (isShopee || isTiktok) {
+                              /* Nos dois, "modalidade de envio" é a TRANSPORTADORA
+                                 e não um modo logístico próprio: quem escolhe é a
+                                 plataforma. No TikTok o nome vem em
+                                 `shipping_provider_name`, que o sync guarda em
+                                 `shippingStatus` — o mesmo lugar da Shopee (ver
+                                 `MODALIDADE_TT` em `expedicao-data.ts`).
+
+                                 O TikTok precisa deste ramo, e não do de baixo:
+                                 lá `logistic.includes("fulfillment")` casaria com
+                                 `FULFILLMENT_BY_TIKTOK` e a linha apareceria com o
+                                 selo FULL, que neste sistema significa Mercado
+                                 Livre Fulfillment. */
                               const shipmentDetails = (venda as any).shipmentDetails || venda.raw?.shipmentDetails || {};
-                              const shippingCarrier = shipmentDetails.shipping_carrier || venda.shippingStatus || "";
+                              const shippingCarrier =
+                                shipmentDetails.shipping_carrier ||
+                                shipmentDetails.shipping_provider ||
+                                venda.shippingStatus ||
+                                "";
+                              const cor = isTiktok
+                                ? "bg-slate-50 text-slate-800 border-slate-200"
+                                : "bg-orange-50 text-orange-800 border-orange-200";
                               return shippingCarrier ? (
-                                <span className="inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded bg-orange-50 text-orange-800 border border-orange-200 capitalize">
+                                <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-bold rounded border capitalize ${cor}`}>
                                   {shippingCarrier}
                                 </span>
                               ) : (

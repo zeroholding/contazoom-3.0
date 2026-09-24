@@ -1,6 +1,11 @@
 import prisma from "@/lib/prisma";
 import { refreshMeliAccountToken } from "@/lib/meli";
 import { refreshShopeeToken, getShopeeItemBaseInfo } from "@/lib/shopee";
+import {
+  ensureTiktokAccessToken,
+  tiktokApiCall,
+  type TiktokAccountRef,
+} from "@/lib/tiktok";
 
 const MELI_API_BASE = "https://api.mercadolibre.com";
 
@@ -207,20 +212,128 @@ async function resolveShopeeImage(
   }
 }
 
+// ------------------------- TikTok Shop -------------------------
+
+// Localiza o item no rawData da venda TikTok.
+//
+// Diferente de ML e Shopee, o pedido do TikTok JA TRAZ a miniatura pronta em
+// `line_items[].sku_image`. Na prática isso resolve quase todos os casos sem
+// gastar nenhuma chamada de API — o `product_id` só é usado quando a venda é
+// antiga e veio sem a imagem.
+function extractTiktokItem(
+  rawData: any,
+  skuCode: string,
+): { productId: string | null; embeddedImage: string | null } {
+  const root =
+    rawData?.order && typeof rawData.order === "object" ? rawData.order : rawData;
+  const lineItems: any[] = Array.isArray(root?.line_items)
+    ? root.line_items
+    : Array.isArray(rawData?.line_items)
+      ? rawData.line_items
+      : [];
+
+  if (lineItems.length === 0) return { productId: null, embeddedImage: null };
+
+  const target = normalizeSku(skuCode);
+
+  const pick = (item: any) => ({
+    productId: item?.product_id != null ? String(item.product_id) : null,
+    embeddedImage: ensureHttps(item?.sku_image ?? null),
+  });
+
+  for (const item of lineItems) {
+    const itemSku = normalizeSku(item?.seller_sku ?? item?.sku_name ?? item?.sku_id);
+    if (itemSku && itemSku === target) return pick(item);
+  }
+
+  return pick(lineItems[0]);
+}
+
+function toTiktokAccountRef(account: {
+  id: string;
+  userId: string;
+  shop_id: string;
+  shop_cipher: string | null;
+  shop_name: string | null;
+  access_token: string;
+  refresh_token: string;
+  expires_at: Date;
+}): TiktokAccountRef {
+  return {
+    id: account.id,
+    userId: account.userId,
+    shopId: account.shop_id,
+    shopCipher: account.shop_cipher,
+    shopName: account.shop_name,
+    accessToken: account.access_token,
+    refreshToken: account.refresh_token,
+    expiresAt: account.expires_at,
+  };
+}
+
+async function fetchTiktokProductImage(
+  account: Parameters<typeof toTiktokAccountRef>[0],
+  productId: string,
+): Promise<string | null> {
+  const ref = toTiktokAccountRef(account);
+  const accessToken = await ensureTiktokAccessToken(ref);
+
+  const data = await tiktokApiCall({
+    path: `/product/202309/products/${encodeURIComponent(productId)}`,
+    accessToken,
+    shopCipher: ref.shopCipher,
+  });
+
+  const images: any[] = Array.isArray((data as any)?.main_images)
+    ? (data as any).main_images
+    : [];
+  const first = images[0];
+  const url =
+    first?.thumb_urls?.[0] || first?.urls?.[0] || first?.url || null;
+
+  return ensureHttps(url);
+}
+
+async function resolveTiktokImage(
+  userId: string,
+  skuCode: string,
+): Promise<string | null> {
+  const venda = await prisma.tiktokVenda.findFirst({
+    where: { userId, sku: skuCode },
+    orderBy: { dataVenda: "desc" },
+    include: { tiktokAccount: true },
+  });
+
+  if (!venda || !venda.rawData || !venda.tiktokAccount) return null;
+
+  const { productId, embeddedImage } = extractTiktokItem(venda.rawData as any, skuCode);
+  if (embeddedImage) return embeddedImage;
+  if (!productId) return null;
+
+  try {
+    return await fetchTiktokProductImage(venda.tiktokAccount, productId);
+  } catch {
+    return null;
+  }
+}
+
 // ------------------------- Origem da descoberta -------------------------
 
 // Extrai plataforma, conta e id de origem do texto de observação gravado
 // pela descoberta automática: "... - Mercado Livre - conta X - origem MLB123".
 function parseDiscoverySource(observacoes: unknown): {
-  plataforma: "ml" | "shopee" | null;
+  plataforma: "ml" | "shopee" | "tiktok" | null;
   conta: string | null;
   externalId: string | null;
 } {
   const text = String(observacoes ?? "");
   if (!text) return { plataforma: null, conta: null, externalId: null };
 
-  let plataforma: "ml" | "shopee" | null = null;
-  if (/mercado\s*livre/i.test(text)) plataforma = "ml";
+  let plataforma: "ml" | "shopee" | "tiktok" | null = null;
+  // TikTok e testado primeiro: o rotulo da plataforma e "TikTok Shop" e um
+  // /shopee/i cru nao casa com "Shop", mas a ordem deixa isso explicito.
+  if (/tiktok/i.test(text)) plataforma = "tiktok";
+  else if (/mercado\s*livre/i.test(text)) plataforma = "ml";
   else if (/shopee/i.test(text)) plataforma = "shopee";
 
   const origemMatch = text.match(/origem\s+(\S+)/i);
@@ -292,6 +405,35 @@ async function resolveShopeeImageByItemId(
   return null;
 }
 
+async function resolveTiktokImageByItemId(
+  userId: string,
+  itemIdRaw: string,
+  contaNome: string | null,
+): Promise<string | null> {
+  const productId = String(itemIdRaw).split(":")[0].trim();
+  if (!productId) return null;
+
+  const accounts = await prisma.tiktokAccount.findMany({ where: { userId } });
+  if (accounts.length === 0) return null;
+
+  const target = normalizeSku(contaNome);
+  const ordered = [...accounts].sort((a, b) => {
+    const am = target && normalizeSku(a.shop_name) === target ? 0 : 1;
+    const bm = target && normalizeSku(b.shop_name) === target ? 0 : 1;
+    return am - bm;
+  });
+
+  for (const acc of ordered) {
+    try {
+      const img = await fetchTiktokProductImage(acc, productId);
+      if (img) return img;
+    } catch {
+      // tenta a próxima loja
+    }
+  }
+  return null;
+}
+
 // ------------------------- Público -------------------------
 
 /**
@@ -312,10 +454,14 @@ export async function resolveSkuImageForRecord(sku: {
     } else if (src.plataforma === "shopee") {
       const img = await resolveShopeeImageByItemId(sku.userId, src.externalId, src.conta);
       if (img) return img;
+    } else if (src.plataforma === "tiktok") {
+      const img = await resolveTiktokImageByItemId(sku.userId, src.externalId, src.conta);
+      if (img) return img;
     } else {
       const img =
         (await resolveMeliImageByItemId(sku.userId, src.externalId, src.conta)) ||
-        (await resolveShopeeImageByItemId(sku.userId, src.externalId, src.conta));
+        (await resolveShopeeImageByItemId(sku.userId, src.externalId, src.conta)) ||
+        (await resolveTiktokImageByItemId(sku.userId, src.externalId, src.conta));
       if (img) return img;
     }
   }
@@ -326,8 +472,8 @@ export async function resolveSkuImageForRecord(sku: {
 
 /**
  * Resolve a miniatura de um SKU buscando o anúncio correspondente na venda
- * mais recente (ML ou Shopee). Escolhe a plataforma com a venda mais nova.
- * Retorna a URL da imagem ou null se não encontrar.
+ * mais recente (ML, Shopee ou TikTok Shop). Tenta primeiro a plataforma com a
+ * venda mais nova. Retorna a URL da imagem ou null se não encontrar.
  */
 export async function resolveSkuImage(
   userId: string,
@@ -336,7 +482,7 @@ export async function resolveSkuImage(
   const code = String(skuCode ?? "").trim();
   if (!code) return null;
 
-  const [meliVenda, shopeeVenda] = await Promise.all([
+  const [meliVenda, shopeeVenda, tiktokVenda] = await Promise.all([
     prisma.meliVenda.findFirst({
       where: { userId, sku: code },
       orderBy: { dataVenda: "desc" },
@@ -347,21 +493,38 @@ export async function resolveSkuImage(
       orderBy: { dataVenda: "desc" },
       select: { dataVenda: true },
     }),
+    prisma.tiktokVenda.findFirst({
+      where: { userId, sku: code },
+      orderBy: { dataVenda: "desc" },
+      select: { dataVenda: true },
+    }),
   ]);
 
-  const meliTime = meliVenda ? new Date(meliVenda.dataVenda).getTime() : -1;
-  const shopeeTime = shopeeVenda ? new Date(shopeeVenda.dataVenda).getTime() : -1;
+  const resolvers: Record<
+    "ml" | "shopee" | "tiktok",
+    (userId: string, code: string) => Promise<string | null>
+  > = {
+    ml: resolveMeliImage,
+    shopee: resolveShopeeImage,
+    tiktok: resolveTiktokImage,
+  };
 
-  // Ordem de tentativa pela venda mais recente
-  const order: Array<"ml" | "shopee"> =
-    meliTime >= shopeeTime ? ["ml", "shopee"] : ["shopee", "ml"];
+  // Ordem de tentativa pela venda mais recente. Com três plataformas o ternário
+  // antigo não dava mais conta: ordena de fato pelo timestamp.
+  const order = (
+    [
+      ["ml", meliVenda ? new Date(meliVenda.dataVenda).getTime() : -1],
+      ["shopee", shopeeVenda ? new Date(shopeeVenda.dataVenda).getTime() : -1],
+      ["tiktok", tiktokVenda ? new Date(tiktokVenda.dataVenda).getTime() : -1],
+    ] as Array<["ml" | "shopee" | "tiktok", number]>
+  )
+    .filter(([, time]) => time >= 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([platform]) => platform);
 
   for (const platform of order) {
     try {
-      const image =
-        platform === "ml"
-          ? await resolveMeliImage(userId, code)
-          : await resolveShopeeImage(userId, code);
+      const image = await resolvers[platform](userId, code);
       if (image) return image;
     } catch (error) {
       console.error(`[sku-image] Falha ao resolver imagem (${platform}) para SKU ${code}:`, error);

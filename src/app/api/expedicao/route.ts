@@ -12,6 +12,7 @@ import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
 import { buscarExpedicao } from "@/lib/expedicao-data";
 import {
+  CANAIS,
   ehCanal,
   ehOrdem,
   ehPrazoPreset,
@@ -151,7 +152,11 @@ function lerFiltros(url: URL): FiltrosExpedicao {
   if (vendaDe && vendaAte && vendaDe > vendaAte) [vendaDe, vendaAte] = [vendaAte, vendaDe];
 
   return {
-    canais: lista(p.get("canais"), 2).filter((c): c is Canal => ehCanal(c)),
+    // O teto vem de `CANAIS.length`, não de um número escrito à mão. Era `2`, de
+    // quando existiam só ML e Shopee: pedir os três canais fazia o terceiro ser
+    // descartado em silêncio pelo `lista()` e a fila voltava sem o TikTok, com a
+    // tela mostrando o filtro marcado. Cap derivado não envelhece.
+    canais: lista(p.get("canais"), CANAIS.length).filter((c): c is Canal => ehCanal(c)),
     contas: lista(p.get("contas"), 50),
     urgencias: lista(p.get("urgencias"), 6).filter((u): u is Urgencia => ehUrgencia(u)),
     modalidades: lista(p.get("modalidades"), 30).map((m) => m.toUpperCase()),

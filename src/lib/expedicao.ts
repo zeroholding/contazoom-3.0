@@ -12,13 +12,14 @@
 /*                                   Canais                                   */
 /* -------------------------------------------------------------------------- */
 
-export type Canal = "ML" | "SP";
+export type Canal = "ML" | "SP" | "TT";
 
-export const CANAIS: Canal[] = ["ML", "SP"];
+export const CANAIS: Canal[] = ["ML", "SP", "TT"];
 
 export const CANAL_ROTULO: Record<Canal, string> = {
   ML: "Mercado Livre",
   SP: "Shopee",
+  TT: "TikTok Shop",
 };
 
 export function ehCanal(valor: string): valor is Canal {

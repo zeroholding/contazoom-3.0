@@ -271,15 +271,49 @@ export default function FiltrosVendas({
     }
   };
 
+  /**
+   * Rótulos da modalidade de envio, por canal.
+   *
+   * As três chaves (`me`/`full`/`flex`) nasceram do Mercado Livre e viraram
+   * genéricas: em cada canal elas apontam para a logística da plataforma, os
+   * Correios e "o resto". Ficam num mapa porque os ternários binários anteriores
+   * (`platform === "Shopee" ? ... : ...`) davam ao TikTok Shop os rótulos do ML —
+   * um pedido do TikTok apareceria filtrado por "Flex", que não existe lá.
+   */
+  const ROTULOS_MODALIDADE: Record<string, Record<"me" | "full" | "flex", string>> = {
+    Shopee: { me: "Shopee Xpress", full: "Correios", flex: "Pegaki / Outros" },
+    "TikTok Shop": {
+      me: "Logística TikTok",
+      full: "Correios",
+      flex: "Outras transportadoras",
+    },
+  };
+
   const getModalidadeEnvioLabel = (filtro: FiltroModalidadeEnvio) => {
+    if (filtro === "todos") return "Todos";
+    const doCanal = platform ? ROTULOS_MODALIDADE[platform] : undefined;
+    if (doCanal && (filtro === "me" || filtro === "full" || filtro === "flex")) {
+      return doCanal[filtro];
+    }
     switch (filtro) {
-      case "todos": return "Todos";
-      case "me": return platform === "Shopee" ? "Shopee Xpress" : "Mercado Envios";
-      case "full": return platform === "Shopee" ? "Correios" : "Full";
-      case "flex": return platform === "Shopee" ? "Pegaki / Outros" : "Flex";
+      case "me": return "Mercado Envios";
+      case "full": return "Full";
+      case "flex": return "Flex";
       default: return "Todos";
     }
   };
+
+  /**
+   * ADS, exposição e tipo de anúncio existem SÓ no Mercado Livre.
+   *
+   * Por inclusão, não por `platform !== "Shopee"`: com três canais, a exclusão
+   * deixava o TikTok Shop com três filtros que não filtram nada — o mesmo defeito
+   * que `colunasDaPlataforma` corrige do lado das colunas.
+   */
+  const temFiltrosDeAnuncio =
+    platform === undefined ||
+    platform === "Mercado Livre" ||
+    platform === "Geral";
 
   const getContaLabel = (contaId: string) => {
     if (contaId === "todas") return "Todas as Contas";
@@ -389,7 +423,7 @@ export default function FiltrosVendas({
         <div className="overflow-x-auto flex-nowrap hide-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
           <div className="flex items-center gap-2 pb-1 min-w-max">
           {/* Botão de Filtro ADS - Apenas para Mercado Livre */}
-          {platform !== "Shopee" && <div className="relative">
+          {temFiltrosDeAnuncio && <div className="relative">
             <button
               ref={adsDropdown.triggerRef}
               onClick={() => setShowADSDropdown(!showADSDropdown)}
@@ -471,7 +505,7 @@ export default function FiltrosVendas({
           </div>}
 
           {/* Botão de Filtro Exposição - Apenas para Mercado Livre */}
-          {platform !== "Shopee" && <div className="relative">
+          {temFiltrosDeAnuncio && <div className="relative">
             <button
               ref={exposicaoDropdown.triggerRef}
               onClick={() => setShowExposicaoDropdown(!showExposicaoDropdown)}
@@ -553,7 +587,7 @@ export default function FiltrosVendas({
           </div>}
 
           {/* Botão de Filtro Tipo de Anúncio - Apenas para Mercado Livre */}
-          {platform !== "Shopee" && <div className="relative">
+          {temFiltrosDeAnuncio && <div className="relative">
             <button
               ref={tipoAnuncioDropdown.triggerRef}
               onClick={() => setShowTipoAnuncioDropdown(!showTipoAnuncioDropdown)}
@@ -690,10 +724,13 @@ export default function FiltrosVendas({
                 <div className="p-2">
                   <div className="space-y-1">
                     {[
-                      { id: "todos" as FiltroModalidadeEnvio, label: "Todos" },
-                      { id: "me" as FiltroModalidadeEnvio, label: platform === "Shopee" ? "Shopee Xpress" : "Mercado Envios" },
-                      { id: "full" as FiltroModalidadeEnvio, label: platform === "Shopee" ? "Correios" : "Full" },
-                      { id: "flex" as FiltroModalidadeEnvio, label: platform === "Shopee" ? "Pegaki / Outros" : "Flex" },
+                      // Os rótulos saem da MESMA função que desenha o botão fechado
+                      // (`getModalidadeEnvioLabel`). Antes eram dois ternários
+                      // duplicados, e bastava alterar um para o botão e a lista
+                      // passarem a dizer coisas diferentes.
+                      ...(["todos", "me", "full", "flex"] as FiltroModalidadeEnvio[]).map(
+                        (id) => ({ id, label: getModalidadeEnvioLabel(id) }),
+                      ),
                     ].map((opcao) => (
                       <button
                         key={opcao.id}

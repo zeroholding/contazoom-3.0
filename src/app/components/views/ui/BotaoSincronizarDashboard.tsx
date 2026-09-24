@@ -19,12 +19,27 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { IconeAlerta, IconeAtualizar, IconeCerto } from "../comum/icones";
-import { LogoCanal } from "../comum/logos";
+import { LogoCanal, type CanalLogo } from "../comum/logos";
 import { useToast } from "./toaster";
 
 type Estado = "parado" | "preparando" | "sincronizando" | "concluido" | "erro";
 
-type Conta = { id: string; canal: "ML" | "SP" };
+type Conta = { id: string; canal: CanalLogo };
+
+/**
+ * De onde sai a lista de contas de cada canal, e para onde vai o sync.
+ *
+ * Em tabela porque este componente tinha as duas plataformas escritas à mão em
+ * QUATRO lugares (o `Promise.all` das listas, o filtro por canal, a montagem dos
+ * lotes e os logos do painel). Acrescentar um canal significava achar os quatro —
+ * e esquecer um deles não dá erro de compilação: o botão simplesmente deixa de
+ * sincronizar aquele canal, em silêncio.
+ */
+const CANAIS_SYNC: { canal: CanalLogo; contas: string; sync: string }[] = [
+  { canal: "ML", contas: "/api/meli/accounts", sync: "/api/v2/meli/sync-trigger" },
+  { canal: "SP", contas: "/api/shopee/accounts", sync: "/api/shopee/vendas/sync" },
+  { canal: "TT", contas: "/api/tiktok/accounts", sync: "/api/tiktok/vendas/sync" },
+];
 
 type Progresso = { mensagem: string; feitos: number; total: number };
 
@@ -167,20 +182,20 @@ export default function BotaoSincronizarDashboard({
     let lista: Conta[] = [];
 
     try {
-      // As duas listas em paralelo: são independentes, e em série o botão ficaria
-      // parado o tempo das duas somadas antes de a sincronização começar.
-      const [resML, resSP] = await Promise.all([
-        fetch("/api/meli/accounts", { cache: "no-store", credentials: "include" }),
-        fetch("/api/shopee/accounts", { cache: "no-store", credentials: "include" }),
-      ]);
+      // Todas as listas em paralelo: são independentes, e em série o botão ficaria
+      // parado o tempo da soma delas antes de a sincronização começar.
+      const respostas = await Promise.all(
+        CANAIS_SYNC.map((c) =>
+          fetch(c.contas, { cache: "no-store", credentials: "include" }),
+        ),
+      );
 
-      if (resML.ok) {
-        const linhas = (await resML.json()) as { id: string }[];
-        for (const c of linhas ?? []) lista.push({ id: c.id, canal: "ML" });
-      }
-      if (resSP.ok) {
-        const linhas = (await resSP.json()) as { id: string }[];
-        for (const c of linhas ?? []) lista.push({ id: c.id, canal: "SP" });
+      for (const [i, res] of respostas.entries()) {
+        if (!res.ok) continue;
+        const linhas = (await res.json()) as { id: string }[];
+        for (const c of linhas ?? []) {
+          lista.push({ id: c.id, canal: CANAIS_SYNC[i].canal });
+        }
       }
     } catch {
       lista = [];
@@ -195,7 +210,7 @@ export default function BotaoSincronizarDashboard({
         variant: "warning",
         title: "Nenhuma conta conectada",
         description:
-          "Conecte uma conta do Mercado Livre ou da Shopee em Contas para poder sincronizar.",
+          "Conecte uma conta do Mercado Livre, da Shopee ou do TikTok Shop em Contas para poder sincronizar.",
         duration: 8000,
       });
       agendar(() => vivo.current && setEstado("parado"), MS_RESULTADO);
@@ -212,23 +227,21 @@ export default function BotaoSincronizarDashboard({
      * E não uma chamada por conta, que era o que o modal fazia. Três motivos, o
      * último decisivo:
      *
-     * - as duas rotas já aceitam `accountIds` como lista e iteram por dentro;
+     * - as rotas já aceitam `accountIds` como lista e iteram por dentro;
      * - cada requisição a mais é um `acquireSyncLock` e uma partida de rotina
      *   pesada, para o mesmo trabalho;
-     * - e as três sincronizações concorrentes escreviam no MESMO canal de
+     * - e as sincronizações concorrentes escreviam no MESMO canal de
      *   progresso (`sendProgressToUser` é por usuário, não por conta). As
      *   mensagens se intercalavam e a barra pulava entre contagens de contas
      *   diferentes — progresso que anda para trás é pior que nenhum.
      *
-     * As duas plataformas continuam em paralelo entre si: são APIs distintas,
-     * não competem por nada, e em série o tempo seria a soma das duas.
+     * As plataformas continuam em paralelo entre si: são APIs distintas, não
+     * competem por nada, e em série o tempo seria a soma delas.
      */
-    const ml = lista.filter((c) => c.canal === "ML").map((c) => c.id);
-    const sp = lista.filter((c) => c.canal === "SP").map((c) => c.id);
-
-    const lotes: { rota: string; ids: string[] }[] = [];
-    if (ml.length > 0) lotes.push({ rota: "/api/v2/meli/sync-trigger", ids: ml });
-    if (sp.length > 0) lotes.push({ rota: "/api/shopee/vendas/sync", ids: sp });
+    const lotes = CANAIS_SYNC.map((c) => ({
+      rota: c.sync,
+      ids: lista.filter((x) => x.canal === c.canal).map((x) => x.id),
+    })).filter((lote) => lote.ids.length > 0);
 
     // Cada lote resolve o próprio erro em vez de lançar: um `throw` aqui abortaria
     // a espera do outro lote, e o botão voltaria ao normal com a sincronização
@@ -390,7 +403,7 @@ export default function BotaoSincronizarDashboard({
         title={
           rodando
             ? "Sincronização em andamento. Você pode continuar usando o dashboard."
-            : "Sincroniza todas as contas conectadas do Mercado Livre e da Shopee."
+            : "Sincroniza todas as contas conectadas do Mercado Livre, da Shopee e do TikTok Shop."
         }
         className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[var(--cz-raio)] border px-4 text-[13px] font-semibold transition-colors ${
           rodando
@@ -426,8 +439,11 @@ export default function BotaoSincronizarDashboard({
                 {/* Os logos das contas que estão sendo sincronizadas. Dizem "o
                     que" está acontecendo sem gastar uma palavra, e é a mesma
                     linguagem do resto do produto. */}
-                {contas.some((c) => c.canal === "ML") && <LogoCanal canal="ML" />}
-                {contas.some((c) => c.canal === "SP") && <LogoCanal canal="SP" />}
+                {CANAIS_SYNC.filter((c) =>
+                  contas.some((x) => x.canal === c.canal),
+                ).map((c) => (
+                  <LogoCanal key={c.canal} canal={c.canal} />
+                ))}
               </span>
             )}
 

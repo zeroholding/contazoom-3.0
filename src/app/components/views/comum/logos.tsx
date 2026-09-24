@@ -85,31 +85,46 @@ export function LogoShopee({ className = "h-10 w-auto" }: PropsLogo) {
 }
 
 /**
- * TikTok Shop.
+ * TikTok Shop — a SACOLA com a nota, que é a marca do marketplace.
  *
- * A nota musical do TikTok é UM caminho repetido três vezes, em ciano, magenta e
- * preto, deslocado alguns pixels — é o desenho oficial, e é o que dá o efeito de
- * separação de cor da marca. Não é sombra: as três cópias são a marca.
+ * Não é a nota musical solta: aquela é a marca do TikTok, o app de vídeo. Quem
+ * olha a tela de Contas está vendo canais de VENDA, e a sacola é o desenho que o
+ * próprio TikTok usa para o Shop. Havia aqui uma nota reconstruída à mão, que
+ * além de ser a marca errada não fechava com os outros dois logos, oficiais.
  *
- * `viewBox` quadrado, diferente dos outros dois: aqui altura e largura mandam
- * igual, e é por isso que `SeloCanal` contém o desenho numa caixa comum em vez de
- * confiar na proporção de cada logo.
+ * `viewBox` recortado na sacola: o arquivo oficial vem com o wordmark "TikTok
+ * Shop" embaixo, o que daria proporção de banner e destoaria do Mercado Livre e
+ * da Shopee, que são marcas isoladas. Nada foi redesenhado — são os mesmos paths.
+ *
+ * 810x726 é quase quadrado, então nem altura nem largura manda sozinha; por isso
+ * `DESENHO_CANAL` limita as duas.
  */
 export function LogoTikTok({ className = "h-10 w-auto" }: PropsLogo) {
-  const nota =
-    "M232.5 96.7c22.7 16.2 50.5 25.8 80.6 25.8V65.1c-5.7 0-11.3-.6-16.7-1.7v44.9c-30.1 0-57.9-9.6-80.6-25.8v116.2c0 58.2-47.2 105.3-105.4 105.3-21.7 0-41.9-6.6-58.7-17.8 19.2 19.6 45.9 31.8 75.5 31.8 58.2 0 105.4-47.2 105.4-105.3V96.7zM253.4 39.6c-11.6-12.7-19.2-29-20.9-47.1V-15h-16c4 23 17.8 42.6 36.9 54.6zM56.9 246.7a48.2 48.2 0 0 1 53-75.1v-58.1c-5.6-.8-11.3-1.1-16.9-1v44.9a48.2 48.2 0 0 0-36.1 89.3z";
-
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="-20 -20 360 360"
+      viewBox="94 160 810 726"
       className={className}
       role="img"
       aria-label="TikTok Shop"
     >
-      <path fill="#25F4EE" d={nota} transform="translate(-9 9)" />
-      <path fill="#FE2C55" d={nota} transform="translate(9 -9)" />
-      <path fill="#000000" d={nota} />
+      <path
+        fill="#000000"
+        fillRule="evenodd"
+        d="m704.17 170.42c153.2 0 136.11 41.22 155.26 171.05 13.81 93.58 22.13 190.41 34.99 284.67 11.64 85.35 37.9 186.75-57.25 236.66-47.64 25-241.73 13.52-306.14 13.52-300.51 0-409.98 43.57-366.67-253.46 13.67-93.81 23.41-190.72 34.96-284.69 15.68-127.65 5.44-167.34 151.9-167.75 0-225.19 352.95-227.04 352.95 0zm-86.57 0c0-122.34-179.8-125.08-179.8 0z"
+      />
+      <path
+        fill="#ec2b89"
+        d="m727.48 431.75c-55.16 0-99.87-44.71-99.87-99.87h-74.9v289.9c0 33.71-27.32 61.03-61.03 61.03-33.71 0-61.04-27.32-61.04-61.03 0.01-33.7 27.33-61.03 61.04-61.03 6.32 0 13.48 0.96 19.21 2.74v-76.3q-9.42-1.33-19.21-1.34c-75.08 0-135.94 60.86-135.94 135.93 0 75.08 60.86 135.94 135.94 135.94 75.07 0 135.93-60.86 135.93-135.94v-153.43c27.23 22.21 62 35.53 99.87 35.53z"
+      />
+      <path
+        fill="#00efe8"
+        d="m706.27 410.53c-55.16 0-99.88-44.71-99.88-99.87h-74.9v289.9c0 33.71-27.32 61.03-61.03 61.03-33.71 0-61.03-27.32-61.03-61.03 0-33.7 27.32-61.03 61.03-61.03 6.32 0 13.48 0.96 19.22 2.75v-76.3q-9.43-1.34-19.22-1.35c-75.08 0-135.94 60.86-135.94 135.93 0 75.08 60.86 135.94 135.94 135.94 75.07 0 135.93-60.86 135.93-135.94l0.01-153.43c27.22 22.21 61.98 35.53 99.87 35.53z"
+      />
+      <path
+        fill="#ffffff"
+        d="m706.27 429.47c-24.15-5.22-45.04-19.17-59.21-38.38-19.22-14.18-33.16-35.06-38.39-59.21h-55.96v289.9c0 33.71-27.32 61.03-61.03 61.03-22.3 0-41.79-11.96-52.44-29.81-17.85-10.65-29.81-30.14-29.81-52.44 0-33.7 27.32-61.03 61.03-61.03 6.32 0 13.48 0.96 19.22 2.75v-56.41c-74.15 1.07-133.94 61.51-133.94 135.91 0 32.13 11.16 61.66 29.8 84.92 23.26 18.64 52.79 29.8 84.92 29.8 75.07 0 135.93-60.86 135.93-135.94l0.01-153.43c27.22 22.21 61.98 35.53 99.87 35.53z"
+      />
     </svg>
   );
 }
@@ -144,7 +159,26 @@ const DESENHO_CANAL: Record<
 > = {
   ML: { Logo: LogoMercadoLivre, selo: "max-h-[15px] max-w-[20px]", inline: "max-h-[13px] max-w-[17px]" },
   SP: { Logo: LogoShopee, selo: "max-h-[17px] max-w-[16px]", inline: "max-h-[14px] max-w-[13px]" },
-  TT: { Logo: LogoTikTok, selo: "max-h-[16px] max-w-[16px]", inline: "max-h-[13px] max-w-[13px]" },
+  TT: { Logo: LogoTikTok, selo: "max-h-[15px] max-w-[17px]", inline: "max-h-[13px] max-w-[15px]" },
+};
+
+/**
+ * O componente de logo de cada canal, para quem precisa do desenho SOLTO — em
+ * tamanho de cartão, não na caixa contida de `SeloCanal`/`LogoCanal`.
+ *
+ * Exportado porque a tela de Contas tinha a sua própria função:
+ *
+ *     canal === "ML" ? <LogoMercadoLivre/> : <LogoShopee/>
+ *
+ * Ternário binário com TRÊS canais cai silenciosamente no último ramo, e era
+ * exatamente o que acontecia: o cartão do TikTok Shop aparecia com a sacola
+ * laranja da Shopee. Um mapa por chave não tem esse buraco, e a próxima
+ * plataforma passa a ser uma linha aqui em vez de um ramo esquecido lá.
+ */
+export const LOGO_POR_CANAL: Record<CanalLogo, (p: PropsLogo) => React.ReactElement> = {
+  ML: LogoMercadoLivre,
+  SP: LogoShopee,
+  TT: LogoTikTok,
 };
 
 /**

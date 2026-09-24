@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     // Agregar as contagens de vendas em lote (evita o padrão N+1):
     // uma query groupBy por plataforma em vez de duas queries por SKU.
-    const [meliSalesGrouped, shopeeSalesGrouped] =
+    const [meliSalesGrouped, shopeeSalesGrouped, tiktokSalesGrouped] =
       skuCodes.length > 0
         ? await Promise.all([
             prisma.meliVenda.groupBy({
@@ -107,22 +107,25 @@ export async function GET(request: NextRequest) {
               },
               _count: { _all: true },
             }),
+            prisma.tiktokVenda.groupBy({
+              by: ['sku'],
+              where: {
+                userId: session.sub,
+                sku: { in: skuCodes },
+              },
+              _count: { _all: true },
+            }),
           ])
-        : [[], []];
+        : [[], [], []];
 
-    // Montar um Map<sku, count> somando as duas plataformas
+    // Montar um Map<sku, count> somando as três plataformas
     const salesCountBySku = new Map<string, number>();
 
-    for (const group of meliSalesGrouped) {
-      if (group.sku) {
-        salesCountBySku.set(
-          group.sku,
-          (salesCountBySku.get(group.sku) || 0) + group._count._all
-        );
-      }
-    }
-
-    for (const group of shopeeSalesGrouped) {
+    for (const group of [
+      ...meliSalesGrouped,
+      ...shopeeSalesGrouped,
+      ...tiktokSalesGrouped,
+    ]) {
       if (group.sku) {
         salesCountBySku.set(
           group.sku,

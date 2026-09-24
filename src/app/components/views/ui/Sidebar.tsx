@@ -19,7 +19,7 @@ import { LogoCanal, type CanalLogo } from "../comum/logos";
 type Leaf = { href: string; label: string };
 type Branch = {
   // `shipping` entrou quando a Expedição deixou de ser uma tela e passou a ser
-  // três (Geral, Mercado Livre, Shopee). O slug precisa estar neste union porque
+  // várias (Geral, Mercado Livre, Shopee, TikTok Shop). O slug precisa estar neste union porque
   // é ele que identifica o submenu no estado de aberto/fechado e no flyout da
   // barra recolhida — sem isso o submenu abre e nunca fecha.
   slug: "sales" | "shipping" | "ads" | "finance";
@@ -227,6 +227,7 @@ const NAV_ITEMS: Item[] = [
       { href: "/vendas/geral", label: "Vendas Geral" },
       { href: "/vendas/mercado-livre", label: "Vendas Mercado Livre" },
       { href: "/vendas/shopee", label: "Vendas Shopee" },
+      { href: "/vendas/tiktok-shop", label: "Vendas TikTok Shop" },
     ],
   },
   // Logo abaixo da Central de Vendas, e não no fim da lista: expedição é o passo
@@ -244,6 +245,7 @@ const NAV_ITEMS: Item[] = [
       { href: "/expedicao", label: "Expedição Geral" },
       { href: "/expedicao/mercado-livre", label: "Expedição Mercado Livre" },
       { href: "/expedicao/shopee", label: "Expedição Shopee" },
+      { href: "/expedicao/tiktok-shop", label: "Expedição TikTok Shop" },
     ],
   },
   {
@@ -282,13 +284,19 @@ function clamp(n: number, min: number, max: number) {
 /**
  * O marketplace de um item do menu, lido do próprio rótulo.
  *
- * Derivado do texto em vez de virar um campo em `NAV_ITEMS`: são seis itens hoje
- * ("Vendas Mercado Livre", "Expedição Shopee"…) e a lista cresce por canal. Um
- * campo `canal` obrigaria a lembrar de preenchê-lo em cada item novo, e o preço
- * de esquecer é um item sem logo — bug silencioso. O rótulo, esse, ninguém
- * esquece de escrever.
+ * Derivado do texto em vez de virar um campo em `NAV_ITEMS`: são oito itens hoje
+ * ("Vendas Mercado Livre", "Expedição Shopee", "Vendas TikTok Shop"…) e a lista
+ * cresce por canal. Um campo `canal` obrigaria a lembrar de preenchê-lo em cada
+ * item novo, e o preço de esquecer é um item sem logo — bug silencioso. O rótulo,
+ * esse, ninguém esquece de escrever.
+ *
+ * ⚠️  A ORDEM DOS TESTES IMPORTA: "Vendas TikTok Shop" contém "Shop", e um
+ * `/shopee/i` cru não casa com ele — mas qualquer relaxamento futuro desse padrão
+ * (para pegar "Shop", por exemplo) passaria a roubar o item do TikTok. Testar
+ * TikTok primeiro deixa isso resolvido de antemão.
  */
 function canalDoRotulo(label: string): CanalLogo | null {
+  if (/tiktok/i.test(label)) return "TT";
   if (/mercado\s*liv/i.test(label)) return "ML";
   if (/shopee/i.test(label)) return "SP";
   return null;
@@ -297,10 +305,10 @@ function canalDoRotulo(label: string): CanalLogo | null {
 /**
  * Uma folha do menu: logo do marketplace quando houver, e o rótulo.
  *
- * A caixa do logo tem LARGURA FIXA e some quando o item não é de canal. Os dois
- * desenhos têm proporções diferentes (o do Mercado Livre é largo, o da Shopee é
- * alto), e sem a caixa comum "Vendas Mercado Livre" e "Vendas Shopee" começariam
- * em colunas diferentes — numa lista vertical curta isso salta aos olhos.
+ * A caixa do logo tem LARGURA FIXA e some quando o item não é de canal. Os três
+ * desenhos têm proporções diferentes (o do Mercado Livre é largo; Shopee e TikTok
+ * são altos), e sem a caixa comum os rótulos começariam em colunas diferentes —
+ * numa lista vertical curta isso salta aos olhos.
  */
 function RotuloFolha({ label }: { label: string }) {
   const canal = canalDoRotulo(label);

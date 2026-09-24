@@ -10,7 +10,7 @@ import { cache, createCacheKey } from "@/lib/cache";
 // mesmo tempo) sem entregar dado velho por muito tempo.
 const PENDING_SKU_CACHE_TTL = 300_000; // 5 min (invalidado em sync/SKU)
 
-type Plataforma = "Mercado Livre" | "Shopee";
+type Plataforma = "Mercado Livre" | "Shopee" | "TikTok Shop";
 
 export type PendingSkuEntry = {
   sku: string;
@@ -69,9 +69,12 @@ function skuLookupKey(value: unknown): string {
 }
 
 function platformFromTags(tags: unknown): Plataforma {
-  if (Array.isArray(tags) && tags.some((tag) => String(tag) === "Shopee")) {
-    return "Shopee";
-  }
+  if (!Array.isArray(tags)) return "Mercado Livre";
+  if (tags.some((tag) => String(tag) === "Shopee")) return "Shopee";
+  // A tag do TikTok foi gravada em duas formas ao longo do tempo ("TikTok" na
+  // descoberta antiga, "TikTok Shop" depois). Reconhece as duas para o SKU nao
+  // cair no rotulo errado.
+  if (tags.some((tag) => /tiktok/i.test(String(tag)))) return "TikTok Shop";
   return "Mercado Livre";
 }
 
@@ -183,7 +186,7 @@ async function computePendingSkuSummary(
   // SKU distinto (centenas), não dezenas de milhares de linhas com JSON.
   // Usa a coluna `sku` — a mesma que o restante do sistema (CMV, tabela de
   // vendas) trata como o SKU da venda —, mantendo consistência total.
-  const [registeredSkusRows, meliGroups, shopeeGroups] = await Promise.all([
+  const [registeredSkusRows, meliGroups, shopeeGroups, tiktokGroups] = await Promise.all([
     prisma.sKU.findMany({
       where: { userId },
       select: {
@@ -205,6 +208,14 @@ async function computePendingSkuSummary(
       _max: { dataVenda: true },
     }),
     prisma.shopeeVenda.groupBy({
+      by: ["sku"],
+      where: { userId, sku: { not: null } },
+      _count: { _all: true },
+      _sum: { quantidade: true, valorTotal: true },
+      _min: { dataVenda: true },
+      _max: { dataVenda: true },
+    }),
+    prisma.tiktokVenda.groupBy({
       by: ["sku"],
       where: { userId, sku: { not: null } },
       _count: { _all: true },
@@ -287,6 +298,7 @@ async function computePendingSkuSummary(
 
   for (const group of meliGroups) addGroup(group as SaleSkuGroup, "Mercado Livre");
   for (const group of shopeeGroups) addGroup(group as SaleSkuGroup, "Shopee");
+  for (const group of tiktokGroups) addGroup(group as SaleSkuGroup, "TikTok Shop");
 
   // 3) Nome do produto para SKUs pendentes NÃO cadastrados (que ficaram com o
   //    placeholder "SKU x"). Busca um título representativo apenas para esse
@@ -296,7 +308,7 @@ async function computePendingSkuSummary(
   );
   if (semTitulo.length > 0) {
     const skuCodes = semTitulo.map((e) => e.sku);
-    const [meliTitles, shopeeTitles] = await Promise.all([
+    const [meliTitles, shopeeTitles, tiktokTitles] = await Promise.all([
       prisma.meliVenda.findMany({
         where: { userId, sku: { in: skuCodes } },
         select: { sku: true, titulo: true },
@@ -307,9 +319,14 @@ async function computePendingSkuSummary(
         select: { sku: true, titulo: true },
         distinct: ["sku"],
       }),
+      prisma.tiktokVenda.findMany({
+        where: { userId, sku: { in: skuCodes } },
+        select: { sku: true, titulo: true },
+        distinct: ["sku"],
+      }),
     ]);
     const titleBySku = new Map<string, string>();
-    for (const row of [...meliTitles, ...shopeeTitles]) {
+    for (const row of [...meliTitles, ...shopeeTitles, ...tiktokTitles]) {
       if (row.sku && row.titulo && !titleBySku.has(skuLookupKey(row.sku))) {
         titleBySku.set(skuLookupKey(row.sku), row.titulo);
       }

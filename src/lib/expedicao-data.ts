@@ -29,6 +29,7 @@ import {
   type StatusVenda,
   type TemPrazo,
   type Urgencia,
+  ehCanal,
 } from "@/lib/expedicao";
 
 /* -------------------------------------------------------------------------- */
@@ -87,6 +88,25 @@ const SP_STATUS_FILA = ["READY_TO_SHIP", "PROCESSED", "RETRY_SHIP"];
 const SP_STATUS_CANCELADO = ["CANCELLED", "IN_CANCEL", "TO_RETURN"];
 
 /**
+ * Fila de expedição do TikTok Shop.
+ *
+ * Lista branca, mesma ideia da Shopee: só os estados em que há pacote para
+ * despachar. `PARTIALLY_SHIPPING` entra porque pedido parcialmente enviado ainda
+ * tem item na prateleira.
+ *
+ * Fora da lista de propósito: `UNPAID` (criado e não pago — não há o que separar),
+ * `IN_TRANSIT` e `DELIVERED` (já saíram) e `COMPLETED` (histórico de venda, que é
+ * outra tela).
+ */
+const TT_STATUS_FILA = [
+  "AWAITING_SHIPMENT",
+  "AWAITING_COLLECTION",
+  "PARTIALLY_SHIPPING",
+];
+
+const TT_STATUS_CANCELADO = ["CANCELLED"];
+
+/**
  * FULL nunca entra na fila.
  *
  * Em fulfillment o estoque já está no centro de distribuição do ML e quem
@@ -141,6 +161,21 @@ const MODALIDADE_ML = Prisma.raw(`
  */
 const MODALIDADE_SP = Prisma.raw(`
   COALESCE(NULLIF(UPPER(TRIM(v.shipping_status)), ''), 'SHOPEE')
+`);
+
+/**
+ * Modalidade do TikTok Shop: a TRANSPORTADORA, pela mesma razão da Shopee.
+ *
+ * `shipping_status` guarda `shipping_provider_name` (ver o sync em
+ * `tiktok-sync.ts`), não um status. A armadilha é idêntica à da Shopee e está
+ * documentada em `expedicao-status.ts`.
+ *
+ * Reserva `TIKTOK` em vez de `shipping_type`: no Programa de Frete quem define a
+ * transportadora é a plataforma, e o pedido pode chegar antes de ela ser
+ * atribuída.
+ */
+const MODALIDADE_TT = Prisma.raw(`
+  COALESCE(NULLIF(UPPER(TRIM(v.shipping_status)), ''), 'TIKTOK')
 `);
 
 /* -------------------------------------------------------------------------- */
@@ -277,6 +312,45 @@ const ITENS_SP = Prisma.raw(`
             NULLIF(oi->>'model_quantity_purchased', '')::int,
             NULLIF(oi->>'quantity_purchased', '')::int
           ) > 0
+  ) it ON ${SO_SE_PUDER_TER_MAIS_DE_UM}
+`);
+
+/**
+ * Itens do pedido do TikTok Shop, de `raw_data->'line_items'`.
+ *
+ * ⚠️  AGRUPA POR SKU, e é a única das três laterais que faz isso. No TikTok cada
+ * `line_item` é UMA UNIDADE: não existe campo de quantidade, um pedido de três
+ * unidades do mesmo produto vem como três elementos no array. Expandindo
+ * cru, a fila mostraria três linhas de quantidade 1 para o que o galpão separa
+ * como "3 unidades deste código" — e o total de linhas de produto da tela
+ * passaria a contar unidades, não produtos.
+ *
+ * Por isso `COUNT(*)` é a quantidade e o `GROUP BY` é o SKU. `MIN(pos)` mantém a
+ * ordem original do pedido, para a primeira linha continuar sendo o primeiro item.
+ */
+const ITENS_TT = Prisma.raw(`
+  LEFT JOIN LATERAL (
+    SELECT
+      MIN(NULLIF(TRIM(oi->>'product_name'), ''))                   AS titulo,
+      COALESCE(
+        NULLIF(TRIM(oi->>'seller_sku'), ''),
+        NULLIF(TRIM(oi->>'sku_id'), '')
+      )                                                            AS sku,
+      COUNT(*)::int                                                AS quantidade,
+      MIN(NULLIF(TRIM(oi->>'product_id'), ''))                     AS item_id,
+      NULL::text                                                   AS variation_id,
+      NULL::numeric                                                AS valor_total,
+      MIN(pos)                                                     AS pos
+    FROM jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(v.raw_data -> 'line_items') = 'array'
+        THEN v.raw_data -> 'line_items'
+      END
+    ) WITH ORDINALITY AS t(oi, pos)
+    GROUP BY COALESCE(
+      NULLIF(TRIM(oi->>'seller_sku'), ''),
+      NULLIF(TRIM(oi->>'sku_id'), '')
+    )
   ) it ON ${SO_SE_PUDER_TER_MAIS_DE_UM}
 `);
 
@@ -549,6 +623,22 @@ function portaoShopee(status: StatusVenda): Prisma.Sql {
   return Prisma.sql`AND ${venda} IN (${lista(SP_STATUS_FILA)})`;
 }
 
+/**
+ * Portão do TikTok Shop. Mesma forma do da Shopee, por lista branca.
+ *
+ * `pago` e `todos` coincidem de novo, e por um motivo a mais aqui: no TikTok
+ * `UNPAID` é um estado de verdade do enum, e ele NÃO pode entrar na fila —
+ * separar pedido não pago é trabalho que pode ser desfeito.
+ */
+function portaoTiktok(status: StatusVenda): Prisma.Sql {
+  const venda = Prisma.raw(`UPPER(COALESCE(v.status, ''))`);
+
+  if (status === "cancelado") {
+    return Prisma.sql`AND ${venda} IN (${lista(TT_STATUS_CANCELADO)})`;
+  }
+  return Prisma.sql`AND ${venda} IN (${lista(TT_STATUS_FILA)})`;
+}
+
 /** Filtro de hierarquia. Aplicado na coluna já vinda da junção com o cadastro. */
 function fragmentoHierarquia(coluna: Prisma.Sql, valores: string[]): Prisma.Sql {
   if (valores.length === 0) return Prisma.empty;
@@ -725,6 +815,84 @@ function baseShopee(
 }
 
 /**
+ * O canal que veio na linha do SQL, validado.
+ *
+ * Substitui `texto(linha.canal) === "SP" ? "SP" : "ML"`, que estava em dois
+ * lugares. Aquele ternário não tinha ramo para um terceiro canal: TODO pacote do
+ * TikTok chegaria à tela marcado como Mercado Livre — logo errado na linha, e
+ * `statusEnvio` lendo a coluna errada (no TikTok, como na Shopee, o status do
+ * envio está em `status`, não em `shipping_status`, que guarda a transportadora).
+ *
+ * `ehCanal` valida de verdade em vez de assumir; ML é a reserva porque é o canal
+ * mais antigo, e um valor desconhecido aqui significa dado velho, não canal novo.
+ */
+function canalDaLinha(valor: unknown): Canal {
+  const bruto = texto(valor);
+  return ehCanal(bruto) ? bruto : "ML";
+}
+
+/** Ramo do TikTok Shop. Mesmas colunas, mesma ordem — ver `baseMeli`. */
+function baseTiktok(
+  userId: string,
+  filtros: FiltrosExpedicao,
+  opcoes: OpcoesBase,
+): Prisma.Sql {
+  const extras = opcoes.aplicarFiltros
+    ? Prisma.join(
+        [
+          fragmentoContas("tiktok_account_id", filtros.contas),
+          fragmentoBusca(filtros.busca),
+          fragmentoVenda(filtros.vendaDe, filtros.vendaAte),
+          fragmentoPrazo(filtros.prazoDe, filtros.prazoAte),
+          fragmentoTemPrazo(filtros.temPrazo),
+          fragmentoHierarquia(HIERARQUIA_1, filtros.hierarquias1),
+          fragmentoHierarquia(HIERARQUIA_2, filtros.hierarquias2),
+          fragmentoSkus(filtros.skus),
+        ],
+        " ",
+      )
+    : Prisma.empty;
+
+  return Prisma.sql`
+    SELECT
+      ${chavePacote("TT")}                       AS chave,
+      'TT'                                       AS canal,
+      v.tiktok_account_id                        AS account_id,
+      v.conta                                    AS conta,
+      v.comprador                                AS comprador,
+      NULLIF(v.shipping_id, '')                  AS shipping_id,
+      ${MODALIDADE_TT}                           AS modalidade,
+      NULLIF(TRIM(v.shipping_status), '')        AS shipping_status,
+      v.status                                   AS status,
+      v.data_venda                               AS data_venda,
+      v.prazo_despacho                           AS prazo_despacho,
+      v.order_id                                 AS order_id,
+      ${TITULO_ITEM}                             AS titulo,
+      ${SKU_ITEM}                                AS sku,
+      ${QTD_ITEM}                                AS quantidade,
+      ${KIT_SKU}                                 AS kit,
+      ${VALOR_UMA_VEZ}                           AS valor_total,
+      -- item_id existe (e o product_id do TikTok) e serve para agrupar o produto;
+      -- variation_id nao, porque no TikTok a variacao esta embutida no sku_id e ja
+      -- entra no SKU. O NULL explicito e obrigatorio: e UNION ALL, e o Postgres
+      -- casa as colunas por POSICAO.
+      -- (Sem acento e sem backtick de proposito: comentario SQL dentro de
+      -- template literal, e backtick aqui encerra a string.)
+      COALESCE(it.item_id, v.item_id)            AS item_id,
+      NULL::text                                 AS variation_id,
+      ${HIERARQUIA_1}                            AS hierarquia1,
+      ${HIERARQUIA_2}                            AS hierarquia2
+    FROM tiktok_venda v
+    ${ITENS_TT}
+    ${JUNCAO_SKU}
+    WHERE v.user_id = ${userId}
+      ${fragmentoJanela(filtros.janelaDias)}
+      ${portaoTiktok(filtros.statusVenda)}
+      ${extras}
+  `;
+}
+
+/**
  * CTE completa: vendas -> pacotes -> urgência.
  *
  * O filtro de CANAL é aplicado montando o `UNION ALL` só com os ramos escolhidos,
@@ -742,6 +910,7 @@ function montarCte(
   const ramos: Prisma.Sql[] = [];
   if (canais.includes("ML")) ramos.push(baseMeli(userId, filtros, opcoes));
   if (canais.includes("SP")) ramos.push(baseShopee(userId, filtros, opcoes));
+  if (canais.includes("TT")) ramos.push(baseTiktok(userId, filtros, opcoes));
 
   const base = Prisma.join(ramos, " UNION ALL ");
 
@@ -1191,7 +1360,7 @@ export async function buscarExpedicao(
 
     return {
       chave: texto(linha.chave),
-      canal: (texto(linha.canal) === "SP" ? "SP" : "ML") as Canal,
+      canal: canalDaLinha(linha.canal),
       accountId: texto(linha.account_id),
       conta: texto(linha.conta),
       comprador: texto(linha.comprador) || "Comprador",
@@ -1311,7 +1480,7 @@ async function buscarFacetas(
   }
 
   for (const linha of linhas) {
-    const canal = (texto(linha.canal) === "SP" ? "SP" : "ML") as Canal;
+    const canal = canalDaLinha(linha.canal);
     const accountId = texto(linha.account_id);
     const pacotes = numero(linha.pacotes);
 
@@ -1359,9 +1528,10 @@ async function buscarFacetas(
  * disto vai a zero junto.
  */
 async function contarPrazoPendenteRapido(userId: string): Promise<number> {
-  const [ml, sp] = await Promise.all([
+  const [ml, sp, tt] = await Promise.all([
     prisma.meliVenda.count({ where: { userId, prazoDespachoOrigem: null } }),
     prisma.shopeeVenda.count({ where: { userId, prazoDespachoOrigem: null } }),
+    prisma.tiktokVenda.count({ where: { userId, prazoDespachoOrigem: null } }),
   ]);
-  return ml + sp;
+  return ml + sp + tt;
 }

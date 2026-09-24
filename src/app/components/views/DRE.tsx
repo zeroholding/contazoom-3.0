@@ -126,31 +126,58 @@ export default function DRE() {
     valoresPorCategoriaMes: Record<string, Record<string, number>>;
     receitaBrutaMeliPorMes: Record<string, number>;
     receitaBrutaShopeePorMes: Record<string, number>;
+    receitaBrutaTiktokPorMes: Record<string, number>;
     deducoesMeliPorMes: Record<string, number>;
     deducoesShopeePorMes: Record<string, number>;
+    deducoesTiktokPorMes: Record<string, number>;
     taxasMeliPorMes: Record<string, number>;
     taxasShopeePorMes: Record<string, number>;
+    taxasTiktokPorMes: Record<string, number>;
     freteMeliPorMes: Record<string, number>;
     freteShopeePorMes: Record<string, number>;
+    freteTiktokPorMes: Record<string, number>;
     despesasPorMes: Record<string, number>;
     cmvPorMes: Record<string, number>;
     totals: {
       receitaBrutaMeli: number;
       receitaBrutaShopee: number;
+      receitaBrutaTiktok: number;
       receitaBrutaTotal: number;
       deducoesMeli: number;
       deducoesShopee: number;
+      deducoesTiktok: number;
       deducoesTotal: number;
       taxasMeli: number;
       taxasShopee: number;
+      taxasTiktok: number;
       taxasTotal: number;
       freteMeli: number;
       freteShopee: number;
+      freteTiktok: number;
       freteTotal: number;
       cmv: number;
       despesas: number;
     };
   };
+
+  /**
+   * Soma de um mês entre os canais.
+   *
+   * ⚠️  ESTE HELPER É O PONTO DA CORREÇÃO DO DRE.
+   *
+   * A tela somava `meli + shopee` à mão em ONZE lugares (receita bruta, deduções,
+   * taxas, frete, e os subtotais que dependem deles). O TikTok Shop já vinha na
+   * resposta da API desde que o canal entrou, mas nenhuma dessas somas o incluía:
+   * o resultado era um DRE em que a linha "Receita Bruta" era MENOR que a soma das
+   * linhas detalhadas abaixo dela, sem nada na tela explicando a diferença. Um
+   * demonstrativo que não fecha é pior que um demonstrativo ausente.
+   *
+   * Com a soma em um lugar só, o próximo canal é uma entrada aqui.
+   */
+  const somaCanais = (
+    mes: string,
+    ...series: Array<Record<string, number> | undefined>
+  ) => series.reduce((total, serie) => total + (serie?.[mes] || 0), 0);
 
   const [dreData, setDreData] = useState<DREApi | null>(null);
   const [loading, setLoading] = useState(false);
@@ -296,16 +323,20 @@ export default function DRE() {
   // C├ílculos do DRE
   const receitaBrutaMeli = dreData?.totals?.receitaBrutaMeli || 0;
   const receitaBrutaShopee = dreData?.totals?.receitaBrutaShopee || 0;
+  const receitaBrutaTiktok = dreData?.totals?.receitaBrutaTiktok || 0;
   const receitaBrutaTotal = dreData?.totals?.receitaBrutaTotal || 0;
   const deducoesMeli = dreData?.totals?.deducoesMeli || 0;
   const deducoesShopee = dreData?.totals?.deducoesShopee || 0;
+  const deducoesTiktok = dreData?.totals?.deducoesTiktok || 0;
   const deducoesTotal = dreData?.totals?.deducoesTotal || 0;
   const receitaLiquidaTotal = receitaBrutaTotal - deducoesTotal;
   const taxasMeli = dreData?.totals?.taxasMeli || 0;
   const taxasShopee = dreData?.totals?.taxasShopee || 0;
+  const taxasTiktok = dreData?.totals?.taxasTiktok || 0;
   const taxasTotal = dreData?.totals?.taxasTotal || 0;
   const freteMeli = dreData?.totals?.freteMeli || 0;
   const freteShopee = dreData?.totals?.freteShopee || 0;
+  const freteTiktok = dreData?.totals?.freteTiktok || 0;
   const freteTotal = dreData?.totals?.freteTotal || 0;
   const receitaOperacionalLiquida =
     receitaLiquidaTotal - Math.abs(taxasTotal) - Math.abs(freteTotal);
@@ -414,10 +445,16 @@ export default function DRE() {
                   {currency(receitaBrutaMeli)}
                 </span>
               </div>
-              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+              <div className="flex items-center justify-between pl-4 text-xs">
                 <span className="text-gray-600">ÔåÆ Receita Bruta Shopee</span>
                 <span className="text-gray-700">
                   {currency(receitaBrutaShopee)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+                <span className="text-gray-600">ÔåÆ Receita Bruta TikTok Shop</span>
+                <span className="text-gray-700">
+                  {currency(receitaBrutaTiktok)}
                 </span>
               </div>
 
@@ -432,10 +469,16 @@ export default function DRE() {
                 </span>
                 <span className="text-gray-700">{currency(deducoesMeli)}</span>
               </div>
-              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+              <div className="flex items-center justify-between pl-4 text-xs">
                 <span className="text-gray-600">VENDAS CANCELADAS SHOPEE</span>
                 <span className="text-gray-700">
                   {currency(deducoesShopee)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+                <span className="text-gray-600">VENDAS CANCELADAS TIKTOK SHOP</span>
+                <span className="text-gray-700">
+                  {currency(deducoesTiktok)}
                 </span>
               </div>
 
@@ -459,9 +502,13 @@ export default function DRE() {
                 <span className="text-gray-600">ÔåÆ Taxas Mercado Livre</span>
                 <span className="text-gray-700">{currency(taxasMeli)}</span>
               </div>
-              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+              <div className="flex items-center justify-between pl-4 text-xs">
                 <span className="text-gray-600">ÔåÆ Taxas Shopee</span>
                 <span className="text-gray-700">{currency(taxasShopee)}</span>
+              </div>
+              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+                <span className="text-gray-600">ÔåÆ Taxas TikTok Shop</span>
+                <span className="text-gray-700">{currency(taxasTiktok)}</span>
               </div>
 
               {/* CUSTO DE FRETE */}
@@ -473,9 +520,16 @@ export default function DRE() {
                 <span className="text-gray-600">ÔåÆ Frete Mercado Livre</span>
                 <span className="text-gray-700">{currency(freteMeli)}</span>
               </div>
-              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+              <div className="flex items-center justify-between pl-4 text-xs">
                 <span className="text-gray-600">ÔåÆ Frete Shopee</span>
                 <span className="text-gray-700">{currency(freteShopee)}</span>
+              </div>
+              {/* Zero por decisão: no TikTok o frete está dentro da taxa do SFP. */}
+              <div className="flex items-center justify-between pl-4 text-xs mb-2">
+                <span className="text-gray-600">
+                  ÔåÆ Frete TikTok Shop (embutido na taxa do SFP)
+                </span>
+                <span className="text-gray-700">{currency(freteTiktok)}</span>
               </div>
 
               {/* RECEITA OPERACIONAL L├ìQUIDA */}
@@ -554,7 +608,7 @@ export default function DRE() {
                             (+) RECEITA BRUTA TOTAL
                           </td>
                           {dreData.months.map((m) => {
-                            const v = (dreData.receitaBrutaMeliPorMes[m.key] || 0) + (dreData.receitaBrutaShopeePorMes[m.key] || 0);
+                            const v = somaCanais(m.key, dreData.receitaBrutaMeliPorMes, dreData.receitaBrutaShopeePorMes, dreData.receitaBrutaTiktokPorMes);
                             return (
                               <td key={m.key} className="py-2 px-2 text-right font-semibold text-gray-900">
                                 {currency(v)}
@@ -590,13 +644,27 @@ export default function DRE() {
                             );
                           })}
                         </tr>
+                        {/* → Receita Bruta TikTok Shop */}
+                        <tr className="border-t border-gray-100">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
+                            → Receita Bruta TikTok Shop
+                          </td>
+                          {dreData.months.map((m) => {
+                            const v = dreData.receitaBrutaTiktokPorMes[m.key] || 0;
+                            return (
+                              <td key={m.key} className="py-1.5 px-2 text-right text-xs text-gray-700">
+                                {currency(v)}
+                              </td>
+                            );
+                          })}
+                        </tr>
                         {/* (-) DEDU├ç├òES */}
                         <tr className="border-t border-[var(--cz-hairline)]">
                           <td className="sticky left-0 z-10 bg-white py-2 px-3 font-medium text-gray-900 border-r border-[var(--cz-hairline)]">
                             (-) Deducoes da Receita Bruta
                           </td>
                           {dreData.months.map((m) => {
-                            const v = (dreData.deducoesMeliPorMes[m.key] || 0) + (dreData.deducoesShopeePorMes[m.key] || 0);
+                            const v = somaCanais(m.key, dreData.deducoesMeliPorMes, dreData.deducoesShopeePorMes, dreData.deducoesTiktokPorMes);
                             return (
                               <td key={m.key} className="py-2 px-2 text-right text-gray-700">
                                 {currency(v)}
@@ -632,14 +700,28 @@ export default function DRE() {
                             );
                           })}
                         </tr>
+                        {/* VENDAS CANCELADAS TIKTOK SHOP */}
+                        <tr className="border-t border-gray-100">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
+                            VENDAS CANCELADAS TIKTOK SHOP
+                          </td>
+                          {dreData.months.map((m) => {
+                            const v = dreData.deducoesTiktokPorMes[m.key] || 0;
+                            return (
+                              <td key={m.key} className="py-1.5 px-2 text-right text-xs text-gray-700">
+                                {currency(v)}
+                              </td>
+                            );
+                          })}
+                        </tr>
                         {/* (=) RECEITA L├ìQUIDA */}
                         <tr className="border-t border-[var(--cz-hairline)]">
                           <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (=) Receita Liquida
                           </td>
                           {dreData.months.map((m) => {
-                            const receitaBruta = (dreData.receitaBrutaMeliPorMes[m.key] || 0) + (dreData.receitaBrutaShopeePorMes[m.key] || 0);
-                            const deducoes = (dreData.deducoesMeliPorMes[m.key] || 0) + (dreData.deducoesShopeePorMes[m.key] || 0);
+                            const receitaBruta = somaCanais(m.key, dreData.receitaBrutaMeliPorMes, dreData.receitaBrutaShopeePorMes, dreData.receitaBrutaTiktokPorMes);
+                            const deducoes = somaCanais(m.key, dreData.deducoesMeliPorMes, dreData.deducoesShopeePorMes, dreData.deducoesTiktokPorMes);
                             const v = receitaBruta - deducoes;
                             return (
                               <td key={m.key} className="py-2 px-2 text-right font-semibold text-gray-900">
@@ -654,7 +736,7 @@ export default function DRE() {
                             (-) TAXA E COMISSÕES DE MARKETPLACES
                           </td>
                           {dreData.months.map((m) => {
-                            const v = (dreData.taxasMeliPorMes[m.key] || 0) + (dreData.taxasShopeePorMes[m.key] || 0);
+                            const v = somaCanais(m.key, dreData.taxasMeliPorMes, dreData.taxasShopeePorMes, dreData.taxasTiktokPorMes);
                             return (
                               <td key={m.key} className="py-2 px-2 text-right font-semibold text-gray-900">
                                 {currency(v)}
@@ -690,13 +772,33 @@ export default function DRE() {
                             );
                           })}
                         </tr>
+                        {/* → Taxas TikTok Shop.
+
+                            Aqui a taxa embute o Programa de Frete (SFP): no TikTok o
+                            transporte é cobrado como percentual sobre o faturamento e
+                            NÃO aparece na linha de frete — ver o aviso no topo de
+                            `tiktok-finance.ts`. É por isso que a linha de frete do
+                            TikTok, mais abaixo, fica em zero de propósito. */}
+                        <tr className="border-t border-gray-100">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
+                            → Taxas TikTok Shop
+                          </td>
+                          {dreData.months.map((m) => {
+                            const v = dreData.taxasTiktokPorMes[m.key] || 0;
+                            return (
+                              <td key={m.key} className="py-1.5 px-2 text-right text-xs text-gray-700">
+                                {currency(v)}
+                              </td>
+                            );
+                          })}
+                        </tr>
                         {/* (-) CUSTO DE FRETE MARKETPLACE */}
                         <tr className="border-t border-[var(--cz-hairline)]">
                           <td className="sticky left-0 z-10 bg-white py-2 px-3 font-semibold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (-) CUSTO DE FRETE MARKETPLACE
                           </td>
                           {dreData.months.map((m) => {
-                            const v = (dreData.freteMeliPorMes[m.key] || 0) + (dreData.freteShopeePorMes[m.key] || 0);
+                            const v = somaCanais(m.key, dreData.freteMeliPorMes, dreData.freteShopeePorMes, dreData.freteTiktokPorMes);
                             return (
                               <td key={m.key} className="py-2 px-2 text-right font-semibold text-gray-900">
                                 {currency(v)}
@@ -732,17 +834,41 @@ export default function DRE() {
                             );
                           })}
                         </tr>
+                        {/* → Frete TikTok Shop.
+
+                            Fica em ZERO por decisão, não por dado faltando: no
+                            Programa de Frete o custo do transporte está dentro da
+                            taxa (linha acima). A linha existe mesmo assim porque
+                            omiti-la faria parecer que o canal não tem frete
+                            nenhum — e a próxima pergunta seria "onde foi o frete
+                            do TikTok?". */}
+                        <tr className="border-t border-gray-100">
+                          <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
+                            → Frete TikTok Shop
+                            <span className="ml-1 text-[10px] text-gray-400">
+                              (embutido na taxa do SFP)
+                            </span>
+                          </td>
+                          {dreData.months.map((m) => {
+                            const v = dreData.freteTiktokPorMes[m.key] || 0;
+                            return (
+                              <td key={m.key} className="py-1.5 px-2 text-right text-xs text-gray-700">
+                                {currency(v)}
+                              </td>
+                            );
+                          })}
+                        </tr>
                         {/* (=) RECEITA OPERACIONAL LÍQUIDA */}
                         <tr className="border-t border-gray-300">
                           <td className="sticky left-0 z-10 bg-white py-2 px-3 font-bold text-gray-900 border-r border-[var(--cz-hairline)]">
                             (=) RECEITA OPERACIONAL LÍQUIDA
                           </td>
                           {dreData.months.map((m) => {
-                            const receitaBruta = (dreData.receitaBrutaMeliPorMes[m.key] || 0) + (dreData.receitaBrutaShopeePorMes[m.key] || 0);
-                            const deducoes = (dreData.deducoesMeliPorMes[m.key] || 0) + (dreData.deducoesShopeePorMes[m.key] || 0);
+                            const receitaBruta = somaCanais(m.key, dreData.receitaBrutaMeliPorMes, dreData.receitaBrutaShopeePorMes, dreData.receitaBrutaTiktokPorMes);
+                            const deducoes = somaCanais(m.key, dreData.deducoesMeliPorMes, dreData.deducoesShopeePorMes, dreData.deducoesTiktokPorMes);
                             const receitaLiquida = receitaBruta - Math.abs(deducoes);
-                            const taxas = (dreData.taxasMeliPorMes[m.key] || 0) + (dreData.taxasShopeePorMes[m.key] || 0);
-                            const frete = (dreData.freteMeliPorMes[m.key] || 0) + (dreData.freteShopeePorMes[m.key] || 0);
+                            const taxas = somaCanais(m.key, dreData.taxasMeliPorMes, dreData.taxasShopeePorMes, dreData.taxasTiktokPorMes);
+                            const frete = somaCanais(m.key, dreData.freteMeliPorMes, dreData.freteShopeePorMes, dreData.freteTiktokPorMes);
                             const v = receitaLiquida - Math.abs(taxas) - Math.abs(frete);
                             return (
                               <td key={m.key} className="py-2 px-2 text-right font-bold text-gray-900">
@@ -771,11 +897,11 @@ export default function DRE() {
                             (=) LUCRO BRUTO / MARGEM DE CONTRIBUIÇÃO
                           </td>
                           {dreData.months.map((m) => {
-                            const receitaBruta = (dreData.receitaBrutaMeliPorMes[m.key] || 0) + (dreData.receitaBrutaShopeePorMes[m.key] || 0);
-                            const deducoes = (dreData.deducoesMeliPorMes[m.key] || 0) + (dreData.deducoesShopeePorMes[m.key] || 0);
+                            const receitaBruta = somaCanais(m.key, dreData.receitaBrutaMeliPorMes, dreData.receitaBrutaShopeePorMes, dreData.receitaBrutaTiktokPorMes);
+                            const deducoes = somaCanais(m.key, dreData.deducoesMeliPorMes, dreData.deducoesShopeePorMes, dreData.deducoesTiktokPorMes);
                             const receitaLiquida = receitaBruta - Math.abs(deducoes);
-                            const taxas = (dreData.taxasMeliPorMes[m.key] || 0) + (dreData.taxasShopeePorMes[m.key] || 0);
-                            const frete = (dreData.freteMeliPorMes[m.key] || 0) + (dreData.freteShopeePorMes[m.key] || 0);
+                            const taxas = somaCanais(m.key, dreData.taxasMeliPorMes, dreData.taxasShopeePorMes, dreData.taxasTiktokPorMes);
+                            const frete = somaCanais(m.key, dreData.freteMeliPorMes, dreData.freteShopeePorMes, dreData.freteTiktokPorMes);
                             const receitaOperacional = receitaLiquida - Math.abs(taxas) - Math.abs(frete);
                             const cmv = dreData.cmvPorMes[m.key] || 0;
                             const v = receitaOperacional - Math.abs(cmv);

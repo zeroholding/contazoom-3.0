@@ -12,12 +12,30 @@ type TopbarProps = {
   onMobileMenu: () => void; // mobile
 };
 
+/**
+ * Rótulo por CAMINHO COMPLETO, para os slugs que aparecem em mais de um módulo.
+ *
+ * `shopee` e `tiktok-shop` existem sob `/vendas` e sob `/expedicao`. Com o mapa
+ * por segmento sozinho, `/expedicao/shopee` virava "Expedição › Vendas Shopee" —
+ * o breadcrumb anunciava a tela errada. Consultado ANTES do mapa por segmento.
+ */
+const LABEL_POR_CAMINHO: Record<string, string> = {
+  "/expedicao": "Expedição Geral",
+  "/expedicao/mercado-livre": "Mercado Livre",
+  "/expedicao/shopee": "Shopee",
+  "/expedicao/tiktok-shop": "TikTok Shop",
+};
+
 const LABEL_MAP: Record<string, string> = {
   dashboard: "Dashboard",
   vendas: "Central de Vendas",
   geral: "Vendas Geral",
   "mercado-livre": "Vendas Mercado Livre",
   shopee: "Vendas Shopee",
+  // Sem esta linha o fallback traduziria o slug para "Tiktok Shop", com o K
+  // minúsculo. É a grafia da marca que está em jogo, não a capitalização.
+  "tiktok-shop": "Vendas TikTok Shop",
+  expedicao: "Expedição",
   sku: "Gestão de SKU",
   contas: "Contas de plataforma",
   financeiro: "Financeiro",
@@ -28,8 +46,9 @@ const LABEL_MAP: Record<string, string> = {
   documentos: "Documentos",
 };
 
-function toLabel(slug: string) {
+function toLabel(slug: string, href: string) {
   return (
+    LABEL_POR_CAMINHO[href] ??
     LABEL_MAP[slug] ??
     slug.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())
   );
@@ -42,10 +61,10 @@ export default function Topbar({
 }: TopbarProps) {
   const pathname = usePathname() || "/";
   const segments = pathname.split("/").filter(Boolean);
-  const crumbs = segments.map((seg, i) => ({
-    href: "/" + segments.slice(0, i + 1).join("/"),
-    label: toLabel(seg),
-  }));
+  const crumbs = segments.map((seg, i) => {
+    const href = "/" + segments.slice(0, i + 1).join("/");
+    return { href, label: toLabel(seg, href) };
+  });
 
   /**
    * Só o CHEVRON gira, não o ícone inteiro.
