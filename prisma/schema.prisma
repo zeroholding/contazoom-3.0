@@ -1869,7 +1869,7 @@ model ImportacaoXml {
   importados       Int @default(0)
   duplicados       Int @default(0)
   ignorados        Int @default(0)
-  comErro          Int @default(0)
+  comErro          Int @default(0) @map("com_erro")
   naoProcessados   Int @default(0) @map("nao_processados")
   eventosAplicados Int @default(0) @map("eventos_aplicados")
 
