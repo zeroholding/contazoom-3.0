@@ -177,7 +177,7 @@ function situacaoDaNota(statusSefaz: string | null): string {
 
 /** Lock transacional por chave; funciona entre processos e réplicas. */
 async function travarChave(tx: Prisma.TransactionClient, chave: string): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`fiscal:${chave}`}))`;
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`fiscal:${chave}`}))::text AS "locked"`;
 }
 
 /** Lock separado por competência, para agregação antiga nunca sobrescrever nova. */
@@ -187,7 +187,7 @@ async function travarCompetencia(
   ano: number,
   mes: number,
 ): Promise<void> {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${empresaId}:${ano}:${mes}`}))`;
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${empresaId}:${ano}:${mes}`}))::text AS "locked"`;
 }
 
 async function escreverTemporario(destinoFinal: string, bytes: Buffer): Promise<string> {
@@ -277,7 +277,7 @@ async function abrirSessaoImportacao(
   arquivosNoLote: number,
 ): Promise<{ id: string }> {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`importacao:${contexto.sessaoId}`}))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`importacao:${contexto.sessaoId}`}))::text AS "locked"`;
 
     const existente = await tx.importacaoXml.findUnique({
       where: { sessaoId: contexto.sessaoId },
@@ -336,7 +336,7 @@ async function finalizarLoteImportacao(
   fatal = false,
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`importacao:${contexto.sessaoId}`}))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`importacao:${contexto.sessaoId}`}))::text AS "locked"`;
     const atual = await tx.importacaoXml.findUnique({
       where: { id: resumo.importacaoId },
     });
@@ -421,7 +421,7 @@ export async function encerrarSessaoImportacao(input: {
   desfecho: "ABORTAR";
 }): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`importacao:${input.sessaoId}`}))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`importacao:${input.sessaoId}`}))::text AS "locked"`;
     const atual = await tx.importacaoXml.findUnique({
       where: { sessaoId: input.sessaoId },
     });

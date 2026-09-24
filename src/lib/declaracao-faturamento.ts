@@ -361,7 +361,7 @@ export async function emitirDeclaracao(input: {
     // Primeiro serializa pela chave de idempotência global. Sem isto, a mesma
     // chave reutilizada em duas empresas/janelas passaria pelos locks diferentes
     // e uma das chamadas terminaria em P2002/500.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`declaracao-idem:${input.idempotencyKey}`}))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`declaracao-idem:${input.idempotencyKey}`}))::text AS "locked"`;
 
     const repetida = await tx.declaracaoFaturamento.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
@@ -382,13 +382,13 @@ export async function emitirDeclaracao(input: {
       return { declaracao: serializarDeclaracao(repetida), jaExistia: true };
     }
 
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`declaracao:${input.empresaId}:${input.fim}`}))`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`declaracao:${input.empresaId}:${input.fim}`}))::text AS "locked"`;
 
     // Os mesmos locks usados por PUT mensal e pela reapuração, sempre em ordem
     // cronológica. Sem eles, uma importação poderia alterar um dos 12 valores
     // entre o SELECT do snapshot e o UPDATE que congela as linhas.
     for (const competencia of competencias) {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${input.empresaId}:${competencia.ano}:${competencia.mes}`}))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${input.empresaId}:${competencia.ano}:${competencia.mes}`}))::text AS "locked"`;
     }
 
     const empresa = await tx.empresa.findUnique({

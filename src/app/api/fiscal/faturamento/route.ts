@@ -271,7 +271,7 @@ export async function PUT(req: NextRequest) {
       // Mesmo lock de `apurarCompetencia`: valor manual e reapuração não podem
       // se ultrapassar. Sem isto, um import em andamento podia sobrescrever o
       // manual recém-salvo com uma leitura antiga da origem.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${empresa}:${ano}:${mes}`}))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${empresa}:${ano}:${mes}`}))::text AS "locked"`;
 
       const existente = await tx.faturamentoMensal.findUnique({
         where: { empresa_competencia_faturamento: { empresaId: empresa, ano, mes } },

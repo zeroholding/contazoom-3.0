@@ -46,7 +46,7 @@ const erro = (mensagem: string, status: number, code?: string) =>
  * header. Requisição chunked sem Content-Length chega à segunda barreira; o
  * proxy de produção deve manter seu próprio limite de corpo como primeira.
  */
-export const TAMANHO_MAXIMO_ENVIO = 32 * 1024 * 1024;
+const TAMANHO_MAXIMO_ENVIO = 32 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   const sessao = await requirePapel(req, [

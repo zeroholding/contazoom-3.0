@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const resultado = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${empresaId}:${ano}:${mes}`}))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${empresaId}:${ano}:${mes}`}))::text AS "locked"`;
 
       const mensal = await tx.faturamentoMensal.findUnique({
         where: { empresa_competencia_faturamento: { empresaId, ano, mes } },
