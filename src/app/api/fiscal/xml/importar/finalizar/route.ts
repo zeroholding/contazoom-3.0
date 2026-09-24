@@ -22,10 +22,25 @@ export async function POST(req: NextRequest) {
     corpo && typeof corpo.empresaId === "string" ? corpo.empresaId.trim() : "";
   const sessaoId =
     corpo && typeof corpo.sessaoId === "string" ? corpo.sessaoId.trim() : "";
+  const desfecho =
+    corpo && typeof corpo.desfecho === "string" ? corpo.desfecho.trim() : "";
 
-  if (!empresaId || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessaoId)) {
+  if (
+    !empresaId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessaoId)
+  ) {
     return NextResponse.json(
       { error: "Empresa ou sessão de importação inválida.", code: "SESSAO_INVALIDA" },
+      { status: 400 },
+    );
+  }
+  if (desfecho !== "ABORTAR") {
+    return NextResponse.json(
+      {
+        error:
+          "Desfecho inválido. O sucesso é encerrado pelo último lote; este endpoint serve apenas para abortar uma seleção interrompida.",
+        code: "DESFECHO_INVALIDO",
+      },
       { status: 400 },
     );
   }
@@ -35,6 +50,7 @@ export async function POST(req: NextRequest) {
       sessaoId,
       empresaId,
       usuarioId: sessao.userId,
+      desfecho,
     });
     return NextResponse.json({ ok: true });
   } catch (falha) {

@@ -123,29 +123,46 @@ export async function POST(req: NextRequest) {
         ? origemBruta.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 600)
         : nome;
 
-    // Extensão, e não MIME: o navegador manda `text/xml`, `application/xml` ou
-    // string vazia para o mesmo arquivo, dependendo do sistema operacional.
+    /**
+     * Erro INDIVIDUAL, não erro do multipart.
+     *
+     * Antes, qualquer uma destas três condições dava `return`: 299 XMLs bons +
+     * 1 vazio resultavam em ZERO processados. Além de perder trabalho, isso fazia
+     * a pessoa suspeitar do mapa série/canal, porque a tela só mostrava uma falha
+     * genérica do envio. Agora o serviço grava a rejeição no relatório da sessão
+     * e continua com os demais arquivos.
+     *
+     * O Buffer do rejeitado fica vazio de propósito. `request.formData()` já
+     * materializou o multipart, mas não há motivo para criar mais uma cópia de um
+     * XML que sabemos que não será lido. Os limites AGREGADOS acima continuam
+     * abortando o request inteiro para proteger a memória do container.
+     */
+    let erroPrevalidacao: ArquivoParaImportar["erroPrevalidacao"];
     if (!nome.toLowerCase().endsWith(".xml")) {
-      return erro(
-        `"${nome}" não é um arquivo .xml. Envie apenas XML de nota fiscal.`,
-        415,
-        "TIPO_NAO_ACEITO",
-      );
+      erroPrevalidacao = {
+        code: "TIPO_NAO_ACEITO",
+        motivo: `"${nome}" não é um arquivo .xml. Envie apenas XML de nota fiscal.`,
+      };
+    } else if (arquivo.size <= 0) {
+      erroPrevalidacao = {
+        code: "ARQUIVO_VAZIO",
+        motivo: `"${nome}" está vazio.`,
+      };
+    } else if (arquivo.size > TAMANHO_MAXIMO_XML) {
+      erroPrevalidacao = {
+        code: "ARQUIVO_GRANDE",
+        motivo: `"${nome}" tem ${(arquivo.size / 1024).toFixed(0)} KB e o limite por XML é ${TAMANHO_MAXIMO_XML / 1024} KB.`,
+      };
     }
 
-    if (arquivo.size <= 0) {
-      return erro(`"${nome}" está vazio.`, 400, "ARQUIVO_VAZIO");
-    }
-
-    if (arquivo.size > TAMANHO_MAXIMO_XML) {
-      return erro(
-        `"${nome}" tem ${(arquivo.size / 1024).toFixed(0)} KB e o limite por XML é ${TAMANHO_MAXIMO_XML / 1024} KB.`,
-        413,
-        "ARQUIVO_GRANDE",
-      );
-    }
-
-    arquivos.push({ nome, origem, bytes: Buffer.from(await arquivo.arrayBuffer()) });
+    arquivos.push({
+      nome,
+      origem,
+      bytes: erroPrevalidacao
+        ? Buffer.alloc(0)
+        : Buffer.from(await arquivo.arrayBuffer()),
+      erroPrevalidacao,
+    });
   }
 
   try {

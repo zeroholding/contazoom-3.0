@@ -285,6 +285,10 @@ function Conteudo() {
   const pathname = usePathname();
   const params = useSearchParams();
   const { permissoes, sessao, papel } = useSessao();
+  const podeImportarXml =
+    papel === PAPEL.ADMIN ||
+    papel === PAPEL.CONTABIL ||
+    papel === PAPEL.CONTABIL_ASSISTENTE;
 
   // Os filtros da URL valem só na montagem: daí em diante o estado manda e a
   // URL é espelho. Ler a URL a cada render criaria laço com o `router.replace`.
@@ -893,6 +897,22 @@ function Conteudo() {
 
   const acoesCabecalho = (
     <>
+      {podeImportarXml && (
+        <Botao
+          variante="secundario"
+          icone="FileSpreadsheet"
+          onClick={() =>
+            router.push(
+              `/admin/tarefas/faturamento${query({
+                competencia: filtros.competencia,
+                empresaId: filtros.empresaId,
+              })}`,
+            )
+          }
+        >
+          Importar faturamento XML
+        </Botao>
+      )}
       <Alternador
         opcoes={[
           { valor: "kanban", texto: "Kanban", icone: "LayoutGrid" },

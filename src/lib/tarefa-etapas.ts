@@ -317,9 +317,9 @@ export const ETAPAS_SIMPLES_NACIONAL: DefinicaoEtapa[] = [
   {
     numero: 2,
     chave: "CAPTURA_XML",
-    titulo: "Captura de XML de notas de saída e entrada",
+    titulo: "Captura dos XMLs de faturamento e documentos fiscais",
     descricao:
-      "Importação/download dos XMLs de saídas disponíveis e XMLs de compras e notas de entrada, via sistema ou portal da SEFAZ, para compor a apuração.",
+      "Importe no Faturamento (XML) as NF-e/NFC-e emitidas pela empresa; a série é descoberta automaticamente e o canal é definido depois. XMLs de compras e notas recebidas são documentos de entrada e devem ficar nos anexos da competência, pois não compõem o faturamento emitido.",
     responsavel: RESPONSAVEL.ESCRITORIO,
     statusDerivado: "EM_ELABORACAO",
     opcional: false,
@@ -433,9 +433,9 @@ export const ETAPAS_LUCRO_PRESUMIDO: DefinicaoEtapa[] = [
   {
     numero: 2,
     chave: "CAPTURA_XML",
-    titulo: "Captura de XML (entradas e saídas)",
+    titulo: "Captura dos XMLs de faturamento e documentos fiscais",
     descricao:
-      "Importação dos XMLs de notas fiscais emitidas e recebidas para lançamento contábil e apuração de tributos.",
+      "Importe no Faturamento (XML) as NF-e/NFC-e emitidas pela empresa; a série é descoberta automaticamente e o canal é definido depois. XMLs de compras e notas recebidas ficam nos anexos da competência para escrituração, sem compor o faturamento emitido.",
     responsavel: RESPONSAVEL.ESCRITORIO,
     statusDerivado: "EM_ELABORACAO",
     opcional: false,

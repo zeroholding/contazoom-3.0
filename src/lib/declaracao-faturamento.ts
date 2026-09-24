@@ -405,12 +405,34 @@ export async function emitirDeclaracao(input: {
       );
     }
 
+    /**
+     * Recupera sessão cujo navegador sumiu antes do lote final/ABORTAR.
+     *
+     * Um request de lote tem `maxDuration = 300s`. Trinta minutos é seis vezes
+     * esse teto: não existe lote legítimo ainda executando depois disso. Deixar a
+     * sessão aberta por duas horas (regra antiga) bloqueava declaração por uma aba
+     * fechada. A recuperação acontece sob a mesma transação da emissão, então duas
+     * tentativas concorrentes chegam ao mesmo estado.
+     */
+    const limiteAbandono = new Date(Date.now() - 30 * 60 * 1000);
+    await tx.importacaoXml.updateMany({
+      where: {
+        empresaId: input.empresaId,
+        finalizadoEm: null,
+        updatedAt: { lt: limiteAbandono },
+      },
+      data: {
+        situacao: "INTERROMPIDA",
+        lotesAtivos: 0,
+        encerrarQuandoOciosa: false,
+        finalizadoEm: new Date(),
+      },
+    });
+
     const importacaoAtiva = await tx.importacaoXml.findFirst({
       where: {
         empresaId: input.empresaId,
         finalizadoEm: null,
-        // Sessão abandonada por aba fechada deixa de bloquear após duas horas.
-        updatedAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
       },
       select: { id: true, arquivosEnviados: true, lotes: true },
     });

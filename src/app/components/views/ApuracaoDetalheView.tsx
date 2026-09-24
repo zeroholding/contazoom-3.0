@@ -34,6 +34,7 @@ import {
   apiPost,
   ErroApi,
   mensagemDeErro,
+  query,
 } from "@/app/components/views/ui/tarefas/api";
 import type {
   ApuracaoDetalhe,
@@ -146,6 +147,26 @@ type RespostaPatch = {
 
 type RespostaUsuarios = { usuarios: UsuarioInterno[]; total: number };
 
+type EvidenciaFaturamento = {
+  kpis: {
+    apurado: number;
+    arquivosLidos: number;
+    notasValidas: number;
+    notasCanceladas: number;
+  };
+  faturamento: { valor: number; origem: string } | null;
+};
+
+type EvidenciaSeries = {
+  series: Array<{ serie: string; canal: string }>;
+  naoMapeadas: Array<{ serie: string; notas: number }>;
+};
+
+type EvidenciaXml = {
+  faturamento: EvidenciaFaturamento;
+  series: EvidenciaSeries;
+};
+
 /* -------------------------------------------------------------------------- */
 /*                                  Apoio                                     */
 /* -------------------------------------------------------------------------- */
@@ -189,6 +210,9 @@ function paraInputData(valor: string | null | undefined): string {
   return data.toISOString().slice(0, 10);
 }
 
+const real = (valor: number) =>
+  valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 /** Lista "3 (Conferência), 5 (Guia)" das etapas que faltam. */
 function listaEtapas(etapas: EtapaResumo[]): string {
   return etapas.map((e) => `${e.numero} (${e.titulo})`).join(", ");
@@ -220,6 +244,10 @@ function etapasDoErro(erro: unknown): EtapaResumo[] {
 
 export default function ApuracaoDetalheView({ id }: { id: string }) {
   const { permissoes, sessao, papel } = useSessao();
+  const podeImportarXml =
+    papel === PAPEL.ADMIN ||
+    papel === PAPEL.CONTABIL ||
+    papel === PAPEL.CONTABIL_ASSISTENTE;
 
   const [dados, setDados] = useState<ApuracaoDetalhe | null>(null);
   const [carregandoPagina, setCarregandoPagina] = useState(true);
@@ -253,6 +281,10 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
   });
   const [salvando, setSalvando] = useState(false);
   const [erroDados, setErroDados] = useState("");
+
+  /** Evidência real do módulo fiscal para esta empresa/competência. */
+  const [evidenciaXml, setEvidenciaXml] = useState<EvidenciaXml | null>(null);
+  const [carregandoEvidenciaXml, setCarregandoEvidenciaXml] = useState(false);
 
   /* ------------------------------- Carga --------------------------------- */
 
@@ -304,6 +336,50 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
     return () => controlador.abort();
   }, []);
 
+  useEffect(() => {
+    const empresaId = dados?.empresa.id;
+    const competencia = dados?.tarefa.competencia;
+    if (!empresaId || !competencia) {
+      setEvidenciaXml(null);
+      return;
+    }
+
+    /**
+     * A etapa CAPTURA_XML deixou de ser só um texto no workflow: o detalhe lê a
+     * mesma fonte da tela de faturamento e mostra evidência real do mês. As duas
+     * requisições são independentes, por isso paralelas.
+     */
+    const controlador = new AbortController();
+    let vivo = true;
+    setCarregandoEvidenciaXml(true);
+
+    Promise.all([
+      apiGet<EvidenciaFaturamento>(
+        `/api/fiscal/faturamento${query({ empresaId, competencia })}`,
+        controlador.signal,
+      ),
+      apiGet<EvidenciaSeries>(
+        `/api/fiscal/series${query({ empresaId })}`,
+        controlador.signal,
+      ),
+    ])
+      .then(([faturamento, series]) => {
+        if (vivo) setEvidenciaXml({ faturamento, series });
+      })
+      .catch(() => {
+        // Evidência é apoio; falhar aqui não derruba nem bloqueia a tarefa.
+        if (vivo) setEvidenciaXml(null);
+      })
+      .finally(() => {
+        if (vivo) setCarregandoEvidenciaXml(false);
+      });
+
+    return () => {
+      vivo = false;
+      controlador.abort();
+    };
+  }, [dados?.empresa.id, dados?.tarefa.competencia]);
+
   // O formulário espelha o que foi carregado. Recarregar depois de uma ação
   // reposiciona os campos no valor real do banco.
   useEffect(() => {
@@ -322,6 +398,10 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
   const empresa = dados?.empresa ?? null;
   const etapas = dados?.etapas ?? [];
   const logs = dados?.logs ?? [];
+  const etapaCapturaXml = etapas.find((etapa) => etapa.chave === "CAPTURA_XML") ?? null;
+  const capturaXmlEmCurso =
+    Boolean(etapaCapturaXml && tarefa?.etapaAtual === etapaCapturaXml.numero) &&
+    !tarefa?.concluidaEm;
 
   const encerrada = !!tarefa?.concluidaEm;
   const bloqueada = !!tarefa?.bloqueada;
@@ -837,6 +917,113 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
           </p>
         </div>
         <Progresso feito={resolvidas} total={totalEtapas} className="mt-2" />
+      </Painel>
+
+      {/* A captura de XML era só um nome dentro da lista de etapas. Agora a
+          competência leva empresa e mês corretos para o importador e mostra a
+          evidência real que já existe no módulo fiscal. */}
+      <Painel
+        titulo="XML e faturamento desta competência"
+        descricao={
+          capturaXmlEmCurso
+            ? "Esta é a etapa em curso: importe as notas emitidas e confira o valor antes de concluir."
+            : "Acompanhe os XMLs ligados a esta empresa e a este mês sem perder o contexto da apuração."
+        }
+        acoes={
+          podeImportarXml ? (
+            <Link
+              href={`/admin/tarefas/faturamento${query({
+                empresaId: empresa.id,
+                competencia: tarefa.competencia,
+                apuracaoId: tarefa.id,
+              })}`}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--cz-laranja)] px-3.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--cz-laranja-forte)]"
+            >
+              <Icone nome="UploadCloud" className="h-4 w-4" />
+              Abrir importação deste mês
+            </Link>
+          ) : undefined
+        }
+      >
+        <div className="space-y-4 px-5 py-5">
+          <div className="rounded-[12px] border border-sky-200 bg-sky-50/70 px-4 py-3 text-[12.5px] leading-snug text-sky-950">
+            <p className="font-bold">A ordem correta é: empresa → importar XML → atribuir canal.</p>
+            <p className="mt-1">
+              Não cadastre série antes. O sistema lê a série de dentro da nota; o
+              canal é só uma classificação posterior e nunca impede o XML de entrar
+              ou de somar no faturamento.
+            </p>
+          </div>
+
+          {carregandoEvidenciaXml ? (
+            <Carregando texto="Conferindo os XMLs desta competência" />
+          ) : evidenciaXml ? (
+            <>
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    rotulo: "Arquivos lidos",
+                    valor: evidenciaXml.faturamento.kpis.arquivosLidos.toLocaleString("pt-BR"),
+                  },
+                  {
+                    rotulo: "Notas que somam",
+                    valor: evidenciaXml.faturamento.kpis.notasValidas.toLocaleString("pt-BR"),
+                  },
+                  {
+                    rotulo: "Apurado nos XMLs",
+                    valor: real(evidenciaXml.faturamento.kpis.apurado),
+                  },
+                  {
+                    rotulo: "Séries sem canal na empresa",
+                    valor: evidenciaXml.series.naoMapeadas.length.toLocaleString("pt-BR"),
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.rotulo}
+                    className="rounded-[10px] border border-[var(--cz-hairline)] bg-[#FCFCFD] px-3 py-2.5"
+                  >
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.03em] text-gray-500">
+                      {item.rotulo}
+                    </dt>
+                    <dd className="cz-num mt-1 text-lg font-bold text-gray-900">
+                      {item.valor}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              {evidenciaXml.series.naoMapeadas.length > 0 && (
+                <p className="flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-[12px] leading-snug text-amber-900">
+                  <Icone nome="Info" className="mt-px h-4 w-4 shrink-0" />
+                  <span>
+                    Há {evidenciaXml.series.naoMapeadas.length} série(s) da empresa
+                    aguardando canal, considerando todos os meses importados. Elas
+                    podem não ter notas nesta competência. As notas correspondentes
+                    já estão importadas e já somam; abra o faturamento para escolher
+                    os marketplaces sem reenviar os XMLs.
+                  </span>
+                </p>
+              )}
+
+              {evidenciaXml.faturamento.kpis.arquivosLidos === 0 && (
+                <p className="text-[12.5px] text-gray-600">
+                  Nenhum XML emitido por esta empresa foi encontrado em {tarefa.competenciaLabel}.
+                  {podeImportarXml
+                    ? " Use o botão acima para importar; o mês será conferido pela data de emissão da nota."
+                    : " Solicite a importação a um administrador ou à contabilidade; o mês será conferido pela data de emissão da nota."}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-[12.5px] text-gray-600">
+              Não foi possível carregar o resumo fiscal agora. A tarefa continua
+              disponível
+              {podeImportarXml
+                ? "; abra a importação para conferir diretamente."
+                : "; tente consultar novamente mais tarde."}
+            </p>
+          )}
+        </div>
       </Painel>
 
       {bloqueada && (

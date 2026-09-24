@@ -39,6 +39,7 @@
  * sólido e gasta 140px de altura para dizer "veio tudo do mesmo lugar".
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -72,6 +73,7 @@ import { extrairXmlsDoZip } from "@/lib/fiscal-zip";
 import DeclaracaoFaturamentoPanel from "@/app/components/views/fiscal/DeclaracaoFaturamentoPanel";
 import { useSessao } from "@/hooks/useSessao";
 import { PAPEL } from "@/lib/papeis";
+import type { ApuracaoDetalhe } from "@/app/components/views/ui/tarefas/tipos";
 
 /* -------------------------------------------------------------------------- */
 /*                          Formato das respostas                             */
@@ -177,6 +179,8 @@ type LinhaRelatorio = {
   code: string | null;
 };
 
+type CompetenciaImportada = { empresaId: string; ano: number; mes: number };
+
 type ResumoImportacao = {
   importacaoId: string;
   sessaoId: string;
@@ -188,6 +192,14 @@ type ResumoImportacao = {
   comErro: number;
   naoProcessados: number;
   situacao: string;
+  /**
+   * Meses tirados de `dhEmi` dos XMLs, não do seletor da tela.
+   *
+   * O servidor sempre devolveu isto, mas o cliente apagava o campo ao tipar a
+   * resposta. Resultado: XML de julho importado com agosto aberto desaparecia da
+   * tabela e parecia não ter entrado. Mantê-lo permite mostrar e abrir o mês real.
+   */
+  competenciasApuradas: CompetenciaImportada[];
   relatorio: LinhaRelatorio[];
 };
 
@@ -196,6 +208,25 @@ type SeriesResposta = {
   naoMapeadas: Array<{ serie: string; notas: number }>;
   canaisDisponiveis: Array<{ valor: string; texto: string }>;
 };
+
+type MapeamentoSerie = { serie: string; canal: string };
+
+/** Payload estável para comparar rascunho e persistido, inclusive arrays vazios. */
+function normalizarMapeamentosSeries(
+  itens: Array<{ serie: string; canal: string }>,
+): MapeamentoSerie[] {
+  return itens
+    .map((item) => ({
+      serie: item.serie.trim(),
+      canal: item.canal.trim(),
+    }))
+    .filter((item) => item.serie && item.canal)
+    .sort(
+      (a, b) =>
+        a.serie.localeCompare(b.serie, "pt-BR", { numeric: true }) ||
+        a.canal.localeCompare(b.canal, "pt-BR"),
+    );
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                 Formatação                                 */
@@ -336,7 +367,7 @@ const RESULTADO_VISUAL: Record<string, { icone: string; tom: string; rotulo: str
   EVENTO_PENDENTE: { icone: "Clock", tom: "text-amber-600", rotulo: "Evento pendente" },
   EVENTO_ARQUIVADO: { icone: "FileCheck2", tom: "text-sky-600", rotulo: "Evento arquivado" },
   DUPLICADO: { icone: "Copy", tom: "text-[var(--cz-texto-fraco)]", rotulo: "Já existia" },
-  IGNORADO: { icone: "MinusCircle", tom: "text-[var(--cz-texto-suave)]", rotulo: "Ignorado" },
+  IGNORADO: { icone: "MinusCircle", tom: "text-[var(--cz-texto-suave)]", rotulo: "Fora do faturamento" },
   ERRO: { icone: "AlertTriangle", tom: "text-red-600", rotulo: "Erro" },
   NAO_PROCESSADO: { icone: "Clock", tom: "text-sky-600", rotulo: "Não processado" },
 };
@@ -363,10 +394,16 @@ export default function FaturamentoXmlView() {
   /* ----------------------------- Empresas ------------------------------- */
   const [empresas, setEmpresas] = useState<EmpresaResumo[]>([]);
   const [empresaId, setEmpresaId] = useState("");
+  const [empresasCarregadas, setEmpresasCarregadas] = useState(false);
   const [erroEmpresas, setErroEmpresas] = useState("");
 
   /* ---------------------------- Competência ----------------------------- */
   const [competencia, setCompetencia] = useState("");
+  /**
+   * Quando a tela veio do detalhe de uma apuração, preserva o caminho de volta e
+   * deixa claro que empresa/mês não foram escolhidos por acaso.
+   */
+  const [apuracaoId, setApuracaoId] = useState("");
 
   /* ------------------------------ Resumo -------------------------------- */
   const [resumo, setResumo] = useState<Resumo | null>(null);
@@ -374,6 +411,7 @@ export default function FaturamentoXmlView() {
   const [resumoCarregadoPara, setResumoCarregadoPara] = useState("");
   const [carregandoResumo, setCarregandoResumo] = useState(false);
   const [primeiraCarga, setPrimeiraCarga] = useState(true);
+  /** Erro de carga/salvamento geral. Importação tem estado separado abaixo. */
   const [erro, setErro] = useState("");
 
   /* ------------------------------ Tabela -------------------------------- */
@@ -399,6 +437,13 @@ export default function FaturamentoXmlView() {
   const [etapaImportacao, setEtapaImportacao] = useState("");
   const [progresso, setProgresso] = useState({ feitos: 0, total: 0 });
   const [resultado, setResultado] = useState<ResumoImportacao | null>(null);
+  /**
+   * Separado de `erro`: recarregar resumo/tabela depois de uma falha parcial
+   * limpa o erro geral no começo dos efeitos. Quando ambos usavam o mesmo estado,
+   * “ZIP inválido” ou “rede caiu” piscava e sumia — parecendo que o clique não fez
+   * nada. Este só é limpo por nova tentativa ou pela pessoa.
+   */
+  const [erroImportacao, setErroImportacao] = useState("");
 
   /* -------------------------- Valor declarado --------------------------- */
   const [origem, setOrigem] = useState<"xml" | "manual">("xml");
@@ -428,6 +473,18 @@ export default function FaturamentoXmlView() {
   const [recarga, setRecarga] = useState(0);
   const recarregar = () => setRecarga((n) => n + 1);
 
+  const seriesParaSalvar = useMemo(
+    () => normalizarMapeamentosSeries(rascunhoSeries),
+    [rascunhoSeries],
+  );
+  const seriesPersistidas = useMemo(
+    () => normalizarMapeamentosSeries(series?.series ?? []),
+    [series?.series],
+  );
+  const seriesAlteradas =
+    seriesCarregadasPara === empresaId &&
+    JSON.stringify(seriesParaSalvar) !== JSON.stringify(seriesPersistidas);
+
   /* ------------------------ Carrega as empresas ------------------------- */
 
   useEffect(() => {
@@ -438,24 +495,126 @@ export default function FaturamentoXmlView() {
       `/api/empresas${query({ limit: 200 })}`,
       controlador.signal,
     )
-      .then((dados) => {
+      .then(async (dados) => {
         if (!vivo) return;
         const lista = dados.empresas ?? [];
+        const elegiveis = lista.filter((empresa) => empresa.cnpj);
         setEmpresas(lista);
-        /*
-         * Escolhe a primeira empresa COM CNPJ.
+
+        /**
+         * APURAÇÃO NA URL É UM CONTEXTO AUTORIZADO, NÃO TRÊS PARÂMETROS SOLTOS.
          *
-         * Empresa em abertura não tem CNPJ, e sem CNPJ não há como casar nota
-         * nenhuma — abrir a tela nela mostraria vazio permanente e pareceria
-         * defeito da importação.
+         * Quando existe `apuracaoId`, empresa e competência vêm exclusivamente do
+         * GET da tarefa. Isso impede trocar `empresaId` ou `competencia` à mão no
+         * endereço e ainda mostrar o banner como se o vínculo tivesse sido
+         * validado. Só guardamos o id depois de conferir a resposta e a empresa
+         * elegível desta carteira.
+         *
+         * Sem `apuracaoId`, permanece a regra da tela avulsa:
+         * - deep link válido: respeita empresa e mês;
+         * - uma única empresa elegível: pode escolher automaticamente;
+         * - duas ou mais: exige escolha humana explícita.
          */
-        const comCnpj = lista.find((e) => e.cnpj);
-        if (comCnpj) setEmpresaId((atual) => atual || comCnpj.id);
+        const params =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search)
+            : new URLSearchParams();
+        const empresaSolicitada = params.get("empresaId")?.trim() ?? "";
+        const competenciaSolicitada = params.get("competencia")?.trim() ?? "";
+        const apuracaoSolicitada = params.get("apuracaoId")?.trim() ?? "";
+
+        if (apuracaoSolicitada) {
+          try {
+            const detalhe = await apiGet<ApuracaoDetalhe>(
+              `/api/tarefas/apuracao/${encodeURIComponent(apuracaoSolicitada)}`,
+              controlador.signal,
+            );
+            if (!vivo) return;
+
+            const empresaDerivada = detalhe.empresa.id;
+            const competenciaDerivada = detalhe.tarefa.competencia;
+            const empresaElegivel = elegiveis.find(
+              (empresa) => empresa.id === empresaDerivada,
+            );
+
+            if (
+              !empresaElegivel ||
+              !/^\d{4}-(0[1-9]|1[0-2])$/.test(competenciaDerivada)
+            ) {
+              setEmpresaId("");
+              setCompetencia("");
+              setApuracaoId("");
+              setErro(
+                !empresaElegivel
+                  ? "A empresa vinculada à apuração não está disponível ou ainda não tem CNPJ. O vínculo não foi aplicado."
+                  : "A competência vinculada à apuração é inválida. O vínculo não foi aplicado.",
+              );
+              setPrimeiraCarga(false);
+              return;
+            }
+
+            setEmpresaId(empresaDerivada);
+            setCompetencia(competenciaDerivada);
+            setApuracaoId(apuracaoSolicitada);
+
+            if (typeof window !== "undefined") {
+              params.set("empresaId", empresaDerivada);
+              params.set("competencia", competenciaDerivada);
+              params.set("apuracaoId", apuracaoSolicitada);
+              const busca = params.toString();
+              window.history.replaceState(
+                null,
+                "",
+                `${window.location.pathname}${busca ? `?${busca}` : ""}`,
+              );
+            }
+            return;
+          } catch (falha) {
+            if (!vivo) return;
+            const mensagem = mensagemDeErro(falha);
+            if (!mensagem) return;
+            setEmpresaId("");
+            setCompetencia("");
+            setApuracaoId("");
+            setErro(
+              `Não foi possível validar a apuração indicada. O vínculo com empresa e competência não foi aplicado. ${mensagem}`,
+            );
+            setPrimeiraCarga(false);
+            return;
+          }
+        }
+
+        if (/^\d{4}-(0[1-9]|1[0-2])$/.test(competenciaSolicitada)) {
+          setCompetencia(competenciaSolicitada);
+        }
+
+        if (empresaSolicitada) {
+          const alvo = elegiveis.find((empresa) => empresa.id === empresaSolicitada);
+          if (alvo) {
+            setEmpresaId(alvo.id);
+          } else {
+            setErro(
+              "A empresa indicada não está disponível ou ainda não tem CNPJ. Selecione a empresa correta antes de importar.",
+            );
+            setPrimeiraCarga(false);
+          }
+        } else if (elegiveis.length === 1) {
+          setEmpresaId(elegiveis[0].id);
+        } else {
+          // Nenhuma escolha silenciosa quando há mais de um CNPJ. O custo de um
+          // clique é menor do que recusar uma pasta inteira contra a empresa errada.
+          setEmpresaId("");
+          setPrimeiraCarga(false);
+        }
       })
       .catch((falha) => {
         if (!vivo) return;
         const mensagem = mensagemDeErro(falha);
         if (mensagem) setErroEmpresas(mensagem);
+        setPrimeiraCarga(false);
+      })
+      .finally(() => {
+        if (vivo) setEmpresasCarregadas(true);
       });
 
     return () => {
@@ -463,6 +622,28 @@ export default function FaturamentoXmlView() {
       controlador.abort();
     };
   }, []);
+
+  /**
+   * Mantém o contexto compartilhável no endereço sem fazer navegação nem nova
+   * entrada no histórico a cada troca de mês. Ao mudar manualmente empresa/mês,
+   * o vínculo com a apuração de origem é removido: voltar para aquela tarefa com
+   * outro contexto seria enganoso.
+   */
+  const atualizarUrl = useCallback(
+    (proximaEmpresa: string, proximaCompetencia: string, proximaApuracao = "") => {
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      if (proximaEmpresa) params.set("empresaId", proximaEmpresa);
+      else params.delete("empresaId");
+      if (proximaCompetencia) params.set("competencia", proximaCompetencia);
+      else params.delete("competencia");
+      if (proximaApuracao) params.set("apuracaoId", proximaApuracao);
+      else params.delete("apuracaoId");
+      const busca = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${busca ? `?${busca}` : ""}`);
+    },
+    [],
+  );
 
   /* --------------------------- Debounce da busca ------------------------ */
 
@@ -501,6 +682,7 @@ export default function FaturamentoXmlView() {
         // vazio enquanto a tela já exibe agosto.
         if (dados.competencia && !competencia) {
           setCompetencia(dados.competencia.chave);
+          atualizarUrl(empresaId, dados.competencia.chave, apuracaoId);
         }
 
         // Espelha no formulário o que está gravado.
@@ -529,7 +711,7 @@ export default function FaturamentoXmlView() {
     };
     // `competencia` entra como dependência mas é sincronizada dentro do efeito:
     // a primeira carga vai sem ela e o servidor responde qual usou.
-  }, [empresaId, competencia, recarga]);
+  }, [apuracaoId, atualizarUrl, empresaId, competencia, recarga]);
 
   /* ----------------------------- Carrega tabela ------------------------- */
 
@@ -597,7 +779,24 @@ export default function FaturamentoXmlView() {
       .then((dados) => {
         if (!vivo) return;
         setSeries(dados);
-        setRascunhoSeries(dados.series.map((s) => ({ serie: s.serie, canal: s.canal })));
+
+        /**
+         * Toda série DESCOBERTA já aparece como linha, com o canal vazio.
+         *
+         * Antes a API dizia “3 séries sem canal”, mas a pessoa ainda precisava
+         * clicar em cada chip com “+ série 1” para só então aparecer o seletor.
+         * Isso parecia um cadastro obrigatório ANTES do upload. A ordem real é o
+         * contrário: importa -> o XML revela a série -> escolhe o canal aqui.
+         */
+        const mapeadas = dados.series.map((s) => ({
+          serie: s.serie,
+          canal: s.canal,
+        }));
+        const existentes = new Set(mapeadas.map((s) => s.serie));
+        const descobertas = dados.naoMapeadas
+          .filter((s) => !existentes.has(s.serie))
+          .map((s) => ({ serie: s.serie, canal: "" }));
+        setRascunhoSeries([...mapeadas, ...descobertas]);
         setSeriesCarregadasPara(empresaId);
       })
       .catch((falha) => {
@@ -633,11 +832,13 @@ export default function FaturamentoXmlView() {
       // existe para evitar.
       if (importando) return;
       if (!podeImportar) {
-        setErro("Seu perfil pode consultar a apuração, mas não importar arquivos.");
+        setErroImportacao("Seu perfil pode consultar a apuração, mas não importar arquivos.");
         return;
       }
       if (!empresaId) {
-        setErro("Selecione a empresa antes de importar.");
+        setErroImportacao(
+          "Escolha a empresa antes de importar. O CNPJ selecionado é usado para validar o emitente de cada XML.",
+        );
         return;
       }
 
@@ -648,12 +849,12 @@ export default function FaturamentoXmlView() {
       const recusados = selecionados.filter((arquivo) => !aceitos.includes(arquivo));
 
       if (aceitos.length === 0) {
-        setErro("Selecione arquivos .xml ou .zip de nota fiscal.");
+        setErroImportacao("Selecione arquivos .xml ou .zip de nota fiscal.");
         return;
       }
 
       setImportando(true);
-      setErro("");
+      setErroImportacao("");
       setAvisoOk("");
       setResultado(null);
 
@@ -686,6 +887,7 @@ export default function FaturamentoXmlView() {
         comErro: recusados.length,
         naoProcessados: 0,
         situacao: "CONCLUIDA",
+        competenciasApuradas: [],
         relatorio: recusados.map((arquivo) => ({
           arquivo: arquivo.name,
           resultado: "ERRO",
@@ -708,6 +910,13 @@ export default function FaturamentoXmlView() {
         acumulado.eventosAplicados += parcial.eventosAplicados;
         acumulado.comErro += parcial.comErro;
         acumulado.naoProcessados += parcial.naoProcessados;
+        for (const competenciaTocada of parcial.competenciasApuradas ?? []) {
+          const chave = `${competenciaTocada.empresaId}|${competenciaTocada.ano}|${competenciaTocada.mes}`;
+          const jaExiste = acumulado.competenciasApuradas.some(
+            (item) => `${item.empresaId}|${item.ano}|${item.mes}` === chave,
+          );
+          if (!jaExiste) acumulado.competenciasApuradas.push(competenciaTocada);
+        }
         acumulado.relatorio.push(...parcial.relatorio);
       };
 
@@ -718,6 +927,9 @@ export default function FaturamentoXmlView() {
         const formulario = new FormData();
         formulario.append("empresaId", empresaId);
         formulario.append("sessaoId", sessaoId);
+        // O marcador viaja NO MESMO request do lote final. Se a resposta se
+        // perder depois de o servidor gravar, a sessão já está fechada; não
+        // depende de um segundo POST que a mesma queda de rede poderia perder.
         formulario.append("ultimoLote", ultimoLote ? "1" : "0");
         for (const arquivo of lote) {
           formulario.append("arquivos", arquivo);
@@ -734,10 +946,12 @@ export default function FaturamentoXmlView() {
         setProgresso({ feitos: enviados, total: totalDescoberto });
       };
 
-      const esvaziarFila = async (forcar = false) => {
-        // Retém um lote candidato até saber que existe outro arquivo. O corte usa
-        // quantidade E bytes: 300 XMLs de 1 MiB não podem virar multipart de
-        // 300 MiB contra o teto de 32 MiB do proxy.
+      const esvaziarFila = async (forcar = false, encerrar = false) => {
+        // Retém só o lote incompleto para preencher com os próximos XMLs. Antes
+        // de abrir um ZIP, `forcar=true` drena também esse resto SEM encerrar a
+        // sessão: se o ZIP for inválido, tudo que veio antes já está salvo. Só a
+        // chamada final usa `encerrar=true`, marcando o último lote de forma
+        // durável no servidor.
         while (fila.length > 0) {
           let quantidade = 0;
           let bytes = 0;
@@ -748,11 +962,9 @@ export default function FaturamentoXmlView() {
             quantidade += 1;
           }
 
-          // Tudo que está na fila cabe num lote; sem `forcar`, retém para que o
-          // próximo arquivo prove que este não era o último.
           if (!forcar && quantidade === fila.length) return;
 
-          const ultimoLote = forcar && quantidade === fila.length;
+          const ultimoLote = encerrar && quantidade === fila.length;
           const lote = fila.splice(0, quantidade);
           await enviarLote(lote, ultimoLote);
         }
@@ -774,6 +986,10 @@ export default function FaturamentoXmlView() {
             continue;
           }
 
+          // Drena XMLs soltos ANTES de abrir o ZIP. Se a descompactação recusar o
+          // ZIP (corrompido, bomb, limite), os arquivos bons anteriores já foram
+          // processados e aparecem no resultado parcial — não ficam reféns dele.
+          await esvaziarFila(true);
           setEtapaImportacao(`Abrindo ${origem.name}…`);
           const conteudoZip = new Uint8Array(await origem.arrayBuffer());
           const extraidos = await extrairXmlsDoZip(conteudoZip, origem.name);
@@ -801,25 +1017,34 @@ export default function FaturamentoXmlView() {
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
         }
 
-        await esvaziarFila(true);
+        // Em qualquer seleção bem-sucedida existe ao menos um arquivo retido:
+        // XML direto fica na fila; ZIP aceito sempre contém >= 1 XML (ZIP vazio é
+        // erro). Esse lote final leva `ultimoLote=1` e fecha a sessão junto da
+        // própria gravação.
+        await esvaziarFila(true, true);
         setResultado(acumulado);
         recarregar();
       } catch (falha) {
         const mensagem = mensagemDeErro(falha);
-        if (mensagem) setErro(mensagem);
-        // Se a falha aconteceu no navegador (ZIP inválido, aba ficou sem memória,
-        // rede caiu antes do último lote), encerra a sessão pai para não bloquear
-        // uma declaração por duas horas. Se o servidor já marcou FALHA, é no-op.
+        if (mensagem) setErroImportacao(mensagem);
+        // ABORTAR é um desfecho distinto de sucesso. Se a falha aconteceu no
+        // navegador (ZIP inválido, aba sem memória) ou no meio da rede, a sessão
+        // fica INTERROMPIDA; nunca CONCLUIDA só porque os lotes anteriores eram
+        // válidos. Se o último lote já terminou e só a resposta se perdeu, a
+        // sessão já está finalizada e este POST é no-op.
         await apiPost("/api/fiscal/xml/importar/finalizar", {
           empresaId,
           sessaoId,
+          desfecho: "ABORTAR",
         }).catch(() => {});
         // O que entrou nos lotes anteriores continua gravado. Recarrega para a
         // tela refletir a verdade em vez de parecer que nada aconteceu.
         if (
           acumulado.importados > 0 ||
           acumulado.duplicados > 0 ||
-          acumulado.ignorados > 0
+          acumulado.ignorados > 0 ||
+          acumulado.comErro > 0 ||
+          acumulado.naoProcessados > 0
         ) {
           setResultado(acumulado);
           recarregar();
@@ -911,11 +1136,25 @@ export default function FaturamentoXmlView() {
       return;
     }
 
-    if (rascunhoSeries.some((item) => !item.serie || !item.canal)) {
-      setErro("Preencha a série e escolha o canal em todas as linhas.");
+    const descobertas = new Set(
+      (series?.naoMapeadas ?? []).map((item) => item.serie),
+    );
+    const linhaManualIncompleta = rascunhoSeries.some(
+      (item) =>
+        !item.serie ||
+        (!item.canal && !descobertas.has(item.serie)),
+    );
+    if (linhaManualIncompleta) {
+      setErro(
+        "Preencha série e canal nas linhas adicionadas manualmente. Séries descobertas podem continuar sem canal e não bloqueiam as demais.",
+      );
       return;
     }
-    const chaves = rascunhoSeries.map((item) => item.serie);
+
+    // Série descoberta ainda sem escolha NÃO vai ao PUT e continua pendente. Isso
+    // permite salvar as que já sabemos sem inventar canal para as demais. O
+    // payload normalizado também permite persistir a remoção do último mapa.
+    const chaves = seriesParaSalvar.map((item) => item.serie);
     if (new Set(chaves).size !== chaves.length) {
       setErro("A mesma série não pode aparecer duas vezes.");
       return;
@@ -928,9 +1167,9 @@ export default function FaturamentoXmlView() {
     try {
       await apiPut("/api/fiscal/series", {
         empresaId,
-        series: rascunhoSeries,
+        series: seriesParaSalvar,
       });
-      setAvisoOk("Mapa de séries salvo. O canal das notas foi recalculado.");
+      setAvisoOk("Canais salvos. As notas já importadas foram reclassificadas sem precisar de novo upload.");
       recarregar();
     } catch (falha) {
       const mensagem = mensagemDeErro(falha);
@@ -938,9 +1177,48 @@ export default function FaturamentoXmlView() {
     } finally {
       setSalvandoSeries(false);
     }
-  }, [carregandoSeries, empresaId, rascunhoSeries, seriesCarregadasPara]);
+  }, [
+    carregandoSeries,
+    empresaId,
+    rascunhoSeries,
+    series,
+    seriesCarregadasPara,
+    seriesParaSalvar,
+  ]);
 
   /* ------------------------------ Derivados ---------------------------- */
+
+  const abrirCompetencia = useCallback(
+    (chave: string) => {
+      setCompetencia(chave);
+      setApuracaoId("");
+      atualizarUrl(empresaId, chave);
+      setResumo(null);
+      setResumoCarregadoPara("");
+      setLista(null);
+      setOrigem("xml");
+      setDeclarado("");
+      setObservacao("");
+      setMotivoRevisao("");
+      setAba("geral");
+    },
+    [atualizarUrl, empresaId],
+  );
+
+  const competenciasDoResultado = useMemo(
+    () =>
+      (resultado?.competenciasApuradas ?? [])
+        .map((item) => ({
+          chave: `${item.ano}-${String(item.mes).padStart(2, "0")}`,
+          texto: `${String(item.mes).padStart(2, "0")}/${item.ano}`,
+        }))
+        .filter(
+          (item, indice, todos) =>
+            todos.findIndex((outro) => outro.chave === item.chave) === indice,
+        )
+        .sort((a, b) => b.chave.localeCompare(a.chave)),
+    [resultado?.competenciasApuradas],
+  );
 
   const apurado = resumo?.kpis.apurado ?? 0;
   const congelada = Boolean(resumo?.faturamento?.congeladoEm);
@@ -980,7 +1258,7 @@ export default function FaturamentoXmlView() {
     () =>
       [
         { chave: "geral", texto: "Apuração do mês", contagem: lista?.pagination.total },
-        { chave: "canais", texto: "Séries e canais", contagem: series?.naoMapeadas.length || undefined },
+        { chave: "canais", texto: "Canais das séries", contagem: series?.naoMapeadas.length || undefined },
         { chave: "declaracao", texto: "Declaração de 12 meses" },
       ].map((item) =>
         ABAS_PENDENTES.has(item.chave) ? { ...item, texto: `${item.texto} · em breve` } : item,
@@ -1000,7 +1278,10 @@ export default function FaturamentoXmlView() {
     );
   }
 
-  if (primeiraCarga && (carregandoResumo || !empresaId)) {
+  if (
+    !empresasCarregadas ||
+    (primeiraCarga && Boolean(empresaId) && carregandoResumo)
+  ) {
     return (
       <div className="cz-tarefas mx-auto min-w-0 max-w-[1760px] space-y-4 p-4 sm:p-5">
         <Carregando texto="Carregando a apuração fiscal" variante="kpi" />
@@ -1021,9 +1302,10 @@ export default function FaturamentoXmlView() {
               variante="secundario"
               icone="Settings"
               tamanho="sm"
+              disabled={!empresaId}
               onClick={() => setAba("canais")}
             >
-              Séries e canais
+              Canais das séries
             </Botao>
             <Botao
               icone="UploadCloud"
@@ -1057,8 +1339,46 @@ export default function FaturamentoXmlView() {
         }}
       />
 
+      {apuracaoId && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-sky-200 bg-sky-50/70 px-4 py-3 text-[12.5px] text-sky-950">
+          <span className="flex items-start gap-2">
+            <Icone nome="Link2" className="mt-px h-4 w-4 shrink-0 text-sky-700" />
+            <span>
+              Você veio da apuração de <strong>{resumo?.competencia?.label ?? competencia}</strong>.
+              A empresa e o mês abaixo foram trazidos daquela tarefa para evitar importar no CNPJ errado.
+            </span>
+          </span>
+          <Link
+            href={`/admin/tarefas/apuracao/${encodeURIComponent(apuracaoId)}`}
+            className="shrink-0 font-bold text-sky-800 underline-offset-2 hover:underline"
+          >
+            Voltar para a apuração
+          </Link>
+        </div>
+      )}
+
       {erro && <Aviso mensagem={erro} onFechar={() => setErro("")} />}
+      {erroImportacao && (
+        <Aviso
+          tom="erro"
+          mensagem={erroImportacao}
+          onFechar={() => setErroImportacao("")}
+        />
+      )}
       {avisoOk && <Aviso mensagem={avisoOk} tom="ok" onFechar={() => setAvisoOk("")} />}
+
+      {!empresaId && empresas.filter((empresa) => empresa.cnpj).length > 1 && (
+        <Aviso
+          tom="atencao"
+          mensagem="Escolha a empresa antes de importar. Não selecionamos mais o primeiro CNPJ automaticamente: isso fazia pastas inteiras serem recusadas quando pertenciam a outra empresa da carteira."
+        />
+      )}
+      {empresasCarregadas && empresas.filter((empresa) => empresa.cnpj).length === 0 && (
+        <Aviso
+          tom="atencao"
+          mensagem="Nenhuma empresa com CNPJ está disponível. Cadastre o CNPJ da empresa antes de importar XML fiscal."
+        />
+      )}
 
       {/* ------------------- Contexto: empresa + competência ----------------- */}
 
@@ -1101,14 +1421,21 @@ export default function FaturamentoXmlView() {
             manual e para a declaração de 12 meses. */}
         <div className="grid shrink-0 gap-3 sm:grid-cols-[minmax(14rem,1fr)_10rem] lg:w-[31rem]">
           <Escolha
-            rotulo="Empresa"
+            rotulo="Empresa (CNPJ aceito no upload)"
+            vazio="Selecione a empresa"
             opcoes={empresas
               .filter((e) => e.cnpj)
-              .map((e) => ({ valor: e.id, texto: e.razaoSocial }))}
+              .map((e) => ({
+                valor: e.id,
+                texto: `${e.razaoSocial} · ${cnpjFormatado(e.cnpj)}`,
+              }))}
             value={empresaId}
+            disabled={importando}
             onChange={(e) => {
-              setEmpresaId(e.target.value);
-              setCompetencia("");
+              const proximaEmpresa = e.target.value;
+              setEmpresaId(proximaEmpresa);
+              setApuracaoId("");
+              atualizarUrl(proximaEmpresa, competencia);
               setResumo(null);
               setResumoCarregadoPara("");
               setLista(null);
@@ -1116,6 +1443,7 @@ export default function FaturamentoXmlView() {
               setSeriesCarregadasPara("");
               setRascunhoSeries([]);
               setResultado(null);
+              setErroImportacao("");
               setOrigem("xml");
               setDeclarado("");
               setObservacao("");
@@ -1123,11 +1451,15 @@ export default function FaturamentoXmlView() {
             }}
           />
           <Entrada
-            rotulo="Competência"
+            rotulo="Competência exibida"
             type="month"
             value={competencia}
+            disabled={importando}
             onChange={(e) => {
-              setCompetencia(e.target.value);
+              const proximaCompetencia = e.target.value;
+              setCompetencia(proximaCompetencia);
+              setApuracaoId("");
+              atualizarUrl(empresaId, proximaCompetencia);
               setResumo(null);
               setResumoCarregadoPara("");
               setLista(null);
@@ -1136,7 +1468,7 @@ export default function FaturamentoXmlView() {
               setObservacao("");
               setMotivoRevisao("");
             }}
-            ajuda="Aceita mês sem XML"
+            ajuda="O XML entra pelo mês da emissão; este campo só escolhe o mês mostrado"
           />
         </div>
       </div>
@@ -1164,7 +1496,7 @@ export default function FaturamentoXmlView() {
               {[
                 { rotulo: "Importados", valor: resultado.importados, tom: "text-emerald-700" },
                 { rotulo: "Já existiam", valor: resultado.duplicados, tom: "text-[var(--cz-texto-suave)]" },
-                { rotulo: "Ignorados", valor: resultado.ignorados, tom: "text-[var(--cz-texto-suave)]" },
+                { rotulo: "Fora do faturamento", valor: resultado.ignorados, tom: "text-[var(--cz-texto-suave)]" },
                 { rotulo: "Com erro", valor: resultado.comErro, tom: "text-red-700" },
                 { rotulo: "Não processados", valor: resultado.naoProcessados, tom: "text-sky-700" },
               ].map((item) => (
@@ -1181,6 +1513,68 @@ export default function FaturamentoXmlView() {
                 </div>
               ))}
             </div>
+
+            {/* O mês da tela NÃO decide onde o XML entra; `dhEmi` decide. Mostrar
+                as competências tocadas fecha o principal falso negativo: o XML
+                importava em julho enquanto agosto estava aberto e “sumia”. */}
+            {competenciasDoResultado.length > 0 && (
+              <div className="rounded-[10px] border border-sky-200 bg-sky-50/70 px-3 py-2.5">
+                <p className="text-[12.5px] font-bold text-sky-950">
+                  Competência(s) encontrada(s) dentro dos XMLs
+                </p>
+                <p className="mt-0.5 text-[11.5px] leading-snug text-sky-900">
+                  O sistema usa a data de emissão de cada nota. Clique em um mês
+                  para abrir exatamente onde os documentos foram apurados.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {competenciasDoResultado.map((item) => (
+                    <button
+                      key={item.chave}
+                      type="button"
+                      onClick={() => abrirCompetencia(item.chave)}
+                      className={`rounded-full border px-2.5 py-1 text-[12px] font-bold transition-colors ${
+                        item.chave === competencia
+                          ? "border-sky-700 bg-sky-700 text-white"
+                          : "border-sky-300 bg-white text-sky-900 hover:bg-sky-100"
+                      }`}
+                    >
+                      {item.texto}
+                      {item.chave === competencia ? " · aberto" : " · abrir"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {resultado.relatorio.some((linha) => linha.code === "EMPRESA_DIFERENTE") && (
+              <div className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] leading-snug text-red-900">
+                <p className="font-bold">Há XMLs de outro CNPJ nesta seleção.</p>
+                <p className="mt-0.5">
+                  Empresa escolhida: <strong>{empresaAtual?.razaoSocial ?? "—"}</strong>
+                  {empresaAtual?.cnpj ? ` · ${cnpjFormatado(empresaAtual.cnpj)}` : ""}.
+                  Troque a empresa acima e reenvie somente os arquivos rejeitados;
+                  os que já entraram não serão duplicados.
+                </p>
+              </div>
+            )}
+
+            {series && series.naoMapeadas.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-[12px] text-amber-950">
+                <span>
+                  <strong>{series.naoMapeadas.length} série(s)</strong> foram
+                  encontradas sem canal. As notas já estão importadas e já somam;
+                  falta apenas classificar o marketplace.
+                </span>
+                <Botao
+                  variante="secundario"
+                  icone="ArrowRight"
+                  tamanho="sm"
+                  onClick={() => setAba("canais")}
+                >
+                  Atribuir canais agora
+                </Botao>
+              </div>
+            )}
 
             {/* Só o que NÃO foi importado sem ressalva. Listar 366 linhas de
                 sucesso enterraria as 5 que precisam de atenção. */}
@@ -1294,8 +1688,8 @@ export default function FaturamentoXmlView() {
 
       {aba === "canais" && (
         <Painel
-          titulo="Canal e série"
-          descricao="A NF-e não tem campo de marketplace. O canal vem deste mapa, declarado aqui."
+          titulo="Canais das séries encontradas"
+          descricao="Importe primeiro. Depois diga qual marketplace usa cada série; isso nunca bloqueia nem altera o valor do faturamento."
           acoes={
             <Botao
               icone="Save"
@@ -1305,47 +1699,97 @@ export default function FaturamentoXmlView() {
                 !podeDefinirFaturamento ||
                 carregandoSeries ||
                 seriesCarregadasPara !== empresaId ||
-                rascunhoSeries.some((item) => !item.serie || !item.canal)
+                !seriesAlteradas
               }
               onClick={() => void salvarSeries()}
             >
-              Salvar mapa
+              Salvar canais escolhidos
             </Botao>
           }
         >
           <div className="min-w-0 space-y-4 p-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              {[
+                {
+                  numero: "1",
+                  titulo: "Importe os XMLs",
+                  texto: "Não precisa cadastrar série antes.",
+                  pronto: (resumo?.kpis.arquivosLidos ?? 0) > 0,
+                },
+                {
+                  numero: "2",
+                  titulo: "O sistema descobre as séries",
+                  texto: "A série vem de dentro de cada NF-e/NFC-e.",
+                  pronto: Boolean(series && (series.series.length > 0 || series.naoMapeadas.length > 0)),
+                },
+                {
+                  numero: "3",
+                  titulo: "Escolha o canal",
+                  texto: "Só organiza o resumo por marketplace; as notas já somam.",
+                  pronto: Boolean(series && series.naoMapeadas.length === 0 && series.series.length > 0),
+                },
+              ].map((passo) => (
+                <div
+                  key={passo.numero}
+                  className={`rounded-[12px] border px-3.5 py-3 ${
+                    passo.pronto
+                      ? "border-emerald-200 bg-emerald-50/60"
+                      : "border-[var(--cz-hairline)] bg-[#FCFCFD]"
+                  }`}
+                >
+                  <p className="flex items-center gap-2 text-[12.5px] font-bold text-[var(--cz-texto)]">
+                    <span
+                      className={`grid h-5 w-5 place-items-center rounded-full text-[10px] ${
+                        passo.pronto
+                          ? "bg-emerald-600 text-white"
+                          : "bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {passo.pronto ? "✓" : passo.numero}
+                    </span>
+                    {passo.titulo}
+                  </p>
+                  <p className="mt-1 text-[11.5px] leading-snug text-[var(--cz-texto-suave)]">
+                    {passo.texto}
+                  </p>
+                </div>
+              ))}
+            </div>
+
             {erroSeries && <Aviso mensagem={erroSeries} onFechar={() => setErroSeries("")} />}
-            {carregandoSeries && <Carregando texto="Carregando o mapa de séries" />}
+            {carregandoSeries && <Carregando texto="Lendo as séries encontradas nos XMLs" />}
+
+            {!podeDefinirFaturamento && (
+              <Aviso
+                tom="info"
+                mensagem={
+                  podeImportar
+                    ? "Seu perfil pode importar XMLs normalmente. A atribuição de canal deve ser feita por administrador ou contabilidade; ela não bloqueia a importação nem o faturamento."
+                    : "Seu perfil pode apenas consultar os XMLs e o mapa de canais. A importação e a atribuição de canal devem ser feitas por administrador ou contabilidade."
+                }
+              />
+            )}
+
             {series && series.naoMapeadas.length > 0 && (
               <div className="rounded-[12px] border border-amber-200 bg-amber-50/70 px-4 py-3">
                 <p className="text-[12.5px] font-bold text-amber-900">
-                  {series.naoMapeadas.length} série(s) sem canal
+                  {series.naoMapeadas.length} série(s) encontrada(s), aguardando canal
                 </p>
                 <p className="mt-0.5 text-[12px] leading-snug text-amber-900">
-                  Estas séries aparecem nas notas e ninguém declarou o canal. Elas
-                  somam no faturamento normalmente, mas ficam fora do resumo por
-                  canal.
+                  Elas já aparecem nas linhas abaixo: basta escolher o canal. As
+                  notas já foram importadas, já somam no faturamento e não precisam
+                  ser reenviadas.
                 </p>
                 <ul className="mt-2 flex flex-wrap gap-2">
                   {series.naoMapeadas.map((item) => (
-                    <li key={item.serie}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setRascunhoSeries((atual) =>
-                            atual.some((s) => s.serie === item.serie)
-                              ? atual
-                              : [...atual, { serie: item.serie, canal: "" }],
-                          )
-                        }
-                        className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[12px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
-                      >
-                        <Icone nome="Plus" className="h-3 w-3" />
-                        série {item.serie}
-                        <span className="cz-num font-normal text-amber-700">
-                          ({inteiro(item.notas)} notas)
-                        </span>
-                      </button>
+                    <li
+                      key={item.serie}
+                      className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[12px] font-semibold text-amber-900"
+                    >
+                      série {item.serie}{" "}
+                      <span className="cz-num font-normal text-amber-700">
+                        · {inteiro(item.notas)} nota(s)
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -1354,64 +1798,115 @@ export default function FaturamentoXmlView() {
 
             {rascunhoSeries.length === 0 ? (
               <Vazio
-                icone="Settings"
-                titulo="Nenhuma série mapeada"
-                descricao="Sem o mapa, todas as notas aparecem como “sem série mapeada”. Não afeta o total do faturamento."
+                icone="UploadCloud"
+                titulo="Nenhuma série encontrada ainda"
+                descricao="Comece importando os XMLs. O sistema lê a série de cada nota e monta esta lista automaticamente; cadastro antecipado é opcional."
+                acao={
+                  podeImportar && empresaId ? (
+                    <Botao
+                      variante="secundario"
+                      icone="UploadCloud"
+                      tamanho="sm"
+                      onClick={() => inputArquivos.current?.click()}
+                    >
+                      Importar XMLs agora
+                    </Botao>
+                  ) : undefined
+                }
               />
             ) : (
               <ul className="space-y-2">
-                {rascunhoSeries.map((item, indice) => (
-                  <li
-                    key={`${item.serie}-${indice}`}
-                    className="grid min-w-0 items-end gap-3 rounded-[12px] border border-[var(--cz-hairline)] bg-[#FCFCFD] p-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto]"
-                  >
-                    <Entrada
-                      rotulo="Série"
-                      inputMode="numeric"
-                      maxLength={3}
-                      value={item.serie}
-                      onChange={(e) =>
-                        setRascunhoSeries((atual) =>
-                          atual.map((s, i) =>
-                            i === indice ? { ...s, serie: e.target.value.replace(/\D/g, "") } : s,
-                          ),
-                        )
-                      }
-                      className="cz-num"
-                    />
-                    <Escolha
-                      rotulo="Canal"
-                      vazio="Selecione o canal"
-                      opcoes={series?.canaisDisponiveis ?? []}
-                      value={item.canal}
-                      onChange={(e) =>
-                        setRascunhoSeries((atual) =>
-                          atual.map((s, i) => (i === indice ? { ...s, canal: e.target.value } : s)),
-                        )
-                      }
-                    />
-                    <Botao
-                      variante="fantasma"
-                      icone="Trash2"
-                      className="mb-px"
-                      aria-label={`Remover a série ${item.serie}`}
-                      onClick={() =>
-                        setRascunhoSeries((atual) => atual.filter((_, i) => i !== indice))
-                      }
-                    />
-                  </li>
-                ))}
+                {rascunhoSeries.map((item, indice) => {
+                  const encontrada = Boolean(
+                    series?.naoMapeadas.some((serie) => serie.serie === item.serie),
+                  );
+                  const notas = series?.naoMapeadas.find(
+                    (serie) => serie.serie === item.serie,
+                  )?.notas;
+
+                  return (
+                    <li
+                      key={`${item.serie}-${indice}`}
+                      className={`grid min-w-0 items-end gap-3 rounded-[12px] border p-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto] ${
+                        encontrada
+                          ? "border-amber-200 bg-amber-50/40"
+                          : "border-[var(--cz-hairline)] bg-[#FCFCFD]"
+                      }`}
+                    >
+                      <Entrada
+                        rotulo={encontrada ? "Série encontrada" : "Série"}
+                        inputMode="numeric"
+                        maxLength={3}
+                        value={item.serie}
+                        disabled={!podeDefinirFaturamento || encontrada}
+                        ajuda={notas !== undefined ? `${inteiro(notas)} nota(s) já importada(s)` : undefined}
+                        onChange={(e) =>
+                          setRascunhoSeries((atual) =>
+                            atual.map((s, i) =>
+                              i === indice
+                                ? { ...s, serie: e.target.value.replace(/\D/g, "") }
+                                : s,
+                            ),
+                          )
+                        }
+                        className="cz-num"
+                      />
+                      <Escolha
+                        rotulo="Canal de venda"
+                        vazio="Escolha o marketplace"
+                        opcoes={series?.canaisDisponiveis ?? []}
+                        value={item.canal}
+                        disabled={!podeDefinirFaturamento}
+                        onChange={(e) =>
+                          setRascunhoSeries((atual) =>
+                            atual.map((s, i) =>
+                              i === indice ? { ...s, canal: e.target.value } : s,
+                            ),
+                          )
+                        }
+                      />
+                      {encontrada ? (
+                        <span
+                          className="mb-2 text-[11px] font-semibold text-amber-800"
+                          title="Esta série veio dos XMLs e continuará aparecendo até receber um canal."
+                        >
+                          veio do XML
+                        </span>
+                      ) : (
+                        <Botao
+                          variante="fantasma"
+                          icone="Trash2"
+                          className="mb-px"
+                          disabled={!podeDefinirFaturamento}
+                          aria-label={`Remover a série ${item.serie}`}
+                          onClick={() =>
+                            setRascunhoSeries((atual) =>
+                              atual.filter((_, i) => i !== indice),
+                            )
+                          }
+                        />
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
-            <Botao
-              variante="secundario"
-              icone="Plus"
-              tamanho="sm"
-              onClick={() => setRascunhoSeries((atual) => [...atual, { serie: "", canal: "" }])}
-            >
-              Adicionar série
-            </Botao>
+            {podeDefinirFaturamento && (
+              <Botao
+                variante="fantasma"
+                icone="Plus"
+                tamanho="sm"
+                onClick={() =>
+                  setRascunhoSeries((atual) => [
+                    ...atual,
+                    { serie: "", canal: "" },
+                  ])
+                }
+              >
+                Cadastrar série antecipadamente (opcional)
+              </Botao>
+            )}
           </div>
         </Painel>
       )}
@@ -1422,16 +1917,7 @@ export default function FaturamentoXmlView() {
         <DeclaracaoFaturamentoPanel
           empresaId={empresaId}
           competenciaReferencia={competencia}
-          onAbrirMes={(mes) => {
-            setCompetencia(mes);
-            setResumo(null);
-            setResumoCarregadoPara("");
-            setLista(null);
-            setOrigem("xml");
-            setDeclarado("");
-            setObservacao("");
-            setAba("geral");
-          }}
+          onAbrirMes={abrirCompetencia}
         />
       )}
 
@@ -1446,26 +1932,50 @@ export default function FaturamentoXmlView() {
             {aba === "geral" && (
               <div className="grid min-w-0 gap-4 lg:grid-cols-2">
                 {/* ------------------------ Importar ------------------------- */}
-                <Painel titulo="Importar XMLs ou ZIPs" descricao="NF-e e NFC-e, soltos ou compactados" denso>
+                <Painel titulo="Importar XMLs ou ZIPs" descricao="Primeiro importe; o canal das séries é definido depois" denso>
                   <div className="min-w-0 space-y-3 p-4">
+                    <div className="rounded-[10px] border border-sky-200 bg-sky-50/70 px-3 py-2.5 text-[12px] leading-snug text-sky-950">
+                      {empresaAtual ? (
+                        <>
+                          Os arquivos precisam ter sido <strong>emitidos por {empresaAtual.razaoSocial}</strong>
+                          {empresaAtual.cnpj ? ` (${cnpjFormatado(empresaAtual.cnpj)})` : ""}.
+                          A série será descoberta automaticamente; <strong>não cadastre canal antes do upload</strong>.
+                        </>
+                      ) : (
+                        <>
+                          <strong>Escolha a empresa acima.</strong> Ela define qual CNPJ emitente será aceito nos XMLs.
+                          Série e canal não são pré-requisitos.
+                        </>
+                      )}
+                    </div>
+
                     <div
                       onDragOver={(e) => {
                         e.preventDefault();
+                        if (!empresaId || !podeImportar || importando) return;
                         setArrastando(true);
                       }}
                       onDragLeave={() => setArrastando(false)}
                       onDrop={(e) => {
                         e.preventDefault();
                         setArrastando(false);
+                        if (!empresaId) {
+                          setErroImportacao("Escolha a empresa antes de soltar os arquivos.");
+                          return;
+                        }
+                        if (!podeImportar || importando) return;
                         // `dataTransfer.files` é o que a versão anterior descartava:
                         // soltava arquivo, a borda voltava ao normal e nada acontecia.
                         const arquivos = Array.from(e.dataTransfer.files ?? []);
                         if (arquivos.length > 0) void importar(arquivos);
                       }}
+                      aria-disabled={!empresaId || !podeImportar || importando}
                       className={`flex flex-col items-center justify-center rounded-[12px] border border-dashed px-4 py-6 text-center transition-colors ${
-                        arrastando
-                          ? "border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)]"
-                          : "border-[var(--cz-hairline-forte)] bg-[#FCFCFD]"
+                        !empresaId || !podeImportar
+                          ? "cursor-not-allowed border-[var(--cz-hairline)] bg-gray-50 opacity-60"
+                          : arrastando
+                            ? "border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)]"
+                            : "border-[var(--cz-hairline-forte)] bg-[#FCFCFD]"
                       }`}
                     >
                       <span
@@ -1477,7 +1987,9 @@ export default function FaturamentoXmlView() {
                       <p className="text-[13.5px] font-bold text-[var(--cz-texto)]">
                         {importando
                           ? etapaImportacao || `Importando ${progresso.feitos} de ${progresso.total}…`
-                          : "Arraste XMLs ou ZIPs aqui"}
+                          : !empresaId
+                            ? "Escolha a empresa para liberar o upload"
+                            : "Arraste XMLs ou ZIPs aqui"}
                       </p>
                       <p className="mt-1 max-w-[19rem] text-[12px] leading-relaxed text-[var(--cz-texto-suave)]">
                         XMLs soltos ou ZIPs inteiros. Cada ZIP é aberto no seu
@@ -1490,6 +2002,7 @@ export default function FaturamentoXmlView() {
                           icone="FolderOpen"
                           tamanho="sm"
                           carregando={importando}
+                          disabled={!empresaId || !podeImportar || importando}
                           onClick={() => inputArquivos.current?.click()}
                         >
                           Selecionar arquivos
@@ -1501,7 +2014,8 @@ export default function FaturamentoXmlView() {
                       {[
                         "Lê chave, série, número, emissão, CFOP e valor",
                         "Confere as tags contra a chave de acesso e recusa XML alterado",
-                        "Casa o CNPJ do emitente com a carteira",
+                        "Casa o CNPJ do emitente com a empresa selecionada acima",
+                        "Descobre as séries automaticamente; você atribui os canais depois",
                         "Aplica o cancelamento, que vem em arquivo separado",
                       ].map((texto) => (
                         <li

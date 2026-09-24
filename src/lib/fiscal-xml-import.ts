@@ -69,6 +69,16 @@ export type ArquivoParaImportar = {
   bytes: Buffer;
   /** ZIP!caminho interno, ou o nome do XML solto; usado só na auditoria. */
   origem?: string;
+  /**
+   * Falha encontrada pela rota antes do parser.
+   *
+   * Ela viaja junto do arquivo em vez de a rota devolver HTTP 4xx para o lote
+   * inteiro. Assim um XML vazio/grande/com extensão errada vira UMA linha de
+   * relatório e os outros 299 arquivos continuam. Limites agregados (32 MiB e
+   * quantidade máxima) continuam sendo falhas da requisição inteira, pois são
+   * proteção de memória — não defeito de um documento isolado.
+   */
+  erroPrevalidacao?: { code: string; motivo: string };
 };
 
 export type ResultadoArquivo =
@@ -352,9 +362,13 @@ async function finalizarLoteImportacao(
       ? "FALHA"
       : !terminou
         ? "PROCESSANDO"
-        : naoProcessados > 0
+        : atual.encerrarQuandoOciosa || naoProcessados > 0
+          // `encerrarQuandoOciosa` só é ligado pelo endpoint de ABORTAR. Ele pode
+          // chegar enquanto um lote ainda grava; o lote que termina depois deve
+          // produzir o MESMO desfecho de quando o abortamento chegou sem lote
+          // ativo. Antes dependia da corrida e alternava entre PARCIAL/CONCLUIDA.
           ? "INTERROMPIDA"
-          : comErro > 0 || atual.encerrarQuandoOciosa
+          : comErro > 0
             ? "PARCIAL"
             : "CONCLUIDA";
 
@@ -398,6 +412,13 @@ export async function encerrarSessaoImportacao(input: {
   sessaoId: string;
   empresaId: string;
   usuarioId: string;
+  /**
+   * Este comando existe só para ABORTAMENTO (ZIP inválido, rede interrompida,
+   * aba fechando). O sucesso fecha de forma durável no próprio último lote.
+   * Exigir o literal impede uma chamada sem intenção de registrar sucesso por
+   * engano, que era exatamente a ambiguidade anterior.
+   */
+  desfecho: "ABORTAR";
 }): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`importacao:${input.sessaoId}`}))`;
@@ -424,7 +445,11 @@ export async function encerrarSessaoImportacao(input: {
     await tx.importacaoXml.update({
       where: { id: atual.id },
       data: {
-        situacao: atual.comErro > 0 ? "FALHA" : "PARCIAL",
+        // Sem lote ativo, o abortamento termina agora. É INTERROMPIDA mesmo que
+        // os lotes anteriores não tenham erro: a seleção não chegou ao fim (por
+        // exemplo, um ZIP posterior era inválido). Chamar isso de CONCLUIDA
+        // apagava da auditoria justamente o arquivo que interrompeu a rodada.
+        situacao: "INTERROMPIDA",
         encerrarQuandoOciosa: false,
         finalizadoEm: new Date(),
       },
@@ -455,6 +480,21 @@ export async function importarXmlFiscal(
 
     // Passada 1: leitura pura e separação. Erro de um arquivo não derruba os outros.
     for (const arquivo of processar) {
+      // Extensão, tamanho individual e arquivo vazio são detectados na rota,
+      // antes de alocar o Buffer. Até então a rota respondia 4xx e descartava o
+      // multipart INTEIRO; aqui eles viram exatamente o que são: erro deste
+      // arquivo. O registro pai recebe a linha e as contagens normalmente.
+      if (arquivo.erroPrevalidacao) {
+        relatorio.push({
+          arquivo: rotuloArquivo(arquivo),
+          resultado: "ERRO",
+          chave: null,
+          motivo: arquivo.erroPrevalidacao.motivo,
+          code: arquivo.erroPrevalidacao.code,
+        });
+        continue;
+      }
+
       try {
         const conteudo = lerXmlFiscal(arquivo.bytes, arquivo.nome);
         if (conteudo.tipo === "EVENTO") {
