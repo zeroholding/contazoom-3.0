@@ -40,6 +40,7 @@ import {
   type TomSelo,
 } from "../comum/shell";
 import { brl, dataCurta, horaCurta, inteiro, type Linha } from "./tipos";
+import { LogoCanal } from "../comum/logos";
 
 /* -------------------------------------------------------------------------- */
 /*                  Moldura e peças genéricas: vêm do shell                   */
@@ -114,13 +115,28 @@ export function AvisoBackfill({ pendentes }: { pendentes: number }) {
   );
 }
 
-export function RodapeFonte() {
+export function RodapeFonte({
+  contexto = "ML",
+}: {
+  contexto?: "ML" | "todos" | "sem-ml";
+}) {
+  if (contexto === "sem-ml") return null;
   return (
     <p className="mt-4 max-w-4xl text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
-      Estoque, preço e situação são lidos no Mercado Livre a cada carregamento — não
-      ficam guardados no banco, porque mudam a cada venda. Estoque em branco significa
-      que a API não respondeu para aquele anúncio, e não que ele está zerado. A lista
-      só inclui anúncios que já venderam ao menos uma vez.
+      {contexto === "todos" ? (
+        <>
+          Estoque, preço e situação atuais têm cobertura somente nas linhas do
+          Mercado Livre; Shopee e TikTok Shop exibem apenas o histórico sincronizado.
+          A lista só inclui produtos que já venderam ao menos uma vez.
+        </>
+      ) : (
+        <>
+          Estoque, preço e situação são lidos no Mercado Livre a cada carregamento —
+          não ficam guardados no banco, porque mudam a cada venda. Estoque em branco
+          significa que a API não respondeu, e não que ele está zerado. A lista só
+          inclui anúncios que já venderam ao menos uma vez.
+        </>
+      )}
     </p>
   );
 }
@@ -133,18 +149,22 @@ export function RodapeFonte() {
  * número — e ninguém rola até o rodapé antes de olhar a coluna. O rodapé continua
  * existindo com o detalhe técnico; aqui vai a frase curta que muda a leitura.
  */
-export function AvisoDoisTempos() {
+export function AvisoDoisTempos({
+  contexto = "ML",
+}: {
+  contexto?: "ML" | "todos" | "sem-ml";
+}) {
+  if (contexto === "sem-ml") return null;
+  const atual =
+    contexto === "todos"
+      ? "Nas linhas Mercado Livre, situação, estoque e preço: agora"
+      : "Situação, estoque e preço: agora no Mercado Livre";
   return (
-    // Legenda, com a cara de legenda: duas pastilhas com fio, não três frases de
-    // 11,5px encostadas numa faixa cinza. A terceira frase virou a segunda linha,
-    // em tinta suave — ela qualifica a primeira pastilha e não é um terceiro item
-    // da mesma lista, que era como se lia quando as três dividiam a linha.
     <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[12px] font-semibold leading-none text-emerald-800">
           <span className="size-1.5 rounded-full bg-emerald-500" />
-          Situação, estoque e preço: <span className="font-bold">agora</span> no
-          Mercado Livre
+          {atual}
         </span>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1 text-[12px] font-semibold leading-none text-[var(--cz-texto-suave)]">
           <span className="size-1.5 rounded-full bg-[var(--cz-texto-fraco)]" />
@@ -153,8 +173,8 @@ export function AvisoDoisTempos() {
         </span>
       </div>
       <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
-        O preço exibido é o da etiqueta hoje, não o preço praticado nas vendas
-        listadas.
+        Quando disponível, o preço exibido é o da etiqueta hoje, não o preço
+        praticado nas vendas listadas.
       </p>
     </div>
   );
@@ -207,7 +227,11 @@ export function CelulaAnuncio({ l, posicao }: { l: Linha; posicao?: number }) {
             {l.titulo}
           </span>
           <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-            <span className="rounded bg-[var(--cz-fundo)] px-1.5 py-0.5 font-mono text-[var(--cz-texto-suave)]">
+            <span
+              className="inline-flex items-center gap-1.5 rounded bg-[var(--cz-fundo)] px-1.5 py-0.5 font-mono text-[var(--cz-texto-suave)]"
+              title={l.canal === "ML" ? "Mercado Livre" : l.canal === "SP" ? "Shopee" : "TikTok Shop"}
+            >
+              <LogoCanal canal={l.canal} />
               {l.itemId}
             </span>
             {/* A conta era uma pastilha VERDE. Nome de conta é identidade, não
@@ -257,6 +281,7 @@ export function LinkAbrir({ l }: { l: Linha }) {
   if (!l.permalink) {
     return <span className="text-[var(--cz-texto-fraco)]">—</span>;
   }
+  const canal = l.canal === "ML" ? "Mercado Livre" : l.canal === "SP" ? "Shopee" : "TikTok Shop";
   return (
     // Abrir no ML é uma AÇÃO, então o realce de hover é laranja. Era verde, que
     // nesta tela já significa "estoque saudável" e "pódio".
@@ -264,7 +289,7 @@ export function LinkAbrir({ l }: { l: Linha }) {
       href={l.permalink}
       target="_blank"
       rel="noreferrer"
-      title={`Abrir ${l.titulo} no Mercado Livre`}
+      title={`Abrir ${l.titulo} na ${canal}`}
       className="inline-grid size-9 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
     >
       <svg
@@ -363,6 +388,16 @@ export function CelulaAgora({
   /** Espaço para algo específico da tela, como a cobertura de estoque. */
   extra?: ReactNode;
 }) {
+  if (l.canal !== "ML") {
+    return (
+      <td className="px-3 py-3.5">
+        <p className="text-[12px] leading-relaxed text-[var(--cz-texto-suave)]">
+          Estoque, status e preço atuais não disponíveis para este canal.
+        </p>
+        {extra}
+      </td>
+    );
+  }
   return (
     <td className="px-3 py-3.5">
       <div className="flex flex-col items-start gap-1.5">

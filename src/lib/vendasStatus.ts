@@ -14,15 +14,16 @@
 // (que é o padrão da tela) esconderia justamente os pedidos que dão trabalho.
 
 /** Estados ATIVOS da Shopee: o pedido vale como venda. */
-const SHOPEE_PAGO = [
+export const SHOPEE_PAGO: readonly string[] = [
   "ready_to_ship",
   "processed",
+  "retry_ship",
   "shipped",
   "to_confirm_receive",
   "completed",
 ];
 
-const SHOPEE_CANCELADO = ["cancelled", "in_cancel"];
+export const SHOPEE_CANCELADO: readonly string[] = ["cancelled", "in_cancel"];
 
 /**
  * Estados do TikTok Shop em que o pedido vale como venda.
@@ -32,7 +33,7 @@ const SHOPEE_CANCELADO = ["cancelled", "in_cancel"];
  * `UNPAID` fica fora de propósito (pedido criado e não pago não é venda), e
  * `CANCELLED` entra na lista de cancelados.
  */
-const TIKTOK_PAGO = [
+export const TIKTOK_PAGO: readonly string[] = [
   "awaiting_shipment",
   "awaiting_collection",
   "partially_shipping",
@@ -41,7 +42,7 @@ const TIKTOK_PAGO = [
   "completed",
 ];
 
-const TIKTOK_CANCELADO = ["cancelled"];
+export const TIKTOK_CANCELADO: readonly string[] = ["cancelled"];
 
 /**
  * Qual canal estamos lendo.

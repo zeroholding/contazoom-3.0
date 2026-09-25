@@ -28,9 +28,6 @@ import {
   AvisoDoisTempos,
   BotaoAtualizar,
   Cabecalho,
-  CabecalhoTabela,
-  CelulaAgora,
-  CelulaAnuncio,
   Campo,
   Esqueleto,
   Kpi,
@@ -40,14 +37,15 @@ import {
   Paginacao,
   PainelFiltros,
   RodapeFonte,
-  Th,
-  ThGrupo,
+  SeloEnvio,
+  SeloStatus,
   UltimaVenda,
 } from "./anuncios/comum";
 import {
   CampoBusca,
   Faixa,
   GrupoRecorte,
+  Miniatura,
   Selo,
   type OpcaoRecorte,
 } from "./comum/shell";
@@ -62,7 +60,6 @@ import {
   IconeRelogio,
 } from "./comum/icones";
 import {
-  ALTURA_CAMPO,
   brl,
   ENTRADA,
   inteiro,
@@ -93,6 +90,11 @@ const RECORTES: ReadonlyArray<OpcaoRecorte<string>> = [
   },
 ];
 
+const MODULO_CRITERIO =
+  "rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3 shadow-sm";
+const MODULO_CARD =
+  "rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] p-3";
+
 export default function AnunciosMortos() {
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
@@ -102,7 +104,9 @@ export default function AnunciosMortos() {
   const [diasSemVenda, setDiasSemVenda] = useState(30);
   const [minUnidades, setMinUnidades] = useState(10);
   const [minFaturamento, setMinFaturamento] = useState(1000);
-  const [relevancia, setRelevancia] = useState<"ou" | "e">("ou");
+  // E é o padrão para que aumentar qualquer mínimo corte a lista de verdade;
+  // OU continua disponível como alternativa explícita para ampliar o recorte.
+  const [relevancia, setRelevancia] = useState<"ou" | "e">("e");
   const [ordem, setOrdem] = useState("faturamento_desc");
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(20);
@@ -155,11 +159,15 @@ export default function AnunciosMortos() {
 
       <AvisoBackfill pendentes={dados?.backfillPendente ?? 0} />
 
+      {dados?.truncado && (
+        <Faixa tom="alerta" icone={<IconeAlerta className="h-4 w-4" />}>
+          <strong>Atenção:</strong> o ranking atingiu 10.000 anúncios em ao menos um
+          canal. Estreite período, conta ou busca; os totais não são completos.
+        </Faixa>
+      )}
+
       {/* Recorte por motivo. É o eixo da tela, então fica acima dos filtros e
-          não escondido dentro deles. Agora pelo `GrupoRecorte` do kit, que
-          também trocou o verde da pastilha ativa pelo laranja da marca: nesta
-          mesma tela o verde é o faturamento, e "selecionado" em verde fazia
-          parecer que o recorte escolhido era o recorte bom. */}
+          não escondido dentro deles. */}
       <GrupoRecorte opcoes={RECORTES} valor={estoque} onMudar={trocarRecorte} />
 
       <PainelFiltros nota={<NotaFiltroCaro visivel={Boolean(status || estoque)} />}>
@@ -189,19 +197,6 @@ export default function AnunciosMortos() {
           </select>
         </Campo>
 
-        <Campo rotulo="Parado há (dias, mín.)" className="lg:col-span-2">
-          <input
-            type="number"
-            min={1}
-            value={diasSemVenda}
-            onChange={(e) => {
-              setDiasSemVenda(Math.max(1, Number(e.target.value) || 1));
-              setPagina(1);
-            }}
-            className={ENTRADA}
-          />
-        </Campo>
-
         <Campo rotulo="Ordenar por" className="lg:col-span-3">
           <select
             value={ordem}
@@ -219,101 +214,7 @@ export default function AnunciosMortos() {
           </select>
         </Campo>
 
-        {/*
-          OS MÍNIMOS DE RELEVÂNCIA, COM O OPERADOR NO MEIO.
-
-          Os dois campos e o "OU/E" ficam dentro de UM bloco, lado a lado, porque
-          o efeito de cada um depende do outro. Antes eram dois `Campo` separados —
-          um rotulado "Vendia ao menos" e o outro "Ou faturou ao menos" — e a
-          palavra "ou" perdida no início de um rótulo não bastava: com o mínimo de
-          unidades em 10, subir o de faturamento não removia nenhuma linha, e o
-          campo parecia morto. Agora a relação é a primeira coisa que se lê.
-        */}
-        <div className="lg:col-span-6">
-          <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
-            Relevância — o que conta como &ldquo;vendia bem&rdquo;
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex min-w-[7.5rem] flex-1 items-center gap-1.5">
-              <input
-                type="number"
-                min={0}
-                value={minUnidades}
-                onChange={(e) => {
-                  setMinUnidades(Math.max(0, Number(e.target.value) || 0));
-                  setPagina(1);
-                }}
-                className={ENTRADA}
-                aria-label="Mínimo de unidades vendidas"
-              />
-              <span className="shrink-0 text-[12.5px] font-semibold text-[var(--cz-texto-suave)]">
-                un.
-              </span>
-            </label>
-
-            {/* O operador é um SELECT e não um texto fixo: era o "ou" implícito
-                que fazia os dois campos parecerem independentes. Como controle,
-                ele também dá a saída que faltava — em "e", cada mínimo passa a
-                cortar de verdade. */}
-            <select
-              value={relevancia}
-              onChange={(e) => {
-                setRelevancia(e.target.value as "ou" | "e");
-                setPagina(1);
-              }}
-              // `ALTURA_CAMPO` e não `h-11` escrito à mão: este é o único campo
-              // desenhado fora do `ENTRADA` nesta tela, e era ele que estava em
-              // `h-10` no meio de dois inputs de 44px — 4px de degrau no centro do
-              // painel de filtros.
-              className={`${ALTURA_CAMPO} shrink-0 rounded-[var(--cz-raio)] border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-2.5 text-[13px] font-bold uppercase text-[var(--cz-laranja-forte)] outline-none transition-colors focus:border-[var(--cz-laranja)]`}
-              aria-label="Como os dois mínimos se combinam"
-            >
-              <option value="ou">ou</option>
-              <option value="e">e</option>
-            </select>
-
-            <label className="flex min-w-[8.5rem] flex-1 items-center gap-1.5">
-              <span className="shrink-0 text-[12.5px] font-semibold text-[var(--cz-texto-suave)]">
-                R$
-              </span>
-              <input
-                type="number"
-                min={0}
-                value={minFaturamento}
-                onChange={(e) => {
-                  setMinFaturamento(Math.max(0, Number(e.target.value) || 0));
-                  setPagina(1);
-                }}
-                className={ENTRADA}
-                aria-label="Mínimo de faturamento"
-              />
-            </label>
-          </div>
-
-          {/* A frase muda com o operador. É o que fecha o problema: em vez de a
-              pessoa descobrir na tentativa que um campo não corta, a tela diz o
-              que o recorte atual faz — e como usar um critério sozinho. */}
-          <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
-            {relevancia === "ou" ? (
-              <>
-                Entra quem vendia <strong>{inteiro(minUnidades)} unidade(s)</strong>{" "}
-                <strong>ou</strong> faturou <strong>{brl(minFaturamento)}</strong> —
-                basta um dos dois. Subir só um deles não encurta a lista; para usar um
-                critério sozinho, deixe o outro em <strong>0</strong>, ou troque o{" "}
-                <strong>ou</strong> por <strong>e</strong>.
-              </>
-            ) : (
-              <>
-                Entra só quem vendia <strong>{inteiro(minUnidades)} unidade(s)</strong>{" "}
-                <strong>e</strong> faturou <strong>{brl(minFaturamento)}</strong> — os
-                dois. Lista mais curta, mas esconde item barato de giro alto e item
-                caro de giro baixo.
-              </>
-            )}
-          </p>
-        </div>
-
-        <Campo rotulo="Situação no ML" className="lg:col-span-3">
+        <Campo rotulo="Situação no ML" className="lg:col-span-2">
           <select
             value={status}
             onChange={(e) => {
@@ -329,12 +230,145 @@ export default function AnunciosMortos() {
             <option value="under_review">Em revisão</option>
           </select>
         </Campo>
-      </PainelFiltros>
 
-      {/* O parágrafo que explicava o "OU" saiu daqui: agora a explicação fica
-          COLADA nos dois campos, dentro do painel de filtros, e muda conforme o
-          operador escolhido. Texto solto abaixo do painel descrevia uma regra que
-          a pessoa só ia reler depois de já ter estranhado o resultado. */}
+        {/* Os três cortes formam uma única regra. O seletor fica entre os dois
+            critérios históricos; dias sem venda é sempre obrigatório. */}
+        <fieldset className="lg:col-span-12 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] p-3.5">
+          <legend className="px-1 text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
+            Critérios para considerar um anúncio morto
+          </legend>
+
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] md:items-stretch">
+            <label className={MODULO_CRITERIO}>
+              <span className="block text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-suave)]">
+                Mínimo de unidades
+              </span>
+              <span className="mt-1 block text-[12px] leading-relaxed text-[var(--cz-texto-fraco)]">
+                Volume vendido no histórico inteiro.
+              </span>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={minUnidades}
+                  onChange={(e) => {
+                    setMinUnidades(Math.max(0, Number(e.target.value) || 0));
+                    setPagina(1);
+                  }}
+                  className={ENTRADA}
+                  aria-label="Mínimo de unidades vendidas"
+                />
+                <span className="shrink-0 text-[12px] font-semibold text-[var(--cz-texto-suave)]">
+                  un.
+                </span>
+              </div>
+            </label>
+
+            <div className="flex items-center justify-center md:w-20 md:flex-col">
+              <label className="text-center">
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-fraco)]">
+                  Combinar
+                </span>
+                <select
+                  value={relevancia}
+                  onChange={(e) => {
+                    setRelevancia(e.target.value as "ou" | "e");
+                    setPagina(1);
+                  }}
+                  className="h-9 rounded-full border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-3 text-[12px] font-extrabold uppercase text-[var(--cz-laranja-forte)] outline-none transition-colors focus:border-[var(--cz-laranja)]"
+                  aria-label="Como unidades e faturamento se combinam"
+                >
+                  <option value="e">e</option>
+                  <option value="ou">ou</option>
+                </select>
+              </label>
+            </div>
+
+            <label className={MODULO_CRITERIO}>
+              <span className="block text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-suave)]">
+                Mínimo de faturamento
+              </span>
+              <span className="mt-1 block text-[12px] leading-relaxed text-[var(--cz-texto-fraco)]">
+                Receita acumulada antes de parar.
+              </span>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="shrink-0 text-[12px] font-semibold text-[var(--cz-texto-suave)]">
+                  R$
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={minFaturamento}
+                  onChange={(e) => {
+                    setMinFaturamento(Math.max(0, Number(e.target.value) || 0));
+                    setPagina(1);
+                  }}
+                  className={ENTRADA}
+                  aria-label="Mínimo de faturamento"
+                />
+              </div>
+            </label>
+
+            <div
+              className="flex items-center justify-center md:w-12"
+              title="A inatividade mínima sempre precisa ser atendida"
+              aria-label="E também"
+            >
+              <span className="rounded-full border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 py-2 text-[12px] font-extrabold uppercase text-[var(--cz-texto-suave)]">
+                e
+              </span>
+            </div>
+
+            <label className={MODULO_CRITERIO}>
+              <span className="block text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-suave)]">
+                Inatividade mínima
+              </span>
+              <span className="mt-1 block text-[12px] leading-relaxed text-[var(--cz-texto-fraco)]">
+                Tempo obrigatório desde a última venda.
+              </span>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={diasSemVenda}
+                  onChange={(e) => {
+                    setDiasSemVenda(Math.max(1, Number(e.target.value) || 1));
+                    setPagina(1);
+                  }}
+                  className={ENTRADA}
+                  aria-label="Mínimo de dias sem venda"
+                />
+                <span className="shrink-0 text-[12px] font-semibold text-[var(--cz-texto-suave)]">
+                  dias
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <p className="mt-3 rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] px-3 py-2 text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+            {relevancia === "e" ? (
+              <>
+                Regra padrão: <strong>{inteiro(minUnidades)} unidade(s)</strong>{" "}
+                <strong>e</strong> <strong>{brl(minFaturamento)}</strong>{" "}
+                <strong>e</strong> <strong>{inteiro(diasSemVenda)} dias</strong> sem
+                venda. Como todos os cortes precisam passar, aumentar qualquer valor
+                reduz a lista de verdade.
+              </>
+            ) : (
+              <>
+                Alternativa explícita: (<strong>{inteiro(minUnidades)} unidade(s)</strong>{" "}
+                <strong>ou</strong> <strong>{brl(minFaturamento)}</strong>){" "}
+                <strong>e</strong> <strong>{inteiro(diasSemVenda)} dias</strong> sem
+                venda. Basta um dos dois critérios históricos, mas a inatividade
+                continua obrigatória.
+              </>
+            )}
+          </p>
+        </fieldset>
+      </PainelFiltros>
 
       {/* Mesma escada da tela de Mais Vendidos: sem o degrau de 3 colunas, toda a
           faixa entre 640px e 1280px ficava com um cartão sozinho na última linha. */}
@@ -406,38 +440,15 @@ export default function AnunciosMortos() {
             }
           />
         ) : (
-          // Sem scroll horizontal: as dez colunas viraram cinco, agrupadas por
-          // NATUREZA do dado. Ver o comentário equivalente em
-          // `AnunciosMaisVendidos.tsx` e o `ThGrupo` em `anuncios/comum.tsx`.
-          <table className="w-full table-fixed border-collapse text-left">
-            <colgroup>
-              <col className="w-[40%]" />
-              <col className="w-[20%]" />
-              <col className="w-[13%]" />
-              <col className="w-[14%]" />
-              <col className="w-[13%]" />
-            </colgroup>
-            <CabecalhoTabela>
-              <Th className="pl-5">Anúncio</Th>
-              <ThGrupo
-                titulo="Situação / Estoque / Preço"
-                momento="agora no Mercado Livre"
-              />
-              <ThGrupo titulo="O que fazer" momento="conclusão do sistema" />
-              <ThGrupo titulo="Vendia" momento="histórico acumulado" align="right" />
-              <ThGrupo
-                titulo="Parado há / Última venda"
-                momento="data e hora"
-                align="right"
-                className="pr-5"
-              />
-            </CabecalhoTabela>
-            <tbody>
-              {linhas.map((l) => (
-                <LinhaParada key={`${l.meliAccountId}:${l.itemId}`} l={l} />
-              ))}
-            </tbody>
-          </table>
+          <div
+            role="list"
+            aria-label="Anúncios mortos encontrados"
+            className="grid grid-cols-1 gap-3 p-3 xl:grid-cols-2"
+          >
+            {linhas.map((l) => (
+              <AnuncioParadoCard key={`${l.canal}:${l.accountId}:${l.itemId}`} l={l} />
+            ))}
+          </div>
         )}
 
         {dados && dados.total > 0 && (
@@ -461,71 +472,193 @@ export default function AnunciosMortos() {
   );
 }
 
-function LinhaParada({ l }: { l: Linha }) {
+function AnuncioParadoCard({ l }: { l: Linha }) {
   const motivo = motivoDeParada(l);
 
   return (
-    <tr
-      className={`border-b border-[var(--cz-hairline)] align-top text-[13.5px] transition-colors last:border-b-0 hover:bg-[var(--cz-fundo)] ${
-        motivo === "sem_estoque" ? "bg-amber-50/50" : ""
+    <article
+      role="listitem"
+      className={`min-w-0 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3.5 shadow-sm transition-colors hover:border-[var(--cz-hairline-forte)] ${
+        motivo === "sem_estoque" ? "bg-amber-50/50" : "bg-[var(--cz-superficie)]"
       }`}
     >
-      <CelulaAnuncio l={l} />
-
-      {/* Situação + estoque + preço: o bloco do "agora". O selo de "pausado por
-          falta de estoque" já vem dentro dele. */}
-      <CelulaAgora l={l} />
-
-      {/* A coluna que dá o encaminhamento. Sem ela a tela lista problemas; com
-          ela a tela distribui trabalho. Cada saída ganhou ícone: o operador varre
-          esta coluna com o olho, e forma se distingue mais rápido que texto. */}
-      <td className="px-3 py-3.5">
-        {motivo === "sem_estoque" ? (
-          <Selo tom="alerta">
-            <IconeCaixa className="h-3.5 w-3.5" />
-            Repor estoque
-          </Selo>
-        ) : motivo === "com_estoque" ? (
-          <Selo tom="info">
-            <IconeEditar className="h-3.5 w-3.5" />
-            Revisar anúncio
-          </Selo>
-        ) : (
-          <span
-            className="text-[var(--cz-texto-fraco)]"
-            title="Sem o estoque atual não é possível dizer se o problema é reposição ou o anúncio"
-          >
-            —
-          </span>
-        )}
-      </td>
-
-      {/* O que o anúncio VENDIA — histórico, não presente. Unidades em cima
-          porque é o tamanho do buraco em volume; faturamento embaixo porque é o
-          tamanho em dinheiro. */}
-      <td className="px-3 py-3.5 text-right">
-        <span className="block text-[16px] font-bold leading-none tabular-nums text-[var(--cz-texto)]">
-          {inteiro(l.unidades)}
-          <span className="ml-1 text-[11px] font-medium text-[var(--cz-texto-fraco)]">
-            un.
-          </span>
-        </span>
-        <span className="mt-1 block font-semibold tabular-nums text-emerald-700">
-          {brl(l.faturamento)}
-        </span>
-      </td>
-
-      <td className="px-3 py-3.5 pr-5 text-right">
-        <Selo tom={l.diasSemVenda >= 90 ? "critico" : "alerta"} className="tabular-nums">
-          {inteiro(l.diasSemVenda)} dias
-        </Selo>
-        <span className="mt-1 block">
-          <UltimaVenda iso={l.ultimaVenda} />
-        </span>
-        <span className="mt-1.5 inline-flex">
+      <header className="flex min-w-0 items-start gap-3 border-b border-[var(--cz-hairline)] pb-3">
+        <Miniatura src={l.thumbnailUrl} alt={l.titulo} tamanho={56} />
+        <div className="min-w-0 flex-1">
+          <h2 className="line-clamp-2 text-[14px] font-bold leading-snug text-[var(--cz-texto)]">
+            {l.titulo}
+          </h2>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-[var(--cz-texto-suave)]">
+            <span className="font-mono font-semibold text-[var(--cz-texto)]">{l.itemId}</span>
+            <span aria-hidden>·</span>
+            <span>{l.conta || l.accountId}</span>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--cz-texto-fraco)]">
+            <span title={l.skus.join(", ")}>
+              SKU: {l.skus.length > 0 ? l.skus.join(", ") : "—"}
+            </span>
+            {l.logisticType ? (
+              <SeloEnvio tipo={l.logisticType} />
+            ) : (
+              <span>Modalidade: —</span>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0">
           <LinkAbrir l={l} />
-        </span>
-      </td>
-    </tr>
+        </div>
+      </header>
+
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <section className={MODULO_CARD}>
+          <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
+            Agora no Mercado Livre
+          </h3>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <SeloStatus status={l.status} />
+            {l.subStatus.includes("out_of_stock") && (
+              <span className="text-[11px] font-semibold text-amber-700">
+                pausado por falta de estoque
+              </span>
+            )}
+          </div>
+          <dl className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <dt className="text-[10px] font-bold uppercase text-[var(--cz-texto-fraco)]">
+                Estoque
+              </dt>
+              <dd className="mt-0.5 text-[13px] font-bold tabular-nums text-[var(--cz-texto)]">
+                {l.estoque === null ? (
+                  <span
+                    className="font-medium text-[var(--cz-texto-fraco)]"
+                    title="O Mercado Livre não respondeu o estoque deste anúncio"
+                  >
+                    Não consultado
+                  </span>
+                ) : l.estoque === 0 ? (
+                  <span className="text-rose-700">0 un. · esgotado</span>
+                ) : (
+                  `${inteiro(l.estoque)} un.`
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-bold uppercase text-[var(--cz-texto-fraco)]">
+                Preço
+              </dt>
+              <dd className="mt-0.5 text-[13px] font-bold tabular-nums text-[var(--cz-texto)]">
+                {l.preco === null ? (
+                  <span
+                    className="font-medium text-[var(--cz-texto-fraco)]"
+                    title="O Mercado Livre não respondeu o preço deste anúncio"
+                  >
+                    Não consultado
+                  </span>
+                ) : (
+                  brl(l.preco)
+                )}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className={MODULO_CARD}>
+          <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
+            O que fazer
+          </h3>
+          <div className="mt-2">
+            {motivo === "sem_estoque" ? (
+              <>
+                <Selo tom="alerta">
+                  <IconeCaixa className="h-3.5 w-3.5" />
+                  Repor estoque
+                </Selo>
+                <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+                  A mercadoria acabou; alterar o anúncio não resolve a parada.
+                </p>
+              </>
+            ) : motivo === "com_estoque" ? (
+              <>
+                <Selo tom="info">
+                  <IconeEditar className="h-3.5 w-3.5" />
+                  Revisar anúncio
+                </Selo>
+                <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+                  Há estoque: revise preço, título, foto e concorrência.
+                </p>
+              </>
+            ) : (
+              <>
+                <Selo>Indefinido</Selo>
+                <p className="mt-2 text-[11.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+                  Sem estoque atual não é possível indicar reposição ou revisão.
+                </p>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section className={MODULO_CARD}>
+          <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
+            Histórico acumulado
+          </h3>
+          <dl className="mt-2 grid grid-cols-3 gap-2">
+            <div>
+              <dt className="text-[10px] font-bold uppercase text-[var(--cz-texto-fraco)]">
+                Unidades
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-extrabold tabular-nums text-[var(--cz-texto)]">
+                {inteiro(l.unidades)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-bold uppercase text-[var(--cz-texto-fraco)]">
+                Faturamento
+              </dt>
+              <dd className="mt-0.5 text-[13px] font-bold tabular-nums text-emerald-700">
+                {brl(l.faturamento)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] font-bold uppercase text-[var(--cz-texto-fraco)]">
+                Pedidos
+              </dt>
+              <dd className="mt-0.5 text-[15px] font-extrabold tabular-nums text-[var(--cz-texto)]">
+                {inteiro(l.pedidos)}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <section className={MODULO_CARD}>
+          <h3 className="text-[10.5px] font-extrabold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
+            Inatividade
+          </h3>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div>
+              <span className="block text-[10px] font-bold uppercase text-[var(--cz-texto-fraco)]">
+                Sem vender há
+              </span>
+              <span className="mt-1 inline-flex">
+                <Selo
+                  tom={l.diasSemVenda >= 90 ? "critico" : "alerta"}
+                  className="tabular-nums"
+                >
+                  {inteiro(l.diasSemVenda)} dias
+                </Selo>
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="block text-[10px] font-bold uppercase text-[var(--cz-texto-fraco)]">
+                Última venda
+              </span>
+              <span className="mt-1 block">
+                <UltimaVenda iso={l.ultimaVenda} />
+              </span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </article>
   );
 }

@@ -45,8 +45,16 @@ import {
   IconeProibido,
   IconeSubindo,
 } from "./comum/icones";
-import { brl, ENTRADA, inteiro, RESUMO_VAZIO, type Linha } from "./anuncios/tipos";
-import { useAnuncios, useContasMeli } from "./anuncios/useAnuncios";
+import { LogoCanal } from "./comum/logos";
+import {
+  brl,
+  ENTRADA,
+  inteiro,
+  RESUMO_VAZIO,
+  type CanalFiltroAnuncio,
+  type Linha,
+} from "./anuncios/tipos";
+import { useAnuncios, useContas } from "./anuncios/useAnuncios";
 
 /**
  * Alerta de ruptura: quantos dias de estoque restam ao ritmo de venda do período.
@@ -64,7 +72,18 @@ function diasDeCobertura(l: Linha, diasDoPeriodo: number): number | null {
   return Math.floor(l.estoque / porDia);
 }
 
+const OPCOES_CANAL: ReadonlyArray<{
+  valor: CanalFiltroAnuncio;
+  rotulo: string;
+}> = [
+  { valor: "todos", rotulo: "Todos" },
+  { valor: "ML", rotulo: "Mercado Livre" },
+  { valor: "SP", rotulo: "Shopee" },
+  { valor: "TT", rotulo: "TikTok Shop" },
+];
+
 export default function AnunciosMaisVendidos() {
+  const [canal, setCanal] = useState<CanalFiltroAnuncio>("todos");
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [contaId, setContaId] = useState("");
@@ -75,10 +94,15 @@ export default function AnunciosMaisVendidos() {
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(20);
 
-  const contas = useContasMeli();
+  const todasContas = useContas();
+  const contas = useMemo(
+    () => todasContas.filter((c) => canal === "todos" || c.canal === canal),
+    [todasContas, canal],
+  );
 
   const { dados, carregando, erro, atualizando, atualizar } = useAnuncios({
     modo: "mais_vendidos",
+    canal,
     janelaDias,
     busca: buscaAplicada,
     contaId,
@@ -101,11 +125,22 @@ export default function AnunciosMaisVendidos() {
     setPagina(1);
   }
 
+  function trocarCanal(proximo: CanalFiltroAnuncio) {
+    setCanal(proximo);
+    const contaAtual = todasContas.find((c) => `${c.canal}:${c.id}` === contaId);
+    if (contaId && (!contaAtual || (proximo !== "todos" && contaAtual.canal !== proximo))) {
+      setContaId("");
+    }
+    setStatus("");
+    setEstoque("");
+    setPagina(1);
+  }
+
   return (
     <MolduraTela>
       <Cabecalho
         titulo="Anúncios Mais Vendidos"
-        descricao="Quem está vendendo agora, com o estoque real de cada anúncio no Mercado Livre. A coluna de cobertura mostra quantos dias o estoque atual aguenta no ritmo atual de venda."
+        descricao="Ranking de produtos e anúncios vendidos no Mercado Livre, Shopee e TikTok Shop, com histórico consolidado por canal e dados atuais do ML quando disponíveis."
         acao={
           <BotaoAtualizar
             onClick={atualizar}
@@ -117,12 +152,42 @@ export default function AnunciosMaisVendidos() {
 
       <AvisoBackfill pendentes={dados?.backfillPendente ?? 0} />
 
+      {dados?.truncado && (
+        <Faixa tom="alerta" icone={<IconeAlerta className="h-4 w-4" />}>
+          <strong>Atenção:</strong> o ranking atingiu 10.000 anúncios em ao menos um
+          canal. Estreite período, conta ou busca; os totais não são completos.
+        </Faixa>
+      )}
+
+      <div
+        className="mt-4 inline-flex max-w-full flex-wrap gap-1 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] p-1"
+        role="group"
+        aria-label="Canal de vendas"
+      >
+        {OPCOES_CANAL.map((opcao) => (
+          <button
+            key={opcao.valor}
+            type="button"
+            onClick={() => trocarCanal(opcao.valor)}
+            aria-pressed={canal === opcao.valor}
+            className={`inline-flex items-center gap-2 rounded-[var(--cz-raio)] px-3 py-2 text-[12.5px] font-semibold transition ${
+              canal === opcao.valor
+                ? "bg-[var(--cz-superficie)] text-[var(--cz-laranja-forte)] shadow-sm ring-1 ring-[var(--cz-laranja-borda)]"
+                : "text-[var(--cz-texto-suave)] hover:bg-[var(--cz-superficie)]"
+            }`}
+          >
+            {opcao.valor !== "todos" && <LogoCanal canal={opcao.valor} />}
+            {opcao.rotulo}
+          </button>
+        ))}
+      </div>
+
       <PainelFiltros nota={<NotaFiltroCaro visivel={Boolean(status || estoque)} />}>
         <CampoBusca
           valor={busca}
           onMudar={setBusca}
           onAplicar={aplicarBusca}
-          placeholder="MLB, título ou SKU"
+          placeholder="ID, título ou SKU"
           className="lg:col-span-4"
         />
 
@@ -137,8 +202,8 @@ export default function AnunciosMaisVendidos() {
           >
             <option value="">Todas as contas</option>
             {contas.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nickname ?? c.id}
+              <option key={`${c.canal}:${c.id}`} value={`${c.canal}:${c.id}`}>
+                {c.nome} · {c.canal === "ML" ? "Mercado Livre" : c.canal === "SP" ? "Shopee" : "TikTok Shop"}
               </option>
             ))}
           </select>
@@ -175,37 +240,41 @@ export default function AnunciosMaisVendidos() {
           </select>
         </Campo>
 
-        <Campo rotulo="Situação no ML" className="lg:col-span-3">
-          <select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPagina(1);
-            }}
-            className={ENTRADA}
-          >
-            <option value="">Todas</option>
-            <option value="active">Ativo</option>
-            <option value="paused">Pausado</option>
-            <option value="closed">Finalizado</option>
-            <option value="under_review">Em revisão</option>
-          </select>
-        </Campo>
+        {canal === "ML" && (
+          <>
+            <Campo rotulo="Situação no ML" className="lg:col-span-3">
+              <select
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value);
+                  setPagina(1);
+                }}
+                className={ENTRADA}
+              >
+                <option value="">Todas</option>
+                <option value="active">Ativo</option>
+                <option value="paused">Pausado</option>
+                <option value="closed">Finalizado</option>
+                <option value="under_review">Em revisão</option>
+              </select>
+            </Campo>
 
-        <Campo rotulo="Estoque" className="lg:col-span-3">
-          <select
-            value={estoque}
-            onChange={(e) => {
-              setEstoque(e.target.value);
-              setPagina(1);
-            }}
-            className={ENTRADA}
-          >
-            <option value="">Todos</option>
-            <option value="sem">Esgotado</option>
-            <option value="com">Com estoque</option>
-          </select>
-        </Campo>
+            <Campo rotulo="Estoque" className="lg:col-span-3">
+              <select
+                value={estoque}
+                onChange={(e) => {
+                  setEstoque(e.target.value);
+                  setPagina(1);
+                }}
+                className={ENTRADA}
+              >
+                <option value="">Todos</option>
+                <option value="sem">Esgotado</option>
+                <option value="com">Com estoque</option>
+              </select>
+            </Campo>
+          </>
+        )}
       </PainelFiltros>
 
       {/* `sm:grid-cols-3` entre o 2 e o 5: com apenas `grid-cols-2 xl:grid-cols-5`,
@@ -233,23 +302,22 @@ export default function AnunciosMaisVendidos() {
           valor={brl(resumo.unidades > 0 ? resumo.faturamento / resumo.unidades : 0)}
           icone={<IconePreco className="h-5 w-5" />}
         />
-        <Kpi
-          rotulo="Esgotados"
-          valor={inteiro(resumo.semEstoque)}
-          tom={resumo.semEstoque > 0 ? "alerta" : undefined}
-          icone={<IconeProibido className="h-5 w-5" />}
-          // A ressalva é obrigatória: no caminho normal o estoque é consultado
-          // só nos anúncios exibidos, e "3 esgotados" ao lado de um total de 200
-          // seria lido como 3 de 200.
-          nota={
-            resumo.escopoEstoque === "pagina"
-              ? `de ${inteiro(resumo.estoqueConsultados)} nesta página`
-              : `de ${inteiro(resumo.estoqueConsultados)} no total`
-          }
-        />
+        {(canal === "ML" || canal === "todos") && (
+          <Kpi
+            rotulo={canal === "todos" ? "Esgotados (ML)" : "Esgotados"}
+            valor={inteiro(resumo.semEstoque)}
+            tom={resumo.semEstoque > 0 ? "alerta" : undefined}
+            icone={<IconeProibido className="h-5 w-5" />}
+            nota={
+              resumo.escopoEstoque === "pagina"
+                ? `de ${inteiro(resumo.estoqueConsultados)} ML nesta página`
+                : `de ${inteiro(resumo.estoqueConsultados)} ML no total`
+            }
+          />
+        )}
       </div>
 
-      {resumo.semEstoque > 0 && (
+      {(canal === "ML" || canal === "todos") && resumo.semEstoque > 0 && (
         <Faixa tom="critico" icone={<IconeProibido className="h-4 w-4" />}>
           <strong>{inteiro(resumo.semEstoque)}</strong> anúncio(s) que vendem estão{" "}
           <strong>com estoque zerado</strong>. Anúncio campeão esgotado é venda que
@@ -258,7 +326,7 @@ export default function AnunciosMaisVendidos() {
         </Faixa>
       )}
 
-      <AvisoDoisTempos />
+      <AvisoDoisTempos contexto={canal === "ML" ? "ML" : canal === "todos" ? "todos" : "sem-ml"} />
 
       <div className="mt-3 overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
         {carregando ? (
@@ -299,7 +367,10 @@ export default function AnunciosMaisVendidos() {
             </colgroup>
             <CabecalhoTabela>
               <Th className="pl-5">Anúncio</Th>
-              <ThGrupo titulo="Situação / Estoque / Preço" momento="agora no Mercado Livre" />
+              <ThGrupo
+                titulo="Situação / Estoque / Preço"
+                momento={canal === "ML" ? "agora no Mercado Livre" : "quando disponível"}
+              />
               <ThGrupo titulo="Cobertura" momento="estoque ÷ ritmo do período" align="right" />
               <ThGrupo titulo="Vendas" momento="no período filtrado" align="right" />
               <ThGrupo
@@ -312,7 +383,7 @@ export default function AnunciosMaisVendidos() {
             <tbody>
               {linhas.map((l, i) => (
                 <LinhaVendida
-                  key={`${l.meliAccountId}:${l.itemId}`}
+                  key={`${l.canal}:${l.accountId}:${l.itemId}`}
                   l={l}
                   posicao={(dados!.pagina - 1) * porPagina + i + 1}
                   diasDoPeriodo={diasDoPeriodo}
@@ -337,7 +408,7 @@ export default function AnunciosMaisVendidos() {
         )}
       </div>
 
-      <RodapeFonte />
+      <RodapeFonte contexto={canal === "ML" ? "ML" : canal === "todos" ? "todos" : "sem-ml"} />
     </MolduraTela>
   );
 }

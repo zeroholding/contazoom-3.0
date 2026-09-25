@@ -15,6 +15,8 @@ import { assertSessionToken } from "@/lib/auth";
 import { cache, createCacheKey } from "@/lib/cache";
 import {
   buscarAnuncios,
+  type CanalAnuncio,
+  type CanalFiltroAnuncio,
   type FiltrosAnuncios,
   type ModoAnuncio,
   type OrdemAnuncio,
@@ -48,7 +50,29 @@ function inteiro(v: string | null, padrao: number, min: number, max: number): nu
 }
 
 function decimal(v: string | null, padrao: number): number {
-  const n = Number.parseFloat((v ?? "").replace(",", "."));
+  const bruto = (v ?? "").trim();
+  if (!bruto || !/^(?:R\$\s*)?[\d.,\s]+$/.test(bruto)) return padrao;
+
+  const valor = bruto.replace(/^R\$\s*/, "").replace(/\s+/g, "");
+  let normalizado: string;
+
+  if (/^\d+$/.test(valor)) {
+    normalizado = valor;
+  } else if (/^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(valor)) {
+    // pt-BR: pontos agrupam milhares e a vírgula marca os centavos.
+    normalizado = valor.replace(/\./g, "").replace(",", ".");
+  } else if (/^\d+,\d+$/.test(valor)) {
+    normalizado = valor.replace(",", ".");
+  } else if (/^\d+\.\d+$/.test(valor)) {
+    normalizado = valor;
+  } else if (/^\d{1,3}(?:,\d{3})+\.\d+$/.test(valor)) {
+    // en-US só é aceito quando o ponto decimal elimina a ambiguidade.
+    normalizado = valor.replace(/,/g, "");
+  } else {
+    return padrao;
+  }
+
+  const n = Number(normalizado);
   return Number.isFinite(n) && n >= 0 ? n : padrao;
 }
 
@@ -57,34 +81,65 @@ function texto(v: string | null, max = 120): string {
   return (v ?? "").trim().slice(0, max);
 }
 
+function lerConta(
+  valor: string | null,
+  canal: CanalFiltroAnuncio,
+): { accountCanal?: CanalAnuncio; accountId: string; meliAccountId: string } {
+  const contaBruta = texto(valor, 43);
+  const prefixada = /^(ML|SP|TT):(.*)$/.exec(contaBruta);
+  const accountId = texto(prefixada?.[2] ?? contaBruta, 40);
+  const accountCanal = accountId
+    ? ((prefixada?.[1] as CanalAnuncio | undefined) ?? (canal === "todos" ? "ML" : canal))
+    : undefined;
+
+  return {
+    accountCanal,
+    accountId,
+    meliAccountId: accountCanal === "ML" ? accountId : "",
+  };
+}
+
 function lerFiltros(url: URL): FiltrosAnuncios {
   const modo: ModoAnuncio = url.searchParams.get("modo") === "mortos" ? "mortos" : "mais_vendidos";
   const ordemBruta = url.searchParams.get("ordem") as OrdemAnuncio | null;
+  const canalBruto = url.searchParams.get("canal");
+  // Compatibilidade: Mortos e consumidores antigos não enviam canal e continuam ML.
+  const canal: CanalFiltroAnuncio = ["todos", "ML", "SP", "TT"].includes(canalBruto ?? "")
+    ? (canalBruto as CanalFiltroAnuncio)
+    : "ML";
+  const conta = lerConta(url.searchParams.get("contaId"), canal);
+  // Situação e estoque atuais são capacidades ML. Em Todos/SP/TT são limpos em
+  // vez de filtrar silenciosamente só uma parte do conjunto.
+  const permiteFiltrosMl = canal === "ML";
+  const statusBruto = texto(url.searchParams.get("status"));
+  const estoqueBruto = texto(url.searchParams.get("estoque"));
+  const relevanciaBruta = url.searchParams.get("relevancia");
+  // Em Mortos, E é o padrão para que aumentar qualquer mínimo realmente corte
+  // a lista. OU continua disponível, mas precisa ser uma escolha explícita.
+  const relevancia: "ou" | "e" =
+    relevanciaBruta === "ou" || relevanciaBruta === "e"
+      ? relevanciaBruta
+      : modo === "mortos"
+        ? "e"
+        : "ou";
 
   return {
     modo,
-    // Mais vendidos olha os últimos 30 dias — "campeão de vendas" é uma pergunta
-    // sobre o presente. Mortos olha o histórico todo, porque o que qualifica o
-    // anúncio é justamente ter vendido bem ANTES de parar; cortar em 30 dias
-    // esconderia exatamente os casos que interessam.
+    canal,
+    accountCanal: conta.accountCanal,
+    accountId: conta.accountId,
+    meliAccountId: conta.meliAccountId,
+    // Mais vendidos olha os últimos 30 dias; Mortos mantém o histórico inteiro.
     janelaDias: inteiro(url.searchParams.get("janelaDias"), modo === "mortos" ? 0 : 30, 0, 3650),
     diasSemVenda: inteiro(url.searchParams.get("diasSemVenda"), 30, 1, 3650),
     minUnidades: inteiro(url.searchParams.get("minUnidades"), modo === "mortos" ? 10 : 0, 0, 1_000_000),
     minFaturamento: decimal(url.searchParams.get("minFaturamento"), modo === "mortos" ? 1000 : 0),
-    // `ou` continua o padrão: é o comportamento documentado no topo de
-    // `anuncios-data.ts`, e trocá-lo aqui mudaria a lista de quem já tem um link
-    // salvo. Ver o docblock de `relevancia` para o motivo de a escolha existir.
-    relevancia: url.searchParams.get("relevancia") === "e" ? "e" : "ou",
-    meliAccountId: texto(url.searchParams.get("contaId"), 40),
+    relevancia,
     busca: texto(url.searchParams.get("busca")),
     hierarquia1: texto(url.searchParams.get("hierarquia1")),
     hierarquia2: texto(url.searchParams.get("hierarquia2")),
-    status: STATUS_ACEITOS.includes(texto(url.searchParams.get("status")))
-      ? texto(url.searchParams.get("status"))
-      : "",
-    estoque: ["com", "sem"].includes(texto(url.searchParams.get("estoque")))
-      ? texto(url.searchParams.get("estoque"))
-      : "",
+    status: permiteFiltrosMl && STATUS_ACEITOS.includes(statusBruto) ? statusBruto : "",
+    estoque: permiteFiltrosMl && ["com", "sem"].includes(estoqueBruto) ? estoqueBruto : "",
     ordem:
       ordemBruta && ORDENS.includes(ordemBruta)
         ? ordemBruta
@@ -92,13 +147,6 @@ function lerFiltros(url: URL): FiltrosAnuncios {
           ? "faturamento_desc"
           : "unidades_desc",
     pagina: inteiro(url.searchParams.get("pagina"), 1, 1, 100_000),
-    // Faixa e não lista fechada.
-    //
-    // A tela oferece 20/50/100 no seletor, mas uma lista fechada aqui trocaria
-    // silenciosamente qualquer outro valor por 20 — então um link compartilhado
-    // com `porPagina=25` abriria mostrando 20 sem dizer nada a quem o abriu. O
-    // clamp já é a proteção que importa: impede `porPagina=100000` derrubar a
-    // resposta, que era o motivo real da lista existir.
     porPagina: inteiro(url.searchParams.get("porPagina"), 20, 1, 100),
   };
 }
@@ -129,7 +177,9 @@ export async function GET(req: NextRequest) {
       String(filtros.minUnidades),
       String(filtros.minFaturamento),
       filtros.relevancia,
-      filtros.meliAccountId,
+      filtros.canal ?? "ML",
+      filtros.accountCanal ?? "",
+      filtros.accountId ?? filtros.meliAccountId,
       filtros.busca,
       filtros.hierarquia1,
       filtros.hierarquia2,
@@ -149,16 +199,17 @@ export async function GET(req: NextRequest) {
       if (emCache) return NextResponse.json(emCache);
     }
 
-    // O backfill do `item_id` roda aqui, em fatia curta e best-effort.
-    //
-    // Sem ele a tela nasceria vazia num banco que já tem anos de venda, e exigir
-    // que alguém rode um script à mão para a tela funcionar é transformar um
-    // detalhe de implementação em tarefa do usuário. Falhar aqui não pode
-    // derrubar a resposta: a consulta cai no JSON como reserva de qualquer forma.
-    try {
-      await backfillItemIdAte(4_000, session.sub);
-    } catch (err) {
-      console.warn("[anuncios] backfill de item_id não rodou:", err);
+    // O backfill continua estritamente ML e roda apenas quando o resultado inclui
+    // esse canal. Falhas permanecem best-effort e não derrubam os demais ramos.
+    const incluiMl =
+      (filtros.canal === "ML" || filtros.canal === "todos") &&
+      (!filtros.accountCanal || filtros.accountCanal === "ML");
+    if (incluiMl) {
+      try {
+        await backfillItemIdAte(4_000, session.sub);
+      } catch (err) {
+        console.warn("[anuncios] backfill de item_id não rodou:", err);
+      }
     }
 
     const resultado = await buscarAnuncios(session.sub, filtros);

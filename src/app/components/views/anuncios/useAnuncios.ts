@@ -8,7 +8,7 @@
  * numa tela e fosse esquecido na outra.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Conta, Resposta } from "./tipos";
 
@@ -88,27 +88,29 @@ export function useAnuncios(params: ParametrosAnuncios): EstadoAnuncios {
   return { dados, carregando, erro, atualizando, atualizar };
 }
 
-/** Contas do Mercado Livre do usuário, para o filtro de conta. */
-export function useContasMeli(): Conta[] {
+/** Contas dos três canais, vindas da rota segura que nunca expõe tokens. */
+export function useContas(): Conta[] {
   const [contas, setContas] = useState<Conta[]>([]);
 
   useEffect(() => {
     let vivo = true;
-    fetch("/api/meli/accounts", { credentials: "include" })
+    fetch("/api/contas", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (!vivo || !j) return;
-        const lista = Array.isArray(j) ? j : (j.accounts ?? j.contas ?? []);
-        setContas(
-          (lista as Array<Record<string, unknown>>).map((c) => ({
-            id: String(c.id ?? ""),
-            nickname: (c.nickname as string) ?? null,
-          })),
-        );
+        if (!vivo || !j || !Array.isArray(j.contas)) return;
+        const lista: Conta[] = [];
+        for (const valor of j.contas as Array<Record<string, unknown>>) {
+          const canal = valor.canal;
+          if (canal !== "ML" && canal !== "SP" && canal !== "TT") continue;
+          const id = String(valor.id ?? "");
+          if (!id) continue;
+          const nome = String(valor.nome ?? id);
+          lista.push({ id, nome, canal, nickname: nome });
+        }
+        setContas(lista);
       })
       .catch(() => {
-        // Sem a lista, o filtro fica só com "Todas as contas". Não é motivo
-        // para derrubar a tela.
+        // Sem contas, o filtro permanece em "Todas as contas" e a listagem segue.
       });
     return () => {
       vivo = false;
@@ -116,4 +118,10 @@ export function useContasMeli(): Conta[] {
   }, []);
 
   return contas;
+}
+
+/** Compatibilidade de AnunciosMortos: mesma UX ML, agora sem receber tokens. */
+export function useContasMeli(): Conta[] {
+  const contas = useContas();
+  return useMemo(() => contas.filter((c) => c.canal === "ML"), [contas]);
 }

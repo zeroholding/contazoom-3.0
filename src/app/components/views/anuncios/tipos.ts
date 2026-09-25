@@ -8,8 +8,14 @@
  * silenciosamente com o tempo.
  */
 
+export type CanalAnuncio = "ML" | "SP" | "TT";
+export type CanalFiltroAnuncio = "todos" | CanalAnuncio;
+
 export type Linha = {
+  canal: CanalAnuncio;
+  accountId: string;
   itemId: string;
+  /** Alias legado: preenchido somente no Mercado Livre. */
   meliAccountId: string;
   titulo: string;
   conta: string;
@@ -49,6 +55,7 @@ export type Resumo = {
   /** A que conjunto os contadores de estoque se referem. Ver `anuncios-data.ts`. */
   escopoEstoque: "total" | "pagina";
   estoqueConsultados: number;
+  porCanal: Record<CanalAnuncio, number>;
 };
 
 export type Resposta = {
@@ -59,9 +66,17 @@ export type Resposta = {
   totalPaginas: number;
   /** Vendas ainda sem `item_id`. A tela avisa em vez de mostrar número parcial. */
   backfillPendente: number;
+  /** Um ou mais canais excederam o teto de 10.000 anúncios agregados. */
+  truncado?: boolean;
 };
 
-export type Conta = { id: string; nickname: string | null };
+export type Conta = {
+  id: string;
+  nome: string;
+  canal: CanalAnuncio;
+  /** Compatibilidade visual de AnunciosMortos. */
+  nickname: string | null;
+};
 
 export const RESUMO_VAZIO: Resumo = {
   anuncios: 0,
@@ -73,6 +88,7 @@ export const RESUMO_VAZIO: Resumo = {
   estoqueIndisponivel: 0,
   escopoEstoque: "pagina",
   estoqueConsultados: 0,
+  porCanal: { ML: 0, SP: 0, TT: 0 },
 };
 
 /**
