@@ -34,6 +34,7 @@ const sqlCapturado: string[] = [];
   },
   meliVenda: { count: async () => 0 },
   shopeeVenda: { count: async () => 0 },
+  tiktokVenda: { count: async () => 0 },
 };
 
 import { extrairPrazoDespachoMeli } from "../src/lib/prazo-despacho";
@@ -150,7 +151,7 @@ async function main() {
   confere("flex · prazo", flex.prazo?.toISOString(), "2026-09-12T02:59:59.000Z");
 
   const vazio = extrairPrazoDespachoMeli(VAZIO);
-  confere("envio vazio · origem", vazio.origem, "ausente:3");
+  confere("envio vazio · origem", vazio.origem, "ausente:4");
   confere("envio vazio · prazo", vazio.prazo, null);
 
   console.log("\n2. O prazo de ENTREGA não pode virar prazo de despacho\n");
@@ -199,7 +200,7 @@ async function main() {
   );
   confere(
     "SQL reexamina linha marcada com versão antiga",
-    mlSql.includes("prazo_despacho_origem <> 'ausente:3'"),
+    mlSql.includes("prazo_despacho_origem <> 'ausente:4'"),
     true,
   );
 

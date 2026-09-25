@@ -12,8 +12,8 @@
  *
  * O progresso fica AO LADO, e não num modal, porque sincronizar leva minutos: um
  * modal bloqueia a tela inteira e obriga a pessoa a esperar olhando uma barra, ou
- * a fechá-lo e perder a informação. Inline, ela continua lendo o dashboard
- * enquanto os dados chegam, e é isso que "mostrar progresso" precisa significar.
+ * a fechá-lo e perder a informação. Inline, ela continua usando a tela enquanto
+ * os dados chegam, e é isso que "mostrar progresso" precisa significar.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -58,9 +58,15 @@ const MS_LIMITE = 600_000;
 
 export default function BotaoSincronizarDashboard({
   onConcluido,
+  canais,
+  accountIds,
 }: {
-  /** Chamado quando a sincronização termina, para o dashboard recarregar. */
+  /** Chamado quando a sincronização termina, para a tela recarregar. */
   onConcluido: () => void;
+  /** Canais permitidos. Ausente ou vazio preserva todos os canais. */
+  canais?: CanalLogo[];
+  /** Contas permitidas. Ausente ou vazio preserva todas as contas dos canais. */
+  accountIds?: string[];
 }) {
   const { toast } = useToast();
 
@@ -180,21 +186,30 @@ export default function BotaoSincronizarDashboard({
     setContas([]);
 
     let lista: Conta[] = [];
+    const canaisAtivos = CANAIS_SYNC.filter(
+      (config) => !canais?.length || canais.includes(config.canal),
+    );
+    const idsPermitidos = accountIds?.length ? new Set(accountIds) : null;
 
     try {
-      // Todas as listas em paralelo: são independentes, e em série o botão ficaria
-      // parado o tempo da soma delas antes de a sincronização começar.
+      // Somente as listas dos canais permitidos, em paralelo. Cada resposta leva
+      // sua configuração junto para não depender do índice da tabela completa.
       const respostas = await Promise.all(
-        CANAIS_SYNC.map((c) =>
-          fetch(c.contas, { cache: "no-store", credentials: "include" }),
-        ),
+        canaisAtivos.map(async (config) => ({
+          config,
+          res: await fetch(config.contas, {
+            cache: "no-store",
+            credentials: "include",
+          }),
+        })),
       );
 
-      for (const [i, res] of respostas.entries()) {
+      for (const { config, res } of respostas) {
         if (!res.ok) continue;
         const linhas = (await res.json()) as { id: string }[];
-        for (const c of linhas ?? []) {
-          lista.push({ id: c.id, canal: CANAIS_SYNC[i].canal });
+        for (const conta of linhas ?? []) {
+          if (idsPermitidos && !idsPermitidos.has(conta.id)) continue;
+          lista.push({ id: conta.id, canal: config.canal });
         }
       }
     } catch {
@@ -205,12 +220,12 @@ export default function BotaoSincronizarDashboard({
 
     if (lista.length === 0) {
       setEstado("erro");
-      setMensagemFinal("Nenhuma conta conectada.");
+      setMensagemFinal("Nenhuma conta disponível no escopo selecionado.");
       toast({
         variant: "warning",
-        title: "Nenhuma conta conectada",
+        title: "Nenhuma conta disponível",
         description:
-          "Conecte uma conta do Mercado Livre, da Shopee ou do TikTok Shop em Contas para poder sincronizar.",
+          "Conecte uma conta compatível ou ajuste os filtros de canal e conta para sincronizar.",
         duration: 8000,
       });
       agendar(() => vivo.current && setEstado("parado"), MS_RESULTADO);
@@ -238,7 +253,7 @@ export default function BotaoSincronizarDashboard({
      * As plataformas continuam em paralelo entre si: são APIs distintas, não
      * competem por nada, e em série o tempo seria a soma delas.
      */
-    const lotes = CANAIS_SYNC.map((c) => ({
+    const lotes = canaisAtivos.map((c) => ({
       rota: c.sync,
       ids: lista.filter((x) => x.canal === c.canal).map((x) => x.id),
     })).filter((lote) => lote.ids.length > 0);
@@ -262,27 +277,39 @@ export default function BotaoSincronizarDashboard({
             alreadyRunning?: boolean;
             results?: { vendas?: number }[];
             totals?: { saved?: number; fetched?: number };
+            saved?: number;
+            success?: boolean;
+            errors?: unknown[];
           };
 
-          // 409 com `alreadyRunning` NÃO é falha: outra sincronização (outra aba,
-          // ou o cron) já está rodando. Tratar como erro faria a tela acusar
-          // defeito onde o sistema está justamente se protegendo.
-          if (res.status === 409 && corpo.alreadyRunning) {
-            return { ok: true, jaRodando: true, salvas: 0 };
+          // `alreadyRunning` NÃO concluiu este lote: outra sincronização (outra
+          // aba, ou o cron) continua responsável por trazer esses dados.
+          if (corpo.alreadyRunning) {
+            return { status: "jaRodando" as const, salvas: 0 };
           }
 
-          if (!res.ok) return { ok: false, jaRodando: false, salvas: 0 };
+          if (!res.ok) return { status: "falha" as const, salvas: 0 };
 
           const somaResults = corpo.results?.reduce(
             (s, r) => s + (Number(r.vendas) || 0),
             0,
           );
           const quantas =
-            somaResults ?? corpo.totals?.saved ?? corpo.totals?.fetched ?? 0;
+            somaResults ??
+            corpo.totals?.saved ??
+            corpo.saved ??
+            corpo.totals?.fetched ??
+            0;
+          const parcial =
+            corpo.success === false ||
+            (Array.isArray(corpo.errors) && corpo.errors.length > 0);
 
-          return { ok: true, jaRodando: false, salvas: Number(quantas) || 0 };
+          return {
+            status: parcial ? ("parcial" as const) : ("concluido" as const),
+            salvas: Number(quantas) || 0,
+          };
         } catch {
-          return { ok: false, jaRodando: false, salvas: 0 };
+          return { status: "falha" as const, salvas: 0 };
         }
       }),
     );
@@ -293,10 +320,12 @@ export default function BotaoSincronizarDashboard({
     setProgresso(null);
 
     const total = resultados.reduce((s, r) => s + r.salvas, 0);
-    const falhas = resultados.filter((r) => !r.ok).length;
-    const jaRodando = resultados.some((r) => r.jaRodando);
-
-    onConcluido();
+    const falhas = resultados.filter((r) => r.status === "falha").length;
+    const parciais = resultados.filter((r) => r.status === "parcial").length;
+    const concluidos = resultados.filter(
+      (r) => r.status === "concluido" || r.status === "parcial",
+    ).length;
+    const jaRodando = resultados.filter((r) => r.status === "jaRodando").length;
 
     if (falhas === resultados.length) {
       setEstado("erro");
@@ -312,69 +341,87 @@ export default function BotaoSincronizarDashboard({
       return;
     }
 
-    setEstado("concluido");
+    // Só recarrega pelos lotes que realmente terminaram. `alreadyRunning`
+    // sozinho não significa que os dados dessa outra execução já chegaram.
+    if (concluidos > 0) onConcluido();
+
+    setEstado(concluidos === 0 && jaRodando > 0 ? "parado" : "concluido");
     setMensagemFinal(
-      jaRodando
+      concluidos === 0 && jaRodando > 0
         ? "Sincronização já em andamento"
         : total > 0
           ? `${total} venda(s) sincronizada(s)`
           : "Nenhuma venda nova",
     );
 
-    // Parcial não é sucesso silencioso: dizer o que ficou de fora é o que impede
-    // alguém de olhar o dashboard e achar que os números estão completos.
-    if (falhas > 0) {
+    // Parcial não é sucesso silencioso: soma falhas de HTTP/rede e respostas que
+    // concluíram com erro em parte das contas, mas mantém as categorias separadas.
+    const plataformasAfetadas = falhas + parciais;
+    if (plataformasAfetadas > 0) {
       toast({
         variant: "warning",
         title: "Sincronização parcial",
-        description: `${falhas} de ${resultados.length} plataforma(s) não sincronizaram. Os números desta tela ainda estão incompletos.`,
+        description: `${plataformasAfetadas} de ${resultados.length} plataforma(s) tiveram problemas: ${falhas} com falha HTTP/rede e ${parciais} com falhas parciais por conta. Os números desta tela ainda podem estar incompletos.`,
         duration: 10000,
       });
     }
 
-    // "Já rodando" merece aviso próprio: sem ele, um resultado de zero vendas
-    // parece que não havia nada novo, quando na verdade a sincronização de verdade
-    // está acontecendo em outra aba (ou no cron) e os números vão mudar sozinhos.
-    if (jaRodando) {
+    // "Já rodando" pede atualização posterior: sem lote concluído nesta rodada,
+    // não há callback nem refresh imediato para fingir que os dados já chegaram.
+    if (jaRodando > 0) {
       toast({
-        variant: "info",
+        variant: concluidos === 0 ? "warning" : "info",
         title: "Já havia uma sincronização em andamento",
         description:
-          "Outra sincronização está rodando agora. Os dados vão aparecer aqui quando ela terminar — atualize a tela em alguns minutos.",
+          concluidos === 0
+            ? "Aguarde a sincronização em andamento terminar e use Atualizar depois. Esta tela não foi recarregada agora."
+            : "Os lotes concluídos foram recarregados, mas outra sincronização continua rodando. Use Atualizar depois para buscar os demais dados.",
         duration: 10000,
       });
     }
 
     // SKU pendente vale mais que o "concluído": sem custo cadastrado, CMV, lucro
     // e margem do dashboard saem errados, e a pessoa acabou de olhar para eles.
-    try {
-      const res = await fetch("/api/sku/pendentes");
-      if (res.ok) {
-        const dados = (await res.json()) as { total?: number };
-        const pendentes = Number(dados.total || 0);
+    // Sem lote concluído, não consulta nem anuncia dados atualizados.
+    if (concluidos > 0) {
+      try {
+        const res = await fetch("/api/sku/pendentes");
+        if (res.ok) {
+          const dados = (await res.json()) as { total?: number };
+          const pendentes = Number(dados.total || 0);
 
-        if (pendentes > 0) {
-          toast({
-            variant: "warning",
-            title: "SKUs pendentes de cadastro",
-            description: `${pendentes} SKU(s) das suas vendas estão sem custo. Cadastre em Gestão de SKU para CMV, lucro e margem fecharem.`,
-            duration: 10000,
-          });
-        } else if (falhas === 0) {
-          toast({
-            variant: "success",
-            title: "Dashboard atualizado",
-            description: "Sincronização concluída e painéis recarregados.",
-            duration: 6000,
-          });
+          if (pendentes > 0) {
+            toast({
+              variant: "warning",
+              title: "SKUs pendentes de cadastro",
+              description: `${pendentes} SKU(s) das suas vendas estão sem custo. Cadastre em Gestão de SKU para CMV, lucro e margem fecharem.`,
+              duration: 10000,
+            });
+          } else if (falhas === 0 && parciais === 0 && jaRodando === 0) {
+            toast({
+              variant: "success",
+              title: "Dados atualizados",
+              description: "Sincronização concluída e dados da tela recarregados.",
+              duration: 6000,
+            });
+          }
         }
+      } catch {
+        // Conferência de SKU é acessória: a sincronização terminou de verdade.
       }
-    } catch {
-      // Conferência de SKU é acessória: a sincronização terminou de verdade.
     }
 
     agendar(() => vivo.current && setEstado("parado"), MS_RESULTADO);
-  }, [abrirProgresso, agendar, estado, fecharProgresso, onConcluido, toast]);
+  }, [
+    abrirProgresso,
+    accountIds,
+    agendar,
+    canais,
+    estado,
+    fecharProgresso,
+    onConcluido,
+    toast,
+  ]);
 
   const rodando = estado === "preparando" || estado === "sincronizando";
 
@@ -402,8 +449,8 @@ export default function BotaoSincronizarDashboard({
         disabled={rodando}
         title={
           rodando
-            ? "Sincronização em andamento. Você pode continuar usando o dashboard."
-            : "Sincroniza todas as contas conectadas do Mercado Livre, da Shopee e do TikTok Shop."
+            ? "Sincronização em andamento. Você pode continuar usando esta tela."
+            : "Sincroniza as contas conectadas dentro do escopo selecionado."
         }
         className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[var(--cz-raio)] border px-4 text-[13px] font-semibold transition-colors ${
           rodando

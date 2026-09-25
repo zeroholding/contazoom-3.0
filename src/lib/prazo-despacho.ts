@@ -55,7 +55,7 @@
  * antigas sem prazo tendo o dado no JSON.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-export const PRAZO_ORIGEM_AUSENTE = "ausente:3";
+export const PRAZO_ORIGEM_AUSENTE = "ausente:4";
 
 /**
  * Fim do dia civil de São Paulo em que o instante caiu.
@@ -147,16 +147,17 @@ function comoObjeto(valor: unknown): Record<string, unknown> {
  *
  * Ordem de preferência, e o motivo de cada uma:
  *
- * 1. `shipping_option.estimated_handling_limit.date` — é literalmente o limite de
- *    MANUSEIO, ou seja, o horário até o qual o pacote tem de estar despachado.
- *    É o campo certo, e é o que o painel do ML mostra ao vendedor.
+ * 1. `sla.expected_date` — fonte oficial de `/shipments/{id}/sla`, usada como
+ *    referência operacional pelo Nexus. Quando válida, deve prevalecer sobre
+ *    qualquer prazo explícito ou derivado do payload principal.
  *
- * 2. `sla.expected_date` — o acordo de nível de serviço do envio. Cobre envio em
- *    que o ML não devolve `estimated_handling_limit` (coleta e Flex, sobretudo).
- *    É o campo que o CyberDock usa como principal.
+ * 2. Limites explícitos de handling e agendamento — reservas do próprio envio
+ *    para quando o endpoint de SLA não estiver disponível ou vier sem data.
  *
- * 3. `shipping_option.estimated_delivery_time.shipping_limit_date` — reserva
- *    final, para payload antigo em que os dois anteriores não existiam.
+ * 3. Criação do envio + duração de handling — aproximação para JSON histórico
+ *    que ainda não contém SLA.
+ *
+ * 4. Limites em `estimated_delivery_time` — reservas finais para payloads antigos.
  *
  * Cada nível é aceito só se produzir uma data plausível: um campo presente mas
  * com lixo dentro NÃO consome a vez do próximo. Sem isso, um `sla` com
@@ -174,6 +175,11 @@ export function extrairPrazoDespachoMeli(
   const fontes = [comoObjeto(shipment), comoObjeto(comoObjeto(order).shipping)];
 
   const candidatos: Array<{ origem: string; ler: (f: Record<string, unknown>) => unknown }> = [
+    {
+      /** O número OFICIAL, retornado por `/shipments/{id}/sla`. */
+      origem: "ml_sla_expected",
+      ler: (f) => comoObjeto(f.sla).expected_date,
+    },
     {
       origem: "ml_handling_limit",
       ler: (f) =>
@@ -230,8 +236,8 @@ export function extrairPrazoDespachoMeli(
        * de disponibilidade em dias ÚTEIS, então uma venda de sexta com 48h de
        * manuseio vence na terça no painel dele e no domingo nesta conta. Erra
        * para o lado seguro (mostra mais urgente do que é) e ordena a fila
-       * corretamente, que é a função da tela. O número exato vem do nível
-       * `ml_sla_expected`, logo abaixo, quando a venda for re-sincronizada.
+       * corretamente, que é a função da tela. Quando existe, o número exato já
+       * foi escolhido pelo primeiro nível `ml_sla_expected`.
        * ────────────────────────────────────────────────────────────────────
        */
       origem: "ml_handling_derivado",
@@ -251,23 +257,6 @@ export function extrairPrazoDespachoMeli(
           ? fimDoDiaSP(criado)
           : new Date(criado.getTime() + horas * 3_600_000);
       },
-    },
-    {
-      /**
-       * O número OFICIAL, de `/shipments/{id}/sla`.
-       *
-       * É o campo que o CyberDock (`raw_api_data->'sla_data'->>'expected_date'`)
-       * e o NEXUS v2 (`shipment_delivery_sla`) usam como prazo — os dois chamam
-       * esse endpoint separado, que este projeto não chamava. O sync passou a
-       * chamar, então ele preenche a partir da próxima sincronização.
-       *
-       * Fica DEPOIS do derivado por um motivo prático, não de qualidade: o
-       * derivado foi verificado contra dado real desta base e o `sla` ainda não.
-       * Quando houver venda com os dois, basta comparar e, se o `sla` estiver
-       * certo, subir este nível para cima do derivado.
-       */
-      origem: "ml_sla_expected",
-      ler: (f) => comoObjeto(f.sla).expected_date,
     },
     {
       origem: "ml_shipping_limit",

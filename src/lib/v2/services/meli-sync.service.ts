@@ -393,13 +393,24 @@ export default class MeliSyncService {
             return typeof order?.shipping === "object" ? order.shipping : null;
           }
           try {
-            const [res, costsRes] = await Promise.all([
+            const [res, costsRes, slaRes] = await Promise.all([
               fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}`, { headers }, 3, userId),
-              fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/costs`, { headers }, 3, userId).catch(() => null)
+              fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/costs`, { headers }, 3, userId).catch(() => null),
+              fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/sla`, { headers }, 1, undefined, 5000).catch(() => null)
             ]);
             
             if (!res.ok) return null;
             const shipmentData = await res.json();
+
+            // SLA é enriquecimento best-effort: falha de endpoint ou JSON inválido
+            // não pode descartar o shipment principal nem o pedido.
+            if (slaRes && slaRes.ok) {
+              try {
+                shipmentData.sla = await slaRes.json();
+              } catch {
+                // noop
+              }
+            }
             
             if (costsRes && costsRes.ok) {
               const costsData = await costsRes.json();
@@ -689,13 +700,24 @@ export default class MeliSyncService {
               const sid = o?.shipping?.id;
               if (!sid) return null;
               try {
-                const [r, costsRes] = await Promise.all([
+                const [r, costsRes, slaRes] = await Promise.all([
                   fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}`, { headers }, 3, userId),
-                  fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/costs`, { headers }, 3, userId).catch(() => null)
+                  fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/costs`, { headers }, 3, userId).catch(() => null),
+                  fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/sla`, { headers }, 1, undefined, 5000).catch(() => null)
                 ]);
                 
                 if (!r.ok) return null;
                 const shipmentData = await r.json();
+
+                // SLA é enriquecimento best-effort: falha de endpoint ou JSON inválido
+                // não pode descartar o shipment principal nem o pedido.
+                if (slaRes && slaRes.ok) {
+                  try {
+                    shipmentData.sla = await slaRes.json();
+                  } catch {
+                    // noop
+                  }
+                }
                 
                 if (costsRes && costsRes.ok) {
                   const costsData = await costsRes.json();

@@ -46,9 +46,11 @@ const LOTE_PADRAO = 5000;
  * "—" em toda a fila mesmo depois de o código aprender onde procurar.
  *
  * `prazo_despacho IS NULL` no meio da condição é o que garante convergência: linha
- * que JÁ tem prazo nunca é reprocessada, mesmo que a versão do marcador suba de
- * novo. E quem continuar sem prazo é remarcado com a versão atual e sai da fila —
- * então cada linha é reexaminada no máximo uma vez por versão.
+ * que JÁ tem prazo não é reprocessada quando a versão do marcador sobe de novo.
+ * A exceção é exclusiva do Mercado Livre: se o JSON passar a conter o SLA oficial,
+ * o prazo antigo pode ser promovido para `ml_sla_expected`. E quem continuar sem
+ * prazo é remarcado com a versão atual e sai da fila — então cada linha é
+ * reexaminada no máximo uma vez por versão.
  *
  * Ver `PRAZO_ORIGEM_AUSENTE` em `prazo-despacho.ts`.
  */
@@ -186,6 +188,11 @@ function niveisMeli(): Nivel[] {
 
   return [
     {
+      // Fonte oficial, retornada por `/shipments/{id}/sla` e preservada no JSON.
+      origem: "ml_sla_expected",
+      expressao: primeiro(envios(`'sla' ->> 'expected_date'`).map(iso)),
+    },
+    {
       origem: "ml_handling_limit",
       expressao: primeiro(
         envios(`'shipping_option' -> 'estimated_handling_limit' ->> 'date'`).map(iso),
@@ -210,10 +217,6 @@ function niveisMeli(): Nivel[] {
       // prazo-despacho.ts.
       origem: "ml_handling_derivado",
       expressao: primeiro(raizes.map(derivadoDoHandling)),
-    },
-    {
-      origem: "ml_sla_expected",
-      expressao: primeiro(envios(`'sla' ->> 'expected_date'`).map(iso)),
     },
     {
       origem: "ml_shipping_limit",
@@ -340,6 +343,7 @@ async function processarTabela(
   niveis: Nivel[],
   limite: number,
   userId?: string,
+  predicadoPendente: string = PENDENTE_SQL,
 ): Promise<{ preenchidas: number; semPrazo: number }> {
   const teto = Math.max(1, Math.min(limite, 20_000));
   const filtroUsuario = userId ? `AND v.user_id = $2` : ``;
@@ -352,7 +356,7 @@ async function processarTabela(
     WITH alvo AS (
       SELECT v.id, ${prazo} AS prazo, ${origem} AS origem
       FROM ${tabela} v
-      WHERE ${PENDENTE_SQL} ${filtroUsuario}
+      WHERE ${predicadoPendente} ${filtroUsuario}
       ORDER BY v.data_venda DESC
       LIMIT $1
     )
@@ -370,7 +374,7 @@ async function processarTabela(
     WITH alvo AS (
       SELECT v.id
       FROM ${tabela} v
-      WHERE ${PENDENTE_SQL}
+      WHERE ${predicadoPendente}
         AND (${prazo}) IS NULL
         ${filtroUsuario}
       ORDER BY v.data_venda DESC
@@ -387,12 +391,29 @@ async function processarTabela(
   return { preenchidas, semPrazo };
 }
 
-/** Uma rodada nas três tabelas. Idempotente: só toca em linha pendente. */
+/** Uma rodada nas três tabelas. Idempotente, salvo promoção de SLA oficial no ML. */
 export async function backfillPrazoChunk(
   limite: number = LOTE_PADRAO,
   userId?: string,
 ): Promise<BackfillPrazoResult> {
-  const ml = await processarTabela("meli_venda", niveisMeli(), limite, userId);
+  const niveisMl = niveisMeli();
+  const slaExpected = niveisMl.find((nivel) => nivel.origem === "ml_sla_expected");
+  if (!slaExpected) {
+    throw new Error("Nível ml_sla_expected não configurado");
+  }
+
+  const pendenteMl = `(${PENDENTE_SQL} OR (
+    v.prazo_despacho_origem IS DISTINCT FROM 'ml_sla_expected'
+    AND (${slaExpected.expressao}) IS NOT NULL
+  ))`;
+
+  const ml = await processarTabela(
+    "meli_venda",
+    niveisMl,
+    limite,
+    userId,
+    pendenteMl,
+  );
   const sp = await processarTabela("shopee_venda", niveisShopee(), limite, userId);
   const tt = await processarTabela("tiktok_venda", niveisTiktok(), limite, userId);
 
@@ -416,6 +437,6 @@ export async function backfillPrazoChunk(
  * A lição é que o botão certo é o NÚMERO DE LINHAS, não o tempo: é ele que
  * determina o tamanho da escrita. `backfillPrazoChunk(limite)` já expõe isso, e a
  * convergência vem das visitas seguintes à tela — cada linha examinada fica
- * resolvida para sempre, então repetir rodadas pequenas chega no mesmo lugar sem
- * pico de escrita.
+ * resolvida para a versão atual (salvo promoção posterior para o SLA oficial do
+ * ML), então repetir rodadas pequenas chega no mesmo lugar sem pico de escrita.
  */

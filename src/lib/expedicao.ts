@@ -326,13 +326,11 @@ export function resolverPrazo(
 
   switch (preset) {
     /**
-     * "A despachar hoje" — o padrão da tela.
+     * "A despachar hoje" — opção explícita para incluir pendências.
      *
      * Vai até hoje SEM PISO, ou seja inclui o que já venceu. Não é o mesmo que
-     * `hoje`, e a diferença é o ponto: o que precisa sair do galpão hoje é o que
-     * vence hoje MAIS tudo o que já deveria ter saído. Um preset que mostrasse só
-     * o dia corrente esconderia justamente o pacote mais grave — o atrasado —
-     * de quem abre a tela às oito da manhã para montar a carga.
+     * `hoje`: use este preset quando a operação precisar reunir os atrasados com
+     * os pacotes que vencem no dia atual.
      */
     case "aDespachar":
       return { de: null, ate: hoje };
@@ -498,18 +496,15 @@ export const FILTROS_PADRAO: FiltrosExpedicao = {
   skus: [],
   busca: "",
   /**
-   * A tela abre em "A DESPACHAR HOJE".
+   * A tela abre em "HOJE", como a referência operacional.
    *
-   * Que é o trabalho do dia: o que vence hoje MAIS o que já venceu. Um padrão de
-   * `hoje` puro esconderia o atrasado — o caso mais grave — de quem abre a tela
-   * pela manhã, e por isso o preset tem piso aberto. E um padrão de "todos os
-   * prazos" abre a fila inteira, incluindo o que vence em três semanas, o que
-   * afoga a decisão de agora numa lista que não é de hoje.
+   * O padrão mostra somente os pacotes cujo prazo vence hoje. Atrasados continuam
+   * disponíveis no preset explícito `aDespachar`, que reúne o vencido com o dia
+   * atual, e a fila completa permanece a um clique em "Todos os prazos".
    *
-   * As fichas de urgência continuam mostrando a distribuição do recorte, e trocar
-   * para "Todos os prazos" é um clique.
+   * As fichas de urgência continuam mostrando a distribuição do recorte.
    */
-  prazoPreset: "aDespachar",
+  prazoPreset: "hoje",
   prazoDe: null,
   prazoAte: null,
   vendaDe: null,

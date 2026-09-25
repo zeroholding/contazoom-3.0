@@ -66,6 +66,7 @@ import {
   type LinhaResumo,
   type OrdemExpedicao,
 } from "@/lib/expedicao";
+import BotaoSincronizarDashboard from "./ui/BotaoSincronizarDashboard";
 import BarraLote, { type PacoteLote } from "./expedicao/BarraLote";
 import CartoesSeparacao from "./expedicao/CartoesSeparacao";
 import FiltrosSeparacao from "./expedicao/FiltrosSeparacao";
@@ -436,6 +437,18 @@ export default function Expedicao({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <BotaoSincronizarDashboard
+              canais={
+                canalFixo
+                  ? [canalFixo]
+                  : filtros.canais.length > 0
+                    ? filtros.canais
+                    : undefined
+              }
+              accountIds={filtros.contas.length > 0 ? filtros.contas : undefined}
+              onConcluido={atualizar}
+            />
+
             <BotaoSecundario
               onClick={atualizar}
               desabilitado={carregando || atualizando}
@@ -560,27 +573,28 @@ export default function Expedicao({
             <Aviso
               icone={<IconeCaminhao className="h-6 w-6" />}
               titulo={
-                semFiltro ? "Nada a despachar" : "Nenhum item encontrado para os filtros selecionados"
+                semFiltro ? "Nada vence hoje" : "Nenhum item encontrado para os filtros selecionados"
               }
               texto={
                 semFiltro
-                  ? "Nada vence hoje e não há atrasado — a tela abre nesse recorte. Para ver o que sai nos próximos dias, escolha outro prazo acima. Se acabou de vender, sincronize as vendas para a fila atualizar."
+                  ? "Não há pacotes vencendo hoje. Para incluir pendências antigas, veja A despachar; para abrir a fila completa, veja todos os prazos. Se acabou de vender, sincronize as vendas."
                   : "Os filtros ativos não deixaram nenhum pacote. Tente outro prazo, solte a conta selecionada, ou limpe os filtros."
               }
               acaoSecundaria={
-                // Com o padrão sendo "a despachar hoje", o caminho mais provável a
-                // partir de uma tela vazia é olhar o resto da fila. Deixar isso a um
-                // clique evita a conclusão errada de que não há nada para despachar.
                 semFiltro ? (
-                  <BotaoSecundario onClick={() => mudarBarra({ prazoPreset: "todas" })}>
-                    Ver todos os prazos
+                  <BotaoSecundario onClick={() => mudarBarra({ prazoPreset: "aDespachar" })}>
+                    Ver a despachar
                   </BotaoSecundario>
                 ) : undefined
               }
               acao={
-                !semFiltro ? (
+                semFiltro ? (
+                  <BotaoSecundario onClick={() => mudarBarra({ prazoPreset: "todas" })}>
+                    Ver todos os prazos
+                  </BotaoSecundario>
+                ) : (
                   <BotaoSecundario onClick={limpar}>Limpar filtros</BotaoSecundario>
-                ) : undefined
+                )
               }
             />
           ) : (

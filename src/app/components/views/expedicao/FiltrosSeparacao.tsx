@@ -220,12 +220,6 @@ export default function FiltrosSeparacao({
     return null;
   }, [rascunho.vendaDe, rascunho.vendaAte]);
 
-  const contagemModalidade = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const c of contas) m.set(c.conta, c.pacotes);
-    return m;
-  }, [contas]);
-
   return (
     <div className="mt-4 overflow-hidden rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
       {/* ─────────────────────────── BARRA ─────────────────────────── */}
@@ -243,10 +237,9 @@ export default function FiltrosSeparacao({
                 {a.rotulo}
               </Atalho>
             ))}
-            {/* "Todos" não existe na barra do CyberDock, mas existe aqui porque o
-                CONTAZOOM abre em "a despachar hoje" — sem uma saída para a fila
-                inteira, quem tem um pedido antigo preso não teria como alcançá-lo
-                sem abrir o painel avançado. */}
+            {/* "Todos" mantém uma saída direta para a fila inteira. Com o padrão
+                em "Hoje", ele permite alcançar pedidos futuros ou antigos sem
+                abrir o painel avançado. */}
             <Atalho
               ativo={filtros.prazoPreset === "todas"}
               onClick={() => onMudarBarra({ prazoPreset: "todas" })}
@@ -468,7 +461,6 @@ export default function FiltrosSeparacao({
               opcoes={modalidades.map((m) => ({
                 valor: m,
                 rotulo: metaModalidade(m).rotulo,
-                contagem: contagemModalidade.get(m),
               }))}
               selecionados={rascunho.modalidades}
               onMudar={(v) => onMudarRascunho({ modalidades: v })}

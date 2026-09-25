@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
       sumExpectedOrders: 0,
       sumSavedOrders: 0,
     };
+    const errors: SyncError[] = [];
 
     for (let accountIndex = 0; accountIndex < accounts.length; accountIndex++) {
       const account = accounts[accountIndex];
@@ -168,6 +169,11 @@ export async function POST(req: NextRequest) {
       steps[accountIndex].currentStep =
         downloadOrderbuilder.ctx.current.syncStep;
       steps[accountIndex].error = downloadOrderbuilder.ctx.current.error;
+      errors.push({
+        accountId: account.id,
+        mlUserId: account.ml_user_id,
+        message: downloadOrderbuilder.ctx.current.error,
+      });
       continue;
     }
 
@@ -285,6 +291,7 @@ export async function POST(req: NextRequest) {
   console.log(`[Cache] Cache de vendas invalidado para usuário ${userId}`);
 
     return NextResponse.json({
+      success: errors.length === 0,
       syncedAt: new Date().toISOString(),
       accounts: accounts.map(account => ({
         id: account.id,
@@ -293,7 +300,10 @@ export async function POST(req: NextRequest) {
         expires_at: account.expires_at.toISOString(),
       })),
       orders: [] as MeliOrderPayload[],
-      errors: [], // TODO: implement error handler
+      errors: errors.map((error) => ({
+        ...error,
+        mlUserId: Number(error.mlUserId),
+      })),
       totals: {
         expected: progressSum.sumExpectedOrders,
         fetched: progressSum.sumFetchedOrders,

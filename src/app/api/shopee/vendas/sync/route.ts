@@ -432,6 +432,7 @@ export async function POST(req: NextRequest) {
     });
 
     const { partnerId, partnerKey } = getPartnerCredentials();
+    const errors: SyncError[] = [];
     const refreshResults = await Promise.allSettled(
       contasAtivas.map(async (conta) => {
         // Só renova se estiver expirado ou expirar em menos de 10 minutos
@@ -458,10 +459,13 @@ export async function POST(req: NextRequest) {
     // Reportar falhas
     refreshResults.forEach((r, i) => {
       if (r.status === 'rejected') {
-        console.error(`[Shopee Sync] Falha token conta ${contasAtivas[i].shop_id}:`, r.reason);
+        const conta = contasAtivas[i];
+        const message = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        console.error(`[Shopee Sync] Falha token conta ${conta.shop_id}:`, r.reason);
+        errors.push({ accountId: conta.id, shopId: conta.shop_id, message });
         sendProgressToUser(userId, {
           type: "sync_error",
-          message: `Falha ao renovar token da conta ${contasAtivas[i].shop_id}. Reconecte a conta.`,
+          message: `Falha ao renovar token da conta ${conta.shop_id}. Reconecte a conta.`,
           errorCode: "TOKEN_REFRESH_FAILED"
         });
       }
@@ -473,14 +477,18 @@ export async function POST(req: NextRequest) {
         message: "Nenhuma conta com token válido. Reconecte suas contas.",
         errorCode: "NO_VALID_ACCOUNTS"
       });
-      return NextResponse.json({ 
-        message: "Nenhuma conta Shopee com token válido. Reconecte suas contas." 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          errors,
+          message: "Nenhuma conta Shopee com token válido. Reconecte suas contas.",
+        },
+        { status: 400 },
+      );
     }
 
     const summaries: AccountSummary[] = contasAtualizadas.map(c => ({ id: c.id, shop_id: c.shop_id }));
     const allOrdersPayload: ShopeeOrderPayload[] = [];
-    const errors: SyncError[] = [];
     let totalSaved = 0;
 
     for (let accountIndex = 0; accountIndex < contasAtualizadas.length; accountIndex++) {
@@ -771,6 +779,7 @@ export async function POST(req: NextRequest) {
     setTimeout(() => closeUserConnections(userId), 2000);
 
     return NextResponse.json({
+      success: errors.length === 0,
       syncedAt: new Date().toISOString(),
       accounts: summaries,
       orders: allOrdersPayload.length,
