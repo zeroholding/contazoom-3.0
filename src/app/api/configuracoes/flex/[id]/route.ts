@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
-import { cache, createCacheKey } from "@/lib/cache";
+import { invalidateVendasCache } from "@/lib/cache";
+import { invalidateFlexConfigCache } from "@/lib/flex-shipping-config";
 import { parseFlexConfigValues } from "@/lib/flex-shipping";
 
 export const runtime = "nodejs";
@@ -60,8 +61,8 @@ export async function PUT(
       },
     });
 
-    // Limpar o cache de vendas do Mercado Livre
-    cache.delete(createCacheKey("vendas-meli", session.sub));
+    invalidateFlexConfigCache(session.sub);
+    invalidateVendasCache(session.sub);
 
     return NextResponse.json({ success: true, config: updated });
   } catch (error) {
@@ -97,8 +98,8 @@ export async function DELETE(
 
     await prisma.flexShippingConfig.delete({ where: { id } });
 
-    // Limpar o cache de vendas do Mercado Livre
-    cache.delete(createCacheKey("vendas-meli", session.sub));
+    invalidateFlexConfigCache(session.sub);
+    invalidateVendasCache(session.sub);
 
     return NextResponse.json({ success: true });
   } catch (error) {

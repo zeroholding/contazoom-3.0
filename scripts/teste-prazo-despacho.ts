@@ -37,7 +37,11 @@ const sqlCapturado: string[] = [];
   tiktokVenda: { count: async () => 0 },
 };
 
-import { extrairPrazoDespachoMeli } from "../src/lib/prazo-despacho";
+import {
+  devePreservarPrazoMeli,
+  extrairPrazoDespachoMeli,
+  PRAZO_ORIGEM_AUSENTE,
+} from "../src/lib/prazo-despacho";
 
 let falhas = 0;
 
@@ -151,10 +155,36 @@ async function main() {
   confere("flex · prazo", flex.prazo?.toISOString(), "2026-09-12T02:59:59.000Z");
 
   const vazio = extrairPrazoDespachoMeli(VAZIO);
-  confere("envio vazio · origem", vazio.origem, "ausente:4");
+  confere("envio vazio · origem", vazio.origem, PRAZO_ORIGEM_AUSENTE);
   confere("envio vazio · prazo", vazio.prazo, null);
 
-  console.log("\n2. O prazo de ENTREGA não pode virar prazo de despacho\n");
+  console.log("\n2. Buffering preserva a data civil e precede o handling\n");
+
+  const comBuffering = extrairPrazoDespachoMeli({
+    ...AGENCIA,
+    shipping_option: {
+      ...AGENCIA.shipping_option,
+      buffering: { date: "2026-09-25T00:00:00.000Z" },
+    },
+  });
+  confere("buffering · origem", comBuffering.origem, "ml_buffering_date");
+  confere(
+    "buffering · dia civil de São Paulo",
+    comBuffering.prazo?.toISOString(),
+    "2026-09-26T02:59:59.000Z",
+  );
+  confere(
+    "SLA salvo não é rebaixado para handling",
+    devePreservarPrazoMeli("ml_sla_expected", "ml_handling_derivado"),
+    true,
+  );
+  confere(
+    "SLA novo substitui buffering",
+    devePreservarPrazoMeli("ml_buffering_date", "ml_sla_expected"),
+    false,
+  );
+
+  console.log("\n3. O prazo de ENTREGA não pode virar prazo de despacho\n");
 
   // O Flex traz `estimated_delivery_limit` e `estimated_delivery_extended`
   // preenchidos com 12/09 (a ENTREGA). O prazo devolvido tem de ser o do
@@ -167,7 +197,7 @@ async function main() {
     true,
   );
 
-  console.log("\n3. Precedência: handling_limit explícito ganha do derivado\n");
+  console.log("\n4. Precedência: handling_limit explícito ganha do derivado\n");
 
   const comExplicito = extrairPrazoDespachoMeli({
     ...COLETA,
@@ -179,7 +209,7 @@ async function main() {
   confere("origem", comExplicito.origem, "ml_handling_limit");
   confere("prazo", comExplicito.prazo?.toISOString(), "2026-09-12T23:00:00.000Z");
 
-  console.log("\n4. O SQL do backfill é gerado e está bem formado\n");
+  console.log("\n5. O SQL do backfill é gerado e está bem formado\n");
 
   const { backfillPrazoChunk } = await import("../src/lib/prazo-despacho-backfill");
   await backfillPrazoChunk(10, "user-1");
@@ -200,7 +230,12 @@ async function main() {
   );
   confere(
     "SQL reexamina linha marcada com versão antiga",
-    mlSql.includes("prazo_despacho_origem <> 'ausente:4'"),
+    mlSql.includes(`prazo_despacho_origem <> '${PRAZO_ORIGEM_AUSENTE}'`),
+    true,
+  );
+  confere(
+    "SQL promove buffering como data civil",
+    mlSql.includes("'ml_buffering_date'") && mlSql.includes("AT TIME ZONE 'America/Sao_Paulo'"),
     true,
   );
 

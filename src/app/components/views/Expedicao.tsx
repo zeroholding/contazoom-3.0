@@ -11,7 +11,7 @@
  *
  *   1. cabeçalho: título, subtítulo, [Exportar] [Imprimir PDF]
  *   2. card de filtros: barra (Prazo / Situação / Canal) + Filtros avançados
- *   3. sete cartões de resumo
+ *   3. dois cartões de resumo: vendas e itens físicos
  *   4. card da tabela: contagem + "Ordenar por", tabela agrupada por pacote,
  *      paginação numerada
  *
@@ -196,22 +196,23 @@ function TabelaResumo({
 const TEXTOS: Record<"geral" | Canal, { titulo: string; descricao: string }> = {
   geral: {
     titulo: "Separação de Itens",
-    descricao: "Gerencie e acompanhe os itens separados para despacho.",
+    descricao:
+      "Vendas comercialmente pagas organizadas pela data em que deveriam ser despachadas, mesmo quando o envio já avançou.",
   },
   ML: {
     titulo: "Separação de Itens — Mercado Livre",
     descricao:
-      "Gerencie e acompanhe os itens separados para despacho no Mercado Livre. Vendas FULL não aparecem: nelas quem despacha é o próprio Mercado Livre.",
+      "Vendas pagas organizadas pelo prazo previsto de despacho, independentemente do status logístico atual. Vendas FULL não aparecem.",
   },
   SP: {
     titulo: "Separação de Itens — Shopee",
     descricao:
-      "Gerencie e acompanhe os itens separados para despacho na Shopee. Entram os pedidos prontos para envio, processados e em nova tentativa.",
+      "Vendas pagas organizadas pelo prazo previsto de despacho, incluindo pedidos já enviados ou concluídos.",
   },
   TT: {
     titulo: "Separação de Itens — TikTok Shop",
     descricao:
-      "Gerencie e acompanhe os itens separados para despacho no TikTok Shop. Entram os pedidos a despachar, aguardando coleta e com envio parcial. Pedido não pago fica de fora.",
+      "Vendas pagas organizadas pelo prazo previsto de despacho, incluindo pedidos em trânsito, entregues ou concluídos.",
   },
 };
 
@@ -318,8 +319,6 @@ export default function Expedicao({
     [dados?.totalPaginas],
   );
 
-  const porUrgencia = dados?.porUrgencia;
-
   // `useMemo` e não `dados?.pacotes ?? []`: o `?? []` cria um array novo a cada
   // render, o que faria os `useMemo` que dependem dele recalcular sempre — e
   // deixariam de ser memo nenhum.
@@ -377,7 +376,17 @@ export default function Expedicao({
   const elegiveisLote = useMemo<PacoteLote[]>(
     () =>
       pacotes
-        .filter((p) => p.canal === "ML" && p.shippingId)
+        .filter((p) => {
+          const status = (p.shippingStatus ?? "")
+            .trim()
+            .toLowerCase()
+            .replaceAll(" ", "_");
+          return (
+            p.canal === "ML" &&
+            Boolean(p.shippingId) &&
+            (status === "ready_to_ship" || status === "printed")
+          );
+        })
         .map((p) => ({
           chave: p.chave,
           shippingId: p.shippingId as string,
@@ -525,14 +534,8 @@ export default function Expedicao({
         {/* ──────────────────── CARTÕES DE RESUMO ──────────────────── */}
         <div className="cz-nao-imprimir">
           <CartoesSeparacao
-            pacotes={dados?.total ?? 0}
-            itens={dados?.itens ?? 0}
             vendas={dados?.vendas ?? 0}
-            unidades={dados?.unidades ?? 0}
-            atrasados={porUrgencia?.atrasado ?? 0}
-            despacharHoje={porUrgencia?.hoje ?? 0}
-            porModalidade={dados?.resumoModalidade ?? []}
-            contas={contasDoCanal.length}
+            itens={dados?.unidades ?? 0}
           />
         </div>
 

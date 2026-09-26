@@ -60,7 +60,10 @@ import { toFiniteNumber } from "@/utils/numeric-functions";
 import { roundCurrency, truncateJsonData, truncateString } from "@/utils/string-utils";
 import { calculateMargemContribuicao } from "@/utils/calc-margem-contribuicao";
 import { adsTags, mapListingTypeToExposure } from "@/utils/meli-functions";
-import { extrairPrazoDespachoMeli } from "@/lib/prazo-despacho";
+import {
+  devePreservarPrazoMeli,
+  extrairPrazoDespachoMeli,
+} from "@/lib/prazo-despacho";
 
 export const runtime = "nodejs";
 export const maxDuration = 60; // 60 segundos (Vercel Pro)
@@ -1685,18 +1688,18 @@ async function saveVendasBatch(
         const orderIds = validData.map((d) => d!.orderId);
         const existingOrders = await prisma.meliVenda.findMany({
           where: { orderId: { in: orderIds } },
-          select: { orderId: true },
+          select: { orderId: true, prazoDespachoOrigem: true },
         });
 
-        const existingOrderIdSet = new Set(
-          existingOrders.map((o: any) => o.orderId)
+        const existingByOrderId = new Map(
+          existingOrders.map((order) => [order.orderId, order]),
         );
 
         const toCreate = validData.filter(
-          (d) => !existingOrderIdSet.has(d!.orderId)
+          (d) => !existingByOrderId.has(d!.orderId)
         );
         const toUpdate = validData.filter((d) =>
-          existingOrderIdSet.has(d!.orderId)
+          existingByOrderId.has(d!.orderId)
         );
 
         // BATCH CREATE: insere m�ltiplos registros de uma vez
@@ -1717,12 +1720,27 @@ async function saveVendasBatch(
         if (toUpdate.length > 0) {
           try {
             await prisma.$transaction(
-              toUpdate.map((d) =>
-                prisma.meliVenda.update({
+              toUpdate.map((d) => {
+                const updateData = { ...d!.updateData };
+                const origemExistente = existingByOrderId.get(
+                  d!.orderId,
+                )?.prazoDespachoOrigem;
+
+                if (
+                  devePreservarPrazoMeli(
+                    origemExistente ?? null,
+                    String(updateData.prazoDespachoOrigem ?? ""),
+                  )
+                ) {
+                  delete updateData.prazoDespacho;
+                  delete updateData.prazoDespachoOrigem;
+                }
+
+                return prisma.meliVenda.update({
                   where: { orderId: d!.orderId },
-                  data: { ...d!.updateData, atualizadoEm: new Date() },
-                })
-              )
+                  data: { ...updateData, atualizadoEm: new Date() },
+                });
+              })
             );
             saved += toUpdate.length;
           } catch (updateError) {

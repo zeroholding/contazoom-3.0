@@ -55,7 +55,7 @@
  * antigas sem prazo tendo o dado no JSON.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-export const PRAZO_ORIGEM_AUSENTE = "ausente:4";
+export const PRAZO_ORIGEM_AUSENTE = "ausente:5";
 
 /**
  * Fim do dia civil de São Paulo em que o instante caiu.
@@ -134,6 +134,14 @@ function dataValida(valor: unknown): Date | null {
   return d;
 }
 
+function fimDaDataCivilSP(valor: unknown): Date | null {
+  if (typeof valor === "string") {
+    const dia = valor.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    if (dia) return dataValida(`${dia}T23:59:59-03:00`);
+  }
+  return dataValida(valor);
+}
+
 function comoObjeto(valor: unknown): Record<string, unknown> {
   return valor && typeof valor === "object" ? (valor as Record<string, unknown>) : {};
 }
@@ -179,6 +187,17 @@ export function extrairPrazoDespachoMeli(
       /** O número OFICIAL, retornado por `/shipments/{id}/sla`. */
       origem: "ml_sla_expected",
       ler: (f) => comoObjeto(f.sla).expected_date,
+    },
+    {
+      // A data em que o envio sai do buffering é o corte operacional preservado
+      // no payload mesmo depois que `/sla` deixa de responder (ex.: cancelado ou
+      // entregue). Deve vir antes de qualquer estimativa por horas de handling.
+      origem: "ml_buffering_date",
+      ler: (f) =>
+        fimDaDataCivilSP(
+          comoObjeto(comoObjeto(f.shipping_option).buffering).date ??
+            comoObjeto(f.buffering).date,
+        ),
     },
     {
       origem: "ml_handling_limit",
@@ -284,6 +303,33 @@ export function extrairPrazoDespachoMeli(
   }
 
   return SEM_PRAZO;
+}
+
+const PRIORIDADE_PRAZO_MELI: Record<string, number> = {
+  ml_sla_expected: 100,
+  ml_buffering_date: 90,
+  ml_handling_limit: 80,
+  ml_handling_limit_raiz: 80,
+  ml_schedule_limit: 80,
+  ml_shipping_limit: 60,
+  ml_delivery_handling: 50,
+  ml_handling_derivado: 10,
+};
+
+/**
+ * Evita rebaixar um prazo confiável quando um envio encerrado deixa de expor o
+ * SLA ou o buffering e sobra apenas uma estimativa. A mesma origem pode atualizar
+ * a data, e uma origem melhor sempre substitui a anterior.
+ */
+export function devePreservarPrazoMeli(
+  origemExistente: string | null,
+  origemNova: string,
+): boolean {
+  if (!origemExistente || origemExistente === origemNova) return false;
+  return (
+    (PRIORIDADE_PRAZO_MELI[origemExistente] ?? 0) >
+    (PRIORIDADE_PRAZO_MELI[origemNova] ?? 0)
+  );
 }
 
 /* -------------------------------------------------------------------------- */

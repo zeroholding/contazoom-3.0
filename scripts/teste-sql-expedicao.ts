@@ -26,7 +26,7 @@
 
 /* O stub tem de existir ANTES do import: `src/lib/prisma.ts` faz
    `global.prisma ?? new PrismaClient()`, e sem isto ele tenta abrir conexão. */
-const capturado: { sql: string }[] = [];
+const capturado: { sql: string; values: unknown[] }[] = [];
 
 function texto(arg: unknown): string {
   if (typeof arg === "string") return arg;
@@ -38,7 +38,8 @@ function texto(arg: unknown): string {
 }
 
 const registra = (arg: unknown) => {
-  capturado.push({ sql: texto(arg) });
+  const values = (arg as { values?: unknown[] })?.values;
+  capturado.push({ sql: texto(arg), values: Array.isArray(values) ? values : [] });
 };
 
 (globalThis as Record<string, unknown>).prisma = {
@@ -101,12 +102,34 @@ async function main() {
   const { buscarExpedicao } = await import("../src/lib/expedicao-data");
   const { FILTROS_PADRAO } = await import("../src/lib/expedicao");
 
-  try {
-    await buscarExpedicao("user-1", { ...FILTROS_PADRAO });
-  } catch {
-    // Esperado: o stub devolve listas vazias e o montador da resposta reclama. O
-    // que interessa já foi capturado.
-  }
+  const executar = async (
+    canais: ("ML" | "SP" | "TT")[],
+    statusVenda: "pago" | "cancelado" | "todos",
+  ) => {
+    const inicio = capturado.length;
+    try {
+      await buscarExpedicao("user-1", {
+        ...FILTROS_PADRAO,
+        canais,
+        statusVenda,
+      });
+    } catch {
+      // O stub devolve listas vazias; o SQL já foi capturado.
+    }
+    return capturado
+      .slice(inicio)
+      .map((item) => `${item.sql}\n${JSON.stringify(item.values)}`)
+      .join("\n;\n");
+  };
+
+  await executar([], "pago");
+  const mlPago = await executar(["ML"], "pago");
+  const mlCancelado = await executar(["ML"], "cancelado");
+  const mlTodos = await executar(["ML"], "todos");
+  const spPago = await executar(["SP"], "pago");
+  const spCancelado = await executar(["SP"], "cancelado");
+  const ttPago = await executar(["TT"], "pago");
+  const ttCancelado = await executar(["TT"], "cancelado");
 
   capturado.forEach((c) => (c.sql = semComentario(c.sql)));
   const todo = capturado.map((c) => c.sql).join("\n;\n");
@@ -165,6 +188,39 @@ async function main() {
     }
   });
   confere(`nenhum alias repetido (${blocos} blocos de CTE)`, repetidos === 0);
+
+  /* 6. Contrato dos portões comerciais. Status logístico não aparece aqui: ele
+        continua no SELECT para exibição, mas nunca forma predicado de inclusão. */
+  confere("ML pagas preserva aprovação histórica", mlPago.includes("date_approved"));
+  confere("ML canceladas usa lista própria", mlCancelado.includes("cancelled"));
+  confere(
+    "ML todas remove o gate comercial",
+    !mlTodos.includes("date_approved") && !mlTodos.includes("cancelado"),
+  );
+  confere(
+    "Shopee pagas inclui histórico enviado/concluído",
+    spPago.includes("SHIPPED") && spPago.includes("COMPLETED"),
+  );
+  confere(
+    "Shopee canceladas não usa lista paga",
+    spCancelado.includes("CANCELLED") && !spCancelado.includes("COMPLETED"),
+  );
+  confere(
+    "TikTok pagas inclui trânsito/entrega/conclusão",
+    ttPago.includes("IN_TRANSIT") &&
+      ttPago.includes("DELIVERED") &&
+      ttPago.includes("COMPLETED"),
+  );
+  confere(
+    "TikTok canceladas não usa lista paga",
+    ttCancelado.includes("CANCELLED") && !ttCancelado.includes("DELIVERED"),
+  );
+  confere(
+    "FULL permanece fora em qualquer situação",
+    [mlPago, mlCancelado, mlTodos].every(
+      (sql) => sql.includes("fulfillment") && sql.includes("full"),
+    ),
+  );
 
   console.log(falhas === 0 ? "\nTODOS OS TESTES PASSARAM.\n" : `\n${falhas} FALHA(S).\n`);
   process.exit(falhas === 0 ? 0 : 1);

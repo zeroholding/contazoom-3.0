@@ -32,78 +32,17 @@ import {
   ehCanal,
 } from "@/lib/expedicao";
 
+import {
+  SHOPEE_PAGO,
+  TIKTOK_PAGO,
+} from "@/lib/vendasStatus";
+
 /* -------------------------------------------------------------------------- */
 /*                        Regras duras da fila                                */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Estados de envio do ML que significam "saiu daqui" — o pacote não é mais
- * trabalho de galpão.
- *
- * LISTA NEGRA, e não lista branca, de propósito. O vocabulário de
- * `shipping_status` do ML é aberto e muda sem aviso (`to_be_agreed`, `delayed`,
- * `handling`, `printed`, `stale`...). Com lista branca, um estado novo que a
- * lista não conhecesse faria o pacote DESAPARECER da fila — trabalho invisível,
- * que é o pior defeito possível numa tela de expedição. Com lista negra, o
- * estado desconhecido aparece; no máximo aparece algo demais, e isso alguém vê e
- * corrige. É a mesma escolha do CyberDock.
- *
- * `shipping_status` NULL ou vazio PERMANECE na fila: é a venda recém-paga cujo
- * envio o ML ainda não criou.
- */
-const ML_ENVIO_ENCERRADO = [
-  "shipped",
-  "delivered",
-  "not_delivered",
-  "cancelled",
-  "canceled",
-  "closed",
-  "returned",
-  "stale",
-];
-
-/** Vendas que nem deveriam existir como trabalho. */
-const ML_STATUS_MORTO = ["cancelled", "canceled", "cancelado", "invalid"];
-
-/**
- * Estados da Shopee que representam "tenho de despachar".
- *
- * Aqui a LISTA BRANCA é a certa, ao contrário do ML: o `order_status` da Shopee é
- * um enum fechado e pequeno (UNPAID, READY_TO_SHIP, PROCESSED, RETRY_SHIP,
- * SHIPPED, TO_CONFIRM_RECEIVE, IN_CANCEL, CANCELLED, TO_RETURN, COMPLETED,
- * INVOICE_PENDING), e só três deles são trabalho de expedição. Uma lista negra
- * teria de nomear oito estados para excluir três, e deixaria UNPAID e
- * INVOICE_PENDING entrarem na fila — pedido que ainda não pode ser despachado.
- */
-const SP_STATUS_FILA = ["READY_TO_SHIP", "PROCESSED", "RETRY_SHIP"];
-
-/**
- * Estados de cancelamento da Shopee.
- *
- * `TO_RETURN` entra junto porque, para o galpão, é o mesmo problema dos outros
- * dois: um pacote que talvez já esteja separado e NÃO deve sair. Não é
- * cancelamento no sentido contábil, e é por isso que a lista tem nome próprio em
- * vez de ser chamada de "cancelados".
- */
+const ML_STATUS_CANCELADO = ["cancelled", "canceled", "cancelado", "invalid"];
 const SP_STATUS_CANCELADO = ["CANCELLED", "IN_CANCEL", "TO_RETURN"];
-
-/**
- * Fila de expedição do TikTok Shop.
- *
- * Lista branca, mesma ideia da Shopee: só os estados em que há pacote para
- * despachar. `PARTIALLY_SHIPPING` entra porque pedido parcialmente enviado ainda
- * tem item na prateleira.
- *
- * Fora da lista de propósito: `UNPAID` (criado e não pago — não há o que separar),
- * `IN_TRANSIT` e `DELIVERED` (já saíram) e `COMPLETED` (histórico de venda, que é
- * outra tela).
- */
-const TT_STATUS_FILA = [
-  "AWAITING_SHIPMENT",
-  "AWAITING_COLLECTION",
-  "PARTIALLY_SHIPPING",
-];
-
 const TT_STATUS_CANCELADO = ["CANCELLED"];
 
 /**
@@ -565,78 +504,57 @@ function fragmentoTemPrazo(valor: TemPrazo): Prisma.Sql {
 }
 
 /**
- * O PORTÃO da fila: quais vendas do Mercado Livre existem, para dado recorte de
- * situação.
+ * A Expedição é uma coorte por PRAZO PREVISTO, não uma fotografia da fila atual.
+ * Status logístico nunca decide inclusão: um pedido já enviado ou entregue
+ * continua pertencendo ao dia em que deveria ser despachado.
  *
- * É aqui, e não num filtro somado depois, porque `statusVenda` não estreita a
- * fila — ele TROCA o conjunto. "Canceladas" pedido como filtro adicional sobre a
- * fila normal devolveria SEMPRE zero, já que a fila normal exclui venda morta e
- * envio encerrado por definição: seriam duas condições que se anulam, e o
- * controle na tela só poderia dar lista vazia.
- *
- * E "Canceladas" é uma pergunta REAL de galpão, não de contabilidade: pedido que
- * caiu depois de alguém já ter separado a caixa não pode sair, e descobrir isso
- * na fila é mais barato que descobrir na transportadora.
- *
- * O `REPLACE` de espaço por underscore existe porque o sync do ML grava o status
- * da venda com o underscore trocado por espaço (`payment_in_process` vira
- * `payment in process`). Sem ele, "pago" funcionaria por acaso (`paid` não tem
- * underscore) e todo status composto escaparia da comparação.
+ * Para o ML, uma venda que depois foi cancelada ainda entra se houve pagamento
+ * aprovado. Isso preserva a coorte histórica (o estorno muda o estado atual, não
+ * apaga que o pedido esteve previsto). `date_approved` é usado porque o status do
+ * pagamento também muda para `refunded` depois do cancelamento.
  */
 function portaoMeli(status: StatusVenda): Prisma.Sql {
   const venda = Prisma.raw(`REPLACE(LOWER(COALESCE(v.status, '')), ' ', '_')`);
-  const envio = Prisma.raw(`REPLACE(LOWER(COALESCE(v.shipping_status, '')), ' ', '_')`);
+  const pagamentoAprovado = Prisma.raw(`EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+      CASE
+        WHEN jsonb_typeof(v.raw_data -> 'order' -> 'payments') = 'array'
+        THEN v.raw_data -> 'order' -> 'payments'
+        ELSE '[]'::jsonb
+      END
+    ) pagamento
+    WHERE NULLIF(pagamento ->> 'date_approved', '') IS NOT NULL
+  )`);
 
-  // Cancelado inverte o portão: nenhuma das duas exclusões da fila normal se
-  // aplica, senão o resultado seria vazio por construção.
+  if (status === "todos") return Prisma.empty;
   if (status === "cancelado") {
-    return Prisma.sql`AND ${venda} IN (${lista(ML_STATUS_MORTO)})`;
+    return Prisma.sql`AND ${venda} IN (${lista(ML_STATUS_CANCELADO)})`;
   }
 
-  const partes: Prisma.Sql[] = [
-    Prisma.sql`AND ${venda} NOT IN (${lista(ML_STATUS_MORTO)})`,
-    Prisma.sql`AND ${envio} NOT IN (${lista(ML_ENVIO_ENCERRADO)})`,
-  ];
-
-  // `todos` deixa entrar `payment_required`, `payment_in_process` e
-  // `invoice_pending` — vendas que não são canceladas nem pagas. É o recorte de
-  // quem procura por que um pedido não aparece na fila normal.
-  if (status === "pago") partes.push(Prisma.sql`AND ${venda} IN ('paid', 'pago')`);
-
-  return Prisma.join(partes, " ");
+  return Prisma.sql`AND (${venda} IN ('paid', 'pago') OR ${pagamentoAprovado})`;
 }
 
-/**
- * O portão da Shopee.
- *
- * `pago` e `todos` dão o MESMO conjunto, e isso é correto: a fila da Shopee é uma
- * lista branca de três estados de despacho, e todos os três pressupõem pedido
- * pago. Alargar `todos` para o enum inteiro traria `COMPLETED` e `SHIPPED` — o
- * que não é fila de expedição, é histórico de vendas, e essa tela já existe.
- */
+/** Coorte comercial paga da Shopee, incluindo pedidos já enviados/concluídos. */
 function portaoShopee(status: StatusVenda): Prisma.Sql {
   const venda = Prisma.raw(`UPPER(COALESCE(v.status, ''))`);
 
+  if (status === "todos") return Prisma.empty;
   if (status === "cancelado") {
     return Prisma.sql`AND ${venda} IN (${lista(SP_STATUS_CANCELADO)})`;
   }
-  return Prisma.sql`AND ${venda} IN (${lista(SP_STATUS_FILA)})`;
+  return Prisma.sql`AND ${venda} IN (${lista(SHOPEE_PAGO.map((item) => item.toUpperCase()))})`;
 }
 
-/**
- * Portão do TikTok Shop. Mesma forma do da Shopee, por lista branca.
- *
- * `pago` e `todos` coincidem de novo, e por um motivo a mais aqui: no TikTok
- * `UNPAID` é um estado de verdade do enum, e ele NÃO pode entrar na fila —
- * separar pedido não pago é trabalho que pode ser desfeito.
- */
+/** Coorte comercial paga do TikTok, incluindo trânsito, entrega e conclusão. */
 function portaoTiktok(status: StatusVenda): Prisma.Sql {
   const venda = Prisma.raw(`UPPER(COALESCE(v.status, ''))`);
 
+  if (status === "todos") return Prisma.empty;
   if (status === "cancelado") {
     return Prisma.sql`AND ${venda} IN (${lista(TT_STATUS_CANCELADO)})`;
   }
-  return Prisma.sql`AND ${venda} IN (${lista(TT_STATUS_FILA)})`;
+  return Prisma.sql`AND ${venda} IN (${lista(TIKTOK_PAGO.map((item) => item.toUpperCase()))})`;
 }
 
 /** Filtro de hierarquia. Aplicado na coluna já vinda da junção com o cadastro. */

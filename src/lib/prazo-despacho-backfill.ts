@@ -93,6 +93,16 @@ function epoch(caminho: string): string {
   END`;
 }
 
+/** Data civil YYYY-MM-DD preservada como fim daquele dia em São Paulo. */
+function dataCivilSP(caminho: string): string {
+  return `CASE
+    WHEN ${caminho} ~ '^\\d{4}-\\d{2}-\\d{2}'
+    THEN (
+      LEFT(${caminho}, 10)::date + INTERVAL '1 day' - INTERVAL '1 second'
+    ) AT TIME ZONE 'America/Sao_Paulo'
+  END`;
+}
+
 /** `COALESCE` das variações de caminho de um mesmo campo lógico. */
 function primeiro(expressoes: string[]): string {
   return expressoes.length === 1
@@ -191,6 +201,15 @@ function niveisMeli(): Nivel[] {
       // Fonte oficial, retornada por `/shipments/{id}/sla` e preservada no JSON.
       origem: "ml_sla_expected",
       expressao: primeiro(envios(`'sla' ->> 'expected_date'`).map(iso)),
+    },
+    {
+      // Data em que o ML libera o envio após o período de buffering. É o dia
+      // operacional mostrado pelo Nexus quando o endpoint /sla já não responde.
+      origem: "ml_buffering_date",
+      expressao: primeiro([
+        ...envios(`'shipping_option' -> 'buffering' ->> 'date'`),
+        ...envios(`'buffering' ->> 'date'`),
+      ].map(dataCivilSP)),
     },
     {
       origem: "ml_handling_limit",
@@ -398,21 +417,24 @@ export async function backfillPrazoChunk(
 ): Promise<BackfillPrazoResult> {
   const niveisMl = niveisMeli();
   const slaExpected = niveisMl.find((nivel) => nivel.origem === "ml_sla_expected");
-  if (!slaExpected) {
-    throw new Error("Nível ml_sla_expected não configurado");
+  const buffering = niveisMl.find((nivel) => nivel.origem === "ml_buffering_date");
+  if (!slaExpected || !buffering) {
+    throw new Error("Níveis autoritativos do prazo ML não configurados");
   }
-
-  const pendenteMl = `(${PENDENTE_SQL} OR (
-    v.prazo_despacho_origem IS DISTINCT FROM 'ml_sla_expected'
-    AND (${slaExpected.expressao}) IS NOT NULL
-  ))`;
 
   const ml = await processarTabela(
     "meli_venda",
     niveisMl,
     limite,
     userId,
-    pendenteMl,
+    `(${PENDENTE_SQL} OR (
+      v.prazo_despacho_origem IS DISTINCT FROM 'ml_sla_expected'
+      AND (${slaExpected.expressao}) IS NOT NULL
+    ) OR (
+      v.prazo_despacho_origem NOT IN ('ml_sla_expected', 'ml_buffering_date')
+      AND (${slaExpected.expressao}) IS NULL
+      AND (${buffering.expressao}) IS NOT NULL
+    ))`,
   );
   const sp = await processarTabela("shopee_venda", niveisShopee(), limite, userId);
   const tt = await processarTabela("tiktok_venda", niveisTiktok(), limite, userId);
