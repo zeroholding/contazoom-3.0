@@ -733,15 +733,6 @@ export default function EstoqueFull() {
         )}
       </section>
 
-      <p className="mt-4 max-w-4xl text-xs leading-relaxed text-[var(--cz-texto-suave)]">
-        Os números de estoque vêm da API do Mercado Livre e são gravados quando você clica
-        em Atualizar — não mudam sozinhos entre um clique e outro. As vendas de 30 dias e a
-        cobertura são calculadas a partir das vendas já sincronizadas neste sistema.{" "}
-        <strong>&quot;A caminho&quot;</strong> são unidades em transferência para o centro de
-        distribuição: o Mercado Livre as devolve somadas às não aptas, e aqui elas ficam
-        separadas para bater com o painel dele. Uma linha por variação, porque no Full o
-        estoque é por variação.
-      </p>
     </MolduraTela>
   );
 }
