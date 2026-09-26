@@ -73,7 +73,7 @@ export default function Dashboard() {
   }, []);
 
   // Estados dos filtros
-  const [periodoAtivo, setPeriodoAtivo] = useState<FiltroPeriodo>("hoje");
+  const [periodoAtivo, setPeriodoAtivo] = useState<FiltroPeriodo>("ultimos_30d");
   const [dataInicioPersonalizada, setDataInicioPersonalizada] = useState<Date | null>(null);
   const [dataFimPersonalizada, setDataFimPersonalizada] = useState<Date | null>(null);
   const [canalAtivo, setCanalAtivo] = useState<FiltroCanal>("todos");

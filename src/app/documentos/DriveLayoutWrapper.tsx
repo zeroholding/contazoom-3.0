@@ -58,7 +58,7 @@ export default function DriveLayoutWrapper() {
         mobileOpen={isSidebarMobileOpen} 
         onMobileClose={() => setIsSidebarMobileOpen(false)} 
       />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden lg:ml-[var(--sidebar-w)] transition-all duration-200">
+      <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden transition-[margin] duration-200 md:ml-[var(--sidebar-w)]">
         <Topbar 
           collapsed={isSidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}

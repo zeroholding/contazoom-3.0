@@ -165,6 +165,7 @@ export default function MapaCalorBrasil({
         if (tipoAnuncioAtivo && tipoAnuncioAtivo !== "todos") params.append("tipoAnuncio", tipoAnuncioAtivo);
         if (modalidadeEnvioAtiva && modalidadeEnvioAtiva !== "todos") params.append("modalidade", modalidadeEnvioAtiva);
         if (agrupamentoSKUAtivo && agrupamentoSKUAtivo !== "mlb") params.append("agrupamentoSKU", agrupamentoSKUAtivo);
+        if (refreshKey) params.append("refresh", String(refreshKey));
         if (selectedAccount && selectedAccount.platform !== "todos" && selectedAccount.id) {
           params.append("accountPlatform", selectedAccount.platform);
           params.append("accountId", selectedAccount.id);

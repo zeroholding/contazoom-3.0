@@ -48,6 +48,7 @@ export default function FiltrosFinancas({
   const [showOrigemDropdown, setShowOrigemDropdown] = useState(false);
   const [showCalendarioPersonalizado, setShowCalendarioPersonalizado] = useState(false);
   const [showCalendarioPersonalizadoComp, setShowCalendarioPersonalizadoComp] = useState(false);
+  const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const [dataInicio, setDataInicio] = useState<Date | null>(null);
   const [dataFim, setDataFim] = useState<Date | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -265,20 +266,59 @@ export default function FiltrosFinancas({
     setEndDateComp(null);
   };
 
-  const temFiltrosAtivos = periodoAtivo !== "todos" || periodoCompetenciaAtivo !== "todos" || categoriasSelecionadas.size > 0 || filtroStatus !== "todos" || filtroOrigem !== "todas";
+  const filtrosAtivosCount = [
+    periodoAtivo !== "todos",
+    periodoCompetenciaAtivo !== "todos",
+    categoriasSelecionadas.size > 0,
+    filtroStatus !== "todos",
+    filtroOrigem !== "todas",
+  ].filter(Boolean).length;
+  const temFiltrosAtivos = filtrosAtivosCount > 0;
 
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="w-full">
+      <div className="flex items-center gap-2 md:hidden">
+        <button
+          type="button"
+          onClick={() => setIsMobileExpanded((value) => !value)}
+          aria-expanded={isMobileExpanded}
+          aria-controls="filtros-financas-mobile"
+          className="inline-flex min-h-11 flex-1 items-center justify-between gap-3 rounded-cz border border-hairline-forte bg-superficie px-3 text-sm font-semibold text-tinta shadow-cz-1 transition-colors hover:bg-fundo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+        >
+          <span className="inline-flex items-center gap-2">
+            <svg className="h-4 w-4 text-tinta-suave" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M6 10h12M10 16h4" />
+            </svg>
+            Filtros
+            {filtrosAtivosCount > 0 && (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-marca px-1.5 text-[11px] text-white">
+                {filtrosAtivosCount}
+              </span>
+            )}
+          </span>
+          <svg className={`h-4 w-4 transition-transform ${isMobileExpanded ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+      </div>
+
+      <div
+        id="filtros-financas-mobile"
+        className={`${isMobileExpanded ? "mt-3 flex" : "hidden"} flex-col gap-3 rounded-cartao border border-hairline bg-superficie p-3 shadow-cz-1 md:mt-0 md:flex md:flex-row md:items-center md:border-0 md:bg-transparent md:p-0 md:shadow-none`}
+      >
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           {/* Dropdown de Período */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <button
               ref={periodoDropdown.triggerRef}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={showPeriodoDropdown}
               onClick={() => setShowPeriodoDropdown(!showPeriodoDropdown)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                showPeriodoDropdown 
-                  ? "border-gray-400 bg-gray-50 text-gray-900" 
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+              className={`inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-cz border px-3 text-xs font-semibold transition-all duration-200 sm:w-auto ${
+                showPeriodoDropdown || periodoAtivo !== "todos"
+                  ? "border-marca-borda bg-marca-suave text-marca-forte"
+                  : "border-hairline-forte bg-superficie text-tinta-suave hover:border-marca-borda hover:bg-marca-suave hover:text-tinta"
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -313,10 +353,10 @@ export default function FiltrosFinancas({
                         <button
                           key={opcao.id}
                           onClick={() => handlePeriodoClick(opcao.id)}
-                          className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                          className={`min-h-10 w-full rounded-cz px-3 py-2 text-left text-sm transition-colors ${
                             periodoAtivo === opcao.id 
-                              ? "bg-gray-100 text-gray-900 font-medium" 
-                              : "text-gray-700 hover:bg-gray-50"
+                              ? "bg-marca-suave text-marca-forte font-semibold" 
+                              : "text-tinta-suave hover:bg-fundo hover:text-tinta"
                           }`}
                         >
                           {opcao.label}
@@ -326,7 +366,7 @@ export default function FiltrosFinancas({
                   </div>
                 ) : (
                   <div className="p-4">
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">Selecione o Período</h4>
+                    <h4 className="mb-3 text-sm font-semibold text-tinta">Selecione o Período</h4>
                     <DatePicker
                       selected={startDate}
                       onChange={(dates: [Date | null, Date | null]) => {
@@ -344,14 +384,14 @@ export default function FiltrosFinancas({
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={handleCancelarPersonalizado}
-                        className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        className="min-h-11 flex-1 rounded-cz border border-hairline-forte bg-superficie px-3 py-2 text-xs font-semibold text-tinta transition-colors hover:bg-fundo"
                       >
                         Cancelar
                       </button>
                       <button
                         onClick={handleConfirmarPersonalizado}
                         disabled={!startDate || !endDate}
-                        className="flex-1 px-3 py-2 text-xs font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="min-h-11 flex-1 rounded-cz bg-tinta px-3 py-2 text-xs font-semibold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Confirmar
                       </button>
@@ -363,14 +403,17 @@ export default function FiltrosFinancas({
           </div>
 
           {/* Período Competência */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <button
               ref={periodoCompetenciaDropdown.triggerRef}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={showPeriodoCompetenciaDropdown}
               onClick={() => setShowPeriodoCompetenciaDropdown(!showPeriodoCompetenciaDropdown)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                showPeriodoCompetenciaDropdown 
-                  ? "border-gray-400 bg-gray-50 text-gray-900" 
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+              className={`inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-cz border px-3 text-xs font-semibold transition-all duration-200 sm:w-auto ${
+                showPeriodoCompetenciaDropdown || periodoCompetenciaAtivo !== "todos"
+                  ? "border-marca-borda bg-marca-suave text-marca-forte"
+                  : "border-hairline-forte bg-superficie text-tinta-suave hover:border-marca-borda hover:bg-marca-suave hover:text-tinta"
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -405,10 +448,10 @@ export default function FiltrosFinancas({
                         <button
                           key={opcao.id}
                           onClick={() => handlePeriodoCompetenciaClick(opcao.id)}
-                          className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                          className={`min-h-10 w-full rounded-cz px-3 py-2 text-left text-sm transition-colors ${
                             periodoCompetenciaAtivo === opcao.id 
-                              ? "bg-gray-100 text-gray-900 font-medium" 
-                              : "text-gray-700 hover:bg-gray-50"
+                              ? "bg-marca-suave text-marca-forte font-semibold" 
+                              : "text-tinta-suave hover:bg-fundo hover:text-tinta"
                           }`}
                         >
                           {opcao.label}
@@ -418,7 +461,7 @@ export default function FiltrosFinancas({
                   </div>
                 ) : (
                   <div className="p-4">
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">Período de Competência</h4>
+                    <h4 className="mb-3 text-sm font-semibold text-tinta">Período de Competência</h4>
                     <DatePicker
                       selected={startDateComp}
                       onChange={(dates: [Date | null, Date | null]) => {
@@ -436,14 +479,14 @@ export default function FiltrosFinancas({
                     <div className="flex gap-2 mt-3">
                       <button
                         onClick={handleCancelarPersonalizadoCompetencia}
-                        className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        className="min-h-11 flex-1 rounded-cz border border-hairline-forte bg-superficie px-3 py-2 text-xs font-semibold text-tinta transition-colors hover:bg-fundo"
                       >
                         Cancelar
                       </button>
                       <button
                         onClick={handleConfirmarPersonalizadoCompetencia}
                         disabled={!startDateComp || !endDateComp}
-                        className="flex-1 px-3 py-2 text-xs font-medium text-white bg-orange-500 rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="min-h-11 flex-1 rounded-cz bg-tinta px-3 py-2 text-xs font-semibold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Confirmar
                       </button>
@@ -455,14 +498,17 @@ export default function FiltrosFinancas({
           </div>
 
           {/* Dropdown de Categoria */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <button
               ref={categoriaDropdown.triggerRef}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={showCategoriaDropdown}
               onClick={() => setShowCategoriaDropdown(!showCategoriaDropdown)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                showCategoriaDropdown 
-                  ? "border-gray-400 bg-gray-50 text-gray-900" 
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+              className={`inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-cz border px-3 text-xs font-semibold transition-all duration-200 sm:w-auto ${
+                showCategoriaDropdown || categoriasSelecionadas.size > 0
+                  ? "border-marca-borda bg-marca-suave text-marca-forte"
+                  : "border-hairline-forte bg-superficie text-tinta-suave hover:border-marca-borda hover:bg-marca-suave hover:text-tinta"
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -484,13 +530,13 @@ export default function FiltrosFinancas({
                   <div className="flex items-center justify-between px-2 pb-2">
                     <button
                       onClick={() => { selecionarTodasCategorias(); }}
-                      className="text-xs text-blue-600 hover:text-blue-700"
+                      className="min-h-10 rounded-cz px-2 text-xs font-semibold text-tinta hover:bg-fundo"
                     >
                       Selecionar todas
                     </button>
                     <button
                       onClick={() => { limparCategorias(); }}
-                      className="text-xs text-gray-600 hover:text-gray-700"
+                      className="min-h-10 rounded-cz px-2 text-xs font-semibold text-tinta-suave hover:bg-fundo hover:text-tinta"
                     >
                       Limpar
                     </button>
@@ -502,15 +548,15 @@ export default function FiltrosFinancas({
                       categoriasDisponiveis.map((categoria) => (
                         <label
                           key={categoria.id}
-                          className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md hover:bg-gray-50 cursor-pointer"
+                          className="flex min-h-10 cursor-pointer items-center gap-2 rounded-cz px-3 py-1.5 text-sm text-tinta hover:bg-fundo"
                         >
                           <input
                             type="checkbox"
-                            className="rounded border-gray-300"
+                            className="rounded border-hairline-forte accent-marca"
                             checked={categoriasSelecionadas.has(categoria.id)}
                             onChange={() => toggleCategoria(categoria.id)}
                           />
-                          <span className="text-gray-700">{categoria.descricao || categoria.nome}</span>
+                          <span className="text-tinta">{categoria.descricao || categoria.nome}</span>
                         </label>
                       ))
                     )}
@@ -521,14 +567,17 @@ export default function FiltrosFinancas({
           </div>
 
           {/* Dropdown de Status */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <button
               ref={statusDropdown.triggerRef}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={showStatusDropdown}
               onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                showStatusDropdown 
-                  ? "border-gray-400 bg-gray-50 text-gray-900" 
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+              className={`inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-cz border px-3 text-xs font-semibold transition-all duration-200 sm:w-auto ${
+                showStatusDropdown || filtroStatus !== "todos"
+                  ? "border-marca-borda bg-marca-suave text-marca-forte"
+                  : "border-hairline-forte bg-superficie text-tinta-suave hover:border-marca-borda hover:bg-marca-suave hover:text-tinta"
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -560,10 +609,10 @@ export default function FiltrosFinancas({
                           if (onStatusChange) onStatusChange(opcao.id);
                           setShowStatusDropdown(false);
                         }}
-                        className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                        className={`min-h-10 w-full rounded-cz px-3 py-2 text-left text-sm transition-colors ${
                           filtroStatus === opcao.id 
-                            ? "bg-gray-100 text-gray-900 font-medium" 
-                            : "text-gray-700 hover:bg-gray-50"
+                            ? "bg-marca-suave text-marca-forte font-semibold" 
+                            : "text-tinta-suave hover:bg-fundo hover:text-tinta"
                         }`}
                       >
                         {opcao.label}
@@ -576,14 +625,17 @@ export default function FiltrosFinancas({
           </div>
 
           {/* Dropdown de Origem */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <button
               ref={origemDropdown.triggerRef}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={showOrigemDropdown}
               onClick={() => setShowOrigemDropdown(!showOrigemDropdown)}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                showOrigemDropdown 
-                  ? "border-gray-400 bg-gray-50 text-gray-900" 
-                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+              className={`inline-flex min-h-11 w-full items-center justify-between gap-2 rounded-cz border px-3 text-xs font-semibold transition-all duration-200 sm:w-auto ${
+                showOrigemDropdown || filtroOrigem !== "todas"
+                  ? "border-marca-borda bg-marca-suave text-marca-forte"
+                  : "border-hairline-forte bg-superficie text-tinta-suave hover:border-marca-borda hover:bg-marca-suave hover:text-tinta"
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -617,10 +669,10 @@ export default function FiltrosFinancas({
                           if (onOrigemChange) onOrigemChange(opcao.id);
                           setShowOrigemDropdown(false);
                         }}
-                        className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${
+                        className={`min-h-10 w-full rounded-cz px-3 py-2 text-left text-sm transition-colors ${
                           filtroOrigem === opcao.id 
-                            ? "bg-gray-100 text-gray-900 font-medium" 
-                            : "text-gray-700 hover:bg-gray-50"
+                            ? "bg-marca-suave text-marca-forte font-semibold" 
+                            : "text-tinta-suave hover:bg-fundo hover:text-tinta"
                         }`}
                       >
                         {opcao.label}
@@ -631,18 +683,20 @@ export default function FiltrosFinancas({
               </div>
             )}
           </div>
-      </div>
+        </div>
 
-      {/* Botão Limpar Filtros */}
-      {temFiltrosAtivos && (
-        <button
-          onClick={limparFiltros}
-          className="text-xs text-gray-600 hover:text-gray-900 font-medium transition-colors"
-        >
-          Limpar filtros
-        </button>
-      )}
-    </>
+        {/* Botão Limpar Filtros */}
+        {temFiltrosAtivos && (
+          <button
+            type="button"
+            onClick={limparFiltros}
+            className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-cz px-3 text-xs font-semibold text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+          >
+            Limpar {filtrosAtivosCount} {filtrosAtivosCount === 1 ? "filtro" : "filtros"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

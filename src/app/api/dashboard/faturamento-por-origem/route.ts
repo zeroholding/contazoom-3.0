@@ -116,7 +116,9 @@ export async function GET(req: NextRequest) {
       accountPlatformParam ?? "",
       accountIdParam ?? "",
     );
-    const cached = cache.get(cacheKey, 300000);
+    const cached = url.searchParams.has("refresh")
+      ? null
+      : cache.get(cacheKey, 60000);
     if (cached) {
       return NextResponse.json(cached);
     }

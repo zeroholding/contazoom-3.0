@@ -32,6 +32,9 @@ export interface SKU {
   createdAt: string;
   updatedAt: string;
   custoHistorico?: SKUCustoHistorico[];
+  /** Contrato de /api/sku/com-status-vendas. */
+  hasSales?: boolean;
+  salesCount?: number;
   statusVendas?: StatusVendas;
 }
 
@@ -116,6 +119,10 @@ function formatDecimalForInput(value: number | undefined): string {
 interface TabelaGestaoSKUProps {
   skus: SKU[];
   isLoading?: boolean;
+  loadError?: string | null;
+  onRetry?: () => void;
+  totalItems?: number;
+  hasActiveFilters?: boolean;
   isEditMode?: boolean;
   isMultiSelect?: boolean;
   selectedSKUs?: string[];
@@ -125,8 +132,8 @@ interface TabelaGestaoSKUProps {
   onSelectSKU?: (skuId: string, selected: boolean) => void;
   onSelectAll?: (selected: boolean) => void;
   onBulkDelete?: (skuIds: string[]) => Promise<void> | void;
-  onToggleStatus?: (skuIds: string[], ativo: boolean) => void;
-  onToggleEstoque?: (skuIds: string[], temEstoque: boolean) => void;
+  onToggleStatus?: (skuIds: string[], ativo: boolean) => Promise<void> | void;
+  onToggleEstoque?: (skuIds: string[], temEstoque: boolean) => Promise<void> | void;
   prefillNovoSku?: PrefillNovoSku;
   onPrefillConsumed?: () => void;
 }
@@ -134,6 +141,10 @@ interface TabelaGestaoSKUProps {
 export default function TabelaGestaoSKU({
   skus,
   isLoading = false,
+  loadError = null,
+  onRetry,
+  totalItems,
+  hasActiveFilters = false,
   isEditMode = false,
   isMultiSelect = false,
   selectedSKUs = [],
@@ -151,10 +162,8 @@ export default function TabelaGestaoSKU({
   const { toast } = useToast();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showEstoqueModal, setShowEstoqueModal] = useState(false);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [skusToDelete, setSkusToDelete] = useState<string[]>([]);
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   
   // Estados para modais de ação individual
   const [showEditModal, setShowEditModal] = useState(false);
@@ -204,34 +213,7 @@ export default function TabelaGestaoSKU({
     [skus]
   );
 
-  // Ordena para exibir kits seguidos de seus filhos, e depois individuais sem pai
-  const skusOrdenados = useMemo(() => {
-    const pais = skus.filter((s) => s.tipo === 'pai');
-    const filhos = skus.filter((s) => s.tipo === 'filho');
-    const filhosPorPai = new Map<string, SKU[]>();
-    for (const f of filhos) {
-      if (!f.skuPai) continue;
-      if (!filhosPorPai.has(f.skuPai)) filhosPorPai.set(f.skuPai, []);
-      filhosPorPai.get(f.skuPai)!.push(f);
-    }
-    const usados = new Set<string>();
-    const resultado: SKU[] = [];
-    for (const p of pais) {
-      resultado.push(p);
-      const filhosDoPai = filhosPorPai.get(p.sku) || [];
-      for (const f of filhosDoPai) {
-        resultado.push(f);
-        usados.add(f.id);
-      }
-    }
-    // Filhos sem pai ou não listados ainda
-    for (const f of filhos) {
-      if (!usados.has(f.id)) resultado.push(f);
-    }
-    return resultado;
-  }, [skus]);
-
-  // Versão que também leva em conta a lista skusFilhos gravada no kit
+  // Ordena kits e itens vinculados mantendo a hierarquia visual.
   const skusOrdenadosHier = useMemo(() => {
     const pais = skus.filter((s) => s.tipo === 'pai');
     const filhos = skus.filter((s) => s.tipo === 'filho');
@@ -249,7 +231,7 @@ export default function TabelaGestaoSKU({
       resultado.push(p);
       const viaFilho = filhosPorPai.get(p.sku) || [];
       let listaKit: string[] = [];
-      const rawSkusFilhos = (p as any).skusFilhos as any;
+      const rawSkusFilhos: unknown = p.skusFilhos;
       if (Array.isArray(rawSkusFilhos)) {
         listaKit = rawSkusFilhos as string[];
       } else if (typeof rawSkusFilhos === 'string') {
@@ -403,32 +385,35 @@ export default function TabelaGestaoSKU({
 
   const confirmBulkDelete = async () => {
     try {
+      setIsBulkSaving(true);
       await onBulkDelete?.(skusToDelete);
       setShowDeleteModal(false);
       setSkusToDelete([]);
     } catch (error) {
       console.error('Erro ao excluir SKUs em lote:', error);
+    } finally {
+      setIsBulkSaving(false);
     }
   };
 
-  const handleBulkToggleStatus = (ativo: boolean) => {
+  const handleBulkToggleStatus = async (ativo: boolean) => {
     if (selectedSKUs.length === 0) return;
-    onToggleStatus?.(selectedSKUs, ativo);
-    toast({
-      variant: "success",
-      title: "Status atualizado",
-      description: `${selectedSKUs.length} SKU(s) foram ${ativo ? 'ativados' : 'inativados'}`,
-    });
+    try {
+      setIsBulkSaving(true);
+      await onToggleStatus?.(selectedSKUs, ativo);
+    } finally {
+      setIsBulkSaving(false);
+    }
   };
 
-  const handleBulkToggleEstoque = (temEstoque: boolean) => {
+  const handleBulkToggleEstoque = async (temEstoque: boolean) => {
     if (selectedSKUs.length === 0) return;
-    onToggleEstoque?.(selectedSKUs, temEstoque);
-    toast({
-      variant: "success",
-      title: "Status de estoque atualizado",
-      description: `${selectedSKUs.length} SKU(s) foram marcados como ${temEstoque ? 'com estoque' : 'sem estoque'}`,
-    });
+    try {
+      setIsBulkSaving(true);
+      await onToggleEstoque?.(selectedSKUs, temEstoque);
+    } finally {
+      setIsBulkSaving(false);
+    }
   };
 
   const handleAplicarRetroativo = async (sku: SKU) => {
@@ -570,36 +555,17 @@ export default function TabelaGestaoSKU({
         hierarquia1: novoSku.hierarquia1.trim() || undefined,
         hierarquia2: novoSku.hierarquia2.trim() || undefined,
         ativo: novoSku.ativo,
-        temEstoque: true, // Sempre true conforme solicitado
+        temEstoque: true,
         skusFilhos:
           novoSku.tipo === "pai" && novoSku.skusFilhos.length > 0
             ? novoSku.skusFilhos
             : undefined,
       });
 
-      console.log('SKU criado com sucesso');
-      // Mensagem de sucesso com informação sobre vínculos criados
-      const numFilhos = novoSku.tipo === 'pai' ? novoSku.skusFilhos.length : 0;
-      toast({
-        variant: "success",
-        title: novoSku.tipo === 'pai' ? "Kit criado" : "SKU criado",
-        description: novoSku.tipo === 'pai' && numFilhos > 0
-          ? `Kit ${novoSku.sku} criado com ${numFilhos} ${numFilhos === 1 ? 'item atrelado' : 'itens atrelados'}`
-          : `SKU ${novoSku.sku} adicionado com sucesso`,
-      });
-
       resetForm();
       setShowCreateModal(false);
     } catch (error) {
       console.error('Erro ao criar SKU:', error);
-      toast({
-        variant: "error",
-        title: "Erro ao salvar",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Não foi possível salvar o SKU.",
-      });
     } finally {
       setIsSaving(false);
     }
@@ -650,79 +616,65 @@ export default function TabelaGestaoSKU({
     </svg>
   ];
 
-  if (isLoading) {
+  if (isLoading && skus.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+      <div className="overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-1)]" aria-busy="true" aria-label="Carregando SKUs">
+        <div className="border-b border-[var(--cz-hairline)] px-4 py-4 sm:px-6"><div className="h-4 w-40 animate-pulse rounded bg-[var(--cz-hairline)]" /></div>
+        <div className="space-y-3 p-4 sm:p-6">
+          {[0, 1, 2, 3, 4].map((item) => (
+            <div key={item} className="flex animate-pulse items-center gap-3 rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] p-3">
+              <div className="h-12 w-12 shrink-0 rounded-lg bg-[var(--cz-fundo)]" />
+              <div className="min-w-0 flex-1 space-y-2"><div className="h-3 w-1/3 rounded bg-[var(--cz-hairline)]" /><div className="h-3 w-2/3 rounded bg-[var(--cz-fundo)]" /></div>
+              <div className="hidden h-8 w-24 rounded bg-[var(--cz-fundo)] sm:block" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError && skus.length === 0) {
+    return (
+      <div className="rounded-[var(--cz-raio-cartao)] border border-rose-200 bg-[var(--cz-superficie)] px-5 py-12 text-center shadow-[var(--cz-elev-1)]" role="alert">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-rose-50 text-rose-700"><svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 9v4m0 4h.01M10.3 4.3 2.7 18a2 2 0 0 0 1.8 3h15a2 2 0 0 0 1.8-3L13.7 4.3a2 2 0 0 0-3.4 0Z" /></svg></span>
+        <h2 className="mt-4 text-base font-bold text-[var(--cz-texto)]">Não foi possível carregar a lista</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-[var(--cz-texto-suave)]">{loadError}</p>
+        <button type="button" onClick={onRetry} className="mt-5 inline-flex h-11 items-center justify-center rounded-[var(--cz-raio)] bg-[var(--cz-laranja)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[var(--cz-laranja-forte)]">Tentar novamente</button>
       </div>
     );
   }
 
   return (
-    <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] overflow-hidden">
+    <div className={`overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-[var(--cz-elev-1)] transition-opacity ${isLoading ? "opacity-70" : ""}`} aria-busy={isLoading}>
       {/* Barra de ações em lote */}
       {isMultiSelect && selectedSKUs.length > 0 && (
-        <div className="bg-blue-50 border-b border-blue-200 px-3 py-2 sm:px-6 sm:py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <span className="text-sm font-medium text-blue-800">
-                {selectedSKUs.length} SKU(s) selecionado(s)
-              </span>
+        <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-blue-900">{selectedSKUs.length} SKU(s) selecionado(s)</p>
+              <p className="text-xs text-blue-700">As ações abaixo afetam somente os itens desta página.</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => handleBulkToggleStatus(true)}
-                className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-md hover:bg-green-200 transition-colors"
-              >
-                Ativar
-              </button>
-              <button
-                onClick={() => handleBulkToggleStatus(false)}
-                className="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-              >
-                Inativar
-              </button>
-              <button
-                onClick={() => handleBulkToggleEstoque(true)}
-                className="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-md hover:bg-blue-200 transition-colors"
-              >
-                Com Estoque
-              </button>
-              <button
-                onClick={() => handleBulkToggleEstoque(false)}
-                className="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-              >
-                Sem Estoque
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                className="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
-              >
-                Excluir
-              </button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" aria-label="Ações em lote">
+              <button type="button" onClick={() => handleBulkToggleStatus(true)} disabled={isBulkSaving} className="inline-flex min-h-11 items-center justify-center rounded-[var(--cz-raio)] bg-emerald-100 px-3 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-200 disabled:opacity-50" aria-label="Ativar SKUs selecionados">Ativar</button>
+              <button type="button" onClick={() => handleBulkToggleStatus(false)} disabled={isBulkSaving} className="inline-flex min-h-11 items-center justify-center rounded-[var(--cz-raio)] bg-rose-100 px-3 text-xs font-semibold text-rose-800 transition-colors hover:bg-rose-200 disabled:opacity-50" aria-label="Inativar SKUs selecionados">Inativar</button>
+              <button type="button" onClick={() => handleBulkToggleEstoque(true)} disabled={isBulkSaving} className="inline-flex min-h-11 items-center justify-center rounded-[var(--cz-raio)] bg-blue-100 px-3 text-xs font-semibold text-blue-800 transition-colors hover:bg-blue-200 disabled:opacity-50" aria-label="Marcar SKUs selecionados com estoque">Com estoque</button>
+              <button type="button" onClick={() => handleBulkToggleEstoque(false)} disabled={isBulkSaving} className="inline-flex min-h-11 items-center justify-center rounded-[var(--cz-raio)] bg-[var(--cz-fundo)] px-3 text-xs font-semibold text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-hairline)] disabled:opacity-50" aria-label="Marcar SKUs selecionados sem estoque">Sem estoque</button>
+              <button type="button" onClick={handleBulkDelete} disabled={isBulkSaving} className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-[var(--cz-raio)] bg-rose-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-50 sm:col-span-1" aria-label="Excluir SKUs selecionados">Excluir</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Toolbar da tabela */}
-      <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-6 border-b border-gray-100">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
-          <span><span className="font-semibold text-gray-700">{skus.length}</span> {skus.length === 1 ? 'item' : 'itens'}</span>
+      {/* Resumo da listagem */}
+      <div className="flex flex-col gap-2 border-b border-[var(--cz-hairline)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex items-center gap-2 text-sm text-[var(--cz-texto-suave)]">
+          <svg className="h-4 w-4 text-[var(--cz-laranja)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+          <span><strong className="text-[var(--cz-texto)]">{totalItems ?? skus.length}</strong> {(totalItems ?? skus.length) === 1 ? "item" : "itens"} no catálogo</span>
         </div>
-        <button
-          type="button"
-          onClick={() => { resetForm(); setShowCreateModal(true); }}
-          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-orange-600 rounded-lg shadow-sm hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1 transition-all active:scale-95"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Adicionar SKU
-        </button>
+        <div className="flex items-center gap-2 text-xs text-[var(--cz-texto-fraco)]">
+          <span>{skus.length} nesta página</span>
+          {isEditMode && <span className="rounded-full border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-2 py-1 font-semibold text-[var(--cz-laranja-forte)]">Edição ativa</span>}
+        </div>
       </div>
 
       {/*
@@ -743,8 +695,70 @@ export default function TabelaGestaoSKU({
         conteúdo, e um nome de produto longo empurraria as outras colunas a cada
         página — a tabela "dançaria" ao filtrar.
       */}
-      <div>
-        <table ref={tableRef} className="w-full table-fixed divide-y divide-gray-200">
+      {/* Cards móveis: preservam toda a informação sem comprimir colunas. */}
+      <div className="divide-y divide-[var(--cz-hairline)] md:hidden">
+        {skusOrdenadosHier.map((sku) => {
+          const isSelected = selectedSKUs.includes(sku.id);
+          const isHiddenByParent = sku.skuPai ? !!collapsedKits[sku.skuPai] : false;
+          if (isHiddenByParent) return null;
+          const image = getImagemUrl(sku);
+
+          return (
+            <article key={sku.id} className={`p-4 ${isSelected ? "bg-blue-50" : sku.skuPai ? "border-l-4 border-blue-300 bg-blue-50/30" : "bg-[var(--cz-superficie)]"}`}>
+              <div className="flex items-start gap-3">
+                {isMultiSelect && (
+                  <label className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--cz-raio)]" aria-label={`Selecionar SKU ${sku.sku}`}>
+                    <input type="checkbox" checked={isSelected} onChange={() => handleSelectSKU(sku.id)} className="h-5 w-5 rounded border-[var(--cz-hairline-forte)] text-[var(--cz-laranja)] focus:ring-[var(--cz-laranja)]" />
+                  </label>
+                )}
+                {image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={image} alt="" className="h-12 w-12 shrink-0 rounded-lg border border-[var(--cz-hairline)] bg-white object-cover" loading="lazy" />
+                ) : (
+                  <button type="button" onClick={() => handleBuscarImagem(sku)} disabled={loadingImagem === sku.id} aria-label={`Buscar imagem do SKU ${sku.sku}`} className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-dashed border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)] transition-colors hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja)] disabled:opacity-50">
+                    {loadingImagem === sku.id ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m4 16 4-4 4 4 3-3 5 5M6 20h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2ZM15 8h.01" /></svg>}
+                  </button>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1">
+                        {sku.tipo === "pai" && (
+                          <button type="button" onClick={() => setCollapsedKits((current) => ({ ...current, [sku.sku]: !current[sku.sku] }))} aria-label={`${collapsedKits[sku.sku] ? "Expandir" : "Recolher"} itens do kit ${sku.sku}`} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[var(--cz-laranja)] hover:bg-[var(--cz-laranja-suave)]">
+                            <svg className={`h-5 w-5 transition-transform ${collapsedKits[sku.sku] ? "" : "rotate-90"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden><path fillRule="evenodd" d="M7.3 14.7a1 1 0 0 1 0-1.4l3.3-3.3-3.3-3.3a1 1 0 1 1 1.4-1.4l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4 0Z" clipRule="evenodd" /></svg>
+                          </button>
+                        )}
+                        <p className="truncate font-mono text-sm font-bold text-[var(--cz-texto)]">{sku.sku}</p>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm leading-snug text-[var(--cz-texto-suave)]">{sku.produto}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">{getTipoBadge(sku)}{getStatusBadge(sku)}</div>
+                  {sku.skuPai && <p className="mt-2 text-xs font-medium text-blue-700">Item do kit {sku.skuPai}</p>}
+                  {(sku.hierarquia1 || sku.hierarquia2) && <p className="mt-1 truncate text-xs text-[var(--cz-texto-fraco)]">{[sku.hierarquia1, sku.hierarquia2].filter(Boolean).join(" › ")}</p>}
+                </div>
+              </div>
+
+              <dl className="mt-4 grid grid-cols-3 divide-x divide-[var(--cz-hairline)] rounded-[var(--cz-raio)] bg-[var(--cz-fundo)] py-3 text-center">
+                <div className="px-2"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--cz-texto-fraco)]">Custo</dt><dd><button type="button" onClick={() => { setSelectedSKUForHistorico(sku); setShowHistoricoModal(true); }} className="min-h-11 text-xs font-bold text-[var(--cz-laranja-forte)] underline decoration-dashed underline-offset-4" aria-label={`Ver histórico de custos do SKU ${sku.sku}`}>{formatCurrency(sku.custoUnitario)}</button></dd></div>
+                <div className="px-2"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--cz-texto-fraco)]">Qtd.</dt><dd className="mt-3 text-sm font-bold text-[var(--cz-texto)]">{sku.tipo === "pai" ? "—" : sku.quantidade}</dd></div>
+                <div className="px-2"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--cz-texto-fraco)]">Vendas</dt><dd className="mt-3 text-sm font-bold text-[var(--cz-texto)]">{sku.salesCount ?? "—"}</dd></div>
+              </dl>
+
+              <div className="mt-3 flex items-center justify-end gap-1 border-t border-[var(--cz-hairline)] pt-3" aria-label={`Ações do SKU ${sku.sku}`}>
+                <button type="button" onClick={() => { setSelectedSKU(sku); setShowEditModal(true); }} aria-label={`Editar SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-[var(--cz-laranja)] hover:bg-[var(--cz-laranja-suave)]"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m4 20 4-1 11-11-3-3L5 16zM14 6l3 3" /></svg></button>
+                <button type="button" onClick={() => { setSelectedSKU(sku); setShowToggleStatusModal(true); }} aria-label={`${sku.ativo ? "Inativar" : "Ativar"} SKU ${sku.sku}`} className={`grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] ${sku.ativo ? "text-amber-700 hover:bg-amber-50" : "text-emerald-700 hover:bg-emerald-50"}`}><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>{sku.ativo ? <path d="M18.4 18.4A9 9 0 0 1 5.6 5.6m12.8 12.8L5.6 5.6" /> : <path d="m9 12 2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />}</svg></button>
+                <button type="button" onClick={() => handleAplicarRetroativo(sku)} disabled={isApplyingRetroactive === sku.id} aria-label={`Aplicar custo retroativo do SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-blue-700 hover:bg-blue-50 disabled:opacity-50"><svg className={`h-5 w-5 ${isApplyingRetroactive === sku.id ? "animate-spin" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 4v5h5M20 20v-5h-5M5.5 15a8 8 0 0 0 13-3M18.5 9a8 8 0 0 0-13 3" /></svg></button>
+                <button type="button" onClick={() => handleBuscarImagem(sku)} disabled={loadingImagem === sku.id} aria-label={`Atualizar imagem do SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-[var(--cz-texto-suave)] hover:bg-[var(--cz-fundo)] disabled:opacity-50"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m4 16 4-4 4 4 3-3 5 5M6 20h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z" /></svg></button>
+                <button type="button" onClick={() => { setSelectedSKU(sku); setShowDeleteSingleModal(true); }} aria-label={`Excluir SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-rose-700 hover:bg-rose-50"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 7h16m-10 4v6m4-6v6M9 7V4h6v3m-9 0 1 14h10l1-14" /></svg></button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block">
+        <table ref={tableRef} className="w-full table-fixed divide-y divide-[var(--cz-hairline)]">
           <colgroup>
             {isMultiSelect && <col className="w-10" />}
             <col className={isMultiSelect ? "w-[44%]" : "w-[46%]"} />
@@ -757,13 +771,15 @@ export default function TabelaGestaoSKU({
             <tr>
               {/* Checkbox para seleção múltipla */}
               {isMultiSelect && (
-                <th className="px-3 py-3 text-left">
-                  <input
-                    type="checkbox"
-                    checked={selectedSKUs.length === skus.length && skus.length > 0}
-                    onChange={handleSelectAll}
-                    className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                  />
+                <th className="px-2 py-2 text-left">
+                  <label className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)]" aria-label="Selecionar todos os SKUs desta página">
+                    <input
+                      type="checkbox"
+                      checked={selectedSKUs.length === skus.length && skus.length > 0}
+                      onChange={handleSelectAll}
+                      className="h-5 w-5 rounded border-[var(--cz-hairline-forte)] text-[var(--cz-laranja)] focus:ring-[var(--cz-laranja)]"
+                    />
+                  </label>
                 </th>
               )}
 
@@ -787,7 +803,6 @@ export default function TabelaGestaoSKU({
           <tbody className="bg-white divide-y divide-gray-200">
             {skusOrdenadosHier.map((sku) => {
               const isSelected = selectedSKUs.includes(sku.id);
-              const isHovered = hoveredRow === sku.id;
               const isHiddenByParent = sku.skuPai ? !!collapsedKits[sku.skuPai] : false;
               if (isHiddenByParent) return null;
 
@@ -797,18 +812,18 @@ export default function TabelaGestaoSKU({
                   className={`transition-colors ${
                     isSelected ? 'bg-blue-50' : sku.skuPai ? '' : 'hover:bg-gray-50'
                   } ${sku.skuPai ? 'border-l-4 border-blue-300' : ''}`}
-                  onMouseEnter={() => setHoveredRow(sku.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
                 >
                   {/* Checkbox de seleção */}
                   {isMultiSelect && (
-                    <td className={`px-3 py-2 sm:px-6 sm:py-4 ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleSelectSKU(sku.id)}
-                        className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
-                      />
+                    <td className={`px-2 py-2 ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
+                      <label className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)]" aria-label={`Selecionar SKU ${sku.sku}`}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleSelectSKU(sku.id)}
+                          className="h-5 w-5 rounded border-[var(--cz-hairline-forte)] text-[var(--cz-laranja)] focus:ring-[var(--cz-laranja)]"
+                        />
+                      </label>
                     </td>
                   )}
 
@@ -834,8 +849,9 @@ export default function TabelaGestaoSKU({
                             type="button"
                             onClick={() => handleBuscarImagem(sku)}
                             disabled={loadingImagem === sku.id}
-                            className="h-10 w-10 shrink-0 rounded-md border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-gray-400 hover:text-orange-500 hover:border-orange-300 transition-colors disabled:opacity-60"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-dashed border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)] transition-colors hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja)] disabled:opacity-60"
                             title="Buscar imagem do anúncio"
+                            aria-label={`Buscar imagem do SKU ${sku.sku}`}
                           >
                             {loadingImagem === sku.id ? (
                               <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -861,8 +877,9 @@ export default function TabelaGestaoSKU({
                           <button
                             type="button"
                             onClick={() => setCollapsedKits(prev => ({ ...prev, [sku.sku]: !prev[sku.sku] }))}
-                            className="text-orange-500 hover:text-orange-700 transition-colors"
+                            className="grid h-11 w-11 place-items-center rounded-full text-[var(--cz-laranja)] transition-colors hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
                             title={collapsedKits[sku.sku] ? 'Expandir filhos' : 'Recolher filhos'}
+                            aria-label={`${collapsedKits[sku.sku] ? 'Expandir' : 'Recolher'} itens do kit ${sku.sku}`}
                           >
                             <svg className={`w-5 h-5 transform transition-transform ${collapsedKits[sku.sku] ? '' : 'rotate-90'}`} viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/>
@@ -876,7 +893,7 @@ export default function TabelaGestaoSKU({
                               <span className="font-mono font-bold text-gray-900">{sku.sku}</span>
                               {(() => {
                                 let numFilhos = 0;
-                                const rawSkusFilhos = (sku as any).skusFilhos as any;
+                                const rawSkusFilhos: unknown = sku.skusFilhos;
                                 if (Array.isArray(rawSkusFilhos)) {
                                   numFilhos = rawSkusFilhos.length;
                                 } else if (typeof rawSkusFilhos === 'string') {
@@ -985,25 +1002,12 @@ export default function TabelaGestaoSKU({
                     )}
                   </td>
 
-                  {/* Vendas */}
+                  {/* Vendas agregadas pelos três canais na API de status. */}
                   <td className={`px-3 py-2 sm:px-4 sm:py-3 text-sm ${sku.skuPai ? 'bg-blue-50/30' : ''}`}>
-                    {sku.statusVendas ? (
-                      <div className="space-y-1">
-                        <div className="text-xs">
-                          <span className="font-medium text-gray-900">{sku.statusVendas.totalVendas}</span> vendas
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatCurrency(sku.statusVendas.totalValorVendido)}
-                        </div>
-                        {sku.statusVendas.ultimaVenda && (
-                          <div className="text-xs text-gray-500">
-                            Última: {formatDate(sku.statusVendas.ultimaVenda.data)}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
+                    <span className="font-semibold tabular-nums text-[var(--cz-texto)]">
+                      {sku.salesCount ?? "—"}
+                    </span>
+                    <span className="ml-1 text-xs text-[var(--cz-texto-suave)]">vendas</span>
                   </td>
 
                   {/* Ações. `flex-wrap` porque são cinco botões: numa coluna de
@@ -1017,8 +1021,9 @@ export default function TabelaGestaoSKU({
                           setSelectedSKU(sku);
                           setShowEditModal(true);
                         }}
-                        className="p-1.5 rounded-lg text-orange-600 hover:text-orange-700 hover:bg-orange-50 transition-colors"
+                        className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-[var(--cz-laranja)] transition-colors hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
                         title="Editar SKU"
+                        aria-label={`Editar SKU ${sku.sku}`}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1029,8 +1034,9 @@ export default function TabelaGestaoSKU({
                           setSelectedSKU(sku);
                           setShowToggleStatusModal(true);
                         }}
-                        className={`p-1.5 rounded-lg transition-colors ${sku.ativo ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100' : 'text-green-600 hover:text-green-700 hover:bg-green-50'}`}
+                        className={`grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] transition-colors ${sku.ativo ? 'text-amber-700 hover:bg-amber-50' : 'text-emerald-700 hover:bg-emerald-50'}`}
                         title={sku.ativo ? 'Inativar SKU' : 'Ativar SKU'}
+                        aria-label={`${sku.ativo ? 'Inativar' : 'Ativar'} SKU ${sku.sku}`}
                       >
                         {sku.ativo ? (
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1047,8 +1053,9 @@ export default function TabelaGestaoSKU({
                           setSelectedSKU(sku);
                           setShowDeleteSingleModal(true);
                         }}
-                        className="p-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+                        className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-rose-700 transition-colors hover:bg-rose-50"
                         title="Excluir SKU"
+                        aria-label={`Excluir SKU ${sku.sku}`}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1057,8 +1064,9 @@ export default function TabelaGestaoSKU({
                       <button
                         onClick={() => handleAplicarRetroativo(sku)}
                         disabled={isApplyingRetroactive === sku.id}
-                        className="p-1.5 rounded-lg text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                        className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-blue-700 transition-colors hover:bg-blue-50 disabled:opacity-50"
                         title="Aplicar custo em vendas passadas sem CMV"
+                        aria-label={`Aplicar custo retroativo do SKU ${sku.sku}`}
                       >
                         {isApplyingRetroactive === sku.id ? (
                           <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1074,8 +1082,9 @@ export default function TabelaGestaoSKU({
                       <button
                         onClick={() => handleBuscarImagem(sku)}
                         disabled={loadingImagem === sku.id}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                        className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-[var(--cz-texto-suave)] transition-colors hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-texto)] disabled:opacity-50"
                         title="Buscar/atualizar imagem do anúncio"
+                        aria-label={`Atualizar imagem do SKU ${sku.sku}`}
                       >
                         {loadingImagem === sku.id ? (
                           <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1101,8 +1110,8 @@ export default function TabelaGestaoSKU({
       {skus.length === 0 && (
         <div className="relative z-20">
           <EmptyState
-            title="Nenhum SKU encontrado"
-            description="Comece adicionando seu primeiro SKU ou ajuste os filtros para encontrar o que procura."
+            title={hasActiveFilters ? "Nenhum SKU corresponde aos filtros" : "Seu catálogo ainda está vazio"}
+            description={hasActiveFilters ? "Limpe ou ajuste os filtros acima para ampliar os resultados." : "Crie seu primeiro SKU pelo botão no topo ou importe uma planilha Excel."}
             icons={emptyStateIcons}
             variant="default"
             size="default"
@@ -1406,15 +1415,17 @@ export default function TabelaGestaoSKU({
             <div className="flex space-x-3">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                disabled={isBulkSaving}
+                className="min-h-11 flex-1 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-4 py-2 text-sm font-semibold text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)] disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmBulkDelete}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+                disabled={isBulkSaving}
+                className="min-h-11 flex-1 rounded-[var(--cz-raio)] bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
               >
-                Excluir
+                {isBulkSaving ? "Excluindo…" : "Excluir"}
               </button>
             </div>
           </div>
@@ -1608,39 +1619,17 @@ export default function TabelaGestaoSKU({
               <button
                 onClick={async () => {
                   try {
-                    const response = await fetch(`/api/sku/${selectedSKU.id}`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ativo: !selectedSKU.ativo }),
-                    });
-
-                    if (!response.ok) {
-                      const error = await response.json();
-                      throw new Error(error.error || 'Erro ao atualizar status');
-                    }
-
-                    toast({
-                      variant: "success",
-                      title: "Status atualizado",
-                      description: `SKU ${selectedSKU.sku} foi ${!selectedSKU.ativo ? 'ativado' : 'inativado'} com sucesso`,
-                    });
-
-                    // Callback para atualizar status
-                    if (onToggleStatus) {
-                      onToggleStatus([selectedSKU.id], !selectedSKU.ativo);
-                    }
-
+                    setIsBulkSaving(true);
+                    await onToggleStatus?.([selectedSKU.id], !selectedSKU.ativo);
                     setShowToggleStatusModal(false);
                     setSelectedSKU(null);
                   } catch (error) {
-                    console.error('Erro ao atualizar status:', error);
-                    toast({
-                      variant: "error",
-                      title: "Erro ao atualizar status",
-                      description: error instanceof Error ? error.message : "Não foi possível atualizar o status",
-                    });
+                    console.error("Erro ao atualizar status:", error);
+                  } finally {
+                    setIsBulkSaving(false);
                   }
                 }}
+                disabled={isBulkSaving}
                 className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white ${
                   selectedSKU.ativo
                     ? "bg-yellow-600 hover:bg-yellow-700"

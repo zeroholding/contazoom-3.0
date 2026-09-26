@@ -74,23 +74,28 @@ const HeaderFinancas = ({
   };
 
   return (
-    <div className="mb-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+    <div className="mb-5 sm:mb-6">
+      <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="text-left">
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-marca-borda bg-marca-suave px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-marca-forte">
+            Gestão financeira
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-tinta sm:text-3xl">
             Finanças
           </h1>
-          <p className="mt-1 text-sm text-gray-600 text-left">
-            Gerencie suas finanças, contas a pagar e receber.
+          <p className="mt-1.5 max-w-2xl text-sm text-tinta-suave">
+            Acompanhe compromissos, recebimentos e cadastros em um só lugar.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-4 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
           {/* Botão de Atualização Incremental - só aparece após primeira sincronização */}
           {hasSyncedBefore && onIncrementalSync && (
             <button
+              type="button"
               onClick={onIncrementalSync}
+              aria-label="Atualizar dados financeiros"
               disabled={isIncrementalSyncing}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-cz border border-hairline-forte bg-superficie px-3 text-sm font-semibold text-tinta shadow-cz-1 transition-colors hover:bg-fundo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
             >
               {isIncrementalSyncing ? (
                 <>
@@ -112,8 +117,10 @@ const HeaderFinancas = ({
 
           {/* Botão de Importar Excel */}
           <button
+            type="button"
             onClick={onImportClick}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors shadow-sm"
+            aria-label="Importar planilha Excel"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-cz border border-hairline-forte bg-superficie px-3 text-sm font-semibold text-tinta shadow-cz-1 transition-colors hover:bg-fundo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca sm:px-4"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
@@ -123,9 +130,11 @@ const HeaderFinancas = ({
 
           {onSyncClick && (
             <button
+              type="button"
               onClick={onSyncClick}
+              aria-label="Trazer dados do Bling"
               disabled={!!isSyncing}
-              className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-cz border border-hairline-forte bg-superficie px-3 text-sm font-semibold text-tinta shadow-cz-1 transition-colors hover:bg-fundo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
             >
               {isSyncing ? (
                 <>
@@ -155,8 +164,10 @@ const HeaderFinancas = ({
 
           {/* Botão de Adicionar */}
           <button
+            type="button"
             onClick={onAddNew}
-            className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 transition-colors shadow-sm"
+            aria-label={getButtonLabel()}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-cz bg-marca px-3 text-sm font-bold text-white shadow-cz-1 transition-colors hover:bg-marca-forte focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca focus-visible:ring-offset-2 sm:px-4"
           >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -177,19 +188,19 @@ const HeaderFinancas = ({
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-[var(--cz-hairline)]">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="rounded-cartao border border-hairline bg-superficie p-1.5 shadow-cz-1">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="overflow-x-auto scrollbar-hidden">
-            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <nav className="flex min-w-max gap-1" aria-label="Seções financeiras">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => onTabChange(tab.id)}
                   className={[
                     activeTab === tab.id
-                      ? "border-orange-500 text-orange-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
-                    "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors",
+                      ? "bg-marca-suave text-marca-forte"
+                      : "text-tinta-suave hover:bg-fundo hover:text-tinta",
+                    "min-h-10 whitespace-nowrap rounded-cz px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca sm:px-4",
                   ].join(" ")}
                   aria-current={activeTab === tab.id ? "page" : undefined}
                 >
@@ -201,7 +212,7 @@ const HeaderFinancas = ({
           
           {/* Filtros na mesma linha das tabs no desktop */}
           {filtrosComponent && (
-            <div className="flex items-center gap-2 pb-px overflow-x-auto scrollbar-hidden">
+            <div className="w-full border-t border-hairline pt-3 lg:w-auto lg:border-0 lg:pt-0">
               {filtrosComponent}
             </div>
           )}
@@ -249,6 +260,120 @@ const emptyStateIcons = [
   </svg>,
 ];
 
+const formatCurrencyBRL = (value: unknown) =>
+  Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const LoadingFinancialState = () => (
+  <div className="grid min-h-72 place-items-center px-6 text-center" role="status" aria-live="polite">
+    <div>
+      <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-hairline-forte border-t-marca" />
+      <p className="mt-4 text-sm font-semibold text-tinta">Carregando dados financeiros</p>
+      <p className="mt-1 text-xs text-tinta-suave">Organizando seus registros mais recentes…</p>
+    </div>
+  </div>
+);
+
+const FinancialErrorState = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
+  <div className="grid min-h-72 place-items-center px-6 text-center" role="alert">
+    <div className="max-w-sm">
+      <span className="mx-auto grid h-12 w-12 place-items-center rounded-full border border-hairline-forte bg-fundo text-tinta-suave">
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.3 3.7 2.6 17A2 2 0 0 0 4.3 20h15.4a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z" />
+        </svg>
+      </span>
+      <h2 className="mt-4 text-base font-semibold text-tinta">Não foi possível carregar</h2>
+      <p className="mt-1 text-sm text-tinta-suave">{message}</p>
+      <button type="button" onClick={onRetry} className="mt-4 inline-flex min-h-11 items-center justify-center rounded-cz border border-hairline-forte bg-superficie px-4 text-sm font-semibold text-tinta shadow-cz-1 transition-colors hover:bg-fundo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca">
+        Tentar novamente
+      </button>
+    </div>
+  </div>
+);
+
+interface FinancialAccount {
+  id: string;
+  descricao: string;
+  valor: unknown;
+  status?: string | null;
+  origem?: string | null;
+  dataVencimento?: string | Date | null;
+  dataPagamento?: string | Date | null;
+  dataRecebimento?: string | Date | null;
+  dataCompetencia?: string | Date | null;
+  historico?: string | null;
+  categoria?: { descricao?: string | null; nome?: string | null } | null;
+  formaPagamento?: { nome?: string | null } | null;
+}
+
+interface MobileAccountCardProps {
+  conta: FinancialAccount;
+  type: "pagar" | "receber";
+  onEdit: () => void;
+  onViewJson: () => void;
+  onDelete: () => void;
+}
+
+const MobileAccountCard = ({ conta, type, onEdit, onViewJson, onDelete }: MobileAccountCardProps) => {
+  const isSettled = ["pago", "recebido"].includes(String(conta.status).toLowerCase());
+  const originLabel = conta.origem === "SINCRONIZACAO" ? "Bling" : conta.origem === "EXCEL" ? "Excel" : "Manual";
+  const settlementDate = type === "pagar" ? conta.dataPagamento : conta.dataRecebimento;
+
+  return (
+    <article className="rounded-cartao border border-hairline bg-superficie p-4 shadow-cz-1">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-tinta">{conta.descricao}</p>
+          <p className="mt-1 text-xs text-tinta-suave">{conta.categoria?.descricao || conta.categoria?.nome || "Sem categoria"}</p>
+        </div>
+        <p className="shrink-0 text-base font-bold tabular-nums text-tinta">{formatCurrencyBRL(conta.valor)}</p>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-hairline py-3 text-xs">
+        <div>
+          <span className="block text-tinta-fraca">Vencimento</span>
+          <strong className="mt-1 block font-semibold text-tinta">{formatDateBR(conta.dataVencimento)}</strong>
+        </div>
+        <div>
+          <span className="block text-tinta-fraca">Forma</span>
+          <strong className="mt-1 block truncate font-semibold text-tinta">{conta.formaPagamento?.nome || "Não informada"}</strong>
+        </div>
+        {isSettled && settlementDate && (
+          <div>
+            <span className="block text-tinta-fraca">{type === "pagar" ? "Pago em" : "Recebido em"}</span>
+            <strong className="mt-1 block font-semibold text-tinta">{formatDateBR(settlementDate)}</strong>
+          </div>
+        )}
+        {type === "pagar" && (
+          <div>
+            <span className="block text-tinta-fraca">Competência</span>
+            <strong className="mt-1 block font-semibold text-tinta">{formatDateBR(conta.dataCompetencia)}</strong>
+          </div>
+        )}
+        <div className={type === "pagar" ? "" : "col-span-2"}>
+          <span className="block text-tinta-fraca">Origem</span>
+          <strong className="mt-1 block font-semibold text-tinta">{originLabel}</strong>
+        </div>
+      </div>
+      {type === "pagar" && conta.historico && <p className="mt-3 line-clamp-2 text-xs leading-5 text-tinta-suave">{conta.historico}</p>}
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isSettled ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          {conta.status}
+        </span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={onEdit} aria-label={`Editar ${conta.descricao}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" /></svg>
+          </button>
+          <button type="button" onClick={onViewJson} aria-label={`Ver dados técnicos de ${conta.descricao}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m10 20 4-16m4 4 4 4-4 4M6 16l-4-4 4-4" /></svg>
+          </button>
+          <button type="button" onClick={onDelete} aria-label={`Excluir ${conta.descricao}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7 18.1 19.1a2 2 0 0 1-2 1.9H7.9a2 2 0 0 1-2-1.9L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16" /></svg>
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+};
+
 export default function Financas() {
   const { toast } = useToast();
   const { connect, disconnect, isConnected } = useSyncProgress();
@@ -294,6 +419,7 @@ export default function Financas() {
   const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<string>>(new Set());
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todos");
   const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>("todas");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -369,17 +495,18 @@ export default function Financas() {
 
   const loadFormasPagamento = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const response = await fetch("/api/financeiro/formas-pagamento", {
         credentials: "include",
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setFormasPagamento(data.data || []);
-      }
+
+      if (!response.ok) throw new Error("Não foi possível carregar as formas de pagamento.");
+      const data = await response.json();
+      setFormasPagamento(data.data || []);
     } catch (error) {
       console.error("Erro ao carregar formas de pagamento:", error);
+      setLoadError(error instanceof Error ? error.message : "Não foi possível carregar os dados.");
     } finally {
       setIsLoading(false);
     }
@@ -387,16 +514,17 @@ export default function Financas() {
 
   const loadContasPagar = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const response = await fetch("/api/financeiro/contas-pagar", {
         credentials: "include",
       });
-      if (response.ok) {
-        const data = await response.json();
-        setContasPagar(data.data || []);
-      }
+      if (!response.ok) throw new Error("Não foi possível carregar as contas a pagar.");
+      const data = await response.json();
+      setContasPagar(data.data || []);
     } catch (error) {
       console.error("Erro ao carregar contas a pagar:", error);
+      setLoadError(error instanceof Error ? error.message : "Não foi possível carregar os dados.");
     } finally {
       setIsLoading(false);
     }
@@ -404,16 +532,17 @@ export default function Financas() {
 
   const loadContasReceber = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const response = await fetch("/api/financeiro/contas-receber", {
         credentials: "include",
       });
-      if (response.ok) {
-        const data = await response.json();
-        setContasReceber(data.data || []);
-      }
+      if (!response.ok) throw new Error("Não foi possível carregar as contas a receber.");
+      const data = await response.json();
+      setContasReceber(data.data || []);
     } catch (error) {
       console.error("Erro ao carregar contas a receber:", error);
+      setLoadError(error instanceof Error ? error.message : "Não foi possível carregar os dados.");
     } finally {
       setIsLoading(false);
     }
@@ -687,20 +816,26 @@ export default function Financas() {
 
   const loadCategorias = async () => {
     // Mostra loader quando a aba de categorias está ativa
-    if (activeTab === "categorias") setIsLoading(true);
+    const shouldShowFeedback = activeTab === "categorias";
+    if (shouldShowFeedback) {
+      setIsLoading(true);
+      setLoadError(null);
+    }
     try {
       const response = await fetch("/api/financeiro/categorias", {
         credentials: "include",
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setCategorias(data.data || []);
-      }
+      if (!response.ok) throw new Error("Não foi possível carregar as categorias.");
+      const data = await response.json();
+      setCategorias(data.data || []);
     } catch (error) {
       console.error("Erro ao carregar categorias:", error);
+      if (shouldShowFeedback) {
+        setLoadError(error instanceof Error ? error.message : "Não foi possível carregar os dados.");
+      }
     } finally {
-      if (activeTab === "categorias") setIsLoading(false);
+      if (shouldShowFeedback) setIsLoading(false);
     }
   };
 
@@ -974,6 +1109,32 @@ export default function Financas() {
   const totalPagesReceber = Math.max(1, Math.ceil(totalReceber / itemsPerPage));
   const paginatedContasPagar = contasPagarFiltradas.slice((pagePagar - 1) * itemsPerPage, pagePagar * itemsPerPage);
   const paginatedContasReceber = contasReceberFiltradas.slice((pageReceber - 1) * itemsPerPage, pageReceber * itemsPerPage);
+
+  const activeFinancialAccounts = activeTab === "contas_pagar" ? contasPagarFiltradas : contasReceberFiltradas;
+  const financialSummary = activeFinancialAccounts.reduce(
+    (summary, conta) => {
+      const valor = Number(conta.valor) || 0;
+      const status = String(conta.status || "").toLowerCase();
+      const isSettled = status === "pago" || status === "recebido";
+      summary.total += valor;
+      summary.count += 1;
+      if (isSettled) summary.settled += valor;
+      else summary.open += valor;
+      if (status === "vencido") {
+        summary.overdue += valor;
+        summary.overdueCount += 1;
+      }
+      return summary;
+    },
+    { total: 0, settled: 0, open: 0, overdue: 0, count: 0, overdueCount: 0 },
+  );
+
+  const reloadActiveTab = () => {
+    if (activeTab === "formas_pagamento") return loadFormasPagamento();
+    if (activeTab === "categorias") return loadCategorias();
+    if (activeTab === "contas_pagar") return loadContasPagar();
+    return loadContasReceber();
+  };
 
   // Paginação para categorias e formas de pagamento
   const totalCategorias = categorias.length;
@@ -1436,9 +1597,11 @@ export default function Financas() {
 
   const EmptyStateButton = () => (
     <button
+      type="button"
       onClick={handleSync}
+      aria-label="Trazer dados do Bling"
       disabled={isSyncing}
-      className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-cz border border-hairline-forte bg-superficie px-4 text-sm font-semibold text-tinta shadow-cz-1 transition-colors hover:bg-fundo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca disabled:cursor-not-allowed disabled:opacity-50"
     >
       {isSyncing ? (
         <>
@@ -1498,7 +1661,7 @@ export default function Financas() {
                 value={formData.descricao}
                 onChange={handleInputChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               />
             </div>
 
@@ -1515,7 +1678,7 @@ export default function Financas() {
                 required
                 step="0.01"
                 min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               />
             </div>
 
@@ -1530,7 +1693,7 @@ export default function Financas() {
                 value={formData.dataPagamento}
                 onChange={handleInputChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               />
             </div>
 
@@ -1544,7 +1707,7 @@ export default function Financas() {
                 value={formData.categoriaId}
                 onChange={handleInputChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               >
                 <option value="">Selecione uma categoria</option>
                 {categorias.map((cat) => (
@@ -1565,7 +1728,7 @@ export default function Financas() {
                 value={formData.formaPagamentoId}
                 onChange={handleInputChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               >
                 <option value="">Selecione uma forma de pagamento</option>
                 {formasPagamento.map((forma) => (
@@ -1618,7 +1781,7 @@ export default function Financas() {
                 value={formData.descricao}
                 onChange={handleInputChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               />
             </div>
 
@@ -1632,7 +1795,7 @@ export default function Financas() {
                 value={formData.tipo}
                 onChange={handleInputChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               >
                 <option value="">Selecione um tipo</option>
                 <option value="RECEITA">Receita</option>
@@ -1649,7 +1812,7 @@ export default function Financas() {
                 name="categoriaPaiId"
                 value={formData.categoriaPaiId}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               >
                 <option value="">Nenhuma (Categoria Principal)</option>
                 {categorias.filter(cat => !cat.categoriaPaiId).map((cat) => (
@@ -1658,7 +1821,7 @@ export default function Financas() {
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">Deixe vazio para criar uma categoria principal. Selecione uma categoria para criar uma subcategoria.</p>
+              <p className="text-xs text-tinta-suave mt-1">Deixe vazio para criar uma categoria principal. Selecione uma categoria para criar uma subcategoria.</p>
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -1703,7 +1866,7 @@ export default function Financas() {
                 value={formData.descricao}
                 onChange={handleInputChange}
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-tinta"
               />
             </div>
 
@@ -1763,8 +1926,8 @@ export default function Financas() {
             e os cartoes brancos se destacam dele. */}
       </div>
 
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">
+      <main className={`relative z-20 pt-[var(--cz-topbar-h)] ${mdMlVar}`}>
+        <section className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
           <HeaderFinancas
             activeTab={activeTab}
             onTabChange={setActiveTab}
@@ -1812,49 +1975,86 @@ export default function Financas() {
             ) : undefined}
           />
 
+          {(activeTab === "contas_pagar" || activeTab === "contas_receber") && !isLoading && !loadError && (
+            <section className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Resumo financeiro dos resultados filtrados">
+              {[
+                {
+                  label: activeTab === "contas_pagar" ? "Despesas no recorte" : "Receitas no recorte",
+                  value: financialSummary.total,
+                  helper: `${financialSummary.count} ${financialSummary.count === 1 ? "registro" : "registros"}`,
+                },
+                {
+                  label: "Em aberto",
+                  value: financialSummary.open,
+                  helper: activeTab === "contas_pagar" ? "Ainda não pago" : "Ainda não recebido",
+                },
+                {
+                  label: "Vencido",
+                  value: financialSummary.overdue,
+                  helper: `${financialSummary.overdueCount} ${financialSummary.overdueCount === 1 ? "pendência" : "pendências"}`,
+                  attention: financialSummary.overdue > 0,
+                },
+                {
+                  label: activeTab === "contas_pagar" ? "Pago" : "Recebido",
+                  value: financialSummary.settled,
+                  helper: "Valor já liquidado",
+                },
+              ].map((kpi) => (
+                <article key={kpi.label} className={`rounded-cartao border bg-superficie p-4 shadow-cz-1 ${kpi.attention ? "border-amber-200" : "border-hairline"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-tinta-suave">{kpi.label}</p>
+                    {kpi.attention && <span className="h-2 w-2 rounded-full bg-amber-500" aria-label="Requer atenção" />}
+                  </div>
+                  <p className="mt-2 text-lg font-bold tracking-tight text-tinta sm:text-xl">{formatCurrencyBRL(kpi.value)}</p>
+                  <p className="mt-1 truncate text-[11px] text-tinta-fraca">{kpi.helper}</p>
+                </article>
+              ))}
+            </section>
+          )}
+
           {/* Conteúdo da Tab */}
           {activeTab === "formas_pagamento" ? (
-            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-64">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
-                </div>
+            <div className="rounded-cartao border border-hairline bg-superficie shadow-cz-1 overflow-hidden">
+              {loadError ? (
+                <FinancialErrorState message={loadError} onRetry={reloadActiveTab} />
+              ) : isLoading ? (
+                <LoadingFinancialState />
               ) : formasPagamento.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-hairline">
+                    <thead className="bg-fundo">
                       <tr>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">
                           Nome
                         </th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">
                           Tipo
                         </th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">
                           Sincronizado
                         </th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">
                           Ações
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-superficie divide-y divide-hairline">
                       {paginatedFormasPagamento.map((forma) => (
                         <tr key={forma.id}>
                           <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-tinta">
                               {forma.nome}
                             </div>
                             {forma.descricao && (
-                              <div className="text-sm text-gray-500">
+                              <div className="text-sm text-tinta-suave">
                                 {forma.descricao}
                               </div>
                             )}
                           </td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">
                             {forma.tipo || "-"}
                           </td>
                           <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
@@ -1866,14 +2066,15 @@ export default function Financas() {
                               {forma.ativo ? "Ativo" : "Inativo"}
                             </span>
                           </td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta-suave">
                             {formatDateBR(forma.sincronizadoEm)}
                           </td>
                           <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleEdit(forma)}
-                                className="text-orange-600 hover:text-orange-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+                                aria-label="Editar"
                                 title="Editar"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1882,7 +2083,8 @@ export default function Financas() {
                               </button>
                               <button
                                 onClick={() => handleDelete(forma)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                aria-label="Excluir"
                                 title="Excluir"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1918,29 +2120,29 @@ export default function Financas() {
               )}
             </div>
           ) : activeTab === "categorias" ? (
-            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-64">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
-                </div>
+            <div className="rounded-cartao border border-hairline bg-superficie shadow-cz-1 overflow-hidden">
+              {loadError ? (
+                <FinancialErrorState message={loadError} onRetry={reloadActiveTab} />
+              ) : isLoading ? (
+                <LoadingFinancialState />
               ) : categorias.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-hairline">
+                    <thead className="bg-fundo">
                       <tr>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Descrição</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Tipo</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Status</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-superficie divide-y divide-hairline">
                       {paginatedCategorias.map((cat) => (
-                        <tr key={cat.id} className={cat.categoriaPaiId ? "bg-blue-50" : ""}>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">
+                        <tr key={cat.id} className={cat.categoriaPaiId ? "bg-fundo" : ""}>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">
                             {cat.categoriaPaiId ? (
                               <span className="flex items-center pl-8">
-                                <svg className="w-4 h-4 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-4 h-4 text-tinta-fraca mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                                 </svg>
                                 {cat.descricao || cat.nome}
@@ -1949,7 +2151,7 @@ export default function Financas() {
                               <span className="font-semibold">{cat.descricao || cat.nome}</span>
                             )}
                           </td>
-                            <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{cat.tipo}</td>
+                            <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{cat.tipo}</td>
                             <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${cat.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                                 {cat.ativo ? "Ativo" : "Inativo"}
@@ -1959,8 +2161,9 @@ export default function Financas() {
                               <div className="flex items-center space-x-2">
                                 <button
                                   onClick={() => handleEdit(cat)}
-                                  className="text-orange-600 hover:text-orange-900 transition-colors"
-                                  title="Editar"
+                                  className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+                                  aria-label="Editar"
+                                title="Editar"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1968,8 +2171,9 @@ export default function Financas() {
                                 </button>
                                 <button
                                   onClick={() => handleDelete(cat)}
-                                  className="text-red-600 hover:text-red-900 transition-colors"
-                                  title="Excluir"
+                                  className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                  aria-label="Excluir"
+                                title="Excluir"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2004,82 +2208,95 @@ export default function Financas() {
               )}
             </div>
           ) : activeTab === "contas_pagar" ? (
-            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-64">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
-                </div>
-              ) : contasPagar.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+            <div className="rounded-cartao border border-hairline bg-superficie shadow-cz-1 overflow-hidden">
+              {loadError ? (
+                <FinancialErrorState message={loadError} onRetry={reloadActiveTab} />
+              ) : isLoading ? (
+                <LoadingFinancialState />
+              ) : contasPagarFiltradas.length > 0 ? (
+                <div>
+                  <div className="space-y-3 bg-fundo p-3 md:hidden">
+                    {paginatedContasPagar.map((conta) => (
+                      <MobileAccountCard
+                        key={conta.id}
+                        conta={conta}
+                        type="pagar"
+                        onEdit={() => handleEdit(conta)}
+                        onViewJson={() => handleViewJson(conta)}
+                        onDelete={() => handleDelete(conta)}
+                      />
+                    ))}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
+                  <table className="min-w-full divide-y divide-hairline">
+                    <thead className="bg-fundo">
                       <tr>
-                        <th onClick={() => handleSort('descricao', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('descricao', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Descrição</span>
                             <SortIcon field="descricao" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Histórico</th>
-                        <th onClick={() => handleSort('valor', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Histórico</th>
+                        <th onClick={() => handleSort('valor', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Valor</span>
                             <SortIcon field="valor" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('dataPagamento', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 w-24 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('dataPagamento', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 w-24 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span className="block leading-tight">DATA<br/>PAGAMENTO</span>
                             <SortIcon field="dataPagamento" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('dataCompetencia', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 w-24 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('dataCompetencia', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 w-24 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span className="block leading-tight">DATA<br/>COMPETENCIA</span>
                             <SortIcon field="dataCompetencia" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('categoria', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('categoria', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Categoria</span>
                             <SortIcon field="categoria" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('formaPagamento', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('formaPagamento', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Forma</span>
                             <SortIcon field="formaPagamento" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('status', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('status', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Status</span>
                             <SortIcon field="status" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('origem', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('origem', 'pagar')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Origem</span>
                             <SortIcon field="origem" currentField={sortFieldPagar} direction={sortDirectionPagar} />
                           </div>
                         </th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-superficie divide-y divide-hairline">
                       {paginatedContasPagar.map((c) => (
                         <tr key={c.id}>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.descricao}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 text-sm text-gray-900 whitespace-pre-line" title={c.historico || ''}>{c.historico || '-'}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900 w-24">
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{c.descricao}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 text-sm text-tinta whitespace-pre-line" title={c.historico || ''}>{c.historico || '-'}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta w-24">
                             <div className="flex flex-col leading-tight">
                               <span>{formatDateBR(c.dataVencimento)}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900 w-24">{formatDateBR(c.dataCompetencia)}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.formaPagamento?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta w-24">{formatDateBR(c.dataCompetencia)}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{c.formaPagamento?.nome || "-"}</td>
                           <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               String(c.status).toLowerCase() === "pago"
@@ -2089,12 +2306,13 @@ export default function Financas() {
                               {c.status}
                             </span>
                           </td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${c.origem === 'SINCRONIZACAO' ? 'bg-blue-100 text-blue-800' : c.origem === 'EXCEL' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap"><span className="inline-flex rounded-full bg-fundo px-2 py-1 text-xs font-semibold text-tinta-suave">{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
                           <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleEdit(c)}
-                                className="text-orange-600 hover:text-orange-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+                                aria-label="Editar"
                                 title="Editar"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2103,7 +2321,8 @@ export default function Financas() {
                               </button>
                               <button
                                 onClick={() => handleViewJson(c)}
-                                className="text-blue-600 hover:text-blue-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+                                aria-label="Ver JSON"
                                 title="Ver JSON"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2112,7 +2331,8 @@ export default function Financas() {
                               </button>
                               <button
                                 onClick={() => handleDelete(c)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                aria-label="Excluir"
                                 title="Excluir"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2125,6 +2345,7 @@ export default function Financas() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <VendasPagination
                     currentPage={pagePagar}
                     totalPages={Math.max(1, totalPagesPagar)}
@@ -2135,10 +2356,10 @@ export default function Financas() {
                 </div>
               ) : (
                 <EmptyState
-                  title="Nenhuma conta a pagar cadastrada"
-                  description="Adicione uma despesa ou sincronize para começar."
+                  title={contasPagar.length > 0 ? "Nenhuma despesa corresponde aos filtros" : "Nenhuma conta a pagar cadastrada"}
+                  description={contasPagar.length > 0 ? "Ajuste ou limpe os filtros para voltar a visualizar seus compromissos." : "Adicione uma despesa ou sincronize para começar."}
                   icons={emptyStateIcons}
-                  footer={<EmptyStateButton />}
+                  footer={contasPagar.length > 0 ? undefined : <EmptyStateButton />}
                   variant="default"
                   size="default"
                   theme="light"
@@ -2148,69 +2369,82 @@ export default function Financas() {
               )}
             </div>
           ) : activeTab === "contas_receber" ? (
-            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-64">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-orange-500"></div>
-                </div>
-              ) : contasReceber.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+            <div className="rounded-cartao border border-hairline bg-superficie shadow-cz-1 overflow-hidden">
+              {loadError ? (
+                <FinancialErrorState message={loadError} onRetry={reloadActiveTab} />
+              ) : isLoading ? (
+                <LoadingFinancialState />
+              ) : contasReceberFiltradas.length > 0 ? (
+                <div>
+                  <div className="space-y-3 bg-fundo p-3 md:hidden">
+                    {paginatedContasReceber.map((conta) => (
+                      <MobileAccountCard
+                        key={conta.id}
+                        conta={conta}
+                        type="receber"
+                        onEdit={() => handleEdit(conta)}
+                        onViewJson={() => handleViewJson(conta)}
+                        onDelete={() => handleDelete(conta)}
+                      />
+                    ))}
+                  </div>
+                  <div className="hidden overflow-x-auto md:block">
+                  <table className="min-w-full divide-y divide-hairline">
+                    <thead className="bg-fundo">
                       <tr>
-                        <th onClick={() => handleSort('descricao', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('descricao', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Descrição</span>
                             <SortIcon field="descricao" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('valor', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('valor', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Valor</span>
                             <SortIcon field="valor" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('dataRecebimento', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('dataRecebimento', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Data de Recebimento</span>
                             <SortIcon field="dataRecebimento" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('categoria', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('categoria', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Categoria</span>
                             <SortIcon field="categoria" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('formaPagamento', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('formaPagamento', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Forma</span>
                             <SortIcon field="formaPagamento" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('status', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('status', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Status</span>
                             <SortIcon field="status" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th onClick={() => handleSort('origem', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors">
+                        <th onClick={() => handleSort('origem', 'receber')} className="group px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider cursor-pointer hover:bg-fundo transition-colors">
                           <div className="flex items-center gap-1">
                             <span>Origem</span>
                             <SortIcon field="origem" currentField={sortFieldReceber} direction={sortDirectionReceber} />
                           </div>
                         </th>
-                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-superficie divide-y divide-hairline">
                       {paginatedContasReceber.map((c) => (
                         <tr key={c.id}>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.descricao}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{formatDateBR(c.dataRecebimento || c.dataVencimento)}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-900">{c.formaPagamento?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{c.descricao}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{Number(c.valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{formatDateBR(c.dataRecebimento || c.dataVencimento)}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{c.categoria?.descricao || c.categoria?.nome || "-"}</td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-tinta">{c.formaPagamento?.nome || "-"}</td>
                           <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               String(c.status).toLowerCase() === "recebido"
@@ -2220,12 +2454,13 @@ export default function Financas() {
                               {c.status}
                             </span>
                           </td>
-                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap"><span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${c.origem === 'SINCRONIZACAO' ? 'bg-blue-100 text-blue-800' : c.origem === 'EXCEL' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
+                          <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap"><span className="inline-flex rounded-full bg-fundo px-2 py-1 text-xs font-semibold text-tinta-suave">{c.origem === 'SINCRONIZACAO' ? 'Bling' : c.origem === 'EXCEL' ? 'Excel' : 'Manual'}</span></td>
                           <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
                                 onClick={() => handleEdit(c)}
-                                className="text-orange-600 hover:text-orange-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+                                aria-label="Editar"
                                 title="Editar"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2234,7 +2469,8 @@ export default function Financas() {
                               </button>
                               <button
                                 onClick={() => handleViewJson(c)}
-                                className="text-blue-600 hover:text-blue-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca"
+                                aria-label="Ver JSON"
                                 title="Ver JSON"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2243,7 +2479,8 @@ export default function Financas() {
                               </button>
                               <button
                                 onClick={() => handleDelete(c)}
-                                className="text-red-600 hover:text-red-900 transition-colors"
+                                className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                                aria-label="Excluir"
                                 title="Excluir"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2256,6 +2493,7 @@ export default function Financas() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <VendasPagination
                     currentPage={pageReceber}
                     totalPages={Math.max(1, totalPagesReceber)}
@@ -2266,10 +2504,10 @@ export default function Financas() {
                 </div>
               ) : (
                 <EmptyState
-                  title="Nenhuma conta a receber cadastrada"
-                  description="Adicione uma receita ou sincronize para começar."
+                  title={contasReceber.length > 0 ? "Nenhuma receita corresponde aos filtros" : "Nenhuma conta a receber cadastrada"}
+                  description={contasReceber.length > 0 ? "Ajuste ou limpe os filtros para voltar a visualizar seus recebimentos." : "Adicione uma receita ou sincronize para começar."}
                   icons={emptyStateIcons}
-                  footer={<EmptyStateButton />}
+                  footer={contasReceber.length > 0 ? undefined : <EmptyStateButton />}
                   variant="default"
                   size="default"
                   theme="light"
@@ -2279,7 +2517,7 @@ export default function Financas() {
               )}
             </div>
           ) : (
-            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
+            <div className="rounded-cartao border border-hairline bg-superficie shadow-cz-1 overflow-hidden">
               <EmptyState
                 title="Nenhum registro encontrado"
                 description={`Comece adicionando ${getTabDescription()}.`}

@@ -13,199 +13,79 @@ interface HeaderGestaoSKUProps {
   isLoading?: boolean;
 }
 
-export default function HeaderGestaoSKU({ 
-  selectedCategory, 
+export default function HeaderGestaoSKU({
+  selectedCategory,
   onBackClick,
   onImportExcel,
   onExportExcel,
   onSKUsPendentes,
   onNovoSKU,
-  isLoading = false
+  isLoading = false,
 }: HeaderGestaoSKUProps) {
   const [showExcelDropdown, setShowExcelDropdown] = useState(false);
-
   const excelDropdown = useSmartDropdown<HTMLButtonElement>({
     isOpen: showExcelDropdown,
     onClose: () => setShowExcelDropdown(false),
-    preferredPosition: 'bottom-right',
+    preferredPosition: "bottom-right",
     offset: 8,
-    minDistanceFromEdge: 16
+    minDistanceFromEdge: 16,
   });
 
   if (selectedCategory) {
     return (
-      <div className="mb-6 text-left">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">
-            SKUs - {selectedCategory}
-          </h1>
-          <button
-            onClick={onBackClick}
-            className="text-orange-600 hover:text-orange-800 text-sm font-medium flex items-center justify-center gap-2 px-3 py-2 rounded-md hover:bg-orange-50 transition-colors h-10"
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              width="18" 
-              height="18" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
-            >
-              <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-              <path d="M5 12l14 0" />
-              <path d="M5 12l4 4" />
-              <path d="M5 12l4 -4" />
-            </svg>
-            Voltar
-          </button>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--cz-laranja)]">Catálogo</p>
+          <h1 className="cz-titulo mt-1 text-[24px] leading-8">SKUs · {selectedCategory}</h1>
+          <p className="mt-1 text-[13.5px] text-[var(--cz-texto-suave)]">Gerencie os SKUs desta categoria.</p>
         </div>
-        <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)] text-left">
-          Gerencie os SKUs da categoria {selectedCategory}.
-        </p>
-      </div>
+        <button type="button" onClick={onBackClick} aria-label="Voltar para todas as categorias" className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-4 text-sm font-semibold text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)]">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M5 12h14M9 16l-4-4 4-4" /></svg>
+          Voltar
+        </button>
+      </header>
     );
   }
 
   return (
-    <div className="mb-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="text-left">
-          <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">Gestão de SKU</h1>
-          <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
-            Gerencie seus produtos e SKUs de forma centralizada.
-          </p>
-        </div>
+    <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="max-w-2xl">
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--cz-laranja)]">Catálogo</p>
+        <h1 className="cz-titulo mt-1 text-[26px] leading-8 sm:text-[30px]">Gestão de SKU</h1>
+        <p className="mt-2 text-[13.5px] leading-relaxed text-[var(--cz-texto-suave)]">Organize produtos, kits, custos e disponibilidade em um único lugar.</p>
+      </div>
 
-        {/* Botões de Ação */}
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          {/* Botão Novo SKU */}
-          <button
-            onClick={onNovoSKU}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 transition-all duration-200 shadow-sm hover:shadow-md"
-            disabled={isLoading}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5v14m-7-7h14"/>
-            </svg>
-            <span>Novo SKU</span>
+      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+        <button type="button" onClick={onSKUsPendentes} disabled={isLoading} aria-label="Abrir SKUs pendentes" className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border border-amber-200 bg-amber-50 px-3.5 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 9v4m0 4h.01M10.3 4.3 2.7 18a2 2 0 0 0 1.8 3h15a2 2 0 0 0 1.8-3L13.7 4.3a2 2 0 0 0-3.4 0Z" /></svg>
+          Pendências
+        </button>
+
+        <div className="relative">
+          <button ref={excelDropdown.triggerRef} type="button" onClick={() => setShowExcelDropdown((value) => !value)} disabled={isLoading} aria-label="Abrir ações de Excel" aria-expanded={showExcelDropdown} className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-[var(--cz-raio)] border px-3.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showExcelDropdown ? "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]" : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:bg-[var(--cz-fundo)]"}`}>
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M7 3h7l5 5v13H7zM14 3v5h5M9 13h6M9 17h6" /></svg>
+            Excel
+            <svg className={`h-3.5 w-3.5 transition-transform ${showExcelDropdown ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m6 9 6 6 6-6" /></svg>
           </button>
-
-          {/* Botão SKUs Pendentes */}
-          <button
-            onClick={onSKUsPendentes}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-yellow-500 bg-yellow-50 text-yellow-900 text-sm font-medium hover:bg-yellow-100 transition-all duration-200"
-            disabled={isLoading}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-            <span>SKUs Pendentes</span>
-          </button>
-
-          {/* Botão Excel */}
-          <div className="relative">
-          <button
-            ref={excelDropdown.triggerRef}
-            onClick={() => setShowExcelDropdown(!showExcelDropdown)}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border text-sm font-medium transition-all duration-200 ${
-              showExcelDropdown 
-                ? "border-gray-400 bg-gray-50 text-gray-900" 
-                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
-            }`}
-            disabled={isLoading}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>Excel</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`transition-transform duration-200 ${showExcelDropdown ? 'rotate-180' : ''}`}
-            >
-              <polyline points="6,9 12,15 18,9"/>
-            </svg>
-          </button>
-
           {excelDropdown.isVisible && (
-            <div 
-              ref={excelDropdown.dropdownRef}
-              className={`smart-dropdown w-48 ${
-                excelDropdown.isOpen ? 'dropdown-enter' : 'dropdown-exit'
-              }`}
-              style={excelDropdown.position}
-            >
-              <div className="py-1">
-                <button
-                  onClick={() => {
-                    onImportExcel?.();
-                    setShowExcelDropdown(false);
-                  }}
-                  className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left flex items-center"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  Importar Excel
-                </button>
-                <button
-                  onClick={() => {
-                    onExportExcel?.();
-                    setShowExcelDropdown(false);
-                  }}
-                  className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left flex items-center"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Exportar Excel
-                </button>
-              </div>
+            <div ref={excelDropdown.dropdownRef} className={`smart-dropdown w-56 overflow-hidden border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] ${excelDropdown.isOpen ? "dropdown-enter" : "dropdown-exit"}`} style={excelDropdown.position}>
+              <button type="button" onClick={() => { onImportExcel?.(); setShowExcelDropdown(false); }} className="flex min-h-11 w-full items-center gap-3 px-4 py-2 text-left text-sm font-medium text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)]" aria-label="Importar SKUs de arquivo Excel">
+                <svg className="h-4 w-4 text-[var(--cz-laranja)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 16V4m0 0L8 8m4-4 4 4M5 14v6h14v-6" /></svg>
+                Importar Excel
+              </button>
+              <button type="button" onClick={() => { onExportExcel?.(); setShowExcelDropdown(false); }} className="flex min-h-11 w-full items-center gap-3 border-t border-[var(--cz-hairline)] px-4 py-2 text-left text-sm font-medium text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)]" aria-label="Exportar SKUs para arquivo Excel">
+                <svg className="h-4 w-4 text-[var(--cz-laranja)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 4v12m0 0 4-4m-4 4-4-4M5 20h14" /></svg>
+                Exportar Excel
+              </button>
             </div>
           )}
-          </div>
         </div>
+
+        <button type="button" onClick={onNovoSKU} disabled={isLoading} aria-label="Criar novo SKU" className="col-span-2 inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] bg-[var(--cz-laranja)] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+          Novo SKU
+        </button>
       </div>
-    </div>
+    </header>
   );
 }

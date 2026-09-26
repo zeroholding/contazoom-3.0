@@ -245,3 +245,88 @@ export function LogoCanal({
   const { Logo, inline } = DESENHO_CANAL[canal];
   return <Logo className={`${inline} ${className}`} />;
 }
+
+/* -------------------------------------------------------------------------- */
+/*                         Seletor visual de canal                            */
+/* -------------------------------------------------------------------------- */
+
+export type CanalSeletor = "todos" | CanalLogo;
+
+const CANAIS_SELETOR: ReadonlyArray<CanalSeletor> = ["todos", "ML", "SP", "TT"];
+
+/**
+ * Seletor de canal orientado pelas marcas, sem siglas ou nomes visuais.
+ *
+ * As quatro opções têm alvo confortável para toque e mantêm nome completo em
+ * `aria-label`, `title` e texto exclusivo para leitor de tela. A opção geral é
+ * uma composição das três marcas — não um quarto rótulo que exige interpretação.
+ */
+export function SeletorCanalLogos({
+  valor,
+  onMudar,
+  className = "",
+}: {
+  valor: CanalSeletor;
+  onMudar: (canal: CanalSeletor) => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid w-full grid-cols-2 gap-2 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] p-2 sm:grid-cols-4 ${className}`}
+      role="group"
+      aria-label="Canal de vendas"
+    >
+      {CANAIS_SELETOR.map((canal) => {
+        const selecionado = canal === valor;
+        const nome = canal === "todos" ? "Todos os canais" : NOME_CANAL[canal];
+
+        return (
+          <button
+            key={canal}
+            type="button"
+            onClick={() => onMudar(canal)}
+            aria-label={nome}
+            aria-pressed={selecionado}
+            title={nome}
+            className={`group relative flex min-h-14 min-w-12 items-center justify-center rounded-[var(--cz-raio)] border px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cz-laranja)] focus-visible:ring-offset-2 ${
+              selecionado
+                ? "border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)] shadow-sm"
+                : "border-transparent bg-[var(--cz-superficie)] hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)]"
+            }`}
+          >
+            {canal === "todos" ? (
+              <span className="flex items-center justify-center gap-1.5" aria-hidden="true">
+                <span className="grid size-9 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-white">
+                  <LogoMercadoLivre className="h-7 w-auto max-w-8" />
+                </span>
+                <span className="grid size-9 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-white">
+                  <LogoShopee className="h-7 w-auto max-w-7" />
+                </span>
+                <span className="grid size-9 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-white">
+                  <LogoTikTok className="h-7 w-auto max-w-7" />
+                </span>
+              </span>
+            ) : (
+              <span className="grid h-10 w-20 place-items-center" aria-hidden="true">
+                {canal === "ML" ? (
+                  <LogoMercadoLivre className="h-9 w-auto max-w-[72px]" />
+                ) : canal === "SP" ? (
+                  <LogoShopee className="h-10 w-auto max-w-10" />
+                ) : (
+                  <LogoTikTok className="h-9 w-auto max-w-10" />
+                )}
+              </span>
+            )}
+            <span className="sr-only">{nome}</span>
+            <span
+              aria-hidden="true"
+              className={`absolute inset-x-5 bottom-1 h-0.5 rounded-full transition-colors ${
+                selecionado ? "bg-[var(--cz-laranja)]" : "bg-transparent"
+              }`}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
