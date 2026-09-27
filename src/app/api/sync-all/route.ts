@@ -6,6 +6,8 @@ import { POST as syncMeli } from "@/app/api/v2/meli/vendas/sync/route";
 import { POST as syncShopee } from "@/app/api/shopee/vendas/sync/route";
 import { POST as syncTiktok } from "@/app/api/tiktok/vendas/sync/route";
 import { assertSessionToken } from "@/lib/auth";
+import { backfillPrazoChunk } from "@/lib/prazo-despacho-backfill";
+import prisma from "@/lib/prisma";
 import {
   getSyncAllState,
   setSyncAllState,
@@ -35,6 +37,18 @@ const CHANNEL_HANDLER: Record<SyncAllChannel, ChannelHandler> = {
 };
 
 const STALE_JOB_MS = 4 * 60 * 1000;
+
+/**
+ * Prazos que a sincronização incremental não regrava.
+ *
+ * O incremental só relê pedidos que mudaram no Mercado Livre nos últimos dias.
+ * Uma venda gravada antes de uma regra nova de prazo (ex.: buffering) fica com o
+ * prazo antigo até alguém abrir a Expedição, e a coorte daquele dia sai errada.
+ * Rodar o mesmo backfill da Expedição ANTES do estado final faz as telas, que
+ * recarregam no fim da sincronização, já abrirem com o prazo certo. Mesmo lote
+ * da Expedição: mais recente primeiro e escrita pequena.
+ */
+const LOTE_BACKFILL_PRAZO_POS_SYNC = 300;
 
 async function reconcileStaleState(
   userId: string,
@@ -74,6 +88,35 @@ function normalizeAccountIds(input: unknown): string[] | undefined {
     new Set(input.map(String).map((id) => id.trim()).filter(Boolean)),
   );
   return ids.length > 0 ? ids : undefined;
+}
+
+/**
+ * Quantas contas o usuário tem em cada canal, respeitando o filtro de contas.
+ *
+ * Igual ao Nexus: canal sem conta nem entra na execução. Antes os três handlers
+ * eram chamados sempre, e o do TikTok responde 500 quando faltam as credenciais
+ * do app, então toda sincronização terminava "parcial" para quem nem usa TikTok.
+ * Se a contagem falhar, segue com todos os canais em vez de bloquear a sync.
+ */
+async function contarContasPorCanal(
+  userId: string,
+  accountIds?: string[],
+): Promise<Record<SyncAllChannel, number> | null> {
+  const where = accountIds ? { userId, id: { in: accountIds } } : { userId };
+  try {
+    const [ml, sp, tt] = await Promise.all([
+      prisma.meliAccount.count({ where }),
+      prisma.shopeeAccount.count({ where }),
+      prisma.tiktokAccount.count({ where }),
+    ]);
+    return { ML: ml, SP: sp, TT: tt };
+  } catch (error) {
+    console.warn(
+      "[Sync All] Não foi possível contar as contas; seguindo com todos os canais.",
+      error,
+    );
+    return null;
+  }
 }
 
 function initialChannel(channel: SyncAllChannel): SyncAllChannelState {
@@ -327,6 +370,24 @@ async function runSyncAll({
       }),
     );
 
+    await update((current) => ({
+      ...current,
+      message: "Atualizando prazos de despacho…",
+      progress: Math.max(current.progress, 97),
+      updatedAt: new Date().toISOString(),
+    }));
+    try {
+      const prazos = await backfillPrazoChunk(LOTE_BACKFILL_PRAZO_POS_SYNC, userId);
+      if (prazos.preenchidas > 0 || prazos.semPrazo > 0) {
+        console.log(
+          `[Sync All] Prazos revisados: ${prazos.preenchidas} preenchido(s), ${prazos.semPrazo} sem prazo, ${prazos.restantes} pendente(s).`,
+        );
+      }
+    } catch (error) {
+      // Acessório: a venda já foi gravada. A Expedição tenta de novo na visita.
+      console.warn("[Sync All] Backfill de prazo não rodou:", error);
+    }
+
     const channelStates = channels.map((channel) => state.channels[channel]!);
     const failures = channelStates.filter((channel) => channel.status === "failed");
     const partials = channelStates.filter((channel) => channel.status === "partial");
@@ -463,8 +524,45 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Contado com o lock na mão: assim um clique sem conta nunca sobrescreve o
+  // estado de uma execução que outra aba acabou de iniciar.
+  const contas = await contarContasPorCanal(userId, accountIds);
+  const activeChannels = contas
+    ? channels.filter((channel) => contas[channel] > 0)
+    : channels;
+
   const now = new Date().toISOString();
   const runId = randomUUID();
+
+  if (activeChannels.length === 0) {
+    const emptyState: SyncAllState = {
+      runId,
+      status: "completed",
+      message: "Nenhuma conta de marketplace conectada",
+      progress: 100,
+      saved: 0,
+      channels: {},
+      startedAt: now,
+      updatedAt: now,
+      heartbeatAt: now,
+      finishedAt: now,
+    };
+    try {
+      await setSyncAllState(userId, emptyState);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          message:
+            error instanceof Error ? error.message : "Sincronização indisponível",
+        },
+        { status: 503 },
+      );
+    } finally {
+      await lock.release();
+    }
+    return NextResponse.json({ state: emptyState });
+  }
+
   const initialState: SyncAllState = {
     runId,
     status: "preparing",
@@ -472,7 +570,7 @@ export async function POST(request: NextRequest) {
     progress: 1,
     saved: 0,
     channels: Object.fromEntries(
-      channels.map((channel) => [channel, initialChannel(channel)]),
+      activeChannels.map((channel) => [channel, initialChannel(channel)]),
     ),
     startedAt: now,
     updatedAt: now,
@@ -514,7 +612,7 @@ export async function POST(request: NextRequest) {
         userId,
         origin,
         cookie,
-        channels,
+        channels: activeChannels,
         accountIds,
         initialState,
         ownership,

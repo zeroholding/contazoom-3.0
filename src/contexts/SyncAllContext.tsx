@@ -31,6 +31,30 @@ type SyncAllContextValue = {
 
 const SyncAllContext = createContext<SyncAllContextValue | null>(null);
 
+/**
+ * Intervalo até a próxima consulta do estado.
+ *
+ * Aba oculta consulta bem menos: ninguém está olhando o card, e cada aba aberta
+ * esquecida fazia 12 requisições por minuto para sempre. Ao voltar a ficar
+ * visível a consulta é imediata (ver `visibilitychange` abaixo), então o card
+ * nunca aparece desatualizado. Erro também espaça, para uma indisponibilidade
+ * do servidor não virar uma rajada de 40 requisições por minuto por aba.
+ */
+function proximoIntervalo(
+  latest: SyncAllState | null,
+  ultimoConhecido: SyncAllState,
+): number {
+  const oculto =
+    typeof document !== "undefined" && document.visibilityState === "hidden";
+  const emAndamento = isSyncAllRunning((latest ?? ultimoConhecido).status);
+
+  if (emAndamento) {
+    if (oculto) return 5_000;
+    return latest ? 800 : 1_500;
+  }
+  return oculto ? 60_000 : 5_000;
+}
+
 export function SyncAllProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthContext();
   const [state, setState] = useState<SyncAllState>(createIdleSyncAllState);
@@ -38,6 +62,8 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
   const [lastConfirmedAt, setLastConfirmedAt] = useState<string | null>(null);
   const stateRef = useRef(state);
   const terminalRunRef = useRef<string | null>(null);
+  const hydratedRef = useRef(false);
+  const wakeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -54,6 +80,17 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error(`Status indisponível (${response.status})`);
       const payload = (await response.json()) as { state?: SyncAllState };
       if (!payload.state) throw new Error("Resposta de status inválida");
+
+      if (!hydratedRef.current) {
+        hydratedRef.current = true;
+        // Execução que terminou ANTES de a página abrir: as telas acabaram de
+        // carregar com esse dado. Reemitir o evento de fim fazia Dashboard,
+        // Vendas e Expedição carregarem duas vezes a cada recarga, por até 2 h.
+        if (payload.state.runId && isSyncAllTerminal(payload.state.status)) {
+          terminalRunRef.current = payload.state.runId;
+        }
+      }
+
       setState(payload.state);
       setPollError(null);
       setLastConfirmedAt(new Date().toISOString());
@@ -67,6 +104,8 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {
+      hydratedRef.current = false;
+      terminalRunRef.current = null;
       setState(createIdleSyncAllState());
       setPollError(null);
       setLastConfirmedAt(null);
@@ -74,23 +113,49 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
     }
 
     let cancelled = false;
+    let inFlight = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const poll = async () => {
-      const latest = await refreshState();
-      if (cancelled) return;
-      const interval = latest
-        ? isSyncAllRunning(latest.status)
-          ? 800
-          : 5000
-        : 1500;
-      timer = setTimeout(poll, interval);
+    const agendar = (ms: number) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(poll, ms);
+    };
+
+    async function poll() {
+      // Uma consulta por vez: a volta da visibilidade e o timer podem cair juntos.
+      if (inFlight || cancelled) return;
+      inFlight = true;
+      try {
+        const latest = await refreshState();
+        if (cancelled) return;
+        agendar(proximoIntervalo(latest, stateRef.current));
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    const aoMudarVisibilidade = () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      void poll();
+    };
+
+    // Chamado logo depois de iniciar uma execução: sem isso o primeiro retrato
+    // do progresso esperava o intervalo de ocioso (5 s).
+    wakeRef.current = () => {
+      if (!cancelled && !inFlight) agendar(800);
     };
 
     void poll();
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
     return () => {
       cancelled = true;
+      wakeRef.current = null;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
     };
   }, [isAuthenticated, isLoading, refreshState]);
 
@@ -141,6 +206,7 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
           setState(payload.state);
           setPollError(null);
           setLastConfirmedAt(new Date().toISOString());
+          wakeRef.current?.();
           return payload.state.runId;
         }
 

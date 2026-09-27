@@ -1688,7 +1688,7 @@ async function saveVendasBatch(
         const orderIds = validData.map((d) => d!.orderId);
         const existingOrders = await prisma.meliVenda.findMany({
           where: { orderId: { in: orderIds } },
-          select: { orderId: true, prazoDespachoOrigem: true },
+          select: { orderId: true, prazoDespachoOrigem: true, userId: true },
         });
 
         const existingByOrderId = new Map(
@@ -1698,9 +1698,18 @@ async function saveVendasBatch(
         const toCreate = validData.filter(
           (d) => !existingByOrderId.has(d!.orderId)
         );
-        const toUpdate = validData.filter((d) =>
-          existingByOrderId.has(d!.orderId)
+        // Isolamento entre usuários: mesma regra de `src/lib/sync-worker.ts`.
+        // Pedido que já pertence a OUTRO usuário (conta ML conectada em dois
+        // cadastros) não é regravado com o CMV e a margem deste.
+        const toUpdate = validData.filter(
+          (d) => existingByOrderId.get(d!.orderId)?.userId === userId
         );
+        const deOutroUsuario = validData.length - toCreate.length - toUpdate.length;
+        if (deOutroUsuario > 0) {
+          console.warn(
+            `[Sync] ${deOutroUsuario} pedido(s) já pertencem a outro usuário (conta ML conectada em duas contas do ContaZoom); não sobrescritos.`
+          );
+        }
 
         // BATCH CREATE: insere m�ltiplos registros de uma vez
         if (toCreate.length > 0) {

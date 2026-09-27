@@ -44,14 +44,6 @@ export async function POST(req: NextRequest) {
   let syncLock: Awaited<ReturnType<typeof acquireSyncLock>> | null = null;
 
   try {
-    const missing = missingTiktokCredentials();
-    if (missing.length > 0) {
-      return NextResponse.json(
-        { message: `Credenciais TikTok ausentes: ${missing.join(", ")}` },
-        { status: 500 },
-      );
-    }
-
     sendProgressToUser(userId, {
       type: "sync_start",
       message: "Conectando ao TikTok Shop...",
@@ -82,6 +74,20 @@ export async function POST(req: NextRequest) {
         { message: "Nenhuma conta TikTok Shop ativa." },
         { status: 404 },
       );
+    }
+
+    // Só depois de saber que existe loja: sem conta, a falta das credenciais do
+    // app não é erro de quem nem usa TikTok, e antes virava 500 para todo mundo.
+    const missing = missingTiktokCredentials();
+    if (missing.length > 0) {
+      const message = `Credenciais TikTok ausentes: ${missing.join(", ")}`;
+      // O `sync_start` já saiu: sem este evento o modal antigo ficaria preso.
+      sendProgressToUser(userId, {
+        type: "sync_error",
+        message,
+        errorCode: "TIKTOK_CREDENTIALS_MISSING",
+      });
+      return NextResponse.json({ message }, { status: 500 });
     }
 
     // Mesma forma de chave dos outros syncs: plataforma + usuário + contas

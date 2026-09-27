@@ -335,7 +335,7 @@ async function saveSalesToDatabase(
             const orderIds = validData.map((d) => d!.orderId);
             const existingOrders = await prisma.meliVenda.findMany({
                 where: { orderId: { in: orderIds } },
-                select: { orderId: true, prazoDespachoOrigem: true },
+                select: { orderId: true, prazoDespachoOrigem: true, userId: true },
             });
 
             const existingByOrderId = new Map(
@@ -345,9 +345,21 @@ async function saveSalesToDatabase(
             const toCreate = validData.filter(
                 (d) => !existingByOrderId.has(d!.orderId)
             );
-            const toUpdate = validData.filter((d) =>
-                existingByOrderId.has(d!.orderId)
+            // ISOLAMENTO ENTRE USUÁRIOS. `orderId` é único no banco inteiro, então
+            // quando a mesma conta do ML está conectada em dois usuários o pedido
+            // já existe na linha do OUTRO. Atualizar por `orderId` regravava a
+            // venda dele com o CMV e a margem calculados pelos SKUs deste usuário,
+            // sem trocar o dono. Aconteceu em produção com BRUXELAS e CINGAPURA.
+            // Só atualiza a linha que é deste usuário; a outra fica intocada.
+            const toUpdate = validData.filter(
+                (d) => existingByOrderId.get(d!.orderId)?.userId === userId
             );
+            const deOutroUsuario = validData.length - toCreate.length - toUpdate.length;
+            if (deOutroUsuario > 0) {
+                console.warn(
+                    `[Sync] ${deOutroUsuario} pedido(s) já pertencem a outro usuário (conta ML conectada em duas contas do ContaZoom); não sobrescritos.`
+                );
+            }
 
             // BATCH CREATE: insere m�ltiplos registros de uma vez
             if (toCreate.length > 0) {
