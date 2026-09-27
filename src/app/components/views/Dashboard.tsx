@@ -94,6 +94,13 @@ export default function Dashboard() {
   const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
 
   useEffect(() => {
+    const recarregarAposSync = () => setRefreshKey((value) => value + 1);
+    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+    return () =>
+      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+  }, []);
+
+  useEffect(() => {
     fetch('/api/sku/stats')
       .then(res => res.json())
       .then(data => {

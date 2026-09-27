@@ -7,7 +7,7 @@ import {
   fetchMeliCatalogSkuCandidates,
   registerDiscoveredSkus,
 } from "@/lib/sku-discovery";
-import { closeUserConnections, sendProgressToUser } from "@/lib/sse-progress";
+import { sendProgressToUser } from "@/lib/sse-progress";
 import { DownloadMeliOrdersBuilder } from "@/lib/v2/builders/meli/download-meli-orders.builder";
 import { SaveMeliOrdersBuilder } from "@/lib/v2/builders/meli/save-meli-orders.builder";
 import MeliSyncService from "@/lib/v2/services/meli-sync.service";
@@ -87,7 +87,6 @@ export async function POST(req: NextRequest) {
     "vendas",
     "meli",
     userId,
-    ...accounts.map((account) => account.id).sort(),
   ]);
 
   if (!syncLock.acquired) {
@@ -244,8 +243,6 @@ export async function POST(req: NextRequest) {
       throw new Error(`Falha ao buscar vendas: ${fetchMsg}`);
     }
 
-    await downloadOrderbuilder.enqueueOrders();
-
     downloadOrderbuilder.finish();
 
     const saveOrdersbuilder = new SaveMeliOrdersBuilder({
@@ -260,13 +257,20 @@ export async function POST(req: NextRequest) {
     try {
       if (downloadOrderbuilder.allOrders.length > 0) {
         console.log(
-          `[Sync] 💾 Redis indisponível/vazio: salvando ${downloadOrderbuilder.allOrders.length} vendas direto no PostgreSQL...`,
+          `[Sync] 💾 Salvando ${downloadOrderbuilder.allOrders.length} vendas direto no PostgreSQL...`,
         );
         await saveOrdersbuilder.saveOrdersDirect(downloadOrderbuilder.allOrders);
       } else {
-        await saveOrdersbuilder.saveOrdersFromCache();
+        console.log("[Sync] Nenhuma venda nova para salvar nesta conta.");
       }
       progressSum.sumSavedOrders += saveOrdersbuilder.ctx.progress.saved;
+      if (saveOrdersbuilder.ctx.progress.errors > 0) {
+        errors.push({
+          accountId: account.id,
+          mlUserId: account.ml_user_id,
+          message: `${saveOrdersbuilder.ctx.progress.errors} venda(s) falharam ao salvar`,
+        });
+      }
     } catch (workerError) {
       console.error(
         `[Sync] ❌ Erro no worker Redis → PostgreSQL:`,

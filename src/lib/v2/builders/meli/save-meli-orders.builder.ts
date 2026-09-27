@@ -1,7 +1,7 @@
 import { sendProgressToUser } from "@/lib/sse-progress";
 import { MeliOrderPayload, SyncError } from "../../types/sync-meli";
 import MeliSyncService from "../../services/meli-sync.service";
-import { processAllUserSales, processSalesDirect } from "@/lib/sync-worker";
+import { processSalesDirect } from "@/lib/sync-worker";
 import { QueuedSale } from "@/lib/redis-queue";
 
 type AccountData = {
@@ -36,6 +36,7 @@ export type SaveMeliOrderBuilderCtx = {
     percentage: number;
     saved: number;
     expected: number;
+    errors: number;
   };
 };
 
@@ -45,6 +46,7 @@ const defaultCtx: Omit<SaveMeliOrderBuilderCtx, "current" | "userId"> = {
     percentage: 0,
     saved: 0,
     expected: 0,
+    errors: 0,
   },
   forcedStop: false,
 };
@@ -80,28 +82,6 @@ export class SaveMeliOrdersBuilder {
     this._meliSyncService = params.meliSyncService;
   }
 
-  async saveOrdersFromCache(): Promise<this> {
-    const workerResult = await processAllUserSales(this._ctx.userId);
-    console.log(
-      `[Sync] ✅ Worker completou: ${workerResult.totalProcessed} salvas, ${workerResult.totalErrors} erros`,
-    );
-
-    this._ctx.progress.expected = workerResult.totalProcessed;
-    this._ctx.progress.saved = workerResult.totalProcessed;
-
-    sendProgressToUser(this._ctx.userId, {
-      type: "sync_save_complete",
-      message: `✅ ${workerResult.totalProcessed} vendas salvas no banco`,
-      current: workerResult.totalProcessed,
-      total: workerResult.totalProcessed,
-      phase: "complete",
-      accountId: this._ctx.current.accountId,
-      accountNickname: this._ctx.current.accountName,
-    });
-
-    return this;
-  }
-
   async saveOrdersDirect(orders: MeliOrderPayload[]): Promise<this> {
     const queuedSales: QueuedSale[] = orders.map((order) => ({
       accountId: order.accountId,
@@ -119,6 +99,7 @@ export class SaveMeliOrdersBuilder {
 
     this._ctx.progress.expected = orders.length;
     this._ctx.progress.saved = workerResult.totalProcessed;
+    this._ctx.progress.errors = workerResult.totalErrors;
 
     sendProgressToUser(this._ctx.userId, {
       type: "sync_save_complete",

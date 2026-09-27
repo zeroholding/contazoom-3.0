@@ -975,6 +975,15 @@ export function useVendasV2(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform]);
 
+  useEffect(() => {
+    const recarregarAposSync = () => {
+      void loadVendasFromDatabase();
+    };
+    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+    return () =>
+      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+  }, [loadVendasFromDatabase]);
+
   return {
     vendas: vendas || [],
     pagination,

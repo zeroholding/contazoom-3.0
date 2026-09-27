@@ -91,7 +91,6 @@ export async function POST(req: NextRequest) {
       "vendas",
       "tiktok",
       userId,
-      ...contas.map((conta) => conta.id).sort(),
     ]);
 
     if (!syncLock.acquired) {

@@ -628,6 +628,17 @@ export function useVendas(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform]);
 
+  useEffect(() => {
+    const recarregarAposSync = () => {
+      void loadVendasFromDatabase();
+    };
+    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+    return () =>
+      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+    // A função lê a plataforma atual; o hook remonta/reexecuta este efeito quando ela muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform]);
+
   return {
     vendas: vendas || [],
     contasConectadas: contasConectadas || [],

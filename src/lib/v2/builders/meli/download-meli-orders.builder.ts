@@ -3,8 +3,6 @@ import { sendProgressToUser } from "@/lib/sse-progress";
 import { MeliOrderPayload, SyncError } from "../../types/sync-meli";
 import { smartRefreshMeliAccountToken } from "@/lib/meli";
 import MeliSyncService from "../../services/meli-sync.service";
-import { checkRedisHealth } from "@/lib/redis";
-import { enqueueSales, QueuedSale } from "@/lib/redis-queue";
 
 type AccountData = {
   id: string;
@@ -181,9 +179,8 @@ export class DownloadMeliOrdersBuilder {
 
   async fetchAllOrders(): Promise<this> {
     const startTime = Date.now();
-    const MAX_EXECUTION_TIME = 3000000; // SEMPRE 30 minutos
+    const MAX_EXECUTION_TIME = 30 * 60 * 1000; // 30 minutos
     const results: MeliOrderPayload[] = [];
-    const detailsResults: MeliOrderPayload[] = [];
     const logisticStats = new Map<string, number>();
     let forcedStop = false; // Declarar forcedStop localmente
 
@@ -259,10 +256,11 @@ export class DownloadMeliOrdersBuilder {
             discoveredTotal === null
           ) {
             discoveredTotal = pageResult.total;
+            total = discoveredTotal;
             this._ctx.progress.expected = discoveredTotal;
             maxOffsetToFetch = Math.min(MAX_OFFSET, discoveredTotal);
             console.log(
-              `[Sync] ?? Conta ${account.ml_user_id}: total estimado ${total} vendas`,
+              `[Sync] ?? Conta ${account.ml_user_id}: total estimado ${discoveredTotal} vendas`,
             );
           }
 
@@ -543,66 +541,6 @@ export class DownloadMeliOrdersBuilder {
     console.log(
       `[Sync] Debug - allOrders.length: ${this.allOrders.length}, expectedTotal: ${this.ctx.progress.expected}`,
     );
-
-    return this;
-  }
-
-  async enqueueOrders(): Promise<this> {
-    const isRedisHealthy = await checkRedisHealth();
-    console.log(
-      `[Sync] Redis status: ${
-        isRedisHealthy ? "✅ Available" : "⚠️ Unavailable - using direct save"
-      }`,
-    );
-
-    if (isRedisHealthy && this._allOrders.length > 0) {
-      // === FASE 1: Enqueue no Redis ===
-      console.log(
-        `[Sync] 📦 Fase 1: Enfileirando ${this._allOrders.length} vendas no Redis...`,
-      );
-
-      sendProgressToUser(this._ctx.userId, {
-        type: "sync_download_progress",
-        message: `Salvando ${this._allOrders.length} vendas no cache...`,
-        current: 0,
-        total: this._allOrders.length,
-        phase: "downloading",
-        accountId: this._ctx.current.accountId,
-        accountNickname: this._ctx.current.accountName,
-      });
-
-      // Convert to QueuedSale format
-      const queuedSales: QueuedSale[] = this._allOrders.map((order) => ({
-        accountId: order.accountId,
-        accountNickname: order.accountNickname ?? null,
-        mlUserId: Number(order.mlUserId),
-        order: order.order,
-        shipment: order.shipment,
-        freight: order.freight,
-      }));
-
-      const enqueueResult = await enqueueSales(
-        this._ctx.userId,
-        this._ctx.current.accountId,
-        queuedSales,
-      );
-
-      if (enqueueResult.success) {
-        console.log(
-          `[Sync] ✅ ${enqueueResult.count} vendas enfileiradas no Redis`,
-        );
-
-        sendProgressToUser(this._ctx.userId, {
-          type: "sync_download_complete",
-          message: `${enqueueResult.count} vendas baixadas e armazenadas`,
-          current: enqueueResult.count,
-          total: enqueueResult.count,
-          phase: "downloading",
-        });
-
-        this._allOrders = [];
-      }
-    }
 
     return this;
   }

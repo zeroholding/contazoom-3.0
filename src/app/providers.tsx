@@ -3,6 +3,7 @@
 import { ToasterProvider } from "./components/views/ui/toaster";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { SyncAllProvider } from "@/contexts/SyncAllContext";
 import PageTransitionFramer from "@/components/PageTransitionFramer";
 import { installExternalApiClients } from "@/lib/install-api-fetch";
 
@@ -12,11 +13,13 @@ installExternalApiClients();
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <NotificationProvider>
-        <ToasterProvider>
-          <PageTransitionFramer>{children}</PageTransitionFramer>
-        </ToasterProvider>
-      </NotificationProvider>
+      <SyncAllProvider>
+        <NotificationProvider>
+          <ToasterProvider>
+            <PageTransitionFramer>{children}</PageTransitionFramer>
+          </ToasterProvider>
+        </NotificationProvider>
+      </SyncAllProvider>
     </AuthProvider>
   );
 }

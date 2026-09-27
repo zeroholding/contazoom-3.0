@@ -16,7 +16,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { prepareSaleData } from '@/utils/sync-prepare-sale-data';
 import { devePreservarPrazoMeli } from './prazo-despacho';
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 100;
 const MAX_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000; // 1 second
 

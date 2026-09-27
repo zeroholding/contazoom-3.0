@@ -398,7 +398,6 @@ export async function POST(req: NextRequest) {
       "vendas",
       "shopee",
       userId,
-      ...contasAtivas.map((conta) => conta.id).sort(),
     ]);
 
     if (!syncLock.acquired) {
@@ -545,16 +544,6 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-
-        // Buscar IDs existentes de forma otimizada (só consideramos como válidas as vendas com valor > 0)
-        const existingOrderIds = await prisma.shopeeVenda.findMany({
-          where: { 
-            shopeeAccountId: conta.id,
-            valorTotal: { gt: 0 } 
-          },
-          select: { orderId: true }
-        });
-        const existingIds = new Set(existingOrderIds.map(v => v.orderId));
 
         // Auto-cura: taxa antiga com sinal errado ou financeiro sem breakdown novo.
         const corruptOrders = await prisma.shopeeVenda.count({

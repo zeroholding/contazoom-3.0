@@ -12,9 +12,11 @@ import {
   useImperativeHandle,
   useCallback,
 } from "react";
-import { ClipboardList } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, RefreshCw } from "lucide-react";
 import gsap from "gsap";
 import { LogoCanal, type CanalLogo } from "../comum/logos";
+import { useSyncAll } from "@/contexts/SyncAllContext";
+import { isSyncAllTerminal } from "@/lib/sync-all-types";
 
 type Leaf = { href: string; label: string };
 type Branch = {
@@ -514,6 +516,125 @@ const AdminIcon = () => (
   </svg>
 );
 
+function SyncGlobalCard({ compact }: { compact: boolean }) {
+  const { state, running, statusUnavailable, startSync } = useSyncAll();
+  const terminal = isSyncAllTerminal(state.status);
+  const hasWarning =
+    statusUnavailable || state.status === "partial" || state.status === "failed";
+  const showRunning = running && !statusUnavailable;
+  const channelStates = Object.values(state.channels).filter(Boolean);
+  const firstErrorChannel = channelStates.find((channel) => channel.errorCount > 0);
+  const diagnosticMessage = firstErrorChannel?.errors[0]
+    ? `${firstErrorChannel.label}: ${firstErrorChannel.errors[0].message}`
+    : state.message;
+
+  return (
+    <div className={`px-3 pb-2 ${compact ? "pt-2" : ""}`}>
+      <button
+        type="button"
+        onClick={() => void startSync()}
+        disabled={running || statusUnavailable}
+        title={
+          compact
+            ? statusUnavailable
+              ? "Status indisponível; reconectando"
+              : hasWarning
+                ? diagnosticMessage
+                : state.message
+            : undefined
+        }
+        aria-label={
+          statusUnavailable
+            ? "Status da sincronização indisponível"
+            : running
+              ? `Sincronização em andamento: ${state.progress}%`
+              : "Sincronizar vendas"
+        }
+        className={`relative w-full overflow-hidden rounded-[var(--cz-raio)] border transition-colors ${
+          compact
+            ? "grid h-11 place-items-center px-0"
+            : "min-h-[58px] px-3 py-2 text-left"
+        } ${
+          showRunning
+            ? "cursor-progress border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)]"
+            : hasWarning
+              ? "border-amber-200 bg-amber-50 hover:bg-amber-100"
+              : terminal
+                ? "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+                : "border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)]"
+        }`}
+      >
+        {compact ? (
+          <span className="relative">
+            {hasWarning ? (
+              <AlertTriangle className="h-5 w-5 text-amber-700" />
+            ) : terminal ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-700" />
+            ) : (
+              <RefreshCw className={`h-5 w-5 text-[var(--cz-laranja)] ${showRunning ? "animate-spin" : ""}`} />
+            )}
+            {showRunning && (
+              <span className="absolute -right-2 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--cz-laranja)] px-1 text-[8px] font-extrabold text-white">
+                {state.progress}
+              </span>
+            )}
+          </span>
+        ) : (
+          <>
+            <span className="flex items-center gap-2">
+              {hasWarning ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700" />
+              ) : terminal ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" />
+              ) : (
+                <RefreshCw className={`h-4 w-4 shrink-0 text-[var(--cz-laranja)] ${showRunning ? "animate-spin" : ""}`} />
+              )}
+              <span className="min-w-0 flex-1 truncate text-[12px] font-extrabold text-[var(--cz-texto)]">
+                {statusUnavailable
+                  ? "Status indisponível"
+                  : showRunning
+                    ? "Sincronizando vendas"
+                    : "Sincronizar vendas"}
+              </span>
+              {showRunning && (
+                <span className="text-[10px] font-extrabold tabular-nums text-[var(--cz-laranja-forte)]">
+                  {state.progress}%
+                </span>
+              )}
+            </span>
+            <span className="mt-1.5 flex min-w-0 items-center gap-1.5">
+              {channelStates.length > 0 && (
+                <span className="flex shrink-0 items-center gap-0.5">
+                  {channelStates.map((channel) => (
+                    <LogoCanal key={channel.channel} canal={channel.channel} />
+                  ))}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate text-[10.5px] text-[var(--cz-texto-suave)]">
+                {statusUnavailable
+                  ? "Reconectando ao estado da sincronização…"
+                  : running || terminal
+                    ? hasWarning
+                      ? diagnosticMessage
+                      : state.message
+                    : "Um clique para todos os canais"}
+              </span>
+            </span>
+            {showRunning && (
+              <span className="mt-2 block h-1 overflow-hidden rounded-full bg-[var(--cz-laranja-borda)]">
+                <span
+                  className="block h-full rounded-full bg-[var(--cz-laranja)] transition-[width] duration-300"
+                  style={{ width: `${Math.max(2, state.progress)}%` }}
+                />
+              </span>
+            )}
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export default function Sidebar({
   collapsed,
   mobileOpen,
@@ -875,6 +996,8 @@ export default function Sidebar({
             </Link>
           </div>
         )}
+
+        <SyncGlobalCard compact={collapsed && !mobileOpen} />
 
         {/* `px-4` NAO e arbitrario: o tracinho laranja do item ativo e posicionado
             em `left: -1rem` pela folha global, exatamente para cair na borda DA

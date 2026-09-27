@@ -126,6 +126,13 @@ export function useExpedicao(filtros: FiltrosExpedicao): EstadoExpedicao {
 
   const atualizar = useCallback(() => setRecarga((n) => n + 1), []);
 
+  useEffect(() => {
+    const recarregarAposSync = () => atualizar();
+    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+    return () =>
+      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
+  }, [atualizar]);
+
   return { dados, carregando, atualizando, erro, atualizar };
 }
 
