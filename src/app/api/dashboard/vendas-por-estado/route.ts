@@ -207,8 +207,7 @@ export async function GET(req: NextRequest) {
               ...(accountPlatformParam === "meli" && accountIdParam ? { meliAccountId: accountIdParam } : {}) }
           : { userId: session.sub, ...dashboardWhereMeli,
               ...(accountPlatformParam === "meli" && accountIdParam ? { meliAccountId: accountIdParam } : {}) },
-        select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
-        distinct: ["orderId"],
+        select: { valorTotal: true, latitude: true, longitude: true },
       }) : [],
       canalIncluiPlataforma(canalParam, "shopee") ? prisma.shopeeVenda.findMany({
         where: useRange
@@ -216,8 +215,7 @@ export async function GET(req: NextRequest) {
               ...(accountPlatformParam === "shopee" && accountIdParam ? { shopeeAccountId: accountIdParam } : {}) }
           : { userId: session.sub, ...dashboardWhereShopee,
               ...(accountPlatformParam === "shopee" && accountIdParam ? { shopeeAccountId: accountIdParam } : {}) },
-        select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
-        distinct: ["orderId"],
+        select: { valorTotal: true, latitude: true, longitude: true },
       }) : [],
       canalIncluiPlataforma(canalParam, "tiktok") ? prisma.tiktokVenda.findMany({
         where: useRange
@@ -225,8 +223,7 @@ export async function GET(req: NextRequest) {
               ...(accountPlatformParam === "tiktok" && accountIdParam ? { tiktokAccountId: accountIdParam } : {}) }
           : { userId: session.sub, ...dashboardWhereTiktok,
               ...(accountPlatformParam === "tiktok" && accountIdParam ? { tiktokAccountId: accountIdParam } : {}) },
-        select: { orderId: true, valorTotal: true, quantidade: true, latitude: true, longitude: true },
-        distinct: ["orderId"],
+        select: { valorTotal: true, latitude: true, longitude: true },
       }) : [],
     ]);
 

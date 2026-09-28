@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import {
   Aviso,
   BotaoAtualizar,
@@ -228,6 +229,15 @@ export default function EstoqueFull() {
     },
     [params],
   );
+
+  useAoSincronizarVendas(() => {
+    setCarregando(true);
+    setErro(null);
+    void carregar(true)
+      .then(setDados)
+      .catch(() => setErro("Não foi possível atualizar o estoque."))
+      .finally(() => setCarregando(false));
+  });
 
   useEffect(() => {
     let vivo = true;

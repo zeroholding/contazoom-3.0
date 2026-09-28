@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import { useVendasSyncProgress, VendasSyncProgress } from "@/hooks/useVendasSyncProgress";
 import {
   loadVendasFromCache,
@@ -272,10 +273,8 @@ export function useVendas(
           syncCompleteProcessedRef.current = true; // Marcar como processado
           pendingAccountsRef.current = 0;
 
-          // Recarregar vendas do banco após sincronização completa
-          loadVendasFromDatabase().catch(err => {
-            console.error('[useVendas] Erro ao recarregar vendas após sync_complete:', err);
-          });
+          // A lista é recarregada pelo evento global somente depois do backfill
+          // e da invalidação dos caches derivados.
 
           // Resetar estados de loading
           setIsSyncing(false);
@@ -628,16 +627,9 @@ export function useVendas(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform]);
 
-  useEffect(() => {
-    const recarregarAposSync = () => {
-      void loadVendasFromDatabase();
-    };
-    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-    return () =>
-      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-    // A função lê a plataforma atual; o hook remonta/reexecuta este efeito quando ela muda.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platform]);
+  useAoSincronizarVendas(() => {
+    void loadVendasFromDatabase();
+  });
 
   return {
     vendas: vendas || [],

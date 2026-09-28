@@ -61,56 +61,46 @@ export async function GET(req: NextRequest) {
 
     const where = { userId: session.sub };
 
-    // Contagem total (mesmo where). Só é necessária no modo paginado para montar
-    // a metadata de paginação; no modo completo usamos vendas.length.
-    const totalCount = isPaginated
-      ? await prisma.shopeeVenda.count({ where })
-      : 0;
-
-    // Buscar vendas Shopee do usuário.
-    // - Modo completo (default): TODAS as vendas (sem filtro de 6 meses, igual ML).
-    // - Modo paginado (opt-in): apenas a página solicitada via skip/take.
-    const vendas = await prisma.shopeeVenda.findMany({
-      where,
-      ...(isPaginated ? { skip: (page - 1) * limit, take: limit } : {}),
-      select: {
-        id: true,
-        orderId: true,
-        dataVenda: true,
-        status: true,
-        conta: true,
-        shopeeAccountId: true,
-        valorTotal: true,
-        quantidade: true,
-        unitario: true,
-        taxaPlataforma: true,
-        frete: true,
-        freteAjuste: true,
-        cmv: true,
-        margemContribuicao: true,
-        isMargemReal: true,
-        titulo: true,
-        sku: true,
-        comprador: true,
-        logisticType: true,
-        envioMode: true,
-        shippingStatus: true,
-        shippingId: true,
-        paymentMethod: true,
-        paymentStatus: true,
-        latitude: true,
-        longitude: true,
-        plataforma: true,
-        canal: true,
-        tags: true,
-        internalTags: true,
-        sincronizadoEm: true,
-        paymentDetails: true,
-        shipmentDetails: true,
-        rawData: true,
-      },
-      orderBy: { dataVenda: "desc" },
-    });
+    const [totalCount, vendas] = await Promise.all([
+      isPaginated ? prisma.shopeeVenda.count({ where }) : 0,
+      prisma.shopeeVenda.findMany({
+        where,
+        ...(isPaginated ? { skip: (page - 1) * limit, take: limit } : {}),
+        select: {
+          orderId: true,
+          dataVenda: true,
+          status: true,
+          conta: true,
+          shopeeAccountId: true,
+          valorTotal: true,
+          quantidade: true,
+          unitario: true,
+          taxaPlataforma: true,
+          frete: true,
+          freteAjuste: true,
+          titulo: true,
+          sku: true,
+          comprador: true,
+          logisticType: true,
+          envioMode: true,
+          shippingStatus: true,
+          shippingId: true,
+          paymentMethod: true,
+          paymentStatus: true,
+          latitude: true,
+          longitude: true,
+          plataforma: true,
+          canal: true,
+          tags: true,
+          internalTags: true,
+          sincronizadoEm: true,
+          paymentDetails: true,
+          shipmentDetails: true,
+          rawData: true,
+        },
+        orderBy: { dataVenda: "desc" },
+      }),
+    ]);
 
     // === RECÁLCULO DE CMV + MARGEM (espelhando ML GET route) ===
     // Buscar SKUs únicos para construir mapa de custo histórico

@@ -1,8 +1,7 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export default function PageTransitionFramer({
   children,
@@ -11,28 +10,34 @@ export default function PageTransitionFramer({
 }) {
   const pathname = usePathname();
 
-  // Transição leve e SEM `mode="wait"`: a página nova monta imediatamente
-  // (sem esperar a antiga fazer fade-out), com um fade-in curto. Antes o
-  // `mode="wait"` serializava saída (150ms) + entrada (150ms) = ~300ms de
-  // tela "morta" a cada navegação, mesmo antes de carregar dados.
   return (
-    <AnimatePresence initial={false}>
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{
-          duration: 0.1,
-          ease: "easeOut",
-        }}
-        style={{
-          width: "100%",
-          minHeight: "100vh",
-          backgroundColor: "transparent",
-        }}
-      >
+    <>
+      <div key={pathname} className="route-fade-in">
         {children}
-      </motion.div>
-    </AnimatePresence>
+      </div>
+      <style jsx>{`
+        .route-fade-in {
+          width: 100%;
+          min-height: 100vh;
+          background-color: transparent;
+          animation: route-fade-in 100ms ease-out both;
+        }
+
+        @keyframes route-fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .route-fade-in {
+            animation: none;
+          }
+        }
+      `}</style>
+    </>
   );
 }

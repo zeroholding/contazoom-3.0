@@ -183,77 +183,58 @@ export async function GET(req: NextRequest) {
       ? { userId: session.sub, ...dashboardWhereTiktok, ...accountWhereTiktok }
       : { userId: session.sub, dataVenda: { gte: start, lte: end }, ...dashboardWhereTiktok, ...accountWhereTiktok };
 
-    // Buscar vendas do Mercado Livre
-    //
-    // O guard é por INCLUSÃO: o `if (canalParam === 'shopee')` da consolidação
-    // funcionava com duas plataformas porque "não é Shopee" equivalia a "é ML". Com
-    // três, filtrar por `tiktok` não exclui o ML e o ranking somaria Mercado Livre
-    // dentro de um filtro de TikTok.
-    const vendasMeli = canalIncluiPlataforma(canalParam, 'meli')
-      ? await prisma.meliVenda.findMany({
-          where: whereClauseMeli,
-          select: {
-            titulo: true,
-            sku: true,
-            valorTotal: true,
-            quantidade: true,
-            dataVenda: true,
-            plataforma: true,
-          },
-          distinct: ['orderId'],
-          orderBy: { dataVenda: "desc" },
-        })
-      : [];
-
-    // Buscar vendas do Shopee
-    const vendasShopee = canalIncluiPlataforma(canalParam, 'shopee')
-      ? await prisma.shopeeVenda.findMany({
-          where: whereClauseShopee,
-          select: {
-            titulo: true,
-            sku: true,
-            valorTotal: true,
-            quantidade: true,
-            dataVenda: true,
-            plataforma: true,
-          },
-          distinct: ['orderId'],
-          orderBy: { dataVenda: "desc" },
-        })
-      : [];
-
-    // Buscar vendas do TikTok Shop
-    const vendasTiktok = canalIncluiPlataforma(canalParam, 'tiktok')
-      ? await prisma.tiktokVenda.findMany({
-          where: whereClauseTiktok,
-          select: {
-            titulo: true,
-            sku: true,
-            valorTotal: true,
-            quantidade: true,
-            dataVenda: true,
-            plataforma: true,
-          },
-          distinct: ['orderId'],
-          orderBy: { dataVenda: "desc" },
-        })
-      : [];
+    // As três plataformas e os metadados de SKU são independentes.
+    const [vendasMeli, vendasShopee, vendasTiktok, skusData] = await Promise.all([
+      canalIncluiPlataforma(canalParam, 'meli')
+        ? prisma.meliVenda.findMany({
+            where: whereClauseMeli,
+            select: {
+              titulo: true,
+              sku: true,
+              valorTotal: true,
+              quantidade: true,
+            },
+            orderBy: { dataVenda: "desc" },
+          })
+        : [],
+      canalIncluiPlataforma(canalParam, 'shopee')
+        ? prisma.shopeeVenda.findMany({
+            where: whereClauseShopee,
+            select: {
+              titulo: true,
+              sku: true,
+              valorTotal: true,
+              quantidade: true,
+            },
+            orderBy: { dataVenda: "desc" },
+          })
+        : [],
+      canalIncluiPlataforma(canalParam, 'tiktok')
+        ? prisma.tiktokVenda.findMany({
+            where: whereClauseTiktok,
+            select: {
+              titulo: true,
+              sku: true,
+              valorTotal: true,
+              quantidade: true,
+            },
+            orderBy: { dataVenda: "desc" },
+          })
+        : [],
+      prisma.sKU.findMany({
+        where: { userId: session.sub },
+        select: {
+          sku: true,
+          tipo: true,
+          hierarquia1: true,
+          hierarquia2: true,
+        },
+      }),
+    ]);
 
     // Consolidar as vendas das plataformas incluídas no filtro de canal
     // (as excluídas já vieram como lista vazia do guard acima)
     const vendas: any[] = [...vendasMeli, ...vendasShopee, ...vendasTiktok];
-
-    // Buscar dados de SKU para agrupamento inteligente
-    const skusData = await prisma.sKU.findMany({
-      where: { userId: session.sub },
-      select: {
-        sku: true,
-        produto: true,
-        tipo: true,
-        hierarquia1: true,
-        hierarquia2: true,
-      },
-    });
 
     // Criar mapa de SKUs para lookup rápido
     const skuMap = new Map<string, typeof skusData[0]>();
@@ -282,8 +263,6 @@ export async function GET(req: NextRequest) {
 
     // Função para determinar o nome de exibição baseado no agrupamento
     function getDisplayName(venda: typeof vendas[0], groupingKey: string): string {
-      const skuData = skuMap.get(venda.sku || "");
-      
       switch (agrupamentoSKUParam) {
         case "sku":
           return venda.titulo.length > 30 

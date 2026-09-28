@@ -40,17 +40,6 @@ export type SaveMeliOrderBuilderCtx = {
   };
 };
 
-const defaultCtx: Omit<SaveMeliOrderBuilderCtx, "current" | "userId"> = {
-  errors: [],
-  progress: {
-    percentage: 0,
-    saved: 0,
-    expected: 0,
-    errors: 0,
-  },
-  forcedStop: false,
-};
-
 // TODO: move the process and save sales from lib/sync-worker to here
 export class SaveMeliOrdersBuilder {
   private _ctx: SaveMeliOrderBuilderCtx;
@@ -64,18 +53,27 @@ export class SaveMeliOrdersBuilder {
     account: AccountData;
     userId: string;
     meliSyncService: MeliSyncService;
+    accountIndex?: number;
   }) {
+    // Cada conta precisa de estado próprio: os builders rodam em paralelo.
     this._ctx = {
-      ...defaultCtx,
+      errors: [],
+      forcedStop: false,
+      progress: {
+        percentage: 0,
+        saved: 0,
+        expected: 0,
+        errors: 0,
+      },
       userId: params.userId,
       current: {
         accountData: params.account,
         accountId: params.account.id,
-        accountIndex: 0,
+        accountIndex: params.accountIndex ?? 0,
         accountName:
           params.account.nickname || `Conta ${params.account.ml_user_id}`,
         mlUserId: Number(params.account.ml_user_id),
-        syncStep: "fetching",
+        syncStep: "saving",
         expiresAt: params.account.expires_at.toISOString(),
       },
     };
@@ -100,6 +98,10 @@ export class SaveMeliOrdersBuilder {
     this._ctx.progress.expected = orders.length;
     this._ctx.progress.saved = workerResult.totalProcessed;
     this._ctx.progress.errors = workerResult.totalErrors;
+    this._ctx.progress.percentage =
+      orders.length === 0
+        ? 100
+        : Math.min(100, (workerResult.totalProcessed / orders.length) * 100);
 
     sendProgressToUser(this._ctx.userId, {
       type: "sync_save_complete",

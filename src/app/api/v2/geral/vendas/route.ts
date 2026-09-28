@@ -41,8 +41,13 @@ export async function GET(req: NextRequest) {
   }
 
   const searchParams = req.nextUrl.searchParams;
-  const page = parseInt(searchParams.get("page") || "1");
-  const limit = parseInt(searchParams.get("limit") || "10");
+  const parsedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+  const parsedLimit = Number.parseInt(searchParams.get("limit") || "10", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const limit =
+    Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(parsedLimit, 200)
+      : 10;
   const offset = (page - 1) * limit;
 
   // Filters
@@ -72,9 +77,9 @@ export async function GET(req: NextRequest) {
     : Prisma.empty;
 
   try {
-    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
-    // Busca paginada unindo as duas tabelas
-    const vendas: any[] = await prisma.$queryRaw`
+    const flexConfigPromise = loadActiveFlexShippingConfig(session.sub);
+    // Busca paginada unindo as três tabelas
+    const vendasPromise = prisma.$queryRaw<any[]>`
       SELECT 
         'Mercado Livre' as plataforma,
         "order_id" as "orderId",
@@ -103,8 +108,7 @@ export async function GET(req: NextRequest) {
         "latitude",
         "longitude",
         NULL as "rawData",
-        NULL as "paymentDetails",
-        NULL as "shipmentDetails"
+        NULL as "paymentDetails"
       FROM meli_venda
       WHERE "user_id" = ${session.sub} 
       ${dateCondition} 
@@ -141,8 +145,7 @@ export async function GET(req: NextRequest) {
         "latitude",
         "longitude",
         "raw_data" as "rawData",
-        "payment_details" as "paymentDetails",
-        "shipment_details" as "shipmentDetails"
+        "payment_details" as "paymentDetails"
       FROM shopee_venda
       WHERE "user_id" = ${session.sub}
       ${dateCondition}
@@ -179,8 +182,7 @@ export async function GET(req: NextRequest) {
         "latitude",
         "longitude",
         "raw_data" as "rawData",
-        "payment_details" as "paymentDetails",
-        "shipment_details" as "shipmentDetails"
+        "payment_details" as "paymentDetails"
       FROM tiktok_venda
       WHERE "user_id" = ${session.sub}
       ${dateCondition}
@@ -191,77 +193,85 @@ export async function GET(req: NextRequest) {
       LIMIT ${limit} OFFSET ${offset}
     `;
 
-    // Contadores das ABAS (Todos / Pagos / Cancelados): NÃO aplicam o filtro de
-    // status, pois cada aba precisa mostrar o total do seu próprio status dentro
-    // do período/conta selecionados. A deduplicação é feita por tabela via
-    // SELECT DISTINCT sobre "order_id" (order_id é @unique dentro de cada tabela);
-    // a coluna "src" mantém separados eventuais order_ids iguais entre meli e
-    // shopee/tiktok, que representam vendas distintas em plataformas diferentes.
-    const counts: any[] = await prisma.$queryRaw`
+    // Contadores das abas: não aplicam o status ativo. Cada order_id é único
+    // dentro de sua tabela e UNION ALL mantém as plataformas separadas, portanto
+    // a cardinalidade é a mesma da listagem sem custo de DISTINCT.
+    const countsPromise = prisma.$queryRaw<any[]>`
       SELECT 
         COUNT(*) as total,
         SUM(CASE WHEN status IN ('paid', 'pago', 'payment_approved') THEN 1 ELSE 0 END) as paid,
         SUM(CASE WHEN status IN ('cancelled', 'cancelado') THEN 1 ELSE 0 END) as cancelled
       FROM (
-        SELECT DISTINCT 'meli' AS src, "order_id", "status" FROM meli_venda 
+        SELECT "status" FROM meli_venda
         WHERE "user_id" = ${session.sub} ${dateCondition} ${contaMeliCondition}
         UNION ALL
-        SELECT DISTINCT 'shopee' AS src, "order_id", "status" FROM shopee_venda 
+        SELECT "status" FROM shopee_venda
         WHERE "user_id" = ${session.sub} ${dateCondition} ${contaShopeeCondition}
         UNION ALL
-        SELECT DISTINCT 'tiktok' AS src, "order_id", "status" FROM tiktok_venda
+        SELECT "status" FROM tiktok_venda
         WHERE "user_id" = ${session.sub} ${dateCondition} ${contaTiktokCondition}
       ) AS t
     `;
 
-    const allCount = Number(counts[0]?.total || 0);
-    const paidCount = Number(counts[0]?.paid || 0);
-    const cancelledCount = Number(counts[0]?.cancelled || 0);
-
-    // Contagem para a PAGINAÇÃO: precisa refletir EXATAMENTE o conjunto que a
-    // listagem paginada retorna, portanto aplica o mesmo statusCondition (além de
-    // data/conta). Sem filtro de status, statusCondition é vazio e o resultado
-    // coincide com allCount. Também deduplica por "order_id" dentro de cada tabela
-    // para bater linha a linha com a listagem (UNION ALL, order_id @unique por tabela).
-    const paginationCounts: any[] = statusFilter
-      ? await prisma.$queryRaw`
+    // Contagem da paginação aplica exatamente os mesmos filtros da listagem.
+    // order_id é único em cada tabela, então contar as linhas evita DISTINCT.
+    const paginationCountsPromise = statusFilter
+      ? prisma.$queryRaw<any[]>`
           SELECT COUNT(*) as total
           FROM (
-            SELECT DISTINCT 'meli' AS src, "order_id" FROM meli_venda 
+            SELECT 1 FROM meli_venda
             WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaMeliCondition}
             UNION ALL
-            SELECT DISTINCT 'shopee' AS src, "order_id" FROM shopee_venda 
+            SELECT 1 FROM shopee_venda
             WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaShopeeCondition}
             UNION ALL
-            SELECT DISTINCT 'tiktok' AS src, "order_id" FROM tiktok_venda
+            SELECT 1 FROM tiktok_venda
             WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaTiktokCondition}
           ) AS t
         `
-      : counts;
+      : null;
 
-    // totalItemsCount alimenta a paginação e deve seguir o filtro de status ativo.
+    const aliquotasPromise = (async (): Promise<any[]> => {
+      try {
+        if (!prisma.aliquotaImposto) return [];
+        return await prisma.aliquotaImposto.findMany({
+          where: { userId: session.sub, ativo: true },
+          orderBy: { updatedAt: "desc" },
+        });
+      } catch {
+        console.log('[API_GERAL_VENDAS] Modelo AliquotaImposto não disponível');
+        return [];
+      }
+    })();
+
+    const [
+      vendas,
+      counts,
+      paginationCountsResult,
+      flexConfig,
+      aliquotas,
+      { buildHistoricalCostMap },
+    ] = await Promise.all([
+      vendasPromise,
+      countsPromise,
+      paginationCountsPromise,
+      flexConfigPromise,
+      aliquotasPromise,
+      import("@/lib/sku-cost-history"),
+    ]);
+
+    const allCount = Number(counts[0]?.total || 0);
+    const paidCount = Number(counts[0]?.paid || 0);
+    const cancelledCount = Number(counts[0]?.cancelled || 0);
+    const paginationCounts = statusFilter
+      ? (paginationCountsResult ?? [])
+      : counts;
     const totalItemsCount = Number(paginationCounts[0]?.total || 0);
 
     const skusUnicos = Array.from(
       new Set(vendas.map((v) => v.sku).filter(Boolean) as string[]),
     );
-
-    const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
     const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
-
-
-
-    let aliquotas: any[] = [];
-    try {
-      if (prisma.aliquotaImposto) {
-        aliquotas = await prisma.aliquotaImposto.findMany({
-          where: { userId: session.sub, ativo: true },
-          orderBy: { updatedAt: "desc" },
-        });
-      }
-    } catch (error) {
-      console.log('[API_GERAL_VENDAS] Modelo AliquotaImposto não disponível');
-    }
 
     const items = vendas.map((venda) => {
       let cmv: number | null = null;

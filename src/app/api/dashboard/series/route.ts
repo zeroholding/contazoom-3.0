@@ -182,7 +182,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cached);
     }
 
-    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
+    const flexConfigPromise = loadActiveFlexShippingConfig(session.sub);
 
     let start: Date;
     let end: Date;
@@ -276,62 +276,53 @@ export async function GET(req: NextRequest) {
           ...dashboardWhereTiktok
         };
 
-    // Buscar vendas do Mercado Livre
-    //
-    // O guard é por INCLUSÃO: o antigo `if (canalParam === 'shopee')` da
-    // consolidação funcionava com duas plataformas porque "não é Shopee" equivalia
-    // a "é ML". Com três, filtrar por `tiktok` não exclui o ML e a série somaria
-    // Mercado Livre dentro de um filtro de TikTok.
-    const vendasMeli = canalIncluiPlataforma(canalParam, 'meli')
-      ? await prisma.meliVenda.findMany({
-          where: whereClauseMeli,
-          select: {
-            dataVenda: true,
-            valorTotal: true,
-            taxaPlataforma: true,
-            frete: true,
-            quantidade: true,
-            sku: true,
-            logisticType: true,
-          },
-          distinct: ['orderId'],
-          orderBy: { dataVenda: "asc" },
-        })
-      : [];
-
-    // Buscar vendas do Shopee
-    const vendasShopee = canalIncluiPlataforma(canalParam, 'shopee')
-      ? await prisma.shopeeVenda.findMany({
-          where: whereClauseShopee,
-          select: {
-            dataVenda: true,
-            valorTotal: true,
-            taxaPlataforma: true,
-            frete: true,
-            quantidade: true,
-            sku: true,
-          },
-          distinct: ['orderId'],
-          orderBy: { dataVenda: "asc" },
-        })
-      : [];
-
-    // Buscar vendas do TikTok Shop
-    const vendasTiktok = canalIncluiPlataforma(canalParam, 'tiktok')
-      ? await prisma.tiktokVenda.findMany({
-          where: whereClauseTiktok,
-          select: {
-            dataVenda: true,
-            valorTotal: true,
-            taxaPlataforma: true,
-            frete: true,
-            quantidade: true,
-            sku: true,
-          },
-          distinct: ['orderId'],
-          orderBy: { dataVenda: "asc" },
-        })
-      : [];
+    // As três plataformas e a configuração Flex são independentes.
+    const [vendasMeli, vendasShopee, vendasTiktok, flexConfig] = await Promise.all([
+      canalIncluiPlataforma(canalParam, 'meli')
+        ? prisma.meliVenda.findMany({
+            where: whereClauseMeli,
+            select: {
+              dataVenda: true,
+              valorTotal: true,
+              taxaPlataforma: true,
+              frete: true,
+              quantidade: true,
+              sku: true,
+              logisticType: true,
+            },
+            orderBy: { dataVenda: "asc" },
+          })
+        : [],
+      canalIncluiPlataforma(canalParam, 'shopee')
+        ? prisma.shopeeVenda.findMany({
+            where: whereClauseShopee,
+            select: {
+              dataVenda: true,
+              valorTotal: true,
+              taxaPlataforma: true,
+              frete: true,
+              quantidade: true,
+              sku: true,
+            },
+            orderBy: { dataVenda: "asc" },
+          })
+        : [],
+      canalIncluiPlataforma(canalParam, 'tiktok')
+        ? prisma.tiktokVenda.findMany({
+            where: whereClauseTiktok,
+            select: {
+              dataVenda: true,
+              valorTotal: true,
+              taxaPlataforma: true,
+              frete: true,
+              quantidade: true,
+              sku: true,
+            },
+            orderBy: { dataVenda: "asc" },
+          })
+        : [],
+      flexConfigPromise,
+    ]);
 
     // Consolidar as vendas das plataformas incluídas no filtro de canal
     const vendasMeliNormalizadas = vendasMeli.map((venda) => ({

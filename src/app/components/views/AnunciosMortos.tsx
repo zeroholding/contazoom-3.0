@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import {
   Aviso,
   BotaoAtualizar,
@@ -88,6 +89,10 @@ export default function AnunciosMortos() {
     ordem,
     pagina,
     porPagina,
+  });
+
+  useAoSincronizarVendas(() => {
+    void atualizar();
   });
 
   const resumo = dados?.resumo ?? RESUMO_VAZIO;

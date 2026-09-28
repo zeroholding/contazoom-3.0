@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { assertSessionToken } from "@/lib/auth";
 import { invalidateVendasCache } from "@/lib/cache";
+import { pMap } from "@/lib/concorrencia";
+import { gravarCursorSync } from "@/lib/sync-cursor";
 import { acquireSyncLock } from "@/lib/sync-lock";
 import {
   collectSkuCandidatesFromMeliOrders,
@@ -20,6 +22,26 @@ import { NextRequest, NextResponse } from "next/server";
 
 const service = new MeliSyncService();
 
+type SyncStep = {
+  accountId: string;
+  accountName: string;
+  currentStep: "pending" | "fetching" | "saving" | "completed" | "error";
+  progress: number;
+  fetched: number;
+  expected: number;
+  error: string | undefined;
+};
+
+type AccountSyncResult = {
+  expected: number;
+  fetched: number;
+  saved: number;
+  skipped: number;
+  skippedOtherUser: number;
+  complete: boolean;
+  errors: SyncError[];
+};
+
 export async function POST(req: NextRequest) {
   const sessionCookie = req.cookies.get("session")?.value;
 
@@ -30,9 +52,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const bodyText = await req.text();
-    if (bodyText) {
-      requestBody = JSON.parse(bodyText);
-    }
+    if (bodyText) requestBody = JSON.parse(bodyText);
   } catch (error) {
     console.error("[Sync Meli V2] Erro ao parsear body:", error);
   }
@@ -79,15 +99,17 @@ export async function POST(req: NextRequest) {
       accounts: [] as AccountSummary[],
       orders: [] as MeliOrderPayload[],
       errors: [] as SyncError[],
-      totals: { expected: 0, fetched: 0, saved: 0 },
+      totals: {
+        expected: 0,
+        fetched: 0,
+        saved: 0,
+        skipped: 0,
+        skippedOtherUser: 0,
+      },
     });
   }
 
-  const syncLock = await acquireSyncLock([
-    "vendas",
-    "meli",
-    userId,
-  ]);
+  const syncLock = await acquireSyncLock(["vendas", "meli", userId]);
 
   if (!syncLock.acquired) {
     sendProgressToUser(userId, {
@@ -113,191 +135,307 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const steps = accounts.map((acc) => ({
-    accountId: acc.id,
-    accountName: acc.nickname || `Conta ${acc.ml_user_id}`,
-    currentStep: "pending" as
-      | "pending"
-      | "fetching"
-      | "saving"
-      | "completed"
-      | "error",
-    progress: 0,
-    fetched: 0,
-    expected: 0,
-    error: undefined as string | undefined,
-  }));
-    const progressSum = {
-      sumFetchedOrders: 0,
-      sumExpectedOrders: 0,
-      sumSavedOrders: 0,
-    };
-    const errors: SyncError[] = [];
-
-    for (let accountIndex = 0; accountIndex < accounts.length; accountIndex++) {
-      const account = accounts[accountIndex];
-
-      const downloadOrderbuilder = new DownloadMeliOrdersBuilder({
-        account,
-        meliSyncService: service,
-        userId,
-        steps,
-      });
-
-    // Atualizar step para fetching
-    steps[accountIndex].currentStep = "fetching";
-
-    // Enviar progresso: processando conta
-    sendProgressToUser(userId, {
-      type: "sync_progress",
-      message: `Buscando vendas da conta ${
-        downloadOrderbuilder.ctx.current.accountName
-      }...`,
-      current: accountIndex,
-      total: accounts.length,
-      fetched: downloadOrderbuilder.ctx.progress.fetched,
-      expected: downloadOrderbuilder.ctx.progress.expected,
+    const steps: SyncStep[] = accounts.map((account) => ({
       accountId: account.id,
-      accountNickname: downloadOrderbuilder.ctx.current.accountName,
-      steps: steps,
-    });
+      accountName: account.nickname || `Conta ${account.ml_user_id}`,
+      currentStep: "pending",
+      progress: 0,
+      fetched: 0,
+      expected: 0,
+      error: undefined,
+    }));
 
-    await downloadOrderbuilder.refreshHandler();
+    const accountResults = await pMap(
+      accounts,
+      3,
+      async (account, accountIndex): Promise<AccountSyncResult> => {
+        const step = steps[accountIndex];
+        const accountErrors: SyncError[] = [];
+        let downloadBuilder: DownloadMeliOrdersBuilder | null = null;
+        let saveBuilder: SaveMeliOrdersBuilder | null = null;
 
-    if (downloadOrderbuilder.ctx.current.error) {
-      steps[accountIndex].currentStep =
-        downloadOrderbuilder.ctx.current.syncStep;
-      steps[accountIndex].error = downloadOrderbuilder.ctx.current.error;
-      errors.push({
-        accountId: account.id,
-        mlUserId: account.ml_user_id,
-        message: downloadOrderbuilder.ctx.current.error,
-      });
-      continue;
-    }
-
-    // O scan do catálogo inteiro (fetchMeliCatalogSkuCandidates) é CARO
-    // (~3 min numa conta grande) e só é útil na PRIMEIRA sincronização, para
-    // pré-descobrir SKUs. Em syncs incrementais ele re-varria o catálogo todo
-    // sem criar nada novo (found 407 / created 0) — os SKUs das vendas novas
-    // já são descobertos pelos próprios pedidos logo abaixo
-    // (collectSkuCandidatesFromMeliOrders). Então só rodamos o scan quando a
-    // conta ainda não tem vendas no banco (primeira sync).
-    const jaTemVendasMeli = await prisma.meliVenda.count({
-      where: { meliAccountId: account.id },
-    });
-    if (jaTemVendasMeli === 0) {
-      try {
-        const catalogCandidates = await fetchMeliCatalogSkuCandidates(
-          downloadOrderbuilder.ctx.current.accountData,
-          userId,
-        );
-        const catalogResult = await registerDiscoveredSkus(
-          userId,
-          catalogCandidates,
-        );
-
-        if (catalogResult.found > 0) {
-          console.log("[SKU Discovery][ML] Catalogo processado (primeira sync)", {
+        const addError = (message: string): void => {
+          if (accountErrors.some((error) => error.message === message)) return;
+          accountErrors.push({
             accountId: account.id,
-            found: catalogResult.found,
-            created: catalogResult.created,
-            existing: catalogResult.existing,
-            skipped: catalogResult.skipped,
+            mlUserId: account.ml_user_id,
+            message,
           });
+        };
+
+        const collectBuilderErrors = (): void => {
+          for (const error of downloadBuilder?.ctx.errors ?? []) {
+            addError(error.message);
+          }
+        };
+
+        const snapshot = (complete: boolean): AccountSyncResult => ({
+          expected: downloadBuilder?.ctx.progress.expected ?? 0,
+          fetched: downloadBuilder?.ctx.progress.fetched ?? 0,
+          saved: saveBuilder?.ctx.progress.saved ?? 0,
+          skipped: downloadBuilder?.ctx.progress.skipped ?? 0,
+          skippedOtherUser:
+            downloadBuilder?.ctx.progress.skippedOtherUser ?? 0,
+          complete,
+          errors: accountErrors,
+        });
+
+        try {
+          downloadBuilder = new DownloadMeliOrdersBuilder({
+            account,
+            accountIndex,
+            meliSyncService: service,
+            userId,
+            steps,
+          });
+
+          step.currentStep = "fetching";
+          sendProgressToUser(userId, {
+            type: "sync_progress",
+            message: `Buscando vendas da conta ${downloadBuilder.ctx.current.accountName}...`,
+            current: accountIndex,
+            total: accounts.length,
+            fetched: 0,
+            expected: 0,
+            accountId: account.id,
+            accountNickname: downloadBuilder.ctx.current.accountName,
+            steps,
+          });
+
+          await downloadBuilder.refreshHandler();
+          collectBuilderErrors();
+          if (downloadBuilder.ctx.current.error) {
+            step.currentStep = "error";
+            step.error = downloadBuilder.ctx.current.error;
+            return snapshot(false);
+          }
+
+          // O scan completo do catálogo é caro e só é útil na primeira sync.
+          const existingSales = await prisma.meliVenda.count({
+            where: { meliAccountId: account.id },
+          });
+          if (existingSales === 0) {
+            try {
+              const catalogCandidates = await fetchMeliCatalogSkuCandidates(
+                downloadBuilder.ctx.current.accountData,
+                userId,
+              );
+              const catalogResult = await registerDiscoveredSkus(
+                userId,
+                catalogCandidates,
+              );
+              if (catalogResult.found > 0) {
+                console.log(
+                  "[SKU Discovery][ML] Catalogo processado (primeira sync)",
+                  {
+                    accountId: account.id,
+                    found: catalogResult.found,
+                    created: catalogResult.created,
+                    existing: catalogResult.existing,
+                    skipped: catalogResult.skipped,
+                  },
+                );
+              }
+            } catch (skuError) {
+              console.warn("[SKU Discovery][ML] Falha ao ler catalogo da conta", {
+                accountId: account.id,
+                error:
+                  skuError instanceof Error
+                    ? skuError.message
+                    : String(skuError),
+              });
+            }
+          }
+
+          await downloadBuilder.fetchAllOrders();
+          collectBuilderErrors();
+          downloadBuilder.finish();
+
+          step.fetched = downloadBuilder.ctx.progress.fetched;
+          step.expected = downloadBuilder.ctx.progress.expected;
+          step.progress = downloadBuilder.ctx.progress.percentage;
+
+          // Descoberta de SKU não pode impedir que atualizações já baixadas sejam
+          // persistidas; a venda continua segura com CMV pendente.
+          try {
+            const orderSkuResult = await registerDiscoveredSkus(
+              userId,
+              collectSkuCandidatesFromMeliOrders(downloadBuilder.allOrders),
+            );
+            if (orderSkuResult.found > 0) {
+              console.log("[SKU Discovery][ML] Vendas processadas", {
+                accountId: account.id,
+                found: orderSkuResult.found,
+                created: orderSkuResult.created,
+                existing: orderSkuResult.existing,
+                skipped: orderSkuResult.skipped,
+              });
+            }
+          } catch (skuError) {
+            console.warn("[SKU Discovery][ML] Falha ao registrar SKUs das vendas", {
+              accountId: account.id,
+              error:
+                skuError instanceof Error ? skuError.message : String(skuError),
+            });
+          }
+
+          step.currentStep = "saving";
+          sendProgressToUser(userId, {
+            type: "sync_progress",
+            message: `Salvando vendas da conta ${downloadBuilder.ctx.current.accountName}...`,
+            current: downloadBuilder.ctx.progress.fetched,
+            total: downloadBuilder.ctx.progress.expected,
+            fetched: downloadBuilder.ctx.progress.fetched,
+            expected: downloadBuilder.ctx.progress.expected,
+            skipped: downloadBuilder.ctx.progress.skipped,
+            skippedOtherUser: downloadBuilder.ctx.progress.skippedOtherUser,
+            accountId: account.id,
+            accountNickname: downloadBuilder.ctx.current.accountName,
+            steps,
+          });
+
+          saveBuilder = new SaveMeliOrdersBuilder({
+            account,
+            accountIndex,
+            meliSyncService: service,
+            userId,
+          });
+
+          if (downloadBuilder.allOrders.length > 0) {
+            console.log(
+              `[Sync] Salvando ${downloadBuilder.allOrders.length} vendas direto no PostgreSQL...`,
+            );
+            await saveBuilder.saveOrdersDirect(downloadBuilder.allOrders);
+          } else {
+            console.log("[Sync] Nenhuma venda alterada para salvar nesta conta.");
+          }
+          saveBuilder.finish();
+
+          const allSalesSaved =
+            saveBuilder.ctx.progress.errors === 0 &&
+            saveBuilder.ctx.progress.saved === downloadBuilder.allOrders.length;
+
+          if (!downloadBuilder.ctx.fetchComplete && accountErrors.length === 0) {
+            addError(
+              downloadBuilder.ctx.forcedStop
+                ? "Leitura interrompida por tempo/limite; cursor preservado"
+                : "Leitura de páginas incompleta; cursor preservado",
+            );
+          }
+          if (!allSalesSaved) {
+            const missing = Math.max(
+              0,
+              downloadBuilder.allOrders.length -
+                saveBuilder.ctx.progress.saved,
+            );
+            addError(
+              `${saveBuilder.ctx.progress.errors || missing} venda(s) falharam ao salvar; cursor preservado`,
+            );
+          }
+
+          const canAdvanceCursor =
+            downloadBuilder.ctx.fetchComplete &&
+            allSalesSaved &&
+            downloadBuilder.ctx.syncStartedAt !== null;
+
+          if (canAdvanceCursor) {
+            await gravarCursorSync(
+              "meli",
+              account.id,
+              downloadBuilder.ctx.syncStartedAt!,
+            );
+          }
+
+          step.currentStep = canAdvanceCursor ? "completed" : "error";
+          step.progress = canAdvanceCursor ? 100 : step.progress;
+          step.error = accountErrors[0]?.message;
+
+          sendProgressToUser(userId, {
+            type: canAdvanceCursor ? "sync_progress" : "sync_warning",
+            message: canAdvanceCursor
+              ? `${step.accountName}: sincronização concluída`
+              : `${step.accountName}: sincronização parcial; o cursor não avançou`,
+            current: downloadBuilder.ctx.progress.fetched,
+            total: downloadBuilder.ctx.progress.expected,
+            fetched: downloadBuilder.ctx.progress.fetched,
+            expected: downloadBuilder.ctx.progress.expected,
+            skipped: downloadBuilder.ctx.progress.skipped,
+            skippedOtherUser: downloadBuilder.ctx.progress.skippedOtherUser,
+            accountId: account.id,
+            accountNickname: step.accountName,
+            steps,
+          });
+
+          return snapshot(canAdvanceCursor);
+        } catch (error) {
+          collectBuilderErrors();
+          const message =
+            error instanceof Error ? error.message : "Erro desconhecido";
+          addError(message);
+          step.currentStep = "error";
+          step.error = message;
+          step.fetched = downloadBuilder?.ctx.progress.fetched ?? step.fetched;
+          step.expected =
+            downloadBuilder?.ctx.progress.expected ?? step.expected;
+          step.progress =
+            downloadBuilder?.ctx.progress.percentage ?? step.progress;
+
+          console.error(
+            `[Sync] Erro na conta ${account.ml_user_id}; demais contas continuarão:`,
+            error,
+          );
+          sendProgressToUser(userId, {
+            type: "sync_warning",
+            message: `Erro na conta ${step.accountName}: ${message}. Continuando com as demais...`,
+            errorCode: "ACCOUNT_SYNC_FAILED",
+            accountId: account.id,
+            accountNickname: step.accountName,
+            steps,
+          });
+          return snapshot(false);
         }
-      } catch (skuError) {
-        console.warn("[SKU Discovery][ML] Falha ao ler catalogo da conta", {
-          accountId: account.id,
-          error: skuError instanceof Error ? skuError.message : String(skuError),
-        });
-      }
-    }
+      },
+    );
 
-    try {
-      await downloadOrderbuilder.fetchAllOrders();
-      const orderSkuResult = await registerDiscoveredSkus(
-        userId,
-        collectSkuCandidatesFromMeliOrders(downloadOrderbuilder.allOrders),
-      );
-      if (orderSkuResult.found > 0) {
-        console.log("[SKU Discovery][ML] Vendas processadas", {
-          accountId: account.id,
-          found: orderSkuResult.found,
-          created: orderSkuResult.created,
-          existing: orderSkuResult.existing,
-          skipped: orderSkuResult.skipped,
-        });
-      }
-      progressSum.sumFetchedOrders += downloadOrderbuilder.ctx.progress.fetched
-      progressSum.sumExpectedOrders += downloadOrderbuilder.ctx.progress.expected
-    } catch (fetchError) {
-      const fetchMsg =
-        fetchError instanceof Error
-          ? fetchError.message
-          : "Erro ao buscar vendas";
-      console.error(
-        `[Sync] ❌ Erro ao buscar vendas da conta ${downloadOrderbuilder.ctx.current.mlUserId}:`,
-        fetchError,
-      );
-      throw new Error(`Falha ao buscar vendas: ${fetchMsg}`);
-    }
+    const totals = accountResults.reduce(
+      (sum, result) => ({
+        expected: sum.expected + result.expected,
+        fetched: sum.fetched + result.fetched,
+        saved: sum.saved + result.saved,
+        skipped: sum.skipped + result.skipped,
+        skippedOtherUser:
+          sum.skippedOtherUser + result.skippedOtherUser,
+      }),
+      {
+        expected: 0,
+        fetched: 0,
+        saved: 0,
+        skipped: 0,
+        skippedOtherUser: 0,
+      },
+    );
+    const errors = accountResults.flatMap((result) => result.errors);
+    const hasMoreToSync = accountResults.some((result) => !result.complete);
 
-    downloadOrderbuilder.finish();
-
-    const saveOrdersbuilder = new SaveMeliOrdersBuilder({
-      account,
-      meliSyncService: service,
-      userId,
+    sendProgressToUser(userId, {
+      type: "sync_complete",
+      message:
+        `Sincronização concluída: ${totals.saved} vendas salvas, ` +
+        `${totals.skipped} inalteradas de ${totals.expected} esperadas`,
+      current: totals.fetched,
+      total: totals.expected,
+      fetched: totals.fetched,
+      expected: totals.expected,
+      skipped: totals.skipped,
+      skippedOtherUser: totals.skippedOtherUser,
+      hasMoreToSync,
+      steps,
     });
-
-    // === FASE 2: Processar Redis → PostgreSQL ===
-    console.log(`[Sync] 💾 Fase 2: Processando fila Redis → PostgreSQL...`);
-
-    try {
-      if (downloadOrderbuilder.allOrders.length > 0) {
-        console.log(
-          `[Sync] 💾 Salvando ${downloadOrderbuilder.allOrders.length} vendas direto no PostgreSQL...`,
-        );
-        await saveOrdersbuilder.saveOrdersDirect(downloadOrderbuilder.allOrders);
-      } else {
-        console.log("[Sync] Nenhuma venda nova para salvar nesta conta.");
-      }
-      progressSum.sumSavedOrders += saveOrdersbuilder.ctx.progress.saved;
-      if (saveOrdersbuilder.ctx.progress.errors > 0) {
-        errors.push({
-          accountId: account.id,
-          mlUserId: account.ml_user_id,
-          message: `${saveOrdersbuilder.ctx.progress.errors} venda(s) falharam ao salvar`,
-        });
-      }
-    } catch (workerError) {
-      console.error(
-        `[Sync] ❌ Erro no worker Redis → PostgreSQL:`,
-        workerError,
-      );
-      throw new Error(`Erro ao processar fila: ${workerError}`);
-    }
-  }
-
-  sendProgressToUser(userId, {
-    type: "sync_complete",
-    message: `Sincronização completa! ${progressSum.sumSavedOrders} vendas processadas de ${progressSum.sumExpectedOrders} esperadas`,
-    current: progressSum.sumSavedOrders,
-    total: progressSum.sumExpectedOrders,
-    fetched: progressSum.sumFetchedOrders,
-    expected: progressSum.sumExpectedOrders,
-    hasMoreToSync: false,
-  });
-
-  // Invalidar cache de vendas após sincronização
-  invalidateVendasCache(userId);
-  console.log(`[Cache] Cache de vendas invalidado para usuário ${userId}`);
 
     return NextResponse.json({
       success: errors.length === 0,
       syncedAt: new Date().toISOString(),
-      accounts: accounts.map(account => ({
+      accounts: accounts.map((account) => ({
         id: account.id,
         nickname: account.nickname,
         ml_user_id: Number(account.ml_user_id),
@@ -308,16 +446,19 @@ export async function POST(req: NextRequest) {
         ...error,
         mlUserId: Number(error.mlUserId),
       })),
-      totals: {
-        expected: progressSum.sumExpectedOrders,
-        fetched: progressSum.sumFetchedOrders,
-        saved: progressSum.sumSavedOrders,
-      },
-      hasMoreToSync: false, // NOVO: flag indicando se há vendas antigas pendentes
-      quickMode: false, // NOVO: indica qual modo foi usado
+      totals,
+      hasMoreToSync,
+      quickMode: false,
       autoSyncTriggered: false,
     });
   } finally {
+    // Inclusive em erro parcial/inesperado: alguma conta pode ter sido salva.
+    try {
+      invalidateVendasCache(userId);
+      console.log(`[Cache] Cache de vendas invalidado para usuário ${userId}`);
+    } catch (error) {
+      console.error("[Cache] Falha ao invalidar cache de vendas:", error);
+    }
     await syncLock.release();
   }
 }

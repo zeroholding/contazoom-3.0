@@ -3,17 +3,6 @@
  *
  * Dispara o sync de vendas do TikTok Shop do usuário logado. Aceita
  * `{ accountIds: string[] }` para sincronizar só as lojas escolhidas na tela.
- *
- * A rota é fina de propósito: a lógica mora em `src/lib/tiktok-sync.ts`. Os syncs
- * de ML e Shopee cresceram dentro do próprio `route.ts` (o da Shopee tem ~800
- * linhas), o que deixa a regra financeira impossível de testar sem subir um
- * servidor. Separando, `syncTiktokAccounts` pode ser chamada por um agendador
- * mais tarde sem duplicar nada.
- *
- * ⚠️  O primeiro sync de uma loja varre TIKTOK_LOOKBACK_DAYS (120 por padrão) e
- * pode passar do timeout do proxy. Se o fetch morrer com 504, o job CONTINUA
- * rodando no servidor — acompanhe pelo SSE de progresso em vez de disparar de
- * novo.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
@@ -32,6 +21,8 @@ export async function POST(req: NextRequest) {
   if (!session) return new NextResponse("Unauthorized", { status: 401 });
 
   const userId = session.sub;
+  const keepConnectionsOpen =
+    req.headers.get("x-contazoom-sync-all") === "1";
 
   let accountIds: string[] | undefined;
   try {
@@ -76,12 +67,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Só depois de saber que existe loja: sem conta, a falta das credenciais do
-    // app não é erro de quem nem usa TikTok, e antes virava 500 para todo mundo.
     const missing = missingTiktokCredentials();
     if (missing.length > 0) {
       const message = `Credenciais TikTok ausentes: ${missing.join(", ")}`;
-      // O `sync_start` já saiu: sem este evento o modal antigo ficaria preso.
       sendProgressToUser(userId, {
         type: "sync_error",
         message,
@@ -90,14 +78,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message }, { status: 500 });
     }
 
-    // Mesma forma de chave dos outros syncs: plataforma + usuário + contas
-    // ordenadas. Duas abas disparando o mesmo conjunto colidem; sincronizar
-    // lojas diferentes em paralelo continua permitido.
-    syncLock = await acquireSyncLock([
-      "vendas",
-      "tiktok",
-      userId,
-    ]);
+    syncLock = await acquireSyncLock(["vendas", "tiktok", userId]);
 
     if (!syncLock.acquired) {
       sendProgressToUser(userId, {
@@ -121,7 +102,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`[TikTok Sync] Iniciando para usuario ${userId} (${contas.length} loja(s))`);
+    console.log(
+      `[TikTok Sync] Iniciando para usuario ${userId} (${contas.length} loja(s))`,
+    );
 
     const summary = await syncTiktokAccounts({ userId, accountIds });
     const erros = summary.perShop.filter((shop) => shop.error);
@@ -136,7 +119,10 @@ export async function POST(req: NextRequest) {
     });
 
     invalidateVendasCache(userId);
-    setTimeout(() => closeUserConnections(userId), 2000);
+    // No sync agregado, os outros canais ainda usam a mesma conexão SSE.
+    if (!keepConnectionsOpen) {
+      setTimeout(() => closeUserConnections(userId), 2000);
+    }
 
     return NextResponse.json({
       success: erros.length === 0,

@@ -439,7 +439,7 @@ async function reprocessOldRule(account: TiktokAccountRef): Promise<number> {
   if (rows.length === 0) return 0;
 
   let fixed = 0;
-  for (const row of rows) {
+  await pMap(rows, UPSERT_CONCURRENCY, async (row) => {
     try {
       // 1. Recalcula o estimado do pedido cru, já com a regra nova.
       const estimated = calculateTiktokEstimatedFinancials(rec(row.raw_data));
@@ -470,9 +470,11 @@ async function reprocessOldRule(account: TiktokAccountRef): Promise<number> {
       });
       fixed += 1;
     } catch (error) {
+      // O catch precisa ficar dentro do callback: um item ruim não interrompe
+      // os demais trabalhadores nem altera a regra do contador.
       console.warn(`[TikTok Sync] falha ao reprocessar ${row.order_id}:`, error);
     }
-  }
+  });
 
   if (fixed > 0) {
     console.log(
@@ -707,7 +709,8 @@ export async function syncTiktokAccounts(params: {
 
       // Antes de buscar extrato novo, corrige o que já está no banco com regra
       // velha — usando o pedido e o extrato já guardados.
-      totalReprocessed += await reprocessOldRule(account);
+      const reprocessed = await reprocessOldRule(account);
+      totalReprocessed += reprocessed;
 
       sendProgressToUser(userId, {
         type: "sync_progress",

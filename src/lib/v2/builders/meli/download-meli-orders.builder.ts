@@ -1,8 +1,11 @@
 import prisma from "@/lib/prisma";
+import {
+  inicioJanelaPeloCursor,
+} from "@/lib/sync-cursor";
 import { sendProgressToUser } from "@/lib/sse-progress";
-import { MeliOrderPayload, SyncError } from "../../types/sync-meli";
 import { smartRefreshMeliAccountToken } from "@/lib/meli";
 import MeliSyncService from "../../services/meli-sync.service";
+import { MeliOrderPayload, SyncError } from "../../types/sync-meli";
 
 type AccountData = {
   id: string;
@@ -17,10 +20,23 @@ type AccountData = {
   updated_at: Date;
 };
 
+type SyncStep = {
+  accountId: string;
+  accountName: string;
+  currentStep: "error" | "pending" | "fetching" | "saving" | "completed";
+  progress: number;
+  fetched: number;
+  expected: number;
+  error: string | undefined;
+};
+
 export type DownloadMeliOrderBuilderCtx = {
   userId: string;
   errors: SyncError[];
   forcedStop: boolean;
+  fetchComplete: boolean;
+  failedPages: number;
+  syncStartedAt: Date | null;
 
   current: {
     accountId: string;
@@ -36,42 +52,25 @@ export type DownloadMeliOrderBuilderCtx = {
     percentage: number;
     fetched: number;
     expected: number;
+    skipped: number;
+    skippedOtherUser: number;
   };
 };
 
-const defaultCtx: Omit<DownloadMeliOrderBuilderCtx, "current" | "userId"> = {
-  errors: [],
-  progress: {
-    percentage: 0,
-    fetched: 0,
-    expected: 0,
-  },
-  forcedStop: false,
-};
 const PAGE_LIMIT = 50;
-// Páginas de pedidos buscadas em paralelo. Aumentado de 2 -> 5 para acelerar
-// (cada página dispara ainda os fetches de shipment em lotes internos). O teto
-// de 6 mantém a concorrência sob o rate limit do ML.
+const MAX_OFFSET = 50_000;
+const MAX_EXECUTION_TIME = 30 * 60 * 1000;
+const FALLBACK_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 const PAGE_FETCH_CONCURRENCY = Math.min(
   6,
   Math.max(1, Number(process.env.MELI_PAGE_FETCH_CONCURRENCY ?? "5") || 5),
 );
 
 export class DownloadMeliOrdersBuilder {
-  private _steps: {
-    accountId: string;
-    accountName: string;
-    currentStep: "error" | "pending" | "fetching" | "saving" | "completed";
-    progress: number;
-    fetched: number;
-    expected: number;
-    error: string | undefined;
-  }[];
+  private _steps: SyncStep[];
   private _ctx: DownloadMeliOrderBuilderCtx;
-  private _tokenRefreshMutex = new Map<string, Promise<any>>();
+  private _tokenRefreshMutex = new Map<string, Promise<AccountData>>();
   private _meliSyncService: MeliSyncService;
-
-  // TODO: see if it is necessary to add this attributes to CTX
   private _allOrders: MeliOrderPayload[] = [];
 
   public get steps() {
@@ -90,23 +89,29 @@ export class DownloadMeliOrdersBuilder {
     account: AccountData;
     userId: string;
     meliSyncService: MeliSyncService;
-    steps: {
-      accountId: string;
-      accountName: string;
-      currentStep: "error" | "pending" | "fetching" | "saving" | "completed";
-      progress: number;
-      fetched: number;
-      expected: number;
-      error: string | undefined;
-    }[];
+    steps: SyncStep[];
+    accountIndex?: number;
   }) {
+    // Não reutilizar arrays/objetos do contexto padrão: até três contas rodam
+    // simultaneamente e cada uma precisa de métricas e erros isolados.
     this._ctx = {
-      ...defaultCtx,
       userId: params.userId,
+      errors: [],
+      forcedStop: false,
+      fetchComplete: false,
+      failedPages: 0,
+      syncStartedAt: null,
+      progress: {
+        percentage: 0,
+        fetched: 0,
+        expected: 0,
+        skipped: 0,
+        skippedOtherUser: 0,
+      },
       current: {
         accountData: params.account,
         accountId: params.account.id,
-        accountIndex: 0,
+        accountIndex: params.accountIndex ?? 0,
         accountName:
           params.account.nickname || `Conta ${params.account.ml_user_id}`,
         mlUserId: Number(params.account.ml_user_id),
@@ -124,13 +129,13 @@ export class DownloadMeliOrdersBuilder {
 
   async refreshHandler(): Promise<this> {
     try {
-      // Usar mutex para evitar refresh concorrente
       const mutexKey = `refresh_${this._ctx.current.accountId}`;
       if (this._tokenRefreshMutex.has(mutexKey)) {
         console.log(
           `[Sync] Aguardando refresh em andamento para conta ${this._ctx.current.accountId}`,
         );
-        this._ctx.current.accountData = await this._tokenRefreshMutex.get(mutexKey)!;
+        this._ctx.current.accountData =
+          await this._tokenRefreshMutex.get(mutexKey)!;
       } else {
         const refreshPromise = smartRefreshMeliAccountToken(
           this._ctx.current.accountData,
@@ -138,13 +143,12 @@ export class DownloadMeliOrdersBuilder {
         this._tokenRefreshMutex.set(mutexKey, refreshPromise);
         try {
           this._ctx.current.accountData = await refreshPromise;
+        } finally {
           this._tokenRefreshMutex.delete(mutexKey);
-        } catch (error) {
-          this._tokenRefreshMutex.delete(mutexKey);
-          throw error;
         }
       }
-      this._ctx.current.expiresAt = this._ctx.current.accountData.expires_at.toISOString();
+      this._ctx.current.expiresAt =
+        this._ctx.current.accountData.expires_at.toISOString();
     } catch (error) {
       const message =
         error instanceof Error
@@ -160,17 +164,13 @@ export class DownloadMeliOrdersBuilder {
         error,
       );
 
-      // Atualizar step para erro
       this._ctx.current.syncStep = "error";
       this._ctx.current.error = message;
-
-      // Enviar erro via SSE
       sendProgressToUser(this._ctx.userId, {
         type: "sync_warning",
-        message: `Erro ao renovar token da conta ${
-          this._ctx.current.accountName
-        }: ${message}. Continuando com próxima conta...`,
+        message: `Erro ao renovar token da conta ${this._ctx.current.accountName}: ${message}. Continuando com próxima conta...`,
         errorCode: "TOKEN_REFRESH_FAILED",
+        accountId: this._ctx.current.accountId,
       });
     }
 
@@ -178,35 +178,35 @@ export class DownloadMeliOrdersBuilder {
   }
 
   async fetchAllOrders(): Promise<this> {
-    const startTime = Date.now();
-    const MAX_EXECUTION_TIME = 30 * 60 * 1000; // 30 minutos
+    const startedAtMs = Date.now();
+    const syncStartedAt = new Date(startedAtMs);
+    this._ctx.syncStartedAt = syncStartedAt;
+    this._ctx.fetchComplete = false;
+    this._ctx.failedPages = 0;
+    this._ctx.forcedStop = false;
+    this._ctx.progress = {
+      percentage: 0,
+      fetched: 0,
+      expected: 0,
+      skipped: 0,
+      skippedOtherUser: 0,
+    };
+    this._allOrders = [];
+
     const results: MeliOrderPayload[] = [];
     const logisticStats = new Map<string, number>();
-    let forcedStop = false; // Declarar forcedStop localmente
-
     const headers = this.getHeaders();
     const account = this._ctx.current.accountData;
     const userId = this._ctx.userId;
 
     console.log(
-      `[Sync] ?? Iniciando busca de vendas para conta ${account.ml_user_id} (${account.nickname})`,
+      `[Sync] Iniciando busca de vendas para conta ${account.ml_user_id} (${account.nickname}) em ${syncStartedAt.toISOString()}`,
     );
 
-    // Sincronização Incremental (Delta Sync) — REAL, baseada no último sync.
-    // Antes: janela FIXA de 15 dias a cada sync => re-baixava centenas de
-    // pedidos + 2 chamadas de shipment cada, mesmo quando só havia 1 venda
-    // nova (era a causa de "1 venda demora 30-60s").
-    // Agora: a janela começa no ÚLTIMO sync desta conta (max atualizadoEm)
-    // com um pequeno buffer de folga. Como usamos date_last_updated.from,
-    // atualizações de pedidos ANTIGOS continuam sendo capturadas — o ML
-    // atualiza o date_last_updated quando o pedido muda (ex: cancelamento),
-    // então ele cai na janela naturalmente. O buffer cobre skew de relógio
-    // e syncs que falharam no meio.
     const [latestSyncedOrder, lastWriteAgg] = await Promise.all([
       prisma.meliVenda.findFirst({
         where: { meliAccountId: account.id },
-        orderBy: { dataVenda: "desc" },
-        select: { dataVenda: true },
+        select: { id: true },
       }),
       prisma.meliVenda.aggregate({
         where: { meliAccountId: account.id },
@@ -215,29 +215,60 @@ export class DownloadMeliOrdersBuilder {
     ]);
 
     let lastUpdatedFrom: Date | undefined;
-
-    const latestDate = latestSyncedOrder?.dataVenda;
-    if (latestDate) {
-      const lastWrite = lastWriteAgg._max.atualizadoEm ?? new Date();
-      const SYNC_BUFFER_MS = 2 * 24 * 60 * 60 * 1000; // 2 dias de folga
-      lastUpdatedFrom = new Date(lastWrite.getTime() - SYNC_BUFFER_MS);
-      console.log(
-        `[Sync] 🚀 Modo Incremental REAL: atualizações desde ${lastUpdatedFrom.toISOString()} (base: último sync ${lastWrite.toISOString()})`,
+    if (latestSyncedOrder) {
+      const cursorWindowStart = await inicioJanelaPeloCursor(
+        "meli",
+        account.id,
       );
+      if (cursorWindowStart) {
+        lastUpdatedFrom = cursorWindowStart;
+        console.log(
+          `[Sync] Modo incremental por cursor: atualizações desde ${lastUpdatedFrom.toISOString()}`,
+        );
+      } else {
+        const lastWrite = lastWriteAgg._max.atualizadoEm;
+        if (lastWrite) {
+          lastUpdatedFrom = new Date(lastWrite.getTime() - FALLBACK_WINDOW_MS);
+          console.log(
+            `[Sync] Cursor ausente: fallback seguro desde ${lastUpdatedFrom.toISOString()} (max atualizadoEm - 2 dias)`,
+          );
+        } else {
+          console.warn(
+            `[Sync] Conta com vendas sem atualizadoEm; usando janela ampla.`,
+          );
+        }
+      }
     } else {
-      console.log(`[Sync] 📅 Primeira sincronização - buscando histórico (limitado aos 50k mais recentes)`);
+      console.log(
+        "[Sync] Primeira sincronização - buscando histórico (limitado aos 50k mais recentes)",
+      );
     }
 
-    const MAX_OFFSET = 50000; // Limite seguro antes do 50k da API
-    let total = 0;
     let discoveredTotal: number | null = null;
     let nextOffset = 0;
-    const SAFE_BATCH_SIZE = 50000;
-    let maxOffsetToFetch = Math.min(MAX_OFFSET, SAFE_BATCH_SIZE);
+    // A primeira página define o total. Só depois abrimos a fila concorrente,
+    // evitando requisitar offsets que não pertencem à janela.
+    let maxOffsetToFetch = PAGE_LIMIT;
+    let forcedStop = false;
+    let stopScheduling = false;
+    let truncatedByApiLimit = false;
+    const successfulOffsets = new Set<number>();
     const activePages = new Set<Promise<void>>();
-    let oldestOrderDate: Date | null = null;
 
-    const schedulePageFetch = (offsetValue: number) => {
+    const recordPageFailure = (
+      pageNumber: number,
+      message: string,
+    ): void => {
+      this._ctx.failedPages += 1;
+      stopScheduling = true;
+      this._ctx.errors.push({
+        accountId: account.id,
+        mlUserId: account.ml_user_id,
+        message: `Página ${pageNumber}: ${message}`,
+      });
+    };
+
+    const schedulePageFetch = (offsetValue: number): void => {
       const pageNumber = Math.floor(offsetValue / PAGE_LIMIT) + 1;
       const pagePromise = (async () => {
         try {
@@ -248,25 +279,32 @@ export class DownloadMeliOrdersBuilder {
             offset: offsetValue,
             pageNumber,
             lastUpdatedFrom,
+            lastUpdatedTo: syncStartedAt,
           });
 
-          if (
-            typeof pageResult.total === "number" &&
-            pageResult.total >= 0 &&
-            discoveredTotal === null
-          ) {
+          if (pageResult.failed) {
+            recordPageFailure(
+              pageNumber,
+              pageResult.failure?.message ?? "Falha ao buscar página",
+            );
+            return;
+          }
+
+          successfulOffsets.add(offsetValue);
+          if (discoveredTotal === null && pageResult.total !== null) {
             discoveredTotal = pageResult.total;
-            total = discoveredTotal;
-            this._ctx.progress.expected = discoveredTotal;
             maxOffsetToFetch = Math.min(MAX_OFFSET, discoveredTotal);
+            truncatedByApiLimit = discoveredTotal > MAX_OFFSET;
+            this._ctx.progress.expected = discoveredTotal;
             console.log(
-              `[Sync] ?? Conta ${account.ml_user_id}: total estimado ${discoveredTotal} vendas`,
+              `[Sync] Conta ${account.ml_user_id}: total estimado ${discoveredTotal} vendas`,
             );
           }
 
-          if (pageResult.orders.length === 0) {
-            return;
-          }
+          this._ctx.progress.fetched += pageResult.fetched;
+          this._ctx.progress.skipped += pageResult.skipped;
+          this._ctx.progress.skippedOtherUser +=
+            pageResult.skippedOtherUser;
 
           for (const payload of pageResult.orders) {
             results.push(payload);
@@ -278,268 +316,136 @@ export class DownloadMeliOrdersBuilder {
               logisticTypeRaw,
               (logisticStats.get(logisticTypeRaw) || 0) + 1,
             );
-
-            const createdAt = this._meliSyncService.extractOrderDate(
-              payload.order,
-            );
-            if (
-              createdAt &&
-              (!oldestOrderDate || createdAt < oldestOrderDate)
-            ) {
-              oldestOrderDate = createdAt;
-            }
           }
+
+          const expected =
+            discoveredTotal ?? Math.max(this._ctx.progress.fetched, 1);
+          this._ctx.progress.percentage = Math.min(
+            100,
+            (this._ctx.progress.fetched / expected) * 100,
+          );
 
           sendProgressToUser(userId, {
             type: "sync_progress",
-            message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${
-              results.length
-            }/${
-              discoveredTotal ?? results.length
-            } vendas baixadas (página ${pageNumber})`,
-            current: results.length,
-            total: discoveredTotal ?? results.length,
-            fetched: results.length,
-            expected: discoveredTotal ?? results.length,
+            message:
+              `${account.nickname || `Conta ${account.ml_user_id}`}: ` +
+              `${this._ctx.progress.fetched}/${discoveredTotal ?? this._ctx.progress.fetched} vendas verificadas ` +
+              `(${results.length} para salvar, ${this._ctx.progress.skipped} inalteradas)`,
+            current: this._ctx.progress.fetched,
+            total: discoveredTotal ?? this._ctx.progress.fetched,
+            fetched: this._ctx.progress.fetched,
+            expected: discoveredTotal ?? this._ctx.progress.fetched,
+            skipped: this._ctx.progress.skipped,
+            skippedOtherUser: this._ctx.progress.skippedOtherUser,
             accountId: account.id,
             accountNickname: account.nickname || undefined,
             page: pageNumber,
           });
         } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Falha desconhecida";
           console.error(
-            `[Sync] ?? Erro inesperado na p�gina ${pageNumber}:`,
+            `[Sync] Erro inesperado na página ${pageNumber}:`,
             error,
           );
+          recordPageFailure(pageNumber, message);
           sendProgressToUser(userId, {
             type: "sync_warning",
-            message: `Erro inesperado na p�gina ${pageNumber}: ${
-              error instanceof Error ? error.message : "Falha desconhecida"
-            }`,
+            message: `Erro inesperado na página ${pageNumber}: ${message}`,
             errorCode: "PAGE_FETCH_ERROR",
+            accountId: account.id,
           });
         }
       })();
 
-      pagePromise.finally(() => activePages.delete(pagePromise));
       activePages.add(pagePromise);
+      void pagePromise.finally(() => activePages.delete(pagePromise));
     };
 
-    // PASSO 1: Buscar vendas recentes (paginação normal)
-    while (
-      activePages.size < PAGE_FETCH_CONCURRENCY &&
-      nextOffset < Math.min(MAX_OFFSET, maxOffsetToFetch)
-    ) {
-      // Verificar tempo antes de continuar
-      if (Date.now() - startTime > MAX_EXECUTION_TIME) {
-        console.log(
-          `[Sync] ⏱️ Tempo limite atingido (${Math.round(
-            (Date.now() - startTime) / 1000,
-          )}s) - parando busca de vendas recentes`,
-        );
-        forcedStop = true;
-        break;
-      }
-      schedulePageFetch(nextOffset);
-      nextOffset += PAGE_LIMIT;
-    }
-
-    while (activePages.size > 0) {
-      await Promise.race(activePages);
-
-      // Verificar tempo antes de continuar
-      if (Date.now() - startTime > MAX_EXECUTION_TIME) {
-        console.log(`[Sync] ⏱️ Tempo limite atingido - parando paginação`);
-        forcedStop = true;
-        break;
-      }
-
+    const fillPageQueue = (): void => {
       while (
+        !stopScheduling &&
         activePages.size < PAGE_FETCH_CONCURRENCY &&
-        nextOffset < maxOffsetToFetch &&
-        Date.now() - startTime < MAX_EXECUTION_TIME
+        nextOffset < maxOffsetToFetch
       ) {
+        if (Date.now() - startedAtMs > MAX_EXECUTION_TIME) {
+          forcedStop = true;
+          stopScheduling = true;
+          break;
+        }
         schedulePageFetch(nextOffset);
         nextOffset += PAGE_LIMIT;
       }
+    };
+
+    fillPageQueue();
+    while (activePages.size > 0) {
+      await Promise.race(activePages);
+
+      if (
+        !stopScheduling &&
+        Date.now() - startedAtMs > MAX_EXECUTION_TIME
+      ) {
+        console.log("[Sync] Tempo limite atingido - parando paginação");
+        forcedStop = true;
+        stopScheduling = true;
+      }
+
+      fillPageQueue();
     }
 
-    if (discoveredTotal === null) {
-      total = results.length;
-    }
-
-    // // PASSO 2: Buscar vendas hist�ricas apenas se N�O atingiu o limite
-    // const timeRemaining = MAX_EXECUTION_TIME - (Date.now() - startTime);
-    // const reachedLimit = results.length >= SAFE_BATCH_SIZE;
-    // const shouldFetchHistory = !reachedLimit && timeRemaining > 10000;
-
-    // if (shouldFetchHistory) {
-    //   console.log(
-    //     `[Sync] 🔄 Buscando vendas históricas (tempo restante: ${Math.round(
-    //       timeRemaining / 1000,
-    //     )}s)...`,
-    //   );
-
-    //   // Determinar ponto de partida para busca histórica
-    //   let searchStartDate: Date;
-
-    //   if (oldestSyncedDate) {
-    //     // Continuar de onde a última sincronização parou
-    //     searchStartDate = new Date(oldestSyncedDate);
-    //     searchStartDate.setDate(searchStartDate.getDate() - 1); // Um dia antes da última sincronizada
-    //     console.log(
-    //       `[Sync] 📅 Continuando busca histórica a partir de ${
-    //         searchStartDate.toISOString().split("T")[0]
-    //       }`,
-    //     );
-    //   } else {
-    //     // Primeira vez: começar da venda mais antiga das recentes
-    //     const firstSyncFallbackDate = new Date(2025, 0, 1);
-    //     const fallbackOldest =
-    //       results.length > 0
-    //         ? (this._meliSyncService.extractOrderDate(
-    //             results[results.length - 1].order,
-    //           ) ?? firstSyncFallbackDate)
-    //         : firstSyncFallbackDate;
-
-    //     searchStartDate = oldestOrderDate ?? fallbackOldest;
-    //     console.log(
-    //       `[Sync] 📅 Primeira busca histórica a partir de ${
-    //         searchStartDate.toISOString().split("T")[0]
-    //       }`,
-    //     );
-    //   }
-
-    //   // Buscar vendas mais antigas em blocos de 1 mês
-    //   const currentMonthStart = new Date(searchStartDate);
-    //   currentMonthStart.setDate(1); // Primeiro dia do mês
-    //   currentMonthStart.setHours(0, 0, 0, 0);
-    //   currentMonthStart.setMonth(currentMonthStart.getMonth() - 1); // Começar do mês anterior
-
-    //   const startDate = new Date();
-    //   console.log(
-    //     `[Sync] ?? FULL SYNC ativado - buscando TODAS as vendas (desde 2000)`,
-    //   );
-
-    //   // Buscar enquanto tiver tempo
-    //   while (
-    //     currentMonthStart < startDate &&
-    //     Date.now() - startTime < MAX_EXECUTION_TIME - 5000
-    //   ) {
-    //     // Calcular fim do mês
-    //     const currentMonthEnd = new Date(currentMonthStart);
-    //     currentMonthEnd.setMonth(currentMonthEnd.getMonth() + 1);
-    //     currentMonthEnd.setDate(0); // Último dia do mês
-    //     currentMonthEnd.setHours(23, 59, 59, 999);
-
-    //     console.log(
-    //       `[Sync] 📅 Buscando: ${
-    //         currentMonthStart.toISOString().split("T")[0]
-    //       } a ${currentMonthEnd.toISOString().split("T")[0]}`,
-    //     );
-    //     // Buscar vendas deste mês
-    //     const monthOrders = await this._meliSyncService.fetchOrdersInDateRange(
-    //       account,
-    //       headers,
-    //       userId,
-    //       currentMonthStart,
-    //       currentMonthEnd,
-    //       logisticStats,
-    //     );
-
-    //     console.log(
-    //       `[Sync] ✅ Encontradas ${monthOrders.length} vendas neste período`,
-    //     );
-
-    //     detailsResults.push(...monthOrders);
-
-    //     sendProgressToUser(userId, {
-    //       type: "sync_details_progress",
-    //       message: `${account.nickname || `Conta ${account.ml_user_id}`}: ${
-    //         results.length
-    //       } vendas baixadas (buscando histórico: ${
-    //         currentMonthStart.toISOString().split("T")[0]
-    //       })`,
-    //       current: detailsResults.length,
-    //       total: Math.max(total, results.length), // Usar o maior valor entre total estimado e vendas baixadas
-    //       fetched: detailsResults.length,
-    //       expected: Math.max(total, results.length),
-    //       accountId: account.id,
-    //       accountNickname: account.nickname || undefined,
-    //     });
-
-    //     // Se não encontrou vendas neste mês, chegou no início do histórico
-    //     if (monthOrders.length === 0) {
-    //       console.log(
-    //         `[Sync] ✅ Nenhuma venda encontrada neste período - histórico completo!`,
-    //       );
-    //       // break;
-    //     }
-
-    //     // Ir para o mês anterior
-    //     currentMonthStart.setMonth(currentMonthStart.getMonth() + 1);
-    //   }
-
-    //   results.push(...detailsResults);
-
-    //   const elapsedTime = Math.round((Date.now() - startTime) / 1000);
-    //   console.log(
-    //     `[Sync] ✅ Busca por período concluída em ${elapsedTime}s: ${results.length} vendas baixadas`,
-    //   );
-    //   if (
-    //     Date.now() - startTime >= MAX_EXECUTION_TIME - 5000 &&
-    //     currentMonthStart > startDate
-    //   ) {
-    //     forcedStop = true;
-    //   }
-    // } else if (!shouldFetchHistory && total > results.length) {
-    //   if (timeRemaining <= 10000) {
-    //     forcedStop = true;
-    //   }
-    //   console.log(
-    //     `[Sync] ⏱️ Tempo insuficiente para busca histórica - execute sincronização novamente para continuar`,
-    //   );
-    // }
-
-    // Calcular estatísticas finais
-    const elapsedTime = Math.round((Date.now() - startTime) / 1000);
-    const finalTotal = Math.max(total, results.length);
-
-    console.log(
-      `[Sync] 🎉 ${results.length} vendas baixadas em ${elapsedTime}s (total estimado: ${total})`,
-    );
-    console.log(
-      `[Sync] 📊 Tipos de logística:`,
-      Array.from(logisticStats.entries()),
-    );
-
-    // Verificar se há mais vendas para sincronizar
-    const totalInDatabase = await prisma.meliVenda.count({
-      where: { meliAccountId: account.id },
-    });
-
-    if (totalInDatabase < total) {
-      const remaining = total - totalInDatabase;
-      console.log(
-        `[Sync] 📌 ${remaining} vendas restantes - execute sincronização novamente para continuar`,
-      );
+    if (truncatedByApiLimit) {
+      forcedStop = true;
       sendProgressToUser(userId, {
         type: "sync_warning",
-        message: `${remaining} vendas antigas ainda não sincronizadas. Execute sincronização novamente para buscar o restante.`,
+        message: `A busca retornou mais de ${MAX_OFFSET} vendas e foi truncada; o cursor não será avançado.`,
         accountId: account.id,
         accountNickname: account.nickname || undefined,
       });
-    } else {
-      console.log(`[Sync] ✅ Histórico completo sincronizado!`);
     }
 
+    let allRequiredPagesSucceeded = discoveredTotal !== null;
+    const requiredOffsetLimit = Math.min(discoveredTotal ?? 0, MAX_OFFSET);
+    for (
+      let requiredOffset = 0;
+      requiredOffset < requiredOffsetLimit;
+      requiredOffset += PAGE_LIMIT
+    ) {
+      if (!successfulOffsets.has(requiredOffset)) {
+        allRequiredPagesSucceeded = false;
+        break;
+      }
+    }
+
+    this._ctx.forcedStop = forcedStop;
+    this._ctx.fetchComplete =
+      discoveredTotal !== null &&
+      this._ctx.failedPages === 0 &&
+      !forcedStop &&
+      !truncatedByApiLimit &&
+      allRequiredPagesSucceeded;
+    this._ctx.progress.expected =
+      discoveredTotal ?? this._ctx.progress.fetched;
+    this._ctx.progress.percentage = this._ctx.fetchComplete
+      ? 100
+      : this._ctx.progress.expected > 0
+        ? Math.min(
+            100,
+            (this._ctx.progress.fetched / this._ctx.progress.expected) * 100,
+          )
+        : 0;
     this._allOrders = results;
-    this.ctx.progress.expected = finalTotal;
-    this.ctx.forcedStop = forcedStop;
+
+    const elapsedTime = Math.round((Date.now() - startedAtMs) / 1000);
     console.log(
-      `[Sync] ✅ Conta ${this.ctx.current.mlUserId}: ${this.allOrders.length} vendas baixadas de ${this.ctx.progress.expected} totais`,
+      `[Sync] Conta ${this._ctx.current.mlUserId}: ${this._ctx.progress.fetched} verificadas, ` +
+        `${results.length} para salvar, ${this._ctx.progress.skipped} inalteradas, ` +
+        `${this._ctx.progress.skippedOtherUser} de outro usuário em ${elapsedTime}s. ` +
+        `Leitura completa: ${this._ctx.fetchComplete}`,
     );
     console.log(
-      `[Sync] Debug - allOrders.length: ${this.allOrders.length}, expectedTotal: ${this.ctx.progress.expected}`,
+      "[Sync] Tipos de logística:",
+      Array.from(logisticStats.entries()),
     );
 
     return this;

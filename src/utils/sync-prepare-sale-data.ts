@@ -5,6 +5,9 @@ import { calculateMargemContribuicao } from "./calc-margem-contribuicao";
 import { adsTags, mapListingTypeToExposure } from "./meli-functions";
 import { extrairPrazoDespachoMeli } from "@/lib/prazo-despacho";
 
+/** Versão das regras que tornam seguro reutilizar um pedido ML já persistido. */
+export const ML_SYNC_RULE_VERSION = "ml-sync-v1";
+
 type SkuCacheEntry = {
   custoUnitario: number | null;
   tipo: string | null;
@@ -259,6 +262,7 @@ export async function prepareSaleData(
       tags: truncateJsonData(tags),
       internalTags: truncateJsonData(internalTags),
       rawData: truncateJsonData({
+        syncRule: ML_SYNC_RULE_VERSION,
         order: o,
         shipment: order.shipment as any,
         freight: freight,

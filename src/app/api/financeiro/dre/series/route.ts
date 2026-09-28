@@ -49,7 +49,9 @@ export async function GET(req: NextRequest) {
       tipoData,
       catsParam || "all"
     );
-    const cached = cache.get<Record<string, unknown>>(cacheKey, CACHE_TTL_MS);
+    const cached = url.searchParams.has("refresh")
+      ? null
+      : cache.get<Record<string, unknown>>(cacheKey, CACHE_TTL_MS);
     if (cached) {
       return NextResponse.json(cached);
     }
@@ -113,29 +115,55 @@ export async function GET(req: NextRequest) {
       ]
     };
 
-    const [vendasMeli, vendasShopee, vendasTiktok] = await Promise.all([
+    // Vendas e despesas usam apenas o range já calculado e podem ser buscadas juntas.
+    let whereQuery: any = { userId: session.sub, categoria: { tipo: "DESPESA" } };
+    if (tipoData === "caixa") {
+      whereQuery = { ...whereQuery, status: "pago", dataPagamento: { gte: minDate, lte: maxDate } };
+    } else {
+      whereQuery = { ...whereQuery, OR: [{ dataCompetencia: { gte: minDate, lte: maxDate } }, { dataCompetencia: null, dataVencimento: { gte: minDate, lte: maxDate } }] };
+    }
+
+    if (catsParam) {
+      const catIds = catsParam.split(",");
+      if (catIds.length > 0) {
+        whereQuery.categoriaId = { in: catIds };
+      }
+    }
+
+    const [vendasMeli, vendasShopee, vendasTiktok, contasPagar] = await Promise.all([
       prisma.meliVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: minDate, lte: maxDate }, ...paidOnly },
-        select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, logisticType: true, dataVenda: true },
-        distinct: ['orderId'],
+        select: { valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, logisticType: true, dataVenda: true },
       }),
       prisma.shopeeVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: minDate, lte: maxDate }, ...paidOnly },
-        select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, dataVenda: true },
-        distinct: ['orderId'],
+        select: { valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, dataVenda: true },
       }),
       prisma.tiktokVenda.findMany({
         where: { userId: session.sub, dataVenda: { gte: minDate, lte: maxDate }, ...paidOnly },
-        select: { orderId: true, valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, dataVenda: true },
-        distinct: ['orderId'],
-      })
+        select: { valorTotal: true, taxaPlataforma: true, frete: true, quantidade: true, sku: true, dataVenda: true },
+      }),
+      prisma.contaPagar.findMany({
+        where: whereQuery,
+        select: {
+          dataPagamento: true,
+          dataCompetencia: true,
+          dataVencimento: true,
+          valor: true,
+          categoriaId: true,
+          categoria: {
+            select: { id: true, nome: true, descricao: true },
+          },
+        },
+      }),
     ]);
 
     // Calcular custos
     const skusUnicos = Array.from(new Set([...vendasMeli, ...vendasShopee, ...vendasTiktok].map(v => v.sku).filter(Boolean))) as string[];
-    const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
-
-    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
+    const [costMap, flexConfig] = await Promise.all([
+      buildHistoricalCostMap(session.sub, skusUnicos),
+      loadActiveFlexShippingConfig(session.sub),
+    ]);
 
     // Inicializar objetos de resposta
     const receitaBrutaMeliPorMes: Record<string, number> = {};
@@ -169,24 +197,9 @@ export async function GET(req: NextRequest) {
       cmvPorMes[m] = 0;
     }
 
-    const chavesVistas = new Set<string>();
-
     const processarVendas = (vendas: any[], plataforma: "meli" | "shopee" | "tiktok") => {
       for (const v of vendas) {
         if (!v.dataVenda) continue;
-        
-        // Deduplicação em JavaScript (garantir que orderIds não sejam somados duplamente)
-        //
-        // A chave é PLATAFORMA + orderId, não o orderId solto: `order_id` é @unique
-        // em cada tabela, então duplicata dentro de uma plataforma não existe. Um
-        // Set global de orderId só disparava com o MESMO número em plataformas
-        // DIFERENTES — e aí descartava uma venda real do DRE.
-        const orderId = v.orderId;
-        if (orderId) {
-          const chave = `${plataforma}:${orderId}`;
-          if (chavesVistas.has(chave)) continue;
-          chavesVistas.add(chave);
-        }
 
         const d = new Date(v.dataVenda);
         // Converter de volta para horário do Brasil (-3h) para saber a qual mês pertence
@@ -233,26 +246,6 @@ export async function GET(req: NextRequest) {
     processarVendas(vendasMeli, "meli");
     processarVendas(vendasShopee, "shopee");
     processarVendas(vendasTiktok, "tiktok");
-
-    // Buscar Contas a Pagar (Despesas)
-    let whereQuery: any = { userId: session.sub, categoria: { tipo: "DESPESA" } };
-    if (tipoData === "caixa") {
-      whereQuery = { ...whereQuery, status: "pago", dataPagamento: { gte: minDate, lte: maxDate } };
-    } else {
-      whereQuery = { ...whereQuery, OR: [{ dataCompetencia: { gte: minDate, lte: maxDate } }, { dataCompetencia: null, dataVencimento: { gte: minDate, lte: maxDate } }] };
-    }
-
-    if (catsParam) {
-      const catIds = catsParam.split(",");
-      if (catIds.length > 0) {
-        whereQuery.categoriaId = { in: catIds };
-      }
-    }
-
-    const contasPagar = await prisma.contaPagar.findMany({
-      where: whereQuery,
-      include: { categoria: true },
-    });
 
     const despesasPorMes: Record<string, number> = {};
     const valoresPorCategoriaMes: Record<string, Record<string, number>> = {};

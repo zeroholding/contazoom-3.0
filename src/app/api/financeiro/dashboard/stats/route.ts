@@ -83,7 +83,9 @@ export async function GET(req: NextRequest) {
       accountPlatformParam || "",
       accountIdParam || ""
     );
-    const cachedStats = cache.get<Record<string, unknown>>(cacheKey, CACHE_TTL_MS);
+    const cachedStats = url.searchParams.has("refresh")
+      ? null
+      : cache.get<Record<string, unknown>>(cacheKey, CACHE_TTL_MS);
     if (cachedStats) {
       return NextResponse.json(cachedStats);
     }
@@ -234,19 +236,30 @@ export async function GET(req: NextRequest) {
     // Helper for trend calculations (apenas vendas pagas/completas)
     const paidOnly = getStatusWhere('pagos');
 
+    const aliquotasPromise = (async (): Promise<any[]> => {
+      try {
+        if (!prisma.aliquotaImposto) return [];
+        return await prisma.aliquotaImposto.findMany({
+          where: { userId: session.sub, ativo: true },
+          orderBy: { updatedAt: "desc" },
+        });
+      } catch {
+        return [];
+      }
+    })();
+
     // Buscar vendas do Mercado Livre, Shopee e TikTok Shop em PARALELO para melhor performance
     //
     // O guard é por INCLUSÃO. O `canalParam === "shopee" ? [] : ...` de antes
     // funcionava com duas plataformas porque "não é Shopee" equivalia a "é ML";
     // com três, filtrar por `tiktok` não exclui o ML e o painel somaria Mercado
     // Livre dentro de um filtro de TikTok.
-    const [vendasMeli, vendasShopee, vendasTiktok] = await Promise.all([
+    const [vendasMeli, vendasShopee, vendasTiktok, flexConfig, aliquotas] = await Promise.all([
       canalIncluiPlataforma(canalParam, 'meli') ? prisma.meliVenda.findMany({
         where: useRange
           ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli }
           : { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli },
         select: {
-          orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
           meliAccountId: true,
           valorTotal: true,
           taxaPlataforma: true,
@@ -258,7 +271,6 @@ export async function GET(req: NextRequest) {
           logisticType: true,
           dataVenda: true,
         },
-        distinct: ['orderId'],
         orderBy: { dataVenda: "desc" },
       }) : [],
       canalIncluiPlataforma(canalParam, 'shopee') ? prisma.shopeeVenda.findMany({
@@ -266,7 +278,6 @@ export async function GET(req: NextRequest) {
           ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee }
           : { userId: session.sub, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee },
         select: {
-          orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
           shopeeAccountId: true,
           valorTotal: true,
           taxaPlataforma: true,
@@ -277,7 +288,6 @@ export async function GET(req: NextRequest) {
           plataforma: true,
           dataVenda: true,
         },
-        distinct: ['orderId'],
         orderBy: { dataVenda: "desc" },
       }) : [],
       canalIncluiPlataforma(canalParam, 'tiktok') ? prisma.tiktokVenda.findMany({
@@ -285,7 +295,6 @@ export async function GET(req: NextRequest) {
           ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}), ...dashboardWhereTiktok }
           : { userId: session.sub, ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}), ...dashboardWhereTiktok },
         select: {
-          orderId: true, // ⚠️ IMPORTANTE: Necessário para distinct e deduplicação
           tiktokAccountId: true,
           valorTotal: true,
           taxaPlataforma: true,
@@ -296,58 +305,25 @@ export async function GET(req: NextRequest) {
           plataforma: true,
           dataVenda: true,
         },
-        distinct: ['orderId'],
         orderBy: { dataVenda: "desc" },
       }) : [],
+      loadActiveFlexShippingConfig(session.sub),
+      aliquotasPromise,
     ]);
 
     // Consolidar as vendas das plataformas incluídas no filtro de canal
     // (as excluídas já vieram como lista vazia do guard acima)
-    let vendas = [...vendasMeli, ...vendasShopee, ...vendasTiktok];
-
-    // ⚠️ DEDUPLICAÇÃO ADICIONAL: Garantir que nenhum orderId seja contado duas vezes
-    // O distinct do Prisma pode não funcionar perfeitamente em todos os casos
-    //
-    // A chave é PLATAFORMA + orderId, não o orderId solto: `order_id` é @unique em
-    // cada tabela, então duplicata dentro de uma plataforma não existe. Um Set
-    // global de orderId só disparava com o MESMO número em plataformas DIFERENTES
-    // — e aí descartava uma venda real.
-    const vendasDeduplicadas: typeof vendas = [];
-    const chavesVistas = new Set<string>();
-    
-    for (const venda of vendas) {
-      const orderId = (venda as any).orderId;
-      
-      if (!orderId) {
-        // Se não tiver orderId, incluir sempre (caso raro)
-        vendasDeduplicadas.push(venda);
-        continue;
-      }
-      
-      const plataformaChave = 'meliAccountId' in venda
-        ? 'meli'
-        : 'shopeeAccountId' in venda
-          ? 'shopee'
-          : 'tiktok';
-      const chave = `${plataformaChave}:${orderId}`;
-
-      if (!chavesVistas.has(chave)) {
-        chavesVistas.add(chave);
-        vendasDeduplicadas.push(venda);
-      }
-    }
-
-    vendas = vendasDeduplicadas;
+    const vendas = [...vendasMeli, ...vendasShopee, ...vendasTiktok];
 
     // Unique SKUs for CMV calculation
     const skusUnicos = Array.from(
       new Set(vendas.map((v) => v.sku).filter((s): s is string => Boolean(s)))
     );
 
-    const { buildHistoricalCostMap } = await import("@/lib/sku-cost-history");
-    const costMap = await buildHistoricalCostMap(session.sub, skusUnicos);
-
-    const flexConfig = await loadActiveFlexShippingConfig(session.sub);
+    const costMap = await import("@/lib/sku-cost-history").then(
+      ({ buildHistoricalCostMap }) =>
+        buildHistoricalCostMap(session.sub, skusUnicos),
+    );
 
     // Aggregate current period
     let faturamentoTotal = 0;
@@ -407,22 +383,7 @@ export async function GET(req: NextRequest) {
     // Calcular impostos baseado nas alíquotas cadastradas
     let impostosTotal = 0;
     
-    // Buscar alíquotas ativas do usuário (com fallback se modelo não existir)
-    let aliquotas: any[] = [];
-    try {
-      if (prisma.aliquotaImposto) {
-        aliquotas = await prisma.aliquotaImposto.findMany({
-          where: {
-            userId: session.sub,
-            ativo: true,
-          },
-          orderBy: { updatedAt: "desc" },
-        });
-      }
-    } catch {
-      // Modelo AliquotaImposto não existe no schema - ignorar silenciosamente
-      aliquotas = [];
-    }
+    // Alíquotas foram carregadas em paralelo com as vendas acima.
 
     // Se não houver alíquotas, pular o cálculo
     if (aliquotas.length > 0) {
@@ -508,48 +469,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Trend: faturamento do último mês vs penúltimo mês (TODAS AS QUERIES EM PARALELO)
-    const [
-      vendasMeliUltimoMes,
-      vendasShopeeUltimoMes,
-      vendasTiktokUltimoMes,
-      vendasMeliPenultimoMes,
-      vendasShopeePenultimoMes,
-      vendasTiktokPenultimoMes
-    ] = await Promise.all([
-      prisma.meliVenda.findMany({
-        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
-        select: { valorTotal: true },
-        distinct: ['orderId'],
-      }),
-      prisma.shopeeVenda.findMany({
-        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
-        select: { valorTotal: true },
-        distinct: ['orderId'],
-      }),
-      prisma.tiktokVenda.findMany({
-        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
-        select: { valorTotal: true },
-        distinct: ['orderId'],
-      }),
-      prisma.meliVenda.findMany({
-        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
-        select: { valorTotal: true },
-        distinct: ['orderId'],
-      }),
-      prisma.shopeeVenda.findMany({
-        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
-        select: { valorTotal: true },
-        distinct: ['orderId'],
-      }),
-      prisma.tiktokVenda.findMany({
-        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
-        select: { valorTotal: true },
-        distinct: ['orderId'],
-      })
-    ]);
-
-    // Buscar Despesas Operacionais em paralelo (sem depender do await Promise.all de vendas)
     const contasPagarQuery = useRange
       ? tipoVisualizacao === "caixa"
         ? { userId: session.sub, dataPagamento: { gte: start, lte: end }, status: "pago", categoria: { tipo: "DESPESA" } }
@@ -558,21 +477,55 @@ export async function GET(req: NextRequest) {
         ? { userId: session.sub, status: "pago", categoria: { tipo: "DESPESA" } }
         : { userId: session.sub, categoria: { tipo: "DESPESA" } };
 
-    const contasPagar = await prisma.contaPagar.findMany({
-      where: contasPagarQuery as any,
-      select: { valor: true },
-    });
+    // Tendência e despesas são somas puras e independentes.
+    const [
+      vendasMeliUltimoMes,
+      vendasShopeeUltimoMes,
+      vendasTiktokUltimoMes,
+      vendasMeliPenultimoMes,
+      vendasShopeePenultimoMes,
+      vendasTiktokPenultimoMes,
+      contasPagar,
+    ] = await Promise.all([
+      prisma.meliVenda.aggregate({
+        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
+        _sum: { valorTotal: true },
+      }),
+      prisma.shopeeVenda.aggregate({
+        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
+        _sum: { valorTotal: true },
+      }),
+      prisma.tiktokVenda.aggregate({
+        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
+        _sum: { valorTotal: true },
+      }),
+      prisma.meliVenda.aggregate({
+        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
+        _sum: { valorTotal: true },
+      }),
+      prisma.shopeeVenda.aggregate({
+        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
+        _sum: { valorTotal: true },
+      }),
+      prisma.tiktokVenda.aggregate({
+        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
+        _sum: { valorTotal: true },
+      }),
+      prisma.contaPagar.aggregate({
+        where: contasPagarQuery as any,
+        _sum: { valor: true },
+      }),
+    ]);
 
-    const despesasOperacionais = contasPagar.reduce((acc, cp) => acc + toNumber(cp.valor), 0);
-
+    const despesasOperacionais = toNumber(contasPagar._sum.valor);
     const faturamentoPrev =
-      vendasMeliPenultimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
-      vendasShopeePenultimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
-      vendasTiktokPenultimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0);
+      toNumber(vendasMeliPenultimoMes._sum.valorTotal) +
+      toNumber(vendasShopeePenultimoMes._sum.valorTotal) +
+      toNumber(vendasTiktokPenultimoMes._sum.valorTotal);
     const faturamentoUltimo =
-      vendasMeliUltimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
-      vendasShopeeUltimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0) +
-      vendasTiktokUltimoMes.reduce((acc, it) => acc + toNumber(it.valorTotal), 0);
+      toNumber(vendasMeliUltimoMes._sum.valorTotal) +
+      toNumber(vendasShopeeUltimoMes._sum.valorTotal) +
+      toNumber(vendasTiktokUltimoMes._sum.valorTotal);
     const faturamentoTendencia = faturamentoPrev > 0
       ? ((faturamentoUltimo - faturamentoPrev) / Math.abs(faturamentoPrev)) * 100
       : 0;

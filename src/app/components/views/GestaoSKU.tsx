@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import HeaderGestaoSKU from "./ui/HeaderGestaoSKU";
 import FiltrosGestaoSKU, { type FiltrosSKU } from "./ui/FiltrosGestaoSKU";
 import TabelaGestaoSKU, {
@@ -112,6 +113,10 @@ export default function GestaoSKU() {
       console.error("Erro ao carregar estatísticas de SKU:", error);
     }
   }, []);
+
+  useAoSincronizarVendas(() => {
+    void Promise.all([loadSKUs(), loadSKUStats()]);
+  });
 
   useEffect(() => {
     loadSKUs();

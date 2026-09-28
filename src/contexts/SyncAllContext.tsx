@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { useAuthContext } from "@/contexts/AuthContext";
+import { EVENTO_VENDAS_SINCRONIZADAS } from "@/hooks/useAoSincronizarVendas";
 import {
   createIdleSyncAllState,
   isSyncAllRunning,
@@ -165,7 +166,7 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
     terminalRunRef.current = state.runId;
 
     window.dispatchEvent(
-      new CustomEvent("contazoom:vendas-sincronizadas", { detail: state }),
+      new CustomEvent(EVENTO_VENDAS_SINCRONIZADAS, { detail: state }),
     );
   }, [state]);
 

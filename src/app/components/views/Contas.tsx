@@ -32,6 +32,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
+
 import {
   Aviso,
   BotaoAtualizar,
@@ -330,6 +332,8 @@ export default function Contas() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { dados, carregando, atualizando, erro, atualizar } = useContas();
+
+  useAoSincronizarVendas(() => atualizar());
 
   const [abertos, setAbertos] = useState<Set<CanalConta>>(new Set());
   const [ocupados, setOcupados] = useState<Set<string>>(new Set());

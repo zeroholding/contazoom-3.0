@@ -6,6 +6,7 @@ import { POST as syncMeli } from "@/app/api/v2/meli/vendas/sync/route";
 import { POST as syncShopee } from "@/app/api/shopee/vendas/sync/route";
 import { POST as syncTiktok } from "@/app/api/tiktok/vendas/sync/route";
 import { assertSessionToken } from "@/lib/auth";
+import { invalidateVendasCache } from "@/lib/cache";
 import { backfillPrazoChunk } from "@/lib/prazo-despacho-backfill";
 import prisma from "@/lib/prisma";
 import {
@@ -144,7 +145,10 @@ function buildChannelRequest({
   channel: SyncAllChannel;
   accountIds?: string[];
 }) {
-  const headers = new Headers({ "Content-Type": "application/json" });
+  const headers = new Headers({
+    "Content-Type": "application/json",
+    "x-contazoom-sync-all": "1",
+  });
   if (cookie) headers.set("Cookie", cookie);
 
   return new NextRequest(`${origin}/api/sync-all/internal/${channel}`, {
@@ -388,6 +392,8 @@ async function runSyncAll({
       console.warn("[Sync All] Backfill de prazo não rodou:", error);
     }
 
+    invalidateVendasCache(userId);
+
     const channelStates = channels.map((channel) => state.channels[channel]!);
     const failures = channelStates.filter((channel) => channel.status === "failed");
     const partials = channelStates.filter((channel) => channel.status === "partial");
@@ -410,7 +416,9 @@ async function runSyncAll({
           ? "Não foi possível sincronizar os canais"
           : finalStatus === "partial"
             ? `Sincronização parcial em ${affectedLabels} · ${current.saved} venda(s) processada(s)`
-            : `Sincronização concluída · ${current.saved} venda(s) processada(s)`,
+            : current.saved > 0
+              ? `Sincronização concluída · ${current.saved} venda(s) atualizada(s)`
+              : "Sincronização concluída · tudo em dia",
       progress: 100,
       updatedAt: finishedAt,
       heartbeatAt: finishedAt,
@@ -422,6 +430,7 @@ async function runSyncAll({
       return;
     }
     const finishedAt = new Date().toISOString();
+    invalidateVendasCache(userId);
     await update((current) => ({
       ...current,
       status: "failed",

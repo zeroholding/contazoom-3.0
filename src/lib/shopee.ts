@@ -109,13 +109,22 @@ export async function refreshShopeeToken(
 
 export { refreshShopeeToken as refreshShopeeAccountToken };
 
+export type ShopeeOrderTimeRangeField = "create_time" | "update_time";
+
 export interface GetShopeeOrderListParams {
   partnerId: string;
   partnerKey: string;
   accessToken: string;
   shopId: string;
-  createTimeFrom: number;
-  createTimeTo: number;
+  /** Campo usado pela Shopee para selecionar a janela. Mantém create_time por compatibilidade. */
+  timeRangeField?: ShopeeOrderTimeRangeField;
+  /** Novos nomes neutros, usados também quando o campo é update_time. */
+  timeFrom?: number;
+  timeTo?: number;
+  /** @deprecated Use timeFrom. Mantido para os chamadores existentes. */
+  createTimeFrom?: number;
+  /** @deprecated Use timeTo. Mantido para os chamadores existentes. */
+  createTimeTo?: number;
   pageSize: number;
   cursor?: string;
 }
@@ -124,6 +133,12 @@ export async function getShopeeOrderList(params: GetShopeeOrderListParams) {
   const path = "/api/v2/order/get_order_list";
   const timestamp = Math.floor(Date.now() / 1000);
   const sign = generateShopeeSign(params.partnerId, params.partnerKey, path, params.accessToken, params.shopId, timestamp);
+  const timeFrom = params.timeFrom ?? params.createTimeFrom;
+  const timeTo = params.timeTo ?? params.createTimeTo;
+
+  if (!Number.isFinite(timeFrom) || !Number.isFinite(timeTo)) {
+    throw new Error("Shopee getOrderList requer timeFrom e timeTo validos");
+  }
   
   const url = new URL(`https://partner.shopeemobile.com${path}`);
   url.searchParams.append("partner_id", params.partnerId);
@@ -131,9 +146,9 @@ export async function getShopeeOrderList(params: GetShopeeOrderListParams) {
   url.searchParams.append("access_token", params.accessToken);
   url.searchParams.append("shop_id", params.shopId);
   url.searchParams.append("sign", sign);
-  url.searchParams.append("time_range_field", "create_time");
-  url.searchParams.append("time_from", params.createTimeFrom.toString());
-  url.searchParams.append("time_to", params.createTimeTo.toString());
+  url.searchParams.append("time_range_field", params.timeRangeField ?? "create_time");
+  url.searchParams.append("time_from", String(timeFrom));
+  url.searchParams.append("time_to", String(timeTo));
   url.searchParams.append("page_size", params.pageSize.toString());
   if (params.cursor) {
     url.searchParams.append("cursor", params.cursor);

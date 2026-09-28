@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   FetchOrdersPageOptions,
   FetchOrdersPageResult,
@@ -7,20 +8,17 @@ import {
   MeliOrderFreight,
   MeliOrderPayload,
 } from "../types/sync-meli";
+import { pMap } from "@/lib/concorrencia";
 import { sendProgressToUser } from "@/lib/sse-progress";
 import { fetchWithRetry } from "../utils/fetch-with-retry";
 import { roundCurrency } from "@/utils/string-utils";
 import { toFiniteNumber } from "@/utils/numeric-functions";
+import { ML_SYNC_RULE_VERSION } from "@/utils/sync-prepare-sale-data";
 
 const MELI_API_BASE =
   process.env.MELI_API_BASE?.replace(/\/$/, "") ||
   "https://api.mercadolibre.com";
 const PAGE_LIMIT = 50;
-const PAGE_FETCH_CONCURRENCY = Math.min(
-  5,
-  Math.max(1, Number(process.env.MELI_PAGE_FETCH_CONCURRENCY ?? "2") || 2),
-);
-const MAX_OFFSET = 50000;
 
 function sumPromotedAmount(discounts: unknown): number | null {
   if (!Array.isArray(discounts)) return null;
@@ -45,6 +43,35 @@ function firstPositive(...values: Array<number | null | undefined>): number | nu
     }
   }
   return null;
+}
+
+type ExistingOrderSignature = {
+  orderId: string;
+  userId: string;
+  dateLastUpdated: string | null;
+  status: string | null;
+  tags: unknown;
+  shipmentHasStatus: boolean;
+  syncRule: string | null;
+};
+
+function tagSignature(value: unknown): string | null {
+  let tags = value;
+  if (typeof tags === "string") {
+    try {
+      tags = JSON.parse(tags);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(tags)) return null;
+  return JSON.stringify(tags.map((tag) => String(tag)).sort());
+}
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 export default class MeliSyncService {
@@ -288,11 +315,10 @@ export default class MeliSyncService {
     dateTo,
     ...options
   }: FetchOrdersPageOptions): Promise<FetchOrdersPageResult> {
-    const limit = PAGE_LIMIT;
     const url = new URL(`${MELI_API_BASE}/orders/search`);
     url.searchParams.set("seller", account.ml_user_id.toString());
     url.searchParams.set("sort", "date_desc");
-    url.searchParams.set("limit", limit.toString());
+    url.searchParams.set("limit", PAGE_LIMIT.toString());
     url.searchParams.set("offset", offset.toString());
     if (dateFrom) {
       url.searchParams.set("order.date_created.from", dateFrom.toISOString());
@@ -301,10 +327,16 @@ export default class MeliSyncService {
       url.searchParams.set("order.date_created.to", dateTo.toISOString());
     }
     if (options.lastUpdatedFrom) {
-      url.searchParams.set("order.date_last_updated.from", options.lastUpdatedFrom.toISOString());
+      url.searchParams.set(
+        "order.date_last_updated.from",
+        options.lastUpdatedFrom.toISOString(),
+      );
     }
     if (options.lastUpdatedTo) {
-      url.searchParams.set("order.date_last_updated.to", options.lastUpdatedTo.toISOString());
+      url.searchParams.set(
+        "order.date_last_updated.to",
+        options.lastUpdatedTo.toISOString(),
+      );
     }
 
     const result: FetchOrdersPageResult = {
@@ -312,34 +344,46 @@ export default class MeliSyncService {
       pageNumber,
       total: null,
       orders: [],
+      fetched: 0,
+      skipped: 0,
+      skippedOtherUser: 0,
+      failed: false,
+    };
+
+    const fail = (message: string, status?: number): FetchOrdersPageResult => {
+      result.failed = true;
+      result.failure = status === undefined ? { message } : { message, status };
+      return result;
     };
 
     let response: Response;
-    let payload: any = null;
-
     try {
       response = await fetchWithRetry(url.toString(), { headers }, 3, userId);
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Falha desconhecida";
       console.error(`[Sync] ⚠️ Erro ao buscar página ${pageNumber}:`, error);
       sendProgressToUser(userId, {
         type: "sync_warning",
-        message: `Erro ao buscar página ${pageNumber}: ${
-          error instanceof Error ? error.message : "Falha desconhecida"
-        }`,
+        message: `Erro ao buscar página ${pageNumber}: ${message}`,
         errorCode: "PAGE_FETCH_ERROR",
+        accountId: account.id,
       });
-      return result;
+      return fail(message);
     }
 
+    let payload: any = null;
+    let validJson = true;
     try {
       payload = await response.json();
     } catch {
-      payload = null;
+      validJson = false;
     }
 
     result.total =
       typeof payload?.paging?.total === "number" &&
-      Number.isFinite(payload.paging.total)
+      Number.isFinite(payload.paging.total) &&
+      payload.paging.total >= 0
         ? payload.paging.total
         : null;
 
@@ -359,11 +403,26 @@ export default class MeliSyncService {
         type: "sync_warning",
         message: `Erro HTTP ${response.status} na página ${pageNumber}: ${message}`,
         errorCode: response.status.toString(),
+        accountId: account.id,
       });
-      return result;
+      return fail(message, response.status);
     }
 
-    const orders = Array.isArray(payload?.results) ? payload.results : [];
+    if (!validJson || !Array.isArray(payload?.results) || result.total === null) {
+      const message = "Resposta inválida da API de pedidos";
+      console.error(`[Sync] ⚠️ ${message} na página ${pageNumber}`);
+      sendProgressToUser(userId, {
+        type: "sync_warning",
+        message: `${message} na página ${pageNumber}`,
+        errorCode: "INVALID_PAGE_RESPONSE",
+        accountId: account.id,
+      });
+      return fail(message);
+    }
+
+    const orders: any[] = payload.results;
+    result.fetched = orders.length;
+
     if (orders.length === 0) {
       console.log(
         `[Sync] 📄 Página ${pageNumber}: 0 vendas (offset ${offset})`,
@@ -372,110 +431,204 @@ export default class MeliSyncService {
     }
 
     console.log(
-      `[Sync] 📄 Página ${pageNumber}: ${
-        orders.length
-      } vendas (offset ${offset})${
-        result.total
-          ? ` (${Math.min(offset + orders.length, result.total)}/${result.total})`
-          : ""
-      }`,
+      `[Sync] 📄 Página ${pageNumber}: ${orders.length} vendas (offset ${offset}) ` +
+        `(${Math.min(offset + orders.length, result.total)}/${result.total})`,
     );
 
-    const SHIPMENT_BATCH_SIZE = 10;
-    const shipments: any[] = new Array(orders.length).fill(null);
+    const orderIds = Array.from(
+      new Set(
+        orders
+          .map((order) => {
+            const id = order?.id;
+            if (id === undefined || id === null) return null;
+            const normalized = String(id).trim();
+            return normalized.length > 0 ? normalized : null;
+          })
+          .filter((id): id is string => id !== null),
+      ),
+    );
 
-    for (let i = 0; i < orders.length; i += SHIPMENT_BATCH_SIZE) {
-      const batchOrders = orders.slice(i, i + SHIPMENT_BATCH_SIZE);
-      const batchResults = await Promise.allSettled(
-        batchOrders.map(async (order: any) => {
-          const shippingId = order?.shipping?.id;
-          if (!shippingId) {
-            return typeof order?.shipping === "object" ? order.shipping : null;
-          }
-          try {
-            const [res, costsRes, slaRes] = await Promise.all([
-              fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}`, { headers }, 3, userId),
-              fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/costs`, { headers }, 3, userId).catch(() => null),
-              fetchWithRetry(`${MELI_API_BASE}/shipments/${shippingId}/sla`, { headers }, 1, undefined, 5000).catch(() => null)
-            ]);
-            
-            if (!res.ok) return null;
-            const shipmentData = await res.json();
-
-            // SLA é enriquecimento best-effort: falha de endpoint ou JSON inválido
-            // não pode descartar o shipment principal nem o pedido.
-            if (slaRes && slaRes.ok) {
-              try {
-                shipmentData.sla = await slaRes.json();
-              } catch {
-                // noop
-              }
-            }
-            
-            if (costsRes && costsRes.ok) {
-              const costsData = await costsRes.json();
-              const senderCost = costsData.senders?.[0]?.cost;
-              if (senderCost !== undefined && senderCost !== null) {
-                shipmentData._seller_shipping_cost = senderCost;
-              }
-              const senderSave = costsData.senders?.[0]?.save;
-              if (senderSave !== undefined && senderSave !== null) {
-                shipmentData._seller_shipping_save = senderSave;
-              }
-              const senderDiscount = sumPromotedAmount(costsData.senders?.[0]?.discounts);
-              if (senderDiscount !== null) {
-                shipmentData._seller_shipping_discount = senderDiscount;
-              }
-              const senderComp = costsData.senders?.[0]?.compensation;
-              if (senderComp !== undefined && senderComp !== null) {
-                shipmentData._seller_shipping_compensation = senderComp;
-              }
-              const receiverCost = costsData.receiver?.cost;
-              if (receiverCost !== undefined && receiverCost !== null) {
-                shipmentData._receiver_shipping_cost = receiverCost;
-              }
-              const receiverSave = costsData.receiver?.save;
-              if (receiverSave !== undefined && receiverSave !== null) {
-                shipmentData._receiver_shipping_save = receiverSave;
-              }
-              const receiverDiscount = sumPromotedAmount(costsData.receiver?.discounts);
-              if (receiverDiscount !== null) {
-                shipmentData._receiver_shipping_discount = receiverDiscount;
-              }
-              const grossAmount = costsData.gross_amount;
-              if (grossAmount !== undefined && grossAmount !== null) {
-                shipmentData._costs_gross_amount = grossAmount;
-              }
-              const chargeFlex = costsData.senders?.[0]?.charges?.charge_flex;
-              if (chargeFlex !== undefined && chargeFlex !== null) {
-                shipmentData._charge_flex = chargeFlex;
-              }
-            }
-            return shipmentData;
-          } catch {
-            return null;
-          }
-        }),
-      );
-
-      // Mapear resultados para array de shipments
-      batchResults.forEach((result, idx) => {
-        const originalIdx = i + idx;
-        if (result.status === "fulfilled" && result.value) {
-          shipments[originalIdx] = result.value;
-        } else {
-          shipments[originalIdx] =
-            typeof orders[originalIdx]?.shipping === "object"
-              ? orders[originalIdx].shipping
-              : null;
+    const existingByOrderId = new Map<string, ExistingOrderSignature>();
+    if (orderIds.length > 0) {
+      try {
+        // Uma única consulta parametrizada lê só a assinatura necessária para
+        // decidir o skip; raw_data inteiro nunca trafega para a aplicação.
+        const existingOrders = await prisma.$queryRaw<ExistingOrderSignature[]>(
+          Prisma.sql`
+            SELECT
+              order_id AS "orderId",
+              user_id AS "userId",
+              raw_data -> 'order' ->> 'date_last_updated' AS "dateLastUpdated",
+              raw_data -> 'order' ->> 'status' AS "status",
+              raw_data -> 'order' -> 'tags' AS "tags",
+              COALESCE(NULLIF(raw_data -> 'shipment' ->> 'status', ''), '') <> '' AS "shipmentHasStatus",
+              raw_data ->> 'syncRule' AS "syncRule"
+            FROM meli_venda
+            WHERE order_id IN (${Prisma.join(orderIds)})
+          `,
+        );
+        for (const existing of existingOrders) {
+          existingByOrderId.set(existing.orderId, existing);
         }
-      });
+      } catch (error) {
+        // O skip é só otimização. Se a assinatura não puder ser lida, processa
+        // tudo para nunca perder atualização.
+        console.warn(
+          `[Sync] Falha ao consultar assinaturas da página ${pageNumber}; processando todos os pedidos.`,
+          error,
+        );
+      }
     }
 
-    result.orders = orders
-      .map((order: any, idx: number) => {
+    const ordersToEnrich: any[] = [];
+    for (const order of orders) {
+      const rawId = order?.id;
+      const orderId =
+        rawId === undefined || rawId === null ? null : String(rawId).trim();
+      const existing = orderId ? existingByOrderId.get(orderId) : undefined;
+
+      if (!existing) {
+        ordersToEnrich.push(order);
+        continue;
+      }
+
+      if (existing.userId !== userId) {
+        result.skippedOtherUser += 1;
+        continue;
+      }
+
+      const incomingDate = nonEmptyString(order?.date_last_updated);
+      const incomingStatus = nonEmptyString(order?.status);
+      const incomingTags = tagSignature(order?.tags);
+      const storedTags = tagSignature(existing.tags);
+      const shippingId = order?.shipping?.id;
+      const hasShippingId =
+        shippingId !== undefined &&
+        shippingId !== null &&
+        String(shippingId).trim().length > 0;
+
+      const unchanged =
+        incomingDate !== null &&
+        incomingDate === existing.dateLastUpdated &&
+        incomingStatus !== null &&
+        incomingStatus === existing.status &&
+        incomingTags !== null &&
+        incomingTags === storedTags &&
+        (!hasShippingId || existing.shipmentHasStatus) &&
+        existing.syncRule === ML_SYNC_RULE_VERSION;
+
+      if (unchanged) {
+        result.skipped += 1;
+      } else {
+        ordersToEnrich.push(order);
+      }
+    }
+
+    if (result.skipped > 0 || result.skippedOtherUser > 0) {
+      console.log(
+        `[Sync] ⚡ Página ${pageNumber}: ${result.skipped} inalteradas e ` +
+          `${result.skippedOtherUser} de outro usuário; ` +
+          `${ordersToEnrich.length} exigem enriquecimento`,
+      );
+    }
+
+    // Fila contínua: assim que um pedido termina, o próximo começa, sem a
+    // barreira artificial dos antigos blocos de 10.
+    const shipments = await pMap(ordersToEnrich, 10, async (order: any) => {
+      const fallbackShipment =
+        typeof order?.shipping === "object" ? order.shipping : null;
+      const shippingId = order?.shipping?.id;
+      if (!shippingId) return fallbackShipment;
+
+      try {
+        const [shipmentResponse, costsResponse, slaResponse] = await Promise.all([
+          fetchWithRetry(
+            `${MELI_API_BASE}/shipments/${shippingId}`,
+            { headers },
+            3,
+            userId,
+          ),
+          fetchWithRetry(
+            `${MELI_API_BASE}/shipments/${shippingId}/costs`,
+            { headers },
+            3,
+            userId,
+          ).catch(() => null),
+          fetchWithRetry(
+            `${MELI_API_BASE}/shipments/${shippingId}/sla`,
+            { headers },
+            1,
+            undefined,
+            5000,
+          ).catch(() => null),
+        ]);
+
+        if (!shipmentResponse.ok) return fallbackShipment;
+        const shipmentData = await shipmentResponse.json();
+
+        // SLA continua best-effort e nunca descarta o shipment principal.
+        if (slaResponse?.ok) {
+          try {
+            shipmentData.sla = await slaResponse.json();
+          } catch {
+            // noop
+          }
+        }
+
+        if (costsResponse?.ok) {
+          const costsData = await costsResponse.json();
+          const senderCost = costsData.senders?.[0]?.cost;
+          if (senderCost !== undefined && senderCost !== null) {
+            shipmentData._seller_shipping_cost = senderCost;
+          }
+          const senderSave = costsData.senders?.[0]?.save;
+          if (senderSave !== undefined && senderSave !== null) {
+            shipmentData._seller_shipping_save = senderSave;
+          }
+          const senderDiscount = sumPromotedAmount(
+            costsData.senders?.[0]?.discounts,
+          );
+          if (senderDiscount !== null) {
+            shipmentData._seller_shipping_discount = senderDiscount;
+          }
+          const senderComp = costsData.senders?.[0]?.compensation;
+          if (senderComp !== undefined && senderComp !== null) {
+            shipmentData._seller_shipping_compensation = senderComp;
+          }
+          const receiverCost = costsData.receiver?.cost;
+          if (receiverCost !== undefined && receiverCost !== null) {
+            shipmentData._receiver_shipping_cost = receiverCost;
+          }
+          const receiverSave = costsData.receiver?.save;
+          if (receiverSave !== undefined && receiverSave !== null) {
+            shipmentData._receiver_shipping_save = receiverSave;
+          }
+          const receiverDiscount = sumPromotedAmount(
+            costsData.receiver?.discounts,
+          );
+          if (receiverDiscount !== null) {
+            shipmentData._receiver_shipping_discount = receiverDiscount;
+          }
+          const grossAmount = costsData.gross_amount;
+          if (grossAmount !== undefined && grossAmount !== null) {
+            shipmentData._costs_gross_amount = grossAmount;
+          }
+          const chargeFlex = costsData.senders?.[0]?.charges?.charge_flex;
+          if (chargeFlex !== undefined && chargeFlex !== null) {
+            shipmentData._charge_flex = chargeFlex;
+          }
+        }
+
+        return shipmentData;
+      } catch {
+        return fallbackShipment;
+      }
+    });
+
+    result.orders = ordersToEnrich
+      .map((order: any, index: number) => {
         if (!order) return null;
-        const shipment = shipments[idx] ?? undefined;
+        const shipment = shipments[index] ?? undefined;
         return {
           accountId: account.id,
           accountNickname: account.nickname || undefined,
@@ -689,87 +842,92 @@ export default class MeliSyncService {
           r.status === "fulfilled" ? r.value : orders[i]
         );
   
-        // OTIMIZA��O: Buscar shipments em batches menores (10 por vez)
-        const SHIPMENT_BATCH_SIZE = 10;
-        const shipments: any[] = new Array(orders.length).fill(null);
-  
-        for (let i = 0; i < orders.length; i += SHIPMENT_BATCH_SIZE) {
-          const batchOrders = orders.slice(i, i + SHIPMENT_BATCH_SIZE);
-          const batchResults = await Promise.allSettled(
-            batchOrders.map(async (o: any) => {
-              const sid = o?.shipping?.id;
-              if (!sid) return null;
-              try {
-                const [r, costsRes, slaRes] = await Promise.all([
-                  fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}`, { headers }, 3, userId),
-                  fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/costs`, { headers }, 3, userId).catch(() => null),
-                  fetchWithRetry(`${MELI_API_BASE}/shipments/${sid}/sla`, { headers }, 1, undefined, 5000).catch(() => null)
-                ]);
-                
-                if (!r.ok) return null;
-                const shipmentData = await r.json();
+        // Mesma fila contínua do fluxo incremental, preservando a ordem.
+        const shipments = await pMap(orders, 10, async (o: any) => {
+          const sid = o?.shipping?.id;
+          if (!sid) return null;
+          try {
+            const [r, costsRes, slaRes] = await Promise.all([
+              fetchWithRetry(
+                `${MELI_API_BASE}/shipments/${sid}`,
+                { headers },
+                3,
+                userId,
+              ),
+              fetchWithRetry(
+                `${MELI_API_BASE}/shipments/${sid}/costs`,
+                { headers },
+                3,
+                userId,
+              ).catch(() => null),
+              fetchWithRetry(
+                `${MELI_API_BASE}/shipments/${sid}/sla`,
+                { headers },
+                1,
+                undefined,
+                5000,
+              ).catch(() => null),
+            ]);
 
-                // SLA é enriquecimento best-effort: falha de endpoint ou JSON inválido
-                // não pode descartar o shipment principal nem o pedido.
-                if (slaRes && slaRes.ok) {
-                  try {
-                    shipmentData.sla = await slaRes.json();
-                  } catch {
-                    // noop
-                  }
-                }
-                
-                if (costsRes && costsRes.ok) {
-                  const costsData = await costsRes.json();
-                  const senderCost = costsData.senders?.[0]?.cost;
-                  if (senderCost !== undefined && senderCost !== null) {
-                    shipmentData._seller_shipping_cost = senderCost;
-                  }
-                  const senderSave = costsData.senders?.[0]?.save;
-                  if (senderSave !== undefined && senderSave !== null) {
-                    shipmentData._seller_shipping_save = senderSave;
-                  }
-                  const senderDiscount = sumPromotedAmount(costsData.senders?.[0]?.discounts);
-                  if (senderDiscount !== null) {
-                    shipmentData._seller_shipping_discount = senderDiscount;
-                  }
-                  const senderComp = costsData.senders?.[0]?.compensation;
-                  if (senderComp !== undefined && senderComp !== null) {
-                    shipmentData._seller_shipping_compensation = senderComp;
-                  }
-                  const receiverCost = costsData.receiver?.cost;
-                  if (receiverCost !== undefined && receiverCost !== null) {
-                    shipmentData._receiver_shipping_cost = receiverCost;
-                  }
-                  const receiverSave = costsData.receiver?.save;
-                  if (receiverSave !== undefined && receiverSave !== null) {
-                    shipmentData._receiver_shipping_save = receiverSave;
-                  }
-                  const receiverDiscount = sumPromotedAmount(costsData.receiver?.discounts);
-                  if (receiverDiscount !== null) {
-                    shipmentData._receiver_shipping_discount = receiverDiscount;
-                  }
-                  const grossAmount = costsData.gross_amount;
-                  if (grossAmount !== undefined && grossAmount !== null) {
-                    shipmentData._costs_gross_amount = grossAmount;
-                  }
-                  const chargeFlex = costsData.senders?.[0]?.charges?.charge_flex;
-                  if (chargeFlex !== undefined && chargeFlex !== null) {
-                    shipmentData._charge_flex = chargeFlex;
-                  }
-                }
-                return shipmentData;
+            if (!r.ok) return null;
+            const shipmentData = await r.json();
+
+            if (slaRes?.ok) {
+              try {
+                shipmentData.sla = await slaRes.json();
               } catch {
-                return null;
+                // noop
               }
-            })
-          );
-  
-          batchResults.forEach((result, idx) => {
-            shipments[i + idx] =
-              result.status === "fulfilled" ? result.value : null;
-          });
-        }
+            }
+
+            if (costsRes?.ok) {
+              const costsData = await costsRes.json();
+              const senderCost = costsData.senders?.[0]?.cost;
+              if (senderCost !== undefined && senderCost !== null) {
+                shipmentData._seller_shipping_cost = senderCost;
+              }
+              const senderSave = costsData.senders?.[0]?.save;
+              if (senderSave !== undefined && senderSave !== null) {
+                shipmentData._seller_shipping_save = senderSave;
+              }
+              const senderDiscount = sumPromotedAmount(
+                costsData.senders?.[0]?.discounts,
+              );
+              if (senderDiscount !== null) {
+                shipmentData._seller_shipping_discount = senderDiscount;
+              }
+              const senderComp = costsData.senders?.[0]?.compensation;
+              if (senderComp !== undefined && senderComp !== null) {
+                shipmentData._seller_shipping_compensation = senderComp;
+              }
+              const receiverCost = costsData.receiver?.cost;
+              if (receiverCost !== undefined && receiverCost !== null) {
+                shipmentData._receiver_shipping_cost = receiverCost;
+              }
+              const receiverSave = costsData.receiver?.save;
+              if (receiverSave !== undefined && receiverSave !== null) {
+                shipmentData._receiver_shipping_save = receiverSave;
+              }
+              const receiverDiscount = sumPromotedAmount(
+                costsData.receiver?.discounts,
+              );
+              if (receiverDiscount !== null) {
+                shipmentData._receiver_shipping_discount = receiverDiscount;
+              }
+              const grossAmount = costsData.gross_amount;
+              if (grossAmount !== undefined && grossAmount !== null) {
+                shipmentData._costs_gross_amount = grossAmount;
+              }
+              const chargeFlex = costsData.senders?.[0]?.charges?.charge_flex;
+              if (chargeFlex !== undefined && chargeFlex !== null) {
+                shipmentData._charge_flex = chargeFlex;
+              }
+            }
+            return shipmentData;
+          } catch {
+            return null;
+          }
+        });
   
         detailedOrders.forEach((order: any, idx: number) => {
           if (!order) return;

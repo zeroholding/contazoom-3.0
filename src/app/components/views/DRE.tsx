@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import gsap from "gsap";
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import Sidebar from "./ui/Sidebar";
 import Topbar from "./ui/Topbar";
 import HeaderDRE from "./ui/HeaderDRE";
@@ -29,6 +30,11 @@ type Categoria = {
 export default function DRE() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useAoSincronizarVendas(() => {
+    setRefreshKey((value) => value + 1);
+  });
 
   // Sync with localStorage after hydration
   useEffect(() => {
@@ -213,6 +219,7 @@ export default function DRE() {
         qs.set("meses", mesesParam);
         if (catsParam) qs.set("categorias", catsParam);
         qs.set("tipo", tipoVisualizacao);
+        if (refreshKey) qs.set("refresh", String(refreshKey));
 
         const res = await fetch(`/api/financeiro/dre/series?${qs}`, {
           credentials: "include",
@@ -233,7 +240,7 @@ export default function DRE() {
     return () => {
       aborted = true;
     };
-  }, [calcularMeses, categoriasSelecionadas, tipoVisualizacao]);
+  }, [calcularMeses, categoriasSelecionadas, tipoVisualizacao, refreshKey]);
 
   // Horizontal navigation controls for months table
   const scrollRef = useRef<HTMLDivElement | null>(null);

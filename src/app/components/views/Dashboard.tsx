@@ -24,6 +24,7 @@ import { UserGuidanceNotification } from "@/components/ui/user-guidance-notifica
 import { Faixa } from "./comum/shell";
 import { IconeAlerta, IconeFechar, IconeSeta } from "./comum/icones";
 import { useUserGuidance } from "@/hooks/useUserGuidance";
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import { useAuthContext } from "@/contexts/AuthContext";
 
 const FULL_W = "16rem";
@@ -93,12 +94,9 @@ export default function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
 
-  useEffect(() => {
-    const recarregarAposSync = () => setRefreshKey((value) => value + 1);
-    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-    return () =>
-      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-  }, []);
+  useAoSincronizarVendas(() => {
+    setRefreshKey((value) => value + 1);
+  });
 
   useEffect(() => {
     fetch('/api/sku/stats')

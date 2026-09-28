@@ -36,9 +36,8 @@ import FiltrosVendas, {
 } from "../views/ui/FiltrosVendas";
 import { COLUNAS_PADRAO, type ColunasVisiveis } from "../views/ui/colunasVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
-import { useToast } from "./ui/toaster";
 import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
-import ModalSyncVendas from "./ui/ModalSyncVendas";
+import { useSyncAll } from "@/contexts/SyncAllContext";
 import { LogoTikTok } from "./comum/logos";
 
 const FULL_W = "16rem";
@@ -54,26 +53,19 @@ const useIsoLayout =
 interface HeaderVendasTiktokProps {
   vendas?: any[];
   lastSyncedAt?: string | null;
-  isSyncing?: boolean;
-  onSyncOrders: (accountIds?: string[]) => void;
   contasConectadas?: any[];
-  progress?: any;
-  reloadVendas?: () => Promise<void>;
+  accountIds?: string[];
 }
 
 const HeaderVendasTiktok = ({
   vendas = [],
   lastSyncedAt = null,
-  isSyncing = false,
-  onSyncOrders,
   contasConectadas = [],
-  progress,
-  reloadVendas,
+  accountIds,
 }: HeaderVendasTiktokProps) => {
   const router = useRouter();
-  const { toast } = useToast();
+  const { running, statusUnavailable, startSync } = useSyncAll();
   const [showInfoDropdown, setShowInfoDropdown] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
 
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(false);
   const [newOrdersCount, setNewOrdersCount] = useState<number>(0);
@@ -130,19 +122,13 @@ const HeaderVendasTiktok = ({
     return () => clearInterval(id);
   }, [autoSyncEnabled, carregarNotificacoes]);
 
-  const handleOpenSyncModal = () => {
-    setShowSyncModal(true);
+  const handleSync = () => {
+    void startSync({ channels: ["TT"], accountIds });
     fetch("/api/notifications", {
       method: "DELETE",
       credentials: "include",
     }).catch((err) => console.error("Erro ao marcar notificações:", err));
     setNewOrdersCount(0);
-  };
-
-  const handleSyncComplete = async () => {
-    if (reloadVendas) {
-      await reloadVendas();
-    }
   };
 
   const formatDate = (dateString: string) => {
@@ -249,12 +235,17 @@ const HeaderVendasTiktok = ({
         </div>
 
         <button
-          onClick={handleOpenSyncModal}
+          onClick={handleSync}
           className="inline-flex items-center justify-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 w-full sm:w-auto"
-          disabled={isSyncing}
+          disabled={running || statusUnavailable}
+          title={
+            statusUnavailable
+              ? "Status da sincronização indisponível"
+              : "Sincronizar vendas do TikTok Shop"
+          }
         >
           <div className="flex items-center relative">
-            {isSyncing ? (
+            {running ? (
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-gray-700" />
             ) : (
               <svg
@@ -274,13 +265,13 @@ const HeaderVendasTiktok = ({
                 <path d="M9 11v-5a3 3 0 0 1 6 0v5" />
               </svg>
             )}
-            {newOrdersCount > 0 && !isSyncing && (
+            {newOrdersCount > 0 && !running && (
               <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse">
                 {newOrdersCount > 99 ? "99+" : newOrdersCount}
               </span>
             )}
           </div>
-          <span>{isSyncing ? "Sincronizando..." : "Sincronizar vendas"}</span>
+          <span>{running ? "Sincronizando..." : "Sincronizar vendas"}</span>
           {contasConectadas.length > 0 && (
             <div className="flex items-center -space-x-1">
               {contasConectadas.slice(0, 3).map((conta) => {
@@ -332,17 +323,6 @@ const HeaderVendasTiktok = ({
           </span>
         </div>
       )}
-
-      <ModalSyncVendas
-        isOpen={showSyncModal}
-        onClose={() => setShowSyncModal(false)}
-        platform={PLATAFORMA}
-        contas={contasConectadas}
-        onStartSync={onSyncOrders}
-        isSyncing={isSyncing}
-        progress={progress}
-        onSyncComplete={handleSyncComplete}
-      />
     </div>
   );
 };
@@ -377,11 +357,7 @@ export default function VendasTiktokShop() {
   const {
     vendas,
     lastSyncedAt,
-    isSyncing,
-    handleSyncOrders,
     contasConectadas,
-    progress,
-    reloadVendas,
   } = useVendas(PLATAFORMA);
 
   const handlePeriodoPersonalizadoChange = (dataInicio: Date, dataFim: Date) => {
@@ -534,11 +510,8 @@ export default function VendasTiktokShop() {
           <HeaderVendasTiktok
             vendas={vendas || []}
             lastSyncedAt={lastSyncedAt || null}
-            isSyncing={isSyncing || false}
-            onSyncOrders={handleSyncOrders}
             contasConectadas={contasConectadas || []}
-            progress={progress}
-            reloadVendas={reloadVendas}
+            accountIds={filtroConta !== "todas" ? [filtroConta] : undefined}
           />
 
           <FiltrosVendas
@@ -566,6 +539,7 @@ export default function VendasTiktokShop() {
           <TabelaVendas
             vendas={vendasFiltradas}
             platform={PLATAFORMA}
+            syncAccountIds={filtroConta !== "todas" ? [filtroConta] : undefined}
             colunasVisiveis={colunasVisiveis}
           />
         </section>

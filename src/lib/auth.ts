@@ -1,11 +1,20 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import bcrypt from "bcryptjs";
+import prisma from "@/lib/prisma";
 
 export interface SessionPayload extends JWTPayload {
   sub: string;
   email?: string;
   name?: string;
 }
+
+type AdminCacheEntry = {
+  isAdmin: boolean;
+  expiresAt: number;
+};
+
+const ADMIN_CACHE_TTL_MS = 30_000;
+const adminCache = new Map<string, AdminCacheEntry>();
 
 export function getAuthSecret(): string {
   const secret = process.env.JWT_SECRET?.trim();
@@ -97,24 +106,28 @@ export async function checkIsAdmin(email?: string, userId?: string): Promise<boo
   if (adminEmail && email && adminEmail.toLowerCase() === email.toLowerCase()) {
     return true;
   }
-  
-  // Verificação 2: Tem a role ADMIN no banco?
-  if (userId) {
-    try {
-      // Dynamic import to avoid circular dependencies if auth.ts is used elsewhere
-      const { PrismaClient } = await import('@prisma/client');
-      const tempPrisma = new PrismaClient();
-      const user = await tempPrisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true }
-      });
-      await tempPrisma.$disconnect();
-      return user?.role === "ADMIN";
-    } catch (e) {
-      console.error("Erro ao verificar role:", e);
-    }
-  }
-  
-  return false;
-}
 
+  // Verificação 2: Tem a role ADMIN no banco?
+  if (!userId) return false;
+
+  const now = Date.now();
+  const cached = adminCache.get(userId);
+  if (cached && cached.expiresAt > now) return cached.isAdmin;
+  if (cached) adminCache.delete(userId);
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    const isAdmin = user?.role === "ADMIN";
+    adminCache.set(userId, {
+      isAdmin,
+      expiresAt: now + ADMIN_CACHE_TTL_MS,
+    });
+    return isAdmin;
+  } catch (error) {
+    console.error("Erro ao verificar role:", error);
+    return false;
+  }
+}

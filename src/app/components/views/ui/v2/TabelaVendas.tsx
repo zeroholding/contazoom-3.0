@@ -7,6 +7,7 @@ import VendasPagination from "../VendasPagination";
 import ResumoPorConta, { type LinhaResumoConta } from "../ResumoPorConta";
 import type { ColunasVisiveis } from "../colunasVendas";
 import { useToast } from "../toaster";
+import { useSyncAll } from "@/contexts/SyncAllContext";
 import {
   ehMarketplace,
   useVendasV2,
@@ -35,6 +36,7 @@ interface TabelaVendasProps {
   onToggleInfoDropdown?: () => void;
   dropdownRef?: React.RefObject<HTMLDivElement>;
   colunasVisiveis?: Partial<ColunasVisiveis>;
+  syncAccountIds?: string[];
   /**
    * Troca o tamanho da página. Sobe para a tela porque o `limit` faz parte dos
    * filtros que vão à API (`useVendaFilters`), não do estado desta tabela.
@@ -46,10 +48,16 @@ export default function TabelaVendasV2({
   platform = "Mercado Livre",
   syncProgress = null,
   colunasVisiveis,
+  syncAccountIds,
   onPageChange,
   onItemsPerPageChange,
 }: TabelaVendasProps) {
   const { toast } = useToast();
+  const {
+    startSync,
+    running: globalSyncRunning,
+    statusUnavailable,
+  } = useSyncAll();
   const [isStartingSync, setIsStartingSync] = useState(false);
 
   const handleConnectAccountWithToast = () => {
@@ -83,11 +91,9 @@ export default function TabelaVendasV2({
     isTableLoading,
     isLoadingAccounts,
     handleConnectAccount,
-    handleSyncOrders,
     isSyncing,
     syncProgress: hookSyncProgress,
     progress,
-    connect,
   } = useVendasContext();
 
   const effectiveSyncProgress: SyncProgressTotals | null =
@@ -247,7 +253,7 @@ export default function TabelaVendasV2({
       .sort((a, b) => b.total - a.total);
 
     // Enquanto está sincronizando, injeta informações de progresso
-    if (isSyncing || isStartingSync) {
+    if (isSyncing || globalSyncRunning || isStartingSync) {
       const sse: any = progress || {};
       const steps: any[] | undefined = Array.isArray(sse.steps)
         ? sse.steps
@@ -318,6 +324,7 @@ export default function TabelaVendasV2({
   }, [
     vendasProcessadas,
     isSyncing,
+    globalSyncRunning,
     isStartingSync,
     progress,
     mergedSync.fetched,
@@ -384,24 +391,24 @@ export default function TabelaVendasV2({
 
     return (
       <button
-        onClick={() => {
+        onClick={async () => {
           setIsStartingSync(true);
-          setTimeout(() => setIsStartingSync(false), 10000);
-
-          if (platform === "Mercado Livre" || platform === "Shopee") {
-            connect();
-            setTimeout(() => {
-              handleSyncOrders(undefined, undefined, true);
-            }, 500);
-          } else {
-            handleSyncOrders(undefined, undefined, true);
-          }
+          const channels =
+            platform === "Mercado Livre"
+              ? (["ML"] as const)
+              : platform === "Shopee"
+                ? (["SP"] as const)
+                : platform === "TikTok Shop"
+                  ? (["TT"] as const)
+                  : undefined;
+          await startSync({ channels: channels ? [...channels] : undefined, accountIds: syncAccountIds });
+          setIsStartingSync(false);
         }}
-        disabled={isSyncing || isStartingSync}
+        disabled={isSyncing || globalSyncRunning || isStartingSync || statusUnavailable}
         className="inline-flex items-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         <div className="flex items-center">
-          {isSyncing || isStartingSync ? (
+          {isSyncing || globalSyncRunning || isStartingSync ? (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700"></div>
           ) : (
             <svg
@@ -423,7 +430,7 @@ export default function TabelaVendasV2({
           )}
         </div>
         <span>
-          {isSyncing || isStartingSync
+          {isSyncing || globalSyncRunning || isStartingSync
             ? "Sincronizando..."
             : "Sincronizar Vendas"}
         </span>

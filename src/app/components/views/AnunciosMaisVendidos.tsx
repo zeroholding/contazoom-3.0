@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import {
   Aviso,
   AvisoBackfill,
@@ -109,6 +110,10 @@ export default function AnunciosMaisVendidos() {
     ordem,
     pagina,
     porPagina,
+  });
+
+  useAoSincronizarVendas(() => {
+    void atualizar();
   });
 
   const resumo = dados?.resumo ?? RESUMO_VAZIO;

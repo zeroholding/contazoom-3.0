@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import {
   FILTROS_PADRAO,
   type FiltrosExpedicao,
@@ -126,12 +127,7 @@ export function useExpedicao(filtros: FiltrosExpedicao): EstadoExpedicao {
 
   const atualizar = useCallback(() => setRecarga((n) => n + 1), []);
 
-  useEffect(() => {
-    const recarregarAposSync = () => atualizar();
-    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-    return () =>
-      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-  }, [atualizar]);
+  useAoSincronizarVendas(() => atualizar());
 
   return { dados, carregando, atualizando, erro, atualizar };
 }

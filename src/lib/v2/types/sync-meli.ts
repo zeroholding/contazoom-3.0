@@ -25,12 +25,12 @@ export type MeliOrderFreight = {
   adjustmentSource: string | null;
 
   sellerShippingCost: number | null;
-  sellerShippingSave: number | null; // senders[0].save do /costs endpoint
-  sellerShippingDiscount: number | null; // soma de senders[0].discounts[].promoted_amount
-  receiverShippingCost: number | null; // receiver.cost do /costs endpoint (frete pago pelo comprador no FLEX)
-  receiverShippingSave: number | null; // receiver.save do /costs endpoint
-  receiverShippingDiscount: number | null; // soma de receiver.discounts[].promoted_amount
-  costsGrossAmount: number | null;  // gross_amount do /costs endpoint (custo bruto, nao receita)
+  sellerShippingSave: number | null;
+  sellerShippingDiscount: number | null;
+  receiverShippingCost: number | null;
+  receiverShippingSave: number | null;
+  receiverShippingDiscount: number | null;
+  costsGrossAmount: number | null;
 };
 
 export type MeliOrderPayload = {
@@ -111,4 +111,16 @@ export type FetchOrdersPageResult = {
   pageNumber: number;
   total: number | null;
   orders: MeliOrderPayload[];
+  /** Itens examinados na página, inclusive os pulados. */
+  fetched: number;
+  /** Itens inalterados que dispensaram enriquecimento e persistência. */
+  skipped: number;
+  /** Itens pertencentes a outro usuário, que nunca podem ser sobrescritos. */
+  skippedOtherUser: number;
+  /** Distingue uma página vazia válida de uma página que não pôde ser lida. */
+  failed: boolean;
+  failure?: {
+    message: string;
+    status?: number;
+  };
 };

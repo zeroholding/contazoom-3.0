@@ -364,11 +364,11 @@ async function saveSalesToDatabase(
             // BATCH CREATE: insere m�ltiplos registros de uma vez
             if (toCreate.length > 0) {
                 try {
-                    await prisma.meliVenda.createMany({
+                    const createResult = await prisma.meliVenda.createMany({
                     data: toCreate.map((d) => d!.createData),
                     skipDuplicates: true, // Evita erro se j� existir
                     });
-                    saved += toCreate.length;
+                    saved += createResult.count;
                 } catch (createError) {
                     console.error(`[Sync] Erro em batch create:`, createError);
                     errors += toCreate.length;
@@ -398,6 +398,7 @@ async function saveSalesToDatabase(
                         return prisma.meliVenda.update({
                             where: { orderId: d!.orderId },
                             data: { ...updateData, atualizadoEm: new Date() },
+                            select: { id: true },
                         });
                     })
                     );

@@ -8,10 +8,9 @@
  * 1. O projeto não tem `middleware.ts`. O bloco de verificação está copiado em
  *    cerca de quinze `route.ts`, e cada cópia é uma chance de a regra divergir.
  *
- * 2. `checkIsAdmin` em `src/lib/auth.ts` faz `new PrismaClient()` e
- *    `$disconnect()` A CADA CHAMADA, ignorando o singleton de `src/lib/prisma.ts`.
- *    Uma conexão nova por request. Aqui a leitura usa o singleton e tem cache
- *    curto em memória.
+ * 2. Consultas de autorização usam o singleton de `src/lib/prisma.ts`, e
+ *    este guard mantém um cache curto em memória para evitar leituras repetidas
+ *    da tabela `usuario` a cada conjunto de requests da tela.
  *
  * 3. O JWT não carrega `role` (o payload é `{ sub, email, name }`), então o papel
  *    só existe no banco. Sem cache, cada tela do módulo faria várias leituras da

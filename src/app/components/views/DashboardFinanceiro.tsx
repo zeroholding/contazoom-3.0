@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useLayoutEffect, useState } from "react";
 import gsap from "gsap";
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import Sidebar from "../views/ui/Sidebar";
 import Topbar from "../views/ui/Topbar";
 import HeaderFinanceiro from "../views/ui/HeaderFinanceiro";
@@ -61,8 +62,15 @@ export default function DashboardFinanceiro() {
 
   const [refreshKey, setRefreshKey] = useState(0);
 
+  useAoSincronizarVendas(() => {
+    setRefreshKey((value) => value + 1);
+  });
+
   useEffect(() => {
-    fetch('/api/sku/stats')
+    const url = refreshKey
+      ? `/api/sku/stats?refresh=${refreshKey}`
+      : "/api/sku/stats";
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         const count = Number(data.skusSemCusto || 0);

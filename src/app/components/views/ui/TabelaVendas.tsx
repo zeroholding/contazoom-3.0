@@ -17,6 +17,7 @@ import {
 import { COLUNAS_PADRAO, type ColunasVisiveis } from "./colunasVendas";
 import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
 import { useToast } from "./toaster";
+import { useSyncAll } from "@/contexts/SyncAllContext";
 import { ehMarketplace, useVendas, type PlataformaVendas } from "@/hooks/useVendas";
 import {
   calculateShopeeFinancials,
@@ -73,6 +74,7 @@ interface TabelaVendasProps {
   filtroModalidadeEnvio?: FiltroModalidadeEnvio;
   filtroConta?: string;
   colunasVisiveis?: ColunasVisiveis;
+  syncAccountIds?: string[];
   dataInicioPersonalizada?: Date | null;
   dataFimPersonalizada?: Date | null;
 }
@@ -183,12 +185,18 @@ export default function TabelaVendas({
   filtroModalidadeEnvio = "todos",
   filtroConta = "todas",
   colunasVisiveis = COLUNAS_PADRAO,
+  syncAccountIds,
   dataInicioPersonalizada = null,
   dataFimPersonalizada = null,
   syncProgress = null,
   vendas: propVendas, // Recebe vendas via prop (renomeado para evitar conflito)
 }: TabelaVendasProps) {
   const { toast } = useToast();
+  const {
+    startSync,
+    running: globalSyncRunning,
+    statusUnavailable,
+  } = useSyncAll();
   const [isStartingSync, setIsStartingSync] = useState(false);
 
   const handleConnectAccountWithToast = () => {
@@ -221,13 +229,9 @@ export default function TabelaVendas({
     isTableLoading,
     isLoadingAccounts,
     handleConnectAccount,
-    handleSyncOrders,
     isSyncing,
     syncProgress: hookSyncProgress,
-    isConnected,
     progress,
-    connect,
-    disconnect,
   } = useVendas(platform, {
     autoConnectSSE: true, // Conectar SSE automaticamente para detectar syncs em andamento
   });
@@ -659,7 +663,7 @@ export default function TabelaVendas({
       .sort((a, b) => b.total - a.total);
 
     // Enquanto está sincronizando, injeta informações de progresso
-    if (isSyncing || isStartingSync) {
+    if (isSyncing || globalSyncRunning || isStartingSync) {
       const sse: any = progress || {};
       const steps: any[] | undefined = Array.isArray(sse.steps)
         ? sse.steps
@@ -730,6 +734,7 @@ export default function TabelaVendas({
   }, [
     vendasFiltradas,
     isSyncing,
+    globalSyncRunning,
     isStartingSync,
     progress,
     mergedSync.fetched,
@@ -806,24 +811,24 @@ export default function TabelaVendas({
 
     return (
       <button
-        onClick={() => {
+        onClick={async () => {
           setIsStartingSync(true);
-          setTimeout(() => setIsStartingSync(false), 10000);
-
-          if (platform === "Mercado Livre" || platform === "Shopee") {
-            connect();
-            setTimeout(() => {
-              handleSyncOrders(undefined, undefined, true);
-            }, 500);
-          } else {
-            handleSyncOrders(undefined, undefined, true);
-          }
+          const channels =
+            platform === "Mercado Livre"
+              ? (["ML"] as const)
+              : platform === "Shopee"
+                ? (["SP"] as const)
+                : platform === "TikTok Shop"
+                  ? (["TT"] as const)
+                  : undefined;
+          await startSync({ channels: channels ? [...channels] : undefined, accountIds: syncAccountIds });
+          setIsStartingSync(false);
         }}
-        disabled={isSyncing || isStartingSync}
+        disabled={isSyncing || globalSyncRunning || isStartingSync || statusUnavailable}
         className="inline-flex items-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         <div className="flex items-center">
-          {isSyncing || isStartingSync ? (
+          {isSyncing || globalSyncRunning || isStartingSync ? (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-700"></div>
           ) : (
             <svg
@@ -849,7 +854,7 @@ export default function TabelaVendas({
           )}
         </div>
         <span>
-          {isSyncing || isStartingSync ? "Sincronizando..." : "Sincronizar Vendas"}
+          {isSyncing || globalSyncRunning || isStartingSync ? "Sincronizando..." : "Sincronizar Vendas"}
         </span>
       </button>
     );

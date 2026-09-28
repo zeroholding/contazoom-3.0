@@ -18,7 +18,7 @@ import FiltrosVendas, {
 import { COLUNAS_PADRAO, type ColunasVisiveis } from "../views/ui/colunasVendas";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import { useToast } from "./ui/toaster";
-import ModalSyncVendas from "./ui/ModalSyncVendas";
+import { useSyncAll } from "@/contexts/SyncAllContext";
 import { useBackendDetection } from "@/hooks/useBackendDetection";
 
 const FULL_W = "16rem";
@@ -33,27 +33,21 @@ const useIsoLayout =
 interface HeaderVendasMercadolivreProps {
   vendas?: any[];
   lastSyncedAt?: string | null;
-  isSyncing?: boolean;
-  onSyncOrders: (accountIds?: string[]) => void;
   contasConectadas?: any[];
-  progress?: any;
-  reloadVendas?: () => Promise<void>;
+  accountIds?: string[];
   backendUrl?: string;
 }
 
 const HeaderVendasMercadolivre = ({
   vendas = [],
   lastSyncedAt = null,
-  isSyncing = false,
-  onSyncOrders,
   contasConectadas = [],
-  progress,
-  reloadVendas,
+  accountIds,
   backendUrl = ""
 }: HeaderVendasMercadolivreProps) => {
   const router = useRouter();
+  const { running, statusUnavailable, startSync } = useSyncAll();
   const [showInfoDropdown, setShowInfoDropdown] = useState(false);
-  const [showSyncModal, setShowSyncModal] = useState(false);
 
   // Hook para dropdown de informações
   const infoDropdown = useSmartDropdown<HTMLButtonElement>({
@@ -63,22 +57,6 @@ const HeaderVendasMercadolivre = ({
     offset: 8,
     minDistanceFromEdge: 16
   });
-
-  // Função para abrir modal
-  const handleOpenSyncModal = () => {
-    setShowSyncModal(true);
-  };
-
-  const handleSyncComplete = async () => {
-    // Callback quando sincronização completa com sucesso
-    console.log("Sincronização concluída com sucesso - recarregando vendas...");
-    // Recarregar vendas para atualizar a tabela
-    if (reloadVendas) {
-      await reloadVendas();
-    }
-    // Fechar modal (já acontece automaticamente no ModalSyncVendas)
-  };
-
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
@@ -204,13 +182,20 @@ const HeaderVendasMercadolivre = ({
       <div className="flex items-center gap-3 w-full sm:w-auto">
         {/* Botão de Sincronização */}
         <button
-          onClick={handleOpenSyncModal}
+          onClick={() =>
+            void startSync({ channels: ["ML"], accountIds })
+          }
           className="inline-flex items-center justify-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 w-full sm:w-auto"
-          disabled={isSyncing}
+          disabled={running || statusUnavailable}
+          title={
+            statusUnavailable
+              ? "Status da sincronização indisponível"
+              : "Sincronizar vendas do Mercado Livre"
+          }
         >
           {/* Ícone */}
           <div className="flex items-center relative">
-            {isSyncing ? (
+            {running ? (
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-gray-700"></div>
             ) : (
               <svg
@@ -233,7 +218,7 @@ const HeaderVendasMercadolivre = ({
           </div>
 
           {/* Texto */}
-          <span>{isSyncing ? "Sincronizando..." : "Sincronizar vendas"}</span>
+          <span>{running ? "Sincronizando..." : "Sincronizar vendas"}</span>
 
           {/* Avatares das contas conectadas */}
           {contasConectadas.length > 0 && (
@@ -260,18 +245,6 @@ const HeaderVendasMercadolivre = ({
           )}
         </button>
       </div>
-
-      {/* Modal de Sincronização */}
-      <ModalSyncVendas
-        isOpen={showSyncModal}
-        onClose={() => setShowSyncModal(false)}
-        platform="Mercado Livre"
-        contas={contasConectadas}
-        onStartSync={onSyncOrders}
-        isSyncing={isSyncing}
-        progress={progress}
-        onSyncComplete={handleSyncComplete}
-      />
     </div>
   );
 };
@@ -313,15 +286,7 @@ export default function VendasMercadolivre() {
   const {
     vendas,
     lastSyncedAt,
-    isSyncing,
-    handleSyncOrders,
     contasConectadas,
-    isConnected,
-    progress,
-    syncProgress,
-    connect,
-    disconnect,
-    reloadVendas
   } = useVendas("Mercado Livre");
 
   // Função para lidar com mudanças no período personalizado
@@ -479,11 +444,8 @@ export default function VendasMercadolivre() {
           <HeaderVendasMercadolivre
             vendas={vendas || []}
             lastSyncedAt={lastSyncedAt || null}
-            isSyncing={isSyncing || false}
-            onSyncOrders={handleSyncOrders}
             contasConectadas={contasConectadas || []}
-            progress={progress}
-            reloadVendas={reloadVendas}
+            accountIds={filtroConta !== "todas" ? [filtroConta] : undefined}
             backendUrl={`${backendInfo.statusIcon} ${backendInfo.source} - ${backendInfo.url}`}
           />
           
@@ -518,8 +480,7 @@ export default function VendasMercadolivre() {
           platform="Mercado Livre" 
           vendas={vendas}
           isLoading={isLoading}
-          isSyncing={isSyncing}
-          syncProgress={progress}
+          syncAccountIds={filtroConta !== "todas" ? [filtroConta] : undefined}
           filtroAtivo={filtroAtivo}
           periodoAtivo={periodoAtivo}
           filtroADS={filtroADS}

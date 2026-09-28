@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
 import {
   useVendasSyncProgress,
   VendasSyncProgress,
@@ -328,13 +329,8 @@ export function useVendasV2(
           syncCompleteProcessedRef.current = true; // Marcar como processado
           pendingAccountsRef.current = 0;
 
-          // Recarregar vendas do banco após sincronização completa
-          loadVendasFromDatabase().catch((err) => {
-            console.error(
-              "[useVendas] Erro ao recarregar vendas após sync_complete:",
-              err,
-            );
-          });
+          // A lista é recarregada pelo evento global somente depois do backfill
+          // e da invalidação dos caches derivados.
 
           // Resetar estados de loading
           setIsSyncing(false);
@@ -854,10 +850,12 @@ export function useVendasV2(
   // busca no mount). Liberada ao terminar, então reloads legítimos depois
   // continuam funcionando.
   const inFlightLoadKeyRef = useRef<string | null>(null);
+  const filtrosAtuaisRef = useRef<VendaFilters>(DEFAULT_FILTERS);
 
   const loadVendasFromDatabase = useCallback(async (
     filters: VendaFilters = DEFAULT_FILTERS,
   ) => {
+    filtrosAtuaisRef.current = filters;
     const loadKey = `${platform}::${JSON.stringify(filters)}`;
     if (inFlightLoadKeyRef.current === loadKey) {
       return; // já há uma carga idêntica em andamento
@@ -975,14 +973,9 @@ export function useVendasV2(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform]);
 
-  useEffect(() => {
-    const recarregarAposSync = () => {
-      void loadVendasFromDatabase();
-    };
-    window.addEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-    return () =>
-      window.removeEventListener("contazoom:vendas-sincronizadas", recarregarAposSync);
-  }, [loadVendasFromDatabase]);
+  useAoSincronizarVendas(() => {
+    void loadVendasFromDatabase(filtrosAtuaisRef.current);
+  });
 
   return {
     vendas: vendas || [],
