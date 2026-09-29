@@ -31,16 +31,15 @@ import {
 } from "@/lib/sync-cursor";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 3600;
 
-const MAX_VENDAS_POR_CONTA = 10_000;
 const ACCOUNT_CONCURRENCY = 3;
 const WINDOW_CONCURRENCY = 2;
 const DETAIL_CONCURRENCY = 4;
 const ESCROW_CONCURRENCY = 10;
 const UPSERT_CONCURRENCY = 8;
+const ORDER_PIPELINE_CHUNK_SIZE = 100;
 const MAX_WINDOW_SECONDS = 15 * 24 * 60 * 60;
-const FALLBACK_INCREMENTAL_MS = 15 * 24 * 60 * 60 * 1000;
 const NON_TERMINAL_HEAL_LIMIT = 500;
 const FINANCIAL_HEAL_LIMIT = 200;
 const HISTORICAL_START = new Date("2024-01-01T00:00:00.000Z");
@@ -75,6 +74,11 @@ type AccountRunResult = {
   skipped: number;
   error?: SyncError;
 };
+
+type SyncOwnership = { lost: boolean };
+
+const LEASE_LOST_MESSAGE =
+  "lock da sincronização perdido; execução interrompida antes do próximo lote";
 
 const existingVendaSelect = {
   orderId: true,
@@ -134,14 +138,16 @@ function errorMessage(error: unknown): string {
 }
 
 function getPartnerCredentials() {
-  return {
-    partnerId:
-      process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "",
-    partnerKey:
-      process.env.SHOPEE_PARTNER_KEY ||
-      process.env.SHOPEE_CLIENT_SECRET ||
-      "",
-  };
+  const partnerId =
+    process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID || "";
+  const partnerKey =
+    process.env.SHOPEE_PARTNER_KEY ||
+    process.env.SHOPEE_CLIENT_SECRET ||
+    "";
+  if (!partnerId || !partnerKey) {
+    throw new Error("Credenciais da integração Shopee não configuradas");
+  }
+  return { partnerId, partnerKey };
 }
 
 const refreshInFlight = new Map<
@@ -302,8 +308,15 @@ function buildWindows(
     startSeconds = endSeconds + 1;
   }
 
-  return windows;
+  // Primeira carga começa pelo período mais recente. Assim o usuário enxerga
+  // as vendas atuais em segundos enquanto o histórico segue preenchendo atrás.
+  return windows.reverse();
 }
+
+type ListedBatchHandler = (
+  orderIds: string[],
+  progress: { windowsDone: number; windowsTotal: number },
+) => Promise<void>;
 
 async function fetchListedOrders(
   account: ShopeeAccountRef,
@@ -311,6 +324,8 @@ async function fetchListedOrders(
   until: Date,
   timeRangeField: ShopeeOrderTimeRangeField,
   userId: string,
+  onBatch?: ListedBatchHandler,
+  shouldContinue?: () => boolean,
 ): Promise<{
   byOrderId: Map<string, AnyRecord>;
   failures: PipelineFailure[];
@@ -318,13 +333,20 @@ async function fetchListedOrders(
   const windows = buildWindows(since, until);
   const byOrderId = new Map<string, AnyRecord>();
   const failures: PipelineFailure[] = [];
-  let truncated = false;
+  // Listagem e processamento trabalham como uma esteira: enquanto um lote faz
+  // detalhes/escrow/gravação, as próximas janelas já são listadas. O pipeline
+  // permanece sequencial para não multiplicar a concorrência financeira.
+  let batchProcessing: Promise<void> = Promise.resolve();
 
   console.log(
     `[Shopee Sync] ${account.shop_id}: ${windows.length} janela(s) por ${timeRangeField}`,
   );
 
   for (let index = 0; index < windows.length; index += WINDOW_CONCURRENCY) {
+    if (shouldContinue && !shouldContinue()) {
+      failures.push({ stage: "save", message: LEASE_LOST_MESSAGE });
+      break;
+    }
     const batch = windows.slice(index, index + WINDOW_CONCURRENCY);
     const results = await pMap(batch, WINDOW_CONCURRENCY, (window) =>
       fetchListWindow(
@@ -335,6 +357,7 @@ async function fetchListedOrders(
       ),
     );
 
+    const batchOrderIds: string[] = [];
     for (const result of results) {
       if (result.failure) failures.push(result.failure);
 
@@ -343,14 +366,24 @@ async function fetchListedOrders(
         if (!orderId) continue;
 
         const previous = byOrderId.get(orderId);
-        if (!previous && byOrderId.size >= MAX_VENDAS_POR_CONTA) {
-          truncated = true;
-          break;
-        }
+        if (!previous) batchOrderIds.push(orderId);
         byOrderId.set(orderId, preferNewestOrder(previous, order));
       }
+    }
 
-      if (truncated) break;
+    if (onBatch && batchOrderIds.length > 0) {
+      const idsToProcess = [...batchOrderIds];
+      const progress = {
+        windowsDone: Math.min(index + batch.length, windows.length),
+        windowsTotal: windows.length,
+      };
+      batchProcessing = batchProcessing
+        .then(() => onBatch(idsToProcess, progress))
+        .catch((error) => {
+          const message = `pipeline do lote falhou: ${errorMessage(error)}`;
+          failures.push({ stage: "save", message });
+          console.error(`[Shopee Sync] ${account.shop_id}: ${message}`, error);
+        });
     }
 
     sendProgressToUser(userId, {
@@ -364,26 +397,11 @@ async function fetchListedOrders(
       accountNickname: `Loja ${account.shop_id}`,
     });
 
-    if (truncated) break;
-    if (
-      byOrderId.size >= MAX_VENDAS_POR_CONTA &&
-      index + batch.length < windows.length
-    ) {
-      truncated = true;
-      break;
-    }
   }
 
-  if (truncated) {
-    const message = `limite de ${MAX_VENDAS_POR_CONTA} pedidos atingido`;
-    failures.push({ stage: "list", message });
-    sendProgressToUser(userId, {
-      type: "sync_warning",
-      message: `Loja ${account.shop_id}: ${message}; cursor nao sera avancado.`,
-      errorCode: "MAX_VENDAS_REACHED",
-      accountId: account.id,
-    });
-  }
+  // Todas as janelas podem já estar listadas, mas o último lote ainda pode estar
+  // salvando. A conta só termina (e o cursor só avança) depois de drenar a esteira.
+  await batchProcessing;
 
   return { byOrderId, failures };
 }
@@ -410,7 +428,7 @@ async function findFinancialHealOrderIds(accountId: string): Promise<string[]> {
         OR payment_details->>'financialRuleVersion' IS DISTINCT FROM ${SHOPEE_FINANCIAL_RULE_VERSION}
         OR COALESCE(payment_details->>'financialSyncPending', 'false') = 'true'
       )
-    ORDER BY data_venda DESC
+    ORDER BY atualizado_em ASC, data_venda DESC
     LIMIT ${FINANCIAL_HEAL_LIMIT}
   `;
   return rows.map((row) => row.order_id).filter(Boolean);
@@ -858,7 +876,7 @@ async function persistVendas(
       completed += 1;
       if (completed % 50 === 0 || completed === eligible.length) {
         sendProgressToUser(userId, {
-          type: "sync_progress",
+          type: "sync_save_progress",
           message: `Loja ${account.shop_id}: ${completed}/${eligible.length} gravacoes`,
           current: completed,
           total: eligible.length,
@@ -890,11 +908,193 @@ function clampHistoricalStart(date: Date): Date {
   return new Date(Math.max(date.getTime(), HISTORICAL_START.getTime()));
 }
 
+type OrderPipelineResult = {
+  expected: number;
+  fetched: number;
+  saved: number;
+  skipped: number;
+  failures: PipelineFailure[];
+};
+
+async function processOrderChunk(
+  account: ShopeeAccountRef,
+  userId: string,
+  orderIds: string[],
+): Promise<OrderPipelineResult> {
+  const uniqueOrderIds = Array.from(new Set(orderIds));
+  const failures: PipelineFailure[] = [];
+
+  // A consulta é global por orderId porque a coluna é única no banco inteiro.
+  // A checagem abaixo impede uma loja conectada em dois usuários de regravar a
+  // venda do outro usuário.
+  const existingRows = await fetchExistingVendas(uniqueOrderIds);
+  const existingByOrderId = new Map(
+    existingRows.map((row) => [row.orderId, row]),
+  );
+  const allowedOrderIds: string[] = [];
+  for (const orderId of uniqueOrderIds) {
+    const existing = existingByOrderId.get(orderId);
+    if (
+      existing &&
+      (existing.userId !== userId ||
+        existing.shopeeAccountId !== account.id)
+    ) {
+      failures.push({
+        stage: "ownership",
+        orderId,
+        message: `pedido pertence a outro usuario/conta (${existing.userId}/${existing.shopeeAccountId})`,
+      });
+    } else {
+      allowedOrderIds.push(orderId);
+    }
+  }
+
+  const details = await fetchOrderDetails(account, allowedOrderIds);
+  failures.push(...details.failures);
+
+  // Cadastro de SKU é acessório: uma falha não pode jogar fora o pedido que já
+  // veio da Shopee. A próxima sincronização tenta descobrir o SKU novamente.
+  try {
+    const skuResult = await registerDiscoveredSkus(
+      userId,
+      collectSkuCandidatesFromShopeeOrders(details.orders, account),
+    );
+    if (skuResult.created > 0) {
+      console.log(
+        `[SKU Discovery][Shopee] ${account.shop_id}: ${skuResult.created} SKU(s) criados`,
+      );
+    }
+  } catch (error) {
+    console.warn(
+      `[SKU Discovery][Shopee] ${account.shop_id}: falha não bloqueante`,
+      error,
+    );
+  }
+
+  const escrow = await enrichWithEscrow(
+    account,
+    details.orders,
+    existingByOrderId,
+  );
+  failures.push(...escrow.failures);
+
+  const vendaRecords: ShopeeVendaRecord[] = [];
+  for (const item of escrow.enriched) {
+    try {
+      vendaRecords.push(orderToVenda(item, account, userId));
+    } catch (error) {
+      failures.push({
+        stage: "finance",
+        orderId: stringValue(item.order.order_sn),
+        message: errorMessage(error),
+      });
+    }
+  }
+
+  const persistence = await persistVendas(vendaRecords, userId, account);
+  failures.push(...persistence.failures);
+
+  return {
+    expected: uniqueOrderIds.length,
+    fetched: details.orders.length,
+    saved: persistence.saved,
+    skipped: escrow.skipped,
+    failures,
+  };
+}
+
+/**
+ * Detalha, calcula e grava no máximo 100 pedidos por vez.
+ *
+ * Antes a primeira carga guardava milhares de pedidos na memória e só fazia o
+ * primeiro INSERT após terminar 67 janelas + todos os escrows. Com esta barreira
+ * curta, as vendas recentes aparecem já no primeiro lote e uma queda refaz no
+ * máximo o lote corrente (os já gravados são reconhecidos e reaproveitados).
+ */
+async function processOrderIdsInChunks(
+  account: ShopeeAccountRef,
+  userId: string,
+  orderIds: string[],
+  phase: string,
+  ownership: SyncOwnership,
+): Promise<OrderPipelineResult> {
+  const ids = Array.from(new Set(orderIds));
+  const total: OrderPipelineResult = {
+    expected: ids.length,
+    fetched: 0,
+    saved: 0,
+    skipped: 0,
+    failures: [],
+  };
+
+  for (let index = 0; index < ids.length; index += ORDER_PIPELINE_CHUNK_SIZE) {
+    if (ownership.lost) {
+      total.failures.push({ stage: "save", message: LEASE_LOST_MESSAGE });
+      break;
+    }
+    const chunk = ids.slice(index, index + ORDER_PIPELINE_CHUNK_SIZE);
+    let result: OrderPipelineResult;
+    try {
+      result = await processOrderChunk(account, userId, chunk);
+    } catch (error) {
+      const message = `chunk ${index / ORDER_PIPELINE_CHUNK_SIZE + 1} falhou: ${errorMessage(error)}`;
+      total.failures.push({ stage: "save", message });
+      console.error(`[Shopee Sync] ${account.shop_id}: ${message}`, error);
+      break;
+    }
+    total.fetched += result.fetched;
+    total.saved += result.saved;
+    total.skipped += result.skipped;
+    total.failures.push(...result.failures);
+
+    if (ownership.lost) {
+      total.failures.push({ stage: "save", message: LEASE_LOST_MESSAGE });
+    }
+
+    if (result.saved > 0) {
+      // O evento do lote só sai depois de apagar a resposta antiga do servidor.
+      // A tela pode recarregar imediatamente sem receber o cache de 0 vendas.
+      invalidateVendasCache(userId);
+    }
+
+    const processed = Math.min(index + chunk.length, ids.length);
+    const blocking = result.failures.filter(
+      (failure) => failure.stage !== "escrow",
+    );
+    console.log(
+      `[Shopee Sync] ${account.shop_id}: ${phase} ${processed}/${ids.length} ` +
+        `(${result.saved} salvas, ${result.skipped} reaproveitadas, ` +
+        `${result.failures.length} falhas; ${blocking.length} bloqueantes)`,
+    );
+    if (blocking.length > 0) {
+      console.error(
+        `[Shopee Sync] ${account.shop_id}: ${summarizeFailures(blocking)}`,
+      );
+    }
+
+    if (ownership.lost) break;
+  }
+
+  return total;
+}
+
+function mergePipelineResult(
+  target: OrderPipelineResult,
+  source: OrderPipelineResult,
+): void {
+  target.expected += source.expected;
+  target.fetched += source.fetched;
+  target.saved += source.saved;
+  target.skipped += source.skipped;
+  target.failures.push(...source.failures);
+}
+
 async function syncAccount(
   account: ShopeeAccountRef,
   accountIndex: number,
   totalAccounts: number,
   userId: string,
+  ownership: SyncOwnership,
 ): Promise<AccountRunResult> {
   const syncStartedAt = new Date();
   const failures: PipelineFailure[] = [];
@@ -915,15 +1115,10 @@ async function syncAccount(
   });
 
   try {
-    const [saleCount, ultimaVenda, cursorStart, financialHealOrderIds] =
+    const [saleCount, cursorStart, financialHealOrderIds] =
       await Promise.all([
         prisma.shopeeVenda.count({
           where: { shopeeAccountId: account.id, valorTotal: { gt: 0 } },
-        }),
-        prisma.shopeeVenda.findFirst({
-          where: { shopeeAccountId: account.id, valorTotal: { gt: 0 } },
-          orderBy: { dataVenda: "desc" },
-          select: { dataVenda: true },
         }),
         inicioJanelaPeloCursor("shopee", account.id),
         findFinancialHealOrderIds(account.id),
@@ -950,30 +1145,20 @@ async function syncAccount(
       }
     }
 
-    const isFirstSync = !ultimaVenda;
-    let timeRangeField: ShopeeOrderTimeRangeField;
-    let since: Date;
-
-    if (isFirstSync) {
-      timeRangeField = "create_time";
-      since = HISTORICAL_START;
-    } else {
-      timeRangeField = "update_time";
-      const fallback15Days = new Date(
-        syncStartedAt.getTime() - FALLBACK_INCREMENTAL_MS,
-      );
-      const fallbackLastSale = new Date(
-        ultimaVenda.dataVenda.getTime() - 24 * 60 * 60 * 1000,
-      );
-      const fallback = new Date(
-        Math.min(fallback15Days.getTime(), fallbackLastSale.getTime()),
-      );
-      since = clampHistoricalStart(cursorStart ?? fallback);
-    }
-    if (since.getTime() > syncStartedAt.getTime()) since = syncStartedAt;
+    // Sem cursor completo, inclusive quando uma execução anterior já salvou
+    // alguns lotes, continuamos em bootstrap por create_time. Isso impede o pior
+    // caso: uma queda após salvar só o mês recente seguida de incremental, que
+    // deixaria o restante do histórico invisível para sempre.
+    const isBootstrap = cursorStart === null;
+    const timeRangeField: ShopeeOrderTimeRangeField = isBootstrap
+      ? "create_time"
+      : "update_time";
+    const since = isBootstrap
+      ? HISTORICAL_START
+      : clampHistoricalStart(cursorStart);
 
     console.log(
-      `[Shopee Sync] ${account.shop_id}: ${timeRangeField} ${since.toISOString()} -> ${syncStartedAt.toISOString()}`,
+      `[Shopee Sync] ${account.shop_id}: ${timeRangeField} ${since.toISOString()} -> ${syncStartedAt.toISOString()}${isBootstrap ? " (bootstrap recente-primeiro)" : ""}`,
     );
     if (financialHealOrderIds.length > 0) {
       console.log(
@@ -981,110 +1166,133 @@ async function syncAccount(
       );
     }
 
+    const pipelineTotals: OrderPipelineResult = {
+      expected: 0,
+      fetched: 0,
+      saved: 0,
+      skipped: 0,
+      failures: [],
+    };
+
     const listed = await fetchListedOrders(
       account,
       since,
       syncStartedAt,
       timeRangeField,
       userId,
+      async (orderIds, windowProgress) => {
+        const result = await processOrderIdsInChunks(
+          account,
+          userId,
+          orderIds,
+          `janelas ${windowProgress.windowsDone}/${windowProgress.windowsTotal}`,
+          ownership,
+        );
+        mergePipelineResult(pipelineTotals, result);
+        expected = pipelineTotals.expected;
+        fetched = pipelineTotals.fetched;
+        saved = pipelineTotals.saved;
+        skipped = pipelineTotals.skipped;
+        sendProgressToUser(userId, {
+          type: "sync_batch_saved",
+          message:
+            `Loja ${account.shop_id}: ${saved} venda(s) salvas e ` +
+            `${skipped} reaproveitadas; histórico ${windowProgress.windowsDone}/${windowProgress.windowsTotal}`,
+          current: windowProgress.windowsDone,
+          total: windowProgress.windowsTotal,
+          fetched,
+          expected,
+          saved,
+          skipped,
+          accountId: account.id,
+          accountNickname: `Loja ${account.shop_id}`,
+          phase: "saving",
+        });
+      },
+      () => !ownership.lost,
     );
-    failures.push(...listed.failures);
+    failures.push(...listed.failures, ...pipelineTotals.failures);
 
     const listedOrderIds = Array.from(listed.byOrderId.keys());
     const nonTerminalHealOrderIds = await findNonTerminalHealOrderIds(
       account.id,
       listedOrderIds,
     );
-    const requestedOrderIds = Array.from(
-      new Set([
-        ...listedOrderIds,
-        ...nonTerminalHealOrderIds,
-        ...financialHealOrderIds,
-      ]),
-    );
-    expected = requestedOrderIds.length;
+    const listedSet = new Set(listedOrderIds);
+    const healOrderIds = Array.from(
+      new Set([...nonTerminalHealOrderIds, ...financialHealOrderIds]),
+    ).filter((orderId) => !listedSet.has(orderId));
+
+    if (healOrderIds.length > 0) {
+      const healResult = await processOrderIdsInChunks(
+        account,
+        userId,
+        healOrderIds,
+        "cura direcionada",
+        ownership,
+      );
+      mergePipelineResult(pipelineTotals, healResult);
+      failures.push(...healResult.failures);
+      expected = pipelineTotals.expected;
+      fetched = pipelineTotals.fetched;
+      saved = pipelineTotals.saved;
+      skipped = pipelineTotals.skipped;
+    }
 
     console.log(
-      `[Shopee Sync] ${account.shop_id}: ${listedOrderIds.length} por janela, ${nonTerminalHealOrderIds.length} nao terminais e ${financialHealOrderIds.length} financeiros`,
+      `[Shopee Sync] ${account.shop_id}: ${listedOrderIds.length} listados, ` +
+        `${nonTerminalHealOrderIds.length} nao terminais, ` +
+        `${financialHealOrderIds.length} financeiros; ` +
+        `${saved} salvos e ${skipped} reaproveitados`,
     );
 
-    // Consulta global por orderId: pedidos de outro dono nunca chegam à escrita.
-    const existingRows = await fetchExistingVendas(requestedOrderIds);
-    const existingByOrderId = new Map(
-      existingRows.map((row) => [row.orderId, row]),
+    const blockingFailures = failures.filter(
+      (failure) => failure.stage !== "escrow",
     );
-    const allowedOrderIds: string[] = [];
-    for (const orderId of requestedOrderIds) {
-      const existing = existingByOrderId.get(orderId);
-      if (
-        existing &&
-        (existing.userId !== userId ||
-          existing.shopeeAccountId !== account.id)
-      ) {
-        failures.push({
-          stage: "ownership",
-          orderId,
-          message: `pedido pertence a outro usuario/conta (${existing.userId}/${existing.shopeeAccountId})`,
-        });
-      } else {
-        allowedOrderIds.push(orderId);
-      }
+    if (ownership.lost && !blockingFailures.some((failure) => failure.message === LEASE_LOST_MESSAGE)) {
+      blockingFailures.push({ stage: "save", message: LEASE_LOST_MESSAGE });
     }
-
-    const details = await fetchOrderDetails(account, allowedOrderIds);
-    failures.push(...details.failures);
-    fetched = details.orders.length;
-
-    const skuResult = await registerDiscoveredSkus(
-      userId,
-      collectSkuCandidatesFromShopeeOrders(details.orders, account),
-    );
-    if (skuResult.created > 0) {
-      console.log(
-        `[SKU Discovery][Shopee] ${account.shop_id}: ${skuResult.created} SKU(s) criados`,
-      );
-    }
-
-    const escrow = await enrichWithEscrow(
-      account,
-      details.orders,
-      existingByOrderId,
-    );
-    failures.push(...escrow.failures);
-    skipped = escrow.skipped;
-
-    const vendaRecords: ShopeeVendaRecord[] = [];
-    for (const item of escrow.enriched) {
-      try {
-        vendaRecords.push(orderToVenda(item, account, userId));
-      } catch (error) {
-        failures.push({
-          stage: "finance",
-          orderId: stringValue(item.order.order_sn),
-          message: errorMessage(error),
-        });
-      }
-    }
-
-    const persistence = await persistVendas(vendaRecords, userId, account);
-    saved = persistence.saved;
-    failures.push(...persistence.failures);
-
-    if (failures.length === 0) {
+    if (blockingFailures.length === 0) {
+      // Falha de escrow não perde pedido: ele foi salvo com financeiro estimado e
+      // financialSyncPending, entrando na cura direcionada da próxima execução.
+      // Por isso ela não obriga uma nova varredura das 67 janelas.
       await gravarCursorSync("shopee", account.id, syncStartedAt);
       console.log(
-        `[Shopee Sync] ${account.shop_id}: cursor avancado para ${syncStartedAt.toISOString()} (${skipped} skip)`,
+        `[Shopee Sync] ${account.shop_id}: cursor avancado para ${syncStartedAt.toISOString()} (${saved} salvas, ${skipped} skip, ${failures.length} financeiro pendente)`,
       );
-      return { expected, fetched, saved, skipped };
+      if (failures.length === 0) {
+        return { expected, fetched, saved, skipped };
+      }
+
+      const message = `${summarizeFailures(failures)}; vendas salvas e financeiro pendente para a proxima execucao`;
+      console.warn(`[Shopee Sync] ${account.shop_id}: ${message}`);
+      sendProgressToUser(userId, {
+        type: "sync_warning",
+        message: `Loja ${account.shop_id}: ${message}.`,
+        errorCode: "SHOPEE_FINANCE_PENDING",
+        accountId: account.id,
+      });
+      return {
+        expected,
+        fetched,
+        saved,
+        skipped,
+        error: { accountId: account.id, shopId: account.shop_id, message },
+      };
     }
 
-    const message = summarizeFailures(failures);
-    sendProgressToUser(userId, {
-      type: "sync_error",
-      message: `Loja ${account.shop_id}: ${message}. Cursor preservado.`,
-      errorCode: "SHOPEE_SYNC_PARTIAL",
-      accountId: account.id,
-    });
+    const message = summarizeFailures(blockingFailures);
+    console.error(
+      `[Shopee Sync] ${account.shop_id}: ${message}. Cursor preservado.`,
+    );
+    if (!ownership.lost) {
+      sendProgressToUser(userId, {
+        type: "sync_error",
+        message: `Loja ${account.shop_id}: ${message}. Cursor preservado.`,
+        errorCode: "SHOPEE_SYNC_PARTIAL",
+        accountId: account.id,
+      });
+    }
     return {
       expected,
       fetched,
@@ -1095,12 +1303,14 @@ async function syncAccount(
   } catch (error) {
     const message = errorMessage(error);
     console.error(`[Shopee Sync] Erro na conta ${account.id}:`, error);
-    sendProgressToUser(userId, {
-      type: "sync_error",
-      message: `Erro ao processar conta ${account.shop_id}: ${message}`,
-      errorCode: "SHOPEE_SYNC_ERROR",
-      accountId: account.id,
-    });
+    if (!ownership.lost) {
+      sendProgressToUser(userId, {
+        type: "sync_error",
+        message: `Erro ao processar conta ${account.shop_id}: ${message}`,
+        errorCode: "SHOPEE_SYNC_ERROR",
+        accountId: account.id,
+      });
+    }
     return {
       expected,
       fetched,
@@ -1127,6 +1337,8 @@ export async function POST(req: NextRequest) {
   }
 
   let syncLock: Awaited<ReturnType<typeof acquireSyncLock>> | null = null;
+  let lockRenewal: ReturnType<typeof setInterval> | null = null;
+  const ownership: SyncOwnership = { lost: false };
 
   try {
     sendProgressToUser(userId, {
@@ -1182,6 +1394,20 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+
+    // Primeira carga pode atravessar milhares de pedidos. Renovar o lock impede
+    // outro clique de iniciar uma segunda carga quando o TTL original vencer.
+    lockRenewal = setInterval(() => {
+      void syncLock?.renew().then((renewed) => {
+        if (!renewed) {
+          ownership.lost = true;
+          console.error("[Shopee Sync] Lock perdido durante a sincronização");
+        }
+      }).catch((error) => {
+        ownership.lost = true;
+        console.error("[Shopee Sync] Falha ao renovar lock:", error);
+      });
+    }, 5 * 60 * 1000);
 
     sendProgressToUser(userId, {
       type: "sync_progress",
@@ -1247,7 +1473,13 @@ export async function POST(req: NextRequest) {
       contasAtualizadas,
       ACCOUNT_CONCURRENCY,
       (account, index) =>
-        syncAccount(account, index, contasAtualizadas.length, userId),
+        syncAccount(
+          account,
+          index,
+          contasAtualizadas.length,
+          userId,
+          ownership,
+        ),
     );
 
     let totalExpected = 0;
@@ -1262,16 +1494,45 @@ export async function POST(req: NextRequest) {
       if (result.error) errors.push(result.error);
     }
 
+    if (ownership.lost) {
+      // O novo owner controla os eventos a partir daqui. O job antigo só limpa
+      // caches das linhas que conseguiu salvar e encerra sem tocar no SSE.
+      invalidateVendasCache(userId);
+      console.warn(
+        `[Shopee Sync] Execução encerrada após perda do lock: ${totalSaved} venda(s) já salvas`,
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          ownershipLost: true,
+          message: LEASE_LOST_MESSAGE,
+          accounts: summaries,
+          errors,
+          totals: {
+            expected: totalExpected,
+            fetched: totalFetched,
+            saved: totalSaved,
+            skipped: totalSkipped,
+          },
+        },
+        { status: 409 },
+      );
+    }
+
+    // A recarga terminal só pode sair depois de invalidar o último snapshot.
+    invalidateVendasCache(userId);
+    console.log(
+      `[Shopee Sync] Concluída: ${totalSaved} salva(s), ${totalSkipped} inalterada(s), ${errors.length} erro(s)`,
+    );
     sendProgressToUser(userId, {
       type: "sync_complete",
       message: `Sincronizacao concluida: ${totalSaved} salva(s), ${totalSkipped} inalterada(s)`,
-      current: totalSaved,
+      current: totalSaved + totalSkipped,
       total: totalExpected,
       fetched: totalFetched,
       expected: totalExpected,
     });
 
-    invalidateVendasCache(userId);
     if (!keepConnectionsOpen) {
       setTimeout(() => closeUserConnections(userId), 2000);
     }
@@ -1287,6 +1548,7 @@ export async function POST(req: NextRequest) {
         expected: totalExpected,
         fetched: totalFetched,
         saved: totalSaved,
+        skipped: totalSkipped,
       },
     });
   } catch (error) {
@@ -1296,6 +1558,7 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   } finally {
+    if (lockRenewal) clearInterval(lockRenewal);
     if (syncLock?.acquired) {
       await syncLock.release();
     }

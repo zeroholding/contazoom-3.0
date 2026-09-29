@@ -2,6 +2,82 @@
 import crypto from "crypto";
 import prisma from "@/lib/prisma";
 
+const SHOPEE_RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const SHOPEE_REQUEST_TIMEOUT_MS = 20_000;
+const SHOPEE_MAX_RETRY_DELAY_MS = 10_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(response: Response): number | null {
+  const raw = response.headers.get("retry-after")?.trim();
+  if (!raw) return null;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+  const date = Date.parse(raw);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : null;
+}
+
+/**
+ * GETs operacionais da Shopee com timeout e retry conservador.
+ *
+ * A carga histórica faz milhares de chamadas; uma única conexão pendurada não
+ * pode congelar o lote inteiro. Só repetimos falhas transitórias e respeitamos
+ * Retry-After quando a plataforma informa o ritmo permitido.
+ */
+async function fetchShopeeJson(
+  url: string,
+  attempts = 3,
+): Promise<{ response: Response; data: any }> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(SHOPEE_REQUEST_TIMEOUT_MS),
+      });
+      const data = await response.json().catch(() => null);
+
+      const apiCode = String(data?.error ?? "").toLowerCase();
+      // A Shopee também devolve limite/indisponibilidade dentro de HTTP 200.
+      // Mesma classificação já validada no cliente do CyberDock.
+      const transientEnvelope =
+        response.ok &&
+        /(system|internal|busy|timeout|too_many|rate_limit)/.test(apiCode);
+      const retryableHttp = SHOPEE_RETRYABLE_STATUS.has(response.status);
+
+      if (!retryableHttp && !transientEnvelope) {
+        if (data === null) throw new Error("Resposta JSON inválida da Shopee");
+        return { response, data };
+      }
+
+      lastError = new Error(
+        transientEnvelope
+          ? `Shopee temporariamente indisponível: ${data?.message || data?.error}`
+          : `Shopee HTTP ${response.status}`,
+      );
+      if (attempt === attempts - 1) return { response, data };
+
+      const delay =
+        retryAfterMs(response) ??
+        Math.min(
+          SHOPEE_MAX_RETRY_DELAY_MS,
+          500 * 2 ** attempt + Math.random() * 250,
+        );
+      await sleep(delay);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt === attempts - 1) throw lastError;
+      await sleep(Math.min(2_000, 500 * 2 ** attempt));
+    }
+  }
+
+  throw lastError ?? new Error("Falha ao consultar a Shopee");
+}
+
 /**
  * Gera uma URL de autorização para Shopee
  */
@@ -163,10 +239,11 @@ export async function getShopeeOrderList(params: GetShopeeOrderListParams) {
     url.searchParams.append("cursor", params.cursor);
   }
 
-  const response = await fetch(url.toString());
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(`Shopee getOrderList error: ${data.message || data.error}`);
+  const { response, data } = await fetchShopeeJson(url.toString());
+  if (!response.ok || data?.error) {
+    throw new Error(
+      `Shopee getOrderList error: ${data?.message || data?.error || `HTTP ${response.status}`}`,
+    );
   }
   return data.response;
 }
@@ -198,10 +275,11 @@ export async function getShopeeOrderDetail(params: GetShopeeOrderDetailParams) {
       "buyer_user_id,buyer_username,estimated_shipping_fee,actual_shipping_fee,item_list,total_amount,package_list,shipping_carrier",
   );
 
-  const response = await fetch(url.toString());
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(`Shopee getOrderDetail error: ${data.message || data.error}`);
+  const { response, data } = await fetchShopeeJson(url.toString());
+  if (!response.ok || data?.error) {
+    throw new Error(
+      `Shopee getOrderDetail error: ${data?.message || data?.error || `HTTP ${response.status}`}`,
+    );
   }
   return data.response;
 }
@@ -227,10 +305,11 @@ export async function getShopeeEscrowDetail(params: GetShopeeEscrowDetailParams)
   url.searchParams.append("sign", sign);
   url.searchParams.append("order_sn", params.orderSn);
 
-  const response = await fetch(url.toString());
-  const data = await response.json();
-  if (data.error) {
-    throw new Error(`Shopee getEscrowDetail error: ${data.message || data.error}`);
+  const { response, data } = await fetchShopeeJson(url.toString());
+  if (!response.ok || data?.error) {
+    throw new Error(
+      `Shopee getEscrowDetail error: ${data?.message || data?.error || `HTTP ${response.status}`}`,
+    );
   }
   return data.response;
 }

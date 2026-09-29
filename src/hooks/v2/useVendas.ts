@@ -288,6 +288,7 @@ export function useVendasV2(
       // Isso garante que após reload da página, o estado seja restaurado
       if (
         progress.type === "sync_progress" ||
+        progress.type === "sync_batch_saved" ||
         progress.type === "sync_start" ||
         progress.type === "sync_continue"
       ) {
@@ -300,7 +301,11 @@ export function useVendasV2(
         }
       }
 
-      if (
+      if (progress.type === "sync_batch_saved") {
+        // O progresso principal continua em janelas; este evento apenas agenda
+        // uma leitura trailing com os filtros atuais.
+        void loadVendasFromDatabase(filtrosAtuaisRef.current);
+      } else if (
         progress.type === "sync_progress" ||
         progress.type === "sync_continue"
       ) {
@@ -850,6 +855,7 @@ export function useVendasV2(
   // busca no mount). Liberada ao terminar, então reloads legítimos depois
   // continuam funcionando.
   const inFlightLoadKeyRef = useRef<string | null>(null);
+  const pendingReloadRef = useRef(false);
   const filtrosAtuaisRef = useRef<VendaFilters>(DEFAULT_FILTERS);
 
   const loadVendasFromDatabase = useCallback(async (
@@ -857,8 +863,11 @@ export function useVendasV2(
   ) => {
     filtrosAtuaisRef.current = filters;
     const loadKey = `${platform}::${JSON.stringify(filters)}`;
-    if (inFlightLoadKeyRef.current === loadKey) {
-      return; // já há uma carga idêntica em andamento
+    if (inFlightLoadKeyRef.current !== null) {
+      // Evento de lote/filtro durante um GET: não abre corrida. O finally faz
+      // obrigatoriamente uma leitura final com os filtros mais recentes.
+      pendingReloadRef.current = true;
+      return;
     }
     inFlightLoadKeyRef.current = loadKey;
     try {
@@ -943,6 +952,12 @@ export function useVendasV2(
     } finally {
       setIsTableLoading(false);
       inFlightLoadKeyRef.current = null;
+      if (pendingReloadRef.current) {
+        pendingReloadRef.current = false;
+        setTimeout(() => {
+          void loadVendasFromDatabase(filtrosAtuaisRef.current);
+        }, 0);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform]);

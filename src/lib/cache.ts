@@ -12,6 +12,7 @@ class MemoryCache {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private cache = new Map<string, CacheEntry<any>>();
   private defaultTTL = 60000; // 1 minuto padrão
+  private generation = 0;
 
   /**
    * Busca um valor do cache
@@ -46,11 +47,27 @@ class MemoryCache {
     });
   }
 
+  /** Fotografia da geração usada para cercar cálculos assíncronos. */
+  getGeneration(): number {
+    return this.generation;
+  }
+
+  /**
+   * Só grava se nenhuma invalidação aconteceu desde o início da consulta.
+   * Impede um GET lento de recolocar uma resposta velha depois de um sync.
+   */
+  setIfGeneration<T>(key: string, data: T, generation: number): boolean {
+    if (generation !== this.generation) return false;
+    this.set(key, data);
+    return true;
+  }
+
   /**
    * Remove um valor específico do cache
    * @param key Chave do cache
    */
   delete(key: string): void {
+    this.generation += 1;
     this.cache.delete(key);
   }
 
@@ -59,6 +76,9 @@ class MemoryCache {
    * @param pattern Padrão de busca (substring)
    */
   deletePattern(pattern: string): void {
+    // Incrementa mesmo sem chave presente: uma consulta iniciada antes desta
+    // chamada ainda pode tentar criar essa chave quando terminar.
+    this.generation += 1;
     for (const key of this.cache.keys()) {
       if (key.includes(pattern)) {
         this.cache.delete(key);
@@ -70,6 +90,7 @@ class MemoryCache {
    * Limpa todo o cache
    */
   clear(): void {
+    this.generation += 1;
     this.cache.clear();
   }
 

@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
       SHOPEE_FINANCIAL_RULE_VERSION,
       isPaginated ? `p${page}-l${limit}` : "all",
     );
+    const cacheGeneration = cache.getGeneration();
     const cachedData = cache.get<any>(cacheKey, 300000);
     
     if (cachedData) {
@@ -262,9 +263,14 @@ export async function GET(req: NextRequest) {
       };
     }
 
-    // Armazenar no cache
-    cache.set(cacheKey, response);
-    console.log(`[Cache Miss] Vendas do Shopee salvas no cache`);
+    // Não deixa uma consulta iniciada antes do último lote repor um snapshot
+    // antigo no cache depois da invalidação.
+    const cached = cache.setIfGeneration(cacheKey, response, cacheGeneration);
+    console.log(
+      cached
+        ? `[Cache Miss] Vendas do Shopee salvas no cache`
+        : `[Cache Skip] Snapshot Shopee descartado após invalidação concorrente`,
+    );
 
     return NextResponse.json(response, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },

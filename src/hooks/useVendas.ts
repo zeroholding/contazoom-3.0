@@ -241,6 +241,7 @@ export function useVendas(
       // Isso garante que após reload da página, o estado seja restaurado
       if (
         progress.type === "sync_progress" ||
+        progress.type === "sync_batch_saved" ||
         progress.type === "sync_start" ||
         progress.type === "sync_continue"
       ) {
@@ -251,7 +252,14 @@ export function useVendas(
         }
       }
 
-      if (progress.type === "sync_progress" || progress.type === "sync_continue") {
+      if (progress.type === "sync_batch_saved") {
+        // Não troca a unidade do progresso (janelas) pela contagem local do
+        // chunk. O evento existe para fazer a tabela crescer durante o bootstrap.
+        void loadVendasFromDatabase();
+      } else if (
+        progress.type === "sync_progress" ||
+        progress.type === "sync_continue"
+      ) {
         // Atualizar progresso usando fetched/expected ou current/total
         const fetched = progress.current || progress.fetched || 0;
         const expected = progress.total || progress.expected || 0;
@@ -548,7 +556,15 @@ export function useVendas(
     }
   };
 
+  const vendasLoadInFlightRef = useRef(false);
+  const vendasReloadPendingRef = useRef(false);
+
   const loadVendasFromDatabase = async () => {
+    if (vendasLoadInFlightRef.current) {
+      vendasReloadPendingRef.current = true;
+      return;
+    }
+    vendasLoadInFlightRef.current = true;
     try {
       const cachedData = loadVendasFromCache(platform);
       if (cachedData && cachedData.vendas.length > 0) {
@@ -600,6 +616,13 @@ export function useVendas(
       }
     } finally {
       setIsTableLoading(false);
+      vendasLoadInFlightRef.current = false;
+      if (vendasReloadPendingRef.current) {
+        vendasReloadPendingRef.current = false;
+        setTimeout(() => {
+          void loadVendasFromDatabase();
+        }, 0);
+      }
     }
   };
 
