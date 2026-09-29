@@ -44,11 +44,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Usar renovação
+    // A configuração versionada usa CLIENT_*, enquanto instalações antigas usam
+    // PARTNER_*. Todos os outros fluxos da Shopee já aceitam os dois nomes; o
+    // refresh manual era o único que passava `undefined` ao createHmac.
+    const partnerId =
+      process.env.SHOPEE_PARTNER_ID || process.env.SHOPEE_CLIENT_ID;
+    const partnerKey =
+      process.env.SHOPEE_PARTNER_KEY || process.env.SHOPEE_CLIENT_SECRET;
+
+    if (!partnerId || !partnerKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Credenciais da integração Shopee não configuradas no servidor.",
+        },
+        { status: 503 },
+      );
+    }
+
     const updated = await refreshShopeeAccountToken(
       account,
-      process.env.SHOPEE_PARTNER_ID as string,
-      process.env.SHOPEE_PARTNER_KEY as string
+      partnerId,
+      partnerKey,
     );
 
     return NextResponse.json({

@@ -57,6 +57,15 @@ export async function refreshShopeeToken(
   partnerId: string,
   partnerKey: string
 ): Promise<{ access_token: string; refresh_token: string; expires_at: Date }> {
+  // `createHmac` aceita string vazia, mas a assinatura seria inválida; com
+  // `undefined` ele lança o TypeError exibido ao usuário antes de chamar a
+  // Shopee. Validar aqui protege todos os chamadores, não só o botão manual.
+  if (!partnerId?.trim() || !partnerKey?.trim()) {
+    throw new Error(
+      "Credenciais da integração Shopee não configuradas no servidor.",
+    );
+  }
+
   const path = "/api/v2/auth/access_token/get";
   const timestamp = Math.floor(Date.now() / 1000);
   
