@@ -2,7 +2,9 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { CampoDaFolha, GrupoDePilulas } from "@/components/ui/FiltrosSheet";
 import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
+import { useCelular } from "@/hooks/useMediaQuery";
 import {
   Aviso,
   AvisoBackfill,
@@ -10,10 +12,12 @@ import {
   BotaoAtualizar,
   Cabecalho,
   CabecalhoTabela,
+  CartaoAnuncioCelular,
   CelulaAgora,
   CelulaAnuncio,
   Campo,
   Esqueleto,
+  FiltrosAnuncioCelular,
   Kpi,
   LinkAbrir,
   MolduraTela,
@@ -27,7 +31,8 @@ import {
   ThGrupo,
   UltimaVenda,
 } from "./anuncios/comum";
-import { CampoBusca, Faixa, Miniatura, Selo } from "./comum/shell";
+import { CaixaBusca, CampoBusca, Faixa, Miniatura, Selo } from "./comum/shell";
+import type { ChipFiltro } from "./comum/filtros";
 import {
   IconeAlerta,
   IconeCaixa,
@@ -120,6 +125,64 @@ export default function AnunciosMaisVendidos() {
   const linhas = useMemo(() => dados?.linhas ?? [], [dados]);
   const diasDoPeriodo = janelaDias > 0 ? janelaDias : 0;
 
+  // Celular: o que está LIGADO dentro da folha. Alimenta o número do botão "Filtros"
+  // e os chips, que são a única pista de que a lista está filtrada com a folha fechada.
+  const celular = useCelular();
+  const contaEscolhida = contas.find((c) => `${c.canal}:${c.id}` === contaId);
+  const chips: ChipFiltro[] = [];
+  if (contaId) {
+    chips.push({
+      chave: "conta",
+      grupo: "Conta",
+      rotulo: contaEscolhida?.nome ?? contaId,
+      remover: () => {
+        setContaId("");
+        setPagina(1);
+      },
+    });
+  }
+  if (status) {
+    chips.push({
+      chave: "status",
+      grupo: "Situação",
+      rotulo: ROTULO_SITUACAO_ML[status] ?? status,
+      remover: () => {
+        setStatus("");
+        setPagina(1);
+      },
+    });
+  }
+  if (estoque) {
+    chips.push({
+      chave: "estoque",
+      grupo: "Estoque",
+      rotulo: estoque === "sem" ? "Esgotado" : "Com estoque",
+      remover: () => {
+        setEstoque("");
+        setPagina(1);
+      },
+    });
+  }
+  if (ordem !== "unidades_desc") {
+    chips.push({
+      chave: "ordem",
+      grupo: "Ordem",
+      rotulo: ORDENS_RANKING.find((o) => o.chave === ordem)?.rotulo ?? ordem,
+      remover: () => {
+        setOrdem("unidades_desc");
+        setPagina(1);
+      },
+    });
+  }
+
+  function limparFolha() {
+    setContaId("");
+    setStatus("");
+    setEstoque("");
+    setOrdem("unidades_desc");
+    setPagina(1);
+  }
+
   function mudarBusca(valor: string) {
     buscaRef.current = valor;
     setBusca(valor);
@@ -166,6 +229,108 @@ export default function AnunciosMaisVendidos() {
         </Faixa>
       )}
 
+      {celular ? (
+        <>
+          <CanaisCelular valor={canal} onMudar={trocarCanal} />
+
+          <FiltrosAnuncioCelular
+            busca={
+              <CaixaBusca
+                valor={busca}
+                onMudar={mudarBusca}
+                onAplicar={aplicarBusca}
+                placeholder="ID, título ou SKU"
+                rotuloAcessivel="Buscar anúncios"
+              />
+            }
+            destaque={
+              <select
+                aria-label="Período"
+                value={janelaDias}
+                onChange={(e) => {
+                  setJanelaDias(Number(e.target.value));
+                  setPagina(1);
+                }}
+                className={ENTRADA}
+              >
+                <option value={7}>Últimos 7 dias</option>
+                <option value={30}>Últimos 30 dias</option>
+                <option value={90}>Últimos 90 dias</option>
+                <option value={365}>Último ano</option>
+                <option value={0}>Desde sempre</option>
+              </select>
+            }
+            ativos={chips.length}
+            onLimpar={limparFolha}
+            chips={chips}
+          >
+            <CampoDaFolha rotulo="Conta">
+              <select
+                aria-label="Conta"
+                value={contaId}
+                onChange={(e) => {
+                  setContaId(e.target.value);
+                  setPagina(1);
+                }}
+                className={ENTRADA}
+              >
+                <option value="">Todas as contas</option>
+                {contas.map((c) => (
+                  <option key={`${c.canal}:${c.id}`} value={`${c.canal}:${c.id}`}>
+                    {c.nome} · {c.canal === "ML" ? "Mercado Livre" : c.canal === "SP" ? "Shopee" : "TikTok Shop"}
+                  </option>
+                ))}
+              </select>
+            </CampoDaFolha>
+
+            <CampoDaFolha rotulo="Ordenar por">
+              <GrupoDePilulas
+                rotulo="Ordenar por"
+                opcoes={ORDENS_RANKING.map((o) => ({ id: o.chave, rotulo: o.rotulo }))}
+                estaAtiva={(id) => ordem === id}
+                onEscolher={(id) => {
+                  setOrdem(id);
+                  setPagina(1);
+                }}
+              />
+            </CampoDaFolha>
+
+            {canal === "ML" && (
+              <>
+                <CampoDaFolha rotulo="Situação no ML">
+                  <GrupoDePilulas
+                    rotulo="Situação no ML"
+                    opcoes={[{ id: "", rotulo: "Todas" }, ...Object.entries(ROTULO_SITUACAO_ML).map(([id, rotulo]) => ({ id, rotulo }))]}
+                    estaAtiva={(id) => status === id}
+                    onEscolher={(id) => {
+                      setStatus(id);
+                      setPagina(1);
+                    }}
+                  />
+                </CampoDaFolha>
+
+                <CampoDaFolha rotulo="Estoque">
+                  <GrupoDePilulas
+                    rotulo="Estoque"
+                    opcoes={[
+                      { id: "", rotulo: "Todos" },
+                      { id: "sem", rotulo: "Esgotado" },
+                      { id: "com", rotulo: "Com estoque" },
+                    ]}
+                    estaAtiva={(id) => estoque === id}
+                    onEscolher={(id) => {
+                      setEstoque(id);
+                      setPagina(1);
+                    }}
+                  />
+                </CampoDaFolha>
+              </>
+            )}
+          </FiltrosAnuncioCelular>
+          <NotaFiltroCaro visivel={Boolean(status || estoque)} />
+        </>
+      ) : (
+      <>
       <section className="mt-5" aria-labelledby="canal-ranking">
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -277,6 +442,8 @@ export default function AnunciosMaisVendidos() {
           </>
         )}
       </PainelFiltros>
+      </>
+      )}
 
       <section aria-label="Resumo do ranking" className="mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
         <Kpi
@@ -343,7 +510,8 @@ export default function AnunciosMaisVendidos() {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2 xl:hidden" role="list" aria-label="Anúncios mais vendidos">
+            {/* Celular: fundo cinza claro, para o cartão branco se destacar da seção. */}
+            <div className="grid grid-cols-1 gap-3 p-3 max-md:bg-[var(--cz-fundo)] md:grid-cols-2 xl:hidden" role="list" aria-label="Anúncios mais vendidos">
               {linhas.map((l, i) => (
                 <CardVendido
                   key={`${l.canal}:${l.accountId}:${l.itemId}`}
@@ -410,6 +578,52 @@ export default function AnunciosMaisVendidos() {
 
 function CardVendido({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number; diasDoPeriodo: number }) {
   const esgotado = l.estoque === 0;
+  const celular = useCelular();
+
+  // Celular: o cartão compartilhado com Anúncios Mortos (foto, título em duas linhas,
+  // selos e quatro métricas em 2×2). No Mercado Livre entram o estoque e o preço de
+  // AGORA; nos outros canais, que não têm esses dados, pedidos e ticket médio.
+  if (celular) {
+    const ml = l.canal === "ML";
+    return (
+      <CartaoAnuncioCelular
+        l={l}
+        posicao={posicao}
+        alerta={esgotado}
+        selos={
+          <>
+            {ml && <SeloStatus status={l.status} />}
+            {l.logisticType && <SeloEnvio tipo={l.logisticType} />}
+            {ml && (
+              <span className="inline-flex items-center gap-1.5 text-[12.5px] text-[var(--cz-texto-suave)]">
+                Cobertura
+                <CoberturaEstoque l={l} diasDoPeriodo={diasDoPeriodo} />
+              </span>
+            )}
+          </>
+        }
+        metricas={
+          ml
+            ? [
+                { rotulo: "Unidades", valor: inteiro(l.unidades), nota: `${inteiro(l.pedidos)} pedido(s)` },
+                { rotulo: "Faturamento", valor: brl(l.faturamento), tom: "bom" },
+                {
+                  rotulo: "Estoque agora",
+                  valor: l.estoque === null ? "—" : `${inteiro(l.estoque)} un.`,
+                  tom: esgotado ? "critico" : undefined,
+                },
+                { rotulo: "Preço agora", valor: l.preco === null ? "—" : brl(l.preco) },
+              ]
+            : [
+                { rotulo: "Unidades", valor: inteiro(l.unidades) },
+                { rotulo: "Faturamento", valor: brl(l.faturamento), tom: "bom" },
+                { rotulo: "Pedidos", valor: inteiro(l.pedidos) },
+                { rotulo: "Ticket médio", valor: brl(l.ticketMedio) },
+              ]
+        }
+      />
+    );
+  }
 
   return (
     <article
@@ -517,5 +731,68 @@ function LinhaVendida({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number
         <span className="mt-1.5 inline-flex"><LinkAbrir l={l} /></span>
       </td>
     </tr>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  Celular                                   */
+/* -------------------------------------------------------------------------- */
+
+const ROTULO_SITUACAO_ML: Record<string, string> = {
+  active: "Ativo",
+  paused: "Pausado",
+  closed: "Finalizado",
+  under_review: "Em revisão",
+};
+
+const ORDENS_RANKING: ReadonlyArray<{ chave: string; rotulo: string }> = [
+  { chave: "unidades_desc", rotulo: "Mais unidades vendidas" },
+  { chave: "faturamento_desc", rotulo: "Maior faturamento" },
+];
+
+/**
+ * O canal do ranking numa linha que rola, com o logo de cada marca.
+ *
+ * O seletor do desktop (`SeletorCanalLogos`) tem quatro botões de 56px em duas
+ * linhas, mais título, legenda e um "SELEÇÃO POR CANAL" — uns 200px de altura só
+ * para escolher entre quatro opções. Aqui a escolha é uma faixa de 44px, e o
+ * logo continua sendo o que identifica o canal.
+ */
+function CanaisCelular({
+  valor,
+  onMudar,
+}: {
+  valor: CanalFiltroAnuncio;
+  onMudar: (canal: CanalFiltroAnuncio) => void;
+}) {
+  const opcoes: ReadonlyArray<{ chave: CanalFiltroAnuncio; rotulo: string }> = [
+    { chave: "todos", rotulo: "Todos os canais" },
+    { chave: "ML", rotulo: "Mercado Livre" },
+    { chave: "SP", rotulo: "Shopee" },
+    { chave: "TT", rotulo: "TikTok Shop" },
+  ];
+
+  return (
+    <div className="cz-hscroll cz-hscroll-sangra mt-5 pb-0.5" role="group" aria-label="Canal do ranking">
+      {opcoes.map((o) => {
+        const ativo = o.chave === valor;
+        return (
+          <button
+            key={o.chave}
+            type="button"
+            aria-pressed={ativo}
+            onClick={() => onMudar(o.chave)}
+            className={`inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-[var(--cz-raio)] border px-3.5 text-[14px] font-semibold transition-colors ${
+              ativo
+                ? "border-[var(--cz-laranja)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]"
+                : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)]"
+            }`}
+          >
+            {o.chave !== "todos" && <LogoCanal canal={o.chave} />}
+            {o.rotulo}
+          </button>
+        );
+      })}
+    </div>
   );
 }

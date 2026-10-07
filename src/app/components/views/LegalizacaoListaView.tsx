@@ -74,6 +74,11 @@ import {
   enviarAnexosPendentes,
 } from "@/app/components/views/ui/tarefas/Anexos";
 import { Modal } from "@/app/components/views/ui/tarefas/Modal";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosSheet, {
+  CampoDaFolha,
+  GrupoDePilulas,
+} from "@/components/ui/FiltrosSheet";
 import { ModalExclusao } from "@/app/components/views/ui/tarefas/ModalExclusao";
 import {
   SeloBloqueio,
@@ -253,6 +258,7 @@ export default function LegalizacaoListaView() {
 /* -------------------------------------------------------------------------- */
 
 function Conteudo() {
+  const celular = useCelular();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -731,7 +737,7 @@ function Conteudo() {
   )} · ${kpis.emAberto} em aberto nesta página`;
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       <Cabecalho
         compacto
         titulo="Legalização"
@@ -748,7 +754,7 @@ function Conteudo() {
 
       {/* -------------------------------- KPIs ------------------------------ */}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <CartaoKpi
           titulo="Em aberto"
           valor={kpis.emAberto}
@@ -785,6 +791,87 @@ function Conteudo() {
 
       {/* ------------------------------ Filtros ----------------------------- */}
 
+      {celular ? (
+        // Celular: a busca fica SEMPRE à vista; tipo, status, responsável e os dois
+        // interruptores vão para a folha de filtros, como pastilhas tocáveis
+        // (dropdown dentro de folha seria dois níveis de sobreposição).
+        <div className="space-y-2">
+          <div className="flex items-end gap-2">
+            <Entrada
+              rotulo="Buscar"
+              type="search"
+              placeholder="Empresa, identificação ou protocolo"
+              value={textoBusca}
+              onChange={(e) => setTextoBusca(e.target.value)}
+              wrapperClassName="min-w-0 flex-1"
+            />
+            <FiltrosSheet
+              ativos={
+                (filtros.tipo ? 1 : 0) +
+                (filtros.status ? 1 : 0) +
+                (filtros.responsavelId ? 1 : 0) +
+                (filtros.bloqueada ? 1 : 0) +
+                (filtros.abertos ? 0 : 1)
+              }
+              onLimpar={limpar}
+              classeBotao="shrink-0"
+            >
+              <CampoDaFolha rotulo="Mostrar">
+                <GrupoDePilulas
+                  rotulo="Mostrar"
+                  opcoes={[
+                    { id: "abertos", rotulo: "Só em aberto" },
+                    { id: "bloqueada", rotulo: "Só com pendência" },
+                  ]}
+                  estaAtiva={(id) => (id === "abertos" ? filtros.abertos : filtros.bloqueada)}
+                  onEscolher={(id) =>
+                    id === "abertos"
+                      ? alterar({ abertos: !filtros.abertos })
+                      : alterar({ bloqueada: !filtros.bloqueada })
+                  }
+                />
+              </CampoDaFolha>
+              <CampoDaFolha rotulo="Tipo de processo">
+                <GrupoDePilulas
+                  rotulo="Tipo de processo"
+                  opcoes={[
+                    { id: "", rotulo: "Todos" },
+                    ...OPCOES_TIPO.map((o) => ({ id: o.valor, rotulo: o.texto })),
+                  ]}
+                  estaAtiva={(id) => filtros.tipo === id}
+                  onEscolher={(id) => alterar({ tipo: id })}
+                />
+              </CampoDaFolha>
+              <CampoDaFolha rotulo="Status">
+                <GrupoDePilulas
+                  rotulo="Status"
+                  opcoes={[
+                    { id: "", rotulo: "Todos" },
+                    ...OPCOES_STATUS.map((o) => ({ id: o.valor, rotulo: o.texto })),
+                  ]}
+                  estaAtiva={(id) => filtros.status === id}
+                  onEscolher={(id) => alterar({ status: id })}
+                />
+              </CampoDaFolha>
+              <CampoDaFolha rotulo="Responsável">
+                <GrupoDePilulas
+                  rotulo="Responsável"
+                  opcoes={[
+                    { id: "", rotulo: "Todos" },
+                    ...opcoesResponsavel.map((o) => ({ id: o.valor, rotulo: o.texto })),
+                  ]}
+                  estaAtiva={(id) => filtros.responsavelId === id}
+                  onEscolher={(id) => alterar({ responsavelId: id })}
+                />
+              </CampoDaFolha>
+            </FiltrosSheet>
+          </div>
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500">
+            <Icone nome="Filter" className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">Filtrando por {resumoFiltro}</span>
+          </p>
+        </div>
+      ) : (
       <Painel
         titulo="Filtros"
         descricao={resumoLista}
@@ -857,6 +944,7 @@ function Conteudo() {
           </p>
         </div>
       </Painel>
+      )}
 
       {/* ------------------------------ Estados ----------------------------- */}
 
@@ -1283,7 +1371,7 @@ function CartaoProcesso({
     <div className="relative">
     <Link
       href={`/admin/tarefas/legalizacao/${item.id}`}
-      className={`block rounded-xl border p-5 shadow-sm transition-colors ${
+      className={`block rounded-xl border p-5 shadow-sm transition-colors max-md:p-4 ${
         encerrado
           ? "border-[var(--cz-hairline)] bg-gray-50 hover:border-gray-300"
           : "border-[var(--cz-hairline)] bg-white hover:border-orange-300 hover:bg-orange-50/30"
@@ -1312,7 +1400,7 @@ function CartaoProcesso({
                 Empresa em abertura
               </p>
             )}
-            <p className="truncate text-base font-semibold text-gray-900">
+            <p className="truncate text-base font-semibold text-gray-900 max-md:line-clamp-2 max-md:whitespace-normal">
               {nome}
             </p>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
@@ -1469,7 +1557,7 @@ function CartaoProcesso({
     </Link>
 
     {(onEditar || onExcluir) && (
-      <div className="absolute right-3 top-3 flex items-center gap-1">
+      <div className="absolute right-3 top-3 flex items-center gap-1 max-md:right-2 max-md:top-2">
         {onEditar && (
           <button
             type="button"
@@ -1482,7 +1570,7 @@ function CartaoProcesso({
               evento.stopPropagation();
               onEditar(item);
             }}
-            className="rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FFF2E9] hover:text-[#C2410C]"
+            className="rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FFF2E9] hover:text-[#C2410C] max-md:inline-flex max-md:h-11 max-md:w-11 max-md:items-center max-md:justify-center max-md:p-0"
           >
             <Icone nome="Pencil" className="h-4 w-4" />
           </button>
@@ -1500,7 +1588,7 @@ function CartaoProcesso({
               evento.stopPropagation();
               onExcluir(item);
             }}
-            className="rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FEF2F2] hover:text-[#B42318]"
+            className="rounded-lg border border-[#DCE0E7] bg-white p-1.5 text-gray-400 transition-colors hover:bg-[#FEF2F2] hover:text-[#B42318] max-md:inline-flex max-md:h-11 max-md:w-11 max-md:items-center max-md:justify-center max-md:p-0"
           >
             <Icone nome="Trash2" className="h-4 w-4" />
           </button>

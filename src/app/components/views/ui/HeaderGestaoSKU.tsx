@@ -35,7 +35,7 @@ export default function HeaderGestaoSKU({
     return (
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--cz-laranja)]">Catálogo</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--cz-laranja)] max-md:text-xs">Catálogo</p>
           <h1 className="cz-titulo mt-1 text-[24px] leading-8">SKUs · {selectedCategory}</h1>
           <p className="mt-1 text-[13.5px] text-[var(--cz-texto-suave)]">Gerencie os SKUs desta categoria.</p>
         </div>
@@ -48,9 +48,9 @@ export default function HeaderGestaoSKU({
   }
 
   return (
-    <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <header className="flex flex-col gap-5 max-md:gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="max-w-2xl">
-        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--cz-laranja)]">Catálogo</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--cz-laranja)] max-md:text-xs">Catálogo</p>
         <h1 className="cz-titulo mt-1 text-[26px] leading-8 sm:text-[30px]">Gestão de SKU</h1>
         <p className="mt-2 text-[13.5px] leading-relaxed text-[var(--cz-texto-suave)]">Organize produtos, kits, custos e disponibilidade em um único lugar.</p>
       </div>

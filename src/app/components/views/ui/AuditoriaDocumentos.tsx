@@ -22,7 +22,13 @@ type DocumentLog = {
   };
 };
 
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
+import { useCelular } from "@/hooks/useMediaQuery";
+
 export default function AuditoriaDocumentos() {
+  // Celular: o log vira lista de cartões e os filtros secundários entram numa folha
+  // inferior. De 768px para cima nada disso existe: segue a tabela de sempre.
+  const celular = useCelular();
   const [logs, setLogs] = useState<DocumentLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -124,7 +130,7 @@ export default function AuditoriaDocumentos() {
         {/* Filters */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+            <label className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5 max-md:flex!">
               <Search className="w-3.5 h-3.5" /> Pesquisar Arquivo
             </label>
             <input 
@@ -136,8 +142,21 @@ export default function AuditoriaDocumentos() {
             />
           </div>
 
+          {/* Celular: a busca fica à vista; ação e datas vão para a folha. Em md+ o
+              FiltrosSheet devolve os três campos direto na grade de 4 colunas. */}
+          <FiltrosSheet
+            titulo="Filtros"
+            ativos={[selectedAction, startDate, endDate].filter(Boolean).length}
+            onLimpar={() => {
+              setSelectedAction("");
+              setStartDate("");
+              setEndDate("");
+              setPage(1);
+            }}
+            classeBotao="w-full"
+          >
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+            <label className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5 max-md:flex!">
               <Activity className="w-3.5 h-3.5" /> Tipo de Ação
             </label>
             <select 
@@ -153,7 +172,7 @@ export default function AuditoriaDocumentos() {
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+            <label className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5 max-md:flex!">
               <Calendar className="w-3.5 h-3.5" /> Data Inicial
             </label>
             <input 
@@ -166,7 +185,7 @@ export default function AuditoriaDocumentos() {
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+            <label className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1.5 max-md:flex!">
               <Calendar className="w-3.5 h-3.5" /> Data Final
             </label>
             <input 
@@ -177,6 +196,7 @@ export default function AuditoriaDocumentos() {
               title="Data Final"
             />
           </div>
+          </FiltrosSheet>
         </div>
       </div>
 
@@ -202,6 +222,60 @@ export default function AuditoriaDocumentos() {
             <h3 className="text-lg font-semibold text-gray-700">Nenhum registro encontrado</h3>
             <p className="text-sm text-gray-400 mt-1">Tente ajustar os filtros de busca.</p>
           </div>
+        ) : celular ? (
+          // Celular: cada registro é um cartão (quando e o quê em cima, o documento
+          // no meio, quem fez e de quem é embaixo). A tabela de 5 colunas só cabia
+          // rolando para os lados.
+          <ul className="space-y-3">
+            {logs.map((log) => {
+              const quando = new Date(log.createdAt);
+              return (
+                <li key={log.id} className="rounded-xl border border-[var(--cz-hairline)] bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-800">
+                      <Clock className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span className="truncate">
+                        {quando.toLocaleDateString("pt-BR")} às {quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </p>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {getActionIcon(log.action)}
+                      {getActionLabel(log.action)}
+                    </div>
+                  </div>
+
+                  {/* Mesmo gesto da tabela (abrir o arquivo), mas como botão de verdade
+                      e com 44px de altura. */}
+                  <button
+                    type="button"
+                    onClick={() => window.open(`${log.document.fileUrl}?action=view`, "_blank")}
+                    className="mt-3 flex min-h-11 w-full items-center gap-2.5 rounded-lg bg-gray-50 px-3 py-2 text-left transition-colors active:bg-blue-50"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+                    <span className="line-clamp-2 min-w-0 flex-1 break-all text-sm font-medium text-gray-700" title={log.document.originalName}>
+                      {log.document.originalName}
+                    </span>
+                    <Eye className="h-4 w-4 shrink-0 text-gray-400" />
+                  </button>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600">
+                      {log.user.name.charAt(0)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">{log.user.name}</span>
+                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-gray-500">
+                      {log.user.role === "ADMIN" || log.user.role === "MASTER" ? "Equipe" : "Cliente"}
+                    </span>
+                  </div>
+                  <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-500">
+                    <Users className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                    <span className="shrink-0">Dono:</span>
+                    <span className="min-w-0 truncate font-medium text-gray-700">{log.document.user.name}</span>
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           <div className="bg-white border border-[var(--cz-hairline)] rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse">
@@ -282,7 +356,7 @@ export default function AuditoriaDocumentos() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="p-4 border-t border-gray-100 bg-white shrink-0 flex items-center justify-between">
+        <div className="p-4 border-t border-gray-100 bg-white shrink-0 flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-3 max-md:[&>div:first-child]:text-center max-md:[&_button]:h-11 max-md:[&_button]:flex-1">
           <div className="text-sm text-gray-500 font-medium">
             Página <span className="text-gray-900 font-bold">{page}</span> de <span className="text-gray-900 font-bold">{totalPages}</span>
           </div>

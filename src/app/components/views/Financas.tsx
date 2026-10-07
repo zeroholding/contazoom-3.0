@@ -13,6 +13,7 @@ import { ImportFinanceModal } from "./ui/ImportFinanceModal";
 import VendasPagination from "./ui/VendasPagination";
 import { useSyncProgress } from "@/hooks/useSyncProgress";
 import FiltrosFinancas, { FiltroPeriodo, FiltroStatus, FiltroOrigem } from "./ui/FiltrosFinancas";
+import { useCelular } from "@/hooks/useMediaQuery";
 
 const FULL_W = "16rem";
 const RAIL_W = "4rem";
@@ -38,7 +39,7 @@ interface HeaderFinancasProps {
   syncProgress?: string;
 }
 
-const HeaderFinancas = ({ 
+const HeaderFinancasDesktop = ({
   activeTab, 
   onTabChange, 
   onAddNew, 
@@ -222,6 +223,144 @@ const HeaderFinancas = ({
   );
 };
 
+// ---------------------------------------------------------------------------
+// Celular (<768px). O cabeçalho do desktop (`HeaderFinancasDesktop`, acima) fica
+// exatamente como era. Abaixo de 768px entra este: os 4 botões só com ícone (que
+// ninguém sabia o que faziam) viram botões com rótulo, "Adicionar" ocupa a largura
+// toda no topo (é a ação principal da tela, e o polegar acerta fácil) e os filtros
+// vão para dentro do cartão das abas, junto do que eles filtram.
+// ---------------------------------------------------------------------------
+const ABAS_FINANCAS: Array<{ id: TabOption; label: string }> = [
+  { id: "contas_pagar", label: "Contas a Pagar" },
+  { id: "contas_receber", label: "Contas a Receber" },
+  { id: "categorias", label: "Categorias" },
+  { id: "formas_pagamento", label: "Formas de Pagamento" },
+];
+
+const ROTULO_ADICIONAR: Record<TabOption, string> = {
+  contas_pagar: "Adicionar Despesa",
+  contas_receber: "Adicionar Receita",
+  categorias: "Adicionar Categoria",
+  formas_pagamento: "Adicionar Forma de Pagamento",
+};
+
+const BOTAO_SECUNDARIO_CELULAR =
+  "inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-cz border border-hairline-forte bg-superficie px-3 text-[14px] font-semibold text-tinta shadow-cz-1 transition-colors active:bg-fundo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca disabled:cursor-not-allowed disabled:opacity-50";
+
+const IconeSimples = ({ d }: { d: string }) => (
+  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+    <path d={d} />
+  </svg>
+);
+
+const Giro = () => (
+  <span aria-hidden="true" className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-hairline-forte border-t-tinta" />
+);
+
+// Texto sem acento nem caixa, para a busca do celular achar "Cartao" em "Cartão".
+const normalizarBusca = (valor: unknown) =>
+  String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const CabecalhoFinancasCelular = ({
+  activeTab,
+  onTabChange,
+  onAddNew,
+  onImportClick,
+  onIncrementalSync,
+  hasSyncedBefore = false,
+  isIncrementalSyncing = false,
+  filtrosComponent,
+  onSyncClick,
+  isSyncing,
+  syncProgress,
+}: HeaderFinancasProps) => {
+  const mostrarAtualizar = hasSyncedBefore && !!onIncrementalSync;
+  const rotuloAdicionar = ROTULO_ADICIONAR[activeTab];
+
+  return (
+    <div className="mb-4">
+      <h1 className="text-[22px] font-bold leading-7 tracking-tight text-tinta">Finanças</h1>
+
+      <div className={`mt-3 grid gap-2 ${mostrarAtualizar ? "grid-cols-3" : "grid-cols-2"}`}>
+        <button
+          type="button"
+          onClick={onAddNew}
+          aria-label={rotuloAdicionar}
+          className="col-span-full inline-flex h-12 items-center justify-center gap-2 rounded-cz bg-marca px-4 text-[15px] font-bold text-white shadow-cz-1 transition-colors active:bg-marca-forte focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca focus-visible:ring-offset-2"
+        >
+          <svg className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span className="truncate">{rotuloAdicionar}</span>
+        </button>
+
+        <button type="button" onClick={onImportClick} aria-label="Importar planilha Excel" className={BOTAO_SECUNDARIO_CELULAR}>
+          <IconeSimples d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+          <span className="truncate">Importar</span>
+        </button>
+
+        {onSyncClick && (
+          <button type="button" onClick={onSyncClick} disabled={!!isSyncing} aria-label="Trazer dados do Bling" className={BOTAO_SECUNDARIO_CELULAR}>
+            {isSyncing ? <Giro /> : <IconeSimples d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />}
+            <span className="truncate">{isSyncing ? "Sincronizando…" : "Bling"}</span>
+          </button>
+        )}
+
+        {mostrarAtualizar && (
+          <button type="button" onClick={onIncrementalSync} disabled={isIncrementalSyncing} aria-label="Atualizar dados financeiros" className={BOTAO_SECUNDARIO_CELULAR}>
+            {isIncrementalSyncing ? <Giro /> : <IconeSimples d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />}
+            <span className="truncate">{isIncrementalSyncing ? "Atualizando…" : "Atualizar"}</span>
+          </button>
+        )}
+      </div>
+
+      {/* O botão encolhe para "Sincronizando…"; a etapa em curso (texto longo) vem aqui. */}
+      {isSyncing && syncProgress && (
+        <p role="status" className="mt-2 text-[13px] leading-5 text-tinta-suave">
+          {syncProgress}
+        </p>
+      )}
+
+      <div className="mt-3 rounded-cartao border border-hairline bg-superficie p-1.5 shadow-cz-1">
+        <div className="overflow-x-auto scrollbar-hidden">
+          <nav className="flex min-w-max gap-1" aria-label="Seções financeiras">
+            {ABAS_FINANCAS.map((aba) => (
+              <button
+                key={aba.id}
+                type="button"
+                onClick={(e) => {
+                  onTabChange(aba.id);
+                  // A aba cortada na borda vem para o meio: sem isto, tocar em "Categorias"
+                  // mudava a lista mas deixava a aba pela metade, escondida atrás do cartão.
+                  e.currentTarget.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+                }}
+                aria-current={activeTab === aba.id ? "page" : undefined}
+                className={[
+                  activeTab === aba.id ? "bg-marca-suave text-marca-forte" : "text-tinta-suave active:bg-fundo",
+                  "min-h-11 whitespace-nowrap rounded-cz px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca",
+                ].join(" ")}
+              >
+                {aba.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {filtrosComponent && <div className="mt-1.5 border-t border-hairline px-1.5 pb-1.5 pt-3">{filtrosComponent}</div>}
+      </div>
+    </div>
+  );
+};
+
+const HeaderFinancas = (props: HeaderFinancasProps) => {
+  const celular = useCelular();
+  return celular ? <CabecalhoFinancasCelular {...props} /> : <HeaderFinancasDesktop {...props} />;
+};
+
 // Helper para formatar data sem problemas de timezone
 const formatDateBR = (dateValue: string | Date | null | undefined): string => {
   if (!dateValue) return "-";
@@ -313,56 +452,46 @@ interface MobileAccountCardProps {
   onDelete: () => void;
 }
 
+// Cartão de uma conta no celular. Cada cartão tem de caber em ~215px: a versão anterior
+// gastava ~265px (grade de rótulo-sobre-valor em 3 linhas + rodapé de ações), o que
+// fazia a página de 15 contas passar de 4.000px. Aqui a descrição pode quebrar em 2
+// linhas (era cortada em 1), o valor ganha a cor do sentido do dinheiro e as ações
+// dividem a linha com ele, sem rodapé próprio.
 const MobileAccountCard = ({ conta, type, onEdit, onViewJson, onDelete }: MobileAccountCardProps) => {
-  const isSettled = ["pago", "recebido"].includes(String(conta.status).toLowerCase());
+  const statusKey = String(conta.status || "").toLowerCase();
+  const isSettled = ["pago", "recebido"].includes(statusKey);
+  const isOverdue = statusKey === "vencido";
   const originLabel = conta.origem === "SINCRONIZACAO" ? "Bling" : conta.origem === "EXCEL" ? "Excel" : "Manual";
   const settlementDate = type === "pagar" ? conta.dataPagamento : conta.dataRecebimento;
+  const categoriaNome = conta.categoria?.descricao || conta.categoria?.nome || "Sem categoria";
+  const valorTexto = formatCurrencyBRL(conta.valor);
+  // Verde para entrada (receber) e vermelho para saída (pagar): o sentido do dinheiro se lê
+  // antes do número. Valor de 8+ dígitos desce um corpo para dividir a linha com as ações.
+  const valorCor = type === "receber" ? "text-emerald-700" : "text-red-700";
+  const valorTamanho = valorTexto.length > 15 ? "text-[17px]" : "text-[19px]";
+  // Liquidado verde, vencido vermelho (pede ação), pendente âmbar.
+  const statusCor = isSettled ? "bg-emerald-50 text-emerald-700" : isOverdue ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700";
+  const botaoAcao = "grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca";
 
   return (
-    <article className="rounded-cartao border border-hairline bg-superficie p-4 shadow-cz-1">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-tinta">{conta.descricao}</p>
-          <p className="mt-1 text-xs text-tinta-suave">{conta.categoria?.descricao || conta.categoria?.nome || "Sem categoria"}</p>
+    <article className="overflow-hidden rounded-cartao border border-hairline bg-superficie shadow-cz-1">
+      <div className="px-4 pt-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 truncate rounded-full bg-fundo px-2.5 py-1 text-[12px] font-semibold text-tinta-suave">{categoriaNome}</span>
+          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold capitalize ${statusCor}`}>
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+            {conta.status}
+          </span>
         </div>
-        <p className="shrink-0 text-base font-bold tabular-nums text-tinta">{formatCurrencyBRL(conta.valor)}</p>
+        <p className="mt-2.5 line-clamp-2 break-words text-[15px] font-semibold leading-5 text-tinta">{conta.descricao}</p>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-hairline py-3 text-xs">
-        <div>
-          <span className="block text-tinta-fraca">Vencimento</span>
-          <strong className="mt-1 block font-semibold text-tinta">{formatDateBR(conta.dataVencimento)}</strong>
-        </div>
-        <div>
-          <span className="block text-tinta-fraca">Forma</span>
-          <strong className="mt-1 block truncate font-semibold text-tinta">{conta.formaPagamento?.nome || "Não informada"}</strong>
-        </div>
-        {isSettled && settlementDate && (
-          <div>
-            <span className="block text-tinta-fraca">{type === "pagar" ? "Pago em" : "Recebido em"}</span>
-            <strong className="mt-1 block font-semibold text-tinta">{formatDateBR(settlementDate)}</strong>
-          </div>
-        )}
-        {type === "pagar" && (
-          <div>
-            <span className="block text-tinta-fraca">Competência</span>
-            <strong className="mt-1 block font-semibold text-tinta">{formatDateBR(conta.dataCompetencia)}</strong>
-          </div>
-        )}
-        <div className={type === "pagar" ? "" : "col-span-2"}>
-          <span className="block text-tinta-fraca">Origem</span>
-          <strong className="mt-1 block font-semibold text-tinta">{originLabel}</strong>
-        </div>
-      </div>
-      {type === "pagar" && conta.historico && <p className="mt-3 line-clamp-2 text-xs leading-5 text-tinta-suave">{conta.historico}</p>}
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${isSettled ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-          {conta.status}
-        </span>
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={onEdit} aria-label={`Editar ${conta.descricao}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca">
+      <div className="flex items-center justify-between gap-2 pl-4 pr-1.5">
+        <p className={`min-w-0 font-bold tabular-nums tracking-tight ${valorTamanho} ${valorCor}`}>{valorTexto}</p>
+        <div className="flex shrink-0 items-center">
+          <button type="button" onClick={onEdit} aria-label={`Editar ${conta.descricao}`} className={botaoAcao}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" /></svg>
           </button>
-          <button type="button" onClick={onViewJson} aria-label={`Ver dados técnicos de ${conta.descricao}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca">
+          <button type="button" onClick={onViewJson} aria-label={`Ver dados técnicos de ${conta.descricao}`} className={botaoAcao}>
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m10 20 4-16m4 4 4 4-4 4M6 16l-4-4 4-4" /></svg>
           </button>
           <button type="button" onClick={onDelete} aria-label={`Excluir ${conta.descricao}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
@@ -370,9 +499,80 @@ const MobileAccountCard = ({ conta, type, onEdit, onViewJson, onDelete }: Mobile
           </button>
         </div>
       </div>
+      <div className="space-y-0.5 border-t border-hairline px-4 py-2.5 text-[13px] leading-5 text-tinta-suave">
+        <p>
+          Vencimento <strong className="font-semibold text-tinta">{formatDateBR(conta.dataVencimento)}</strong>
+          {isSettled && settlementDate && (
+            <>
+              {" · "}
+              {type === "pagar" ? "Pago em" : "Recebido em"} <strong className="font-semibold text-tinta">{formatDateBR(settlementDate)}</strong>
+            </>
+          )}
+        </p>
+        <p className="truncate">
+          Forma <strong className="font-semibold text-tinta">{conta.formaPagamento?.nome || "Não informada"}</strong>
+        </p>
+        <p>
+          {type === "pagar" && (
+            <>
+              Competência <strong className="font-semibold text-tinta">{formatDateBR(conta.dataCompetencia)}</strong>
+              {" · "}
+            </>
+          )}
+          Origem <strong className="font-semibold text-tinta">{originLabel}</strong>
+        </p>
+        {type === "pagar" && conta.historico && <p className="line-clamp-2 pt-1 text-[12px] leading-4">{conta.historico}</p>}
+      </div>
     </article>
   );
 };
+
+// Cartão de categoria / forma de pagamento no celular. As tabelas dessas abas têm 4–5 colunas com
+// `whitespace-nowrap`: em 390px só a primeira aparecia, e status e botões ficavam atrás da rolagem
+// lateral. Aqui o nome manda, o resto vira selos e as duas ações têm 44px.
+const CartaoCadastroCelular = ({
+  titulo,
+  apoio,
+  tipo,
+  ativo,
+  rodape,
+  recuado = false,
+  onEdit,
+  onDelete,
+}: {
+  titulo: string;
+  apoio?: string | null;
+  tipo?: string | null;
+  ativo: boolean;
+  rodape?: string | null;
+  recuado?: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) => (
+  <article
+    className={`flex items-center gap-2 rounded-cartao border border-hairline bg-superficie py-2 pl-4 pr-1.5 shadow-cz-1 ${recuado ? "ml-5 border-l-4 border-l-marca-borda" : ""}`}
+  >
+    <div className="min-w-0 flex-1">
+      <p className="break-words text-[15px] font-semibold leading-5 text-tinta">{titulo}</p>
+      {apoio && <p className="mt-0.5 line-clamp-2 text-[13px] leading-5 text-tinta-suave">{apoio}</p>}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {tipo && <span className="rounded-full bg-fundo px-2.5 py-0.5 text-[12px] font-semibold text-tinta-suave">{tipo}</span>}
+        <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+          {ativo ? "Ativo" : "Inativo"}
+        </span>
+        {rodape && <span className="text-[12px] text-tinta-suave">{rodape}</span>}
+      </div>
+    </div>
+    <div className="flex shrink-0 items-center">
+      <button type="button" onClick={onEdit} aria-label={`Editar ${titulo}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-fundo hover:text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marca">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" /></svg>
+      </button>
+      <button type="button" onClick={onDelete} aria-label={`Excluir ${titulo}`} className="grid h-11 w-11 place-items-center rounded-cz text-tinta-suave transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7 18.1 19.1a2 2 0 0 1-2 1.9H7.9a2 2 0 0 1-2-1.9L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16" /></svg>
+      </button>
+    </div>
+  </article>
+);
 
 export default function Financas() {
   const { toast } = useToast();
@@ -419,6 +619,8 @@ export default function Financas() {
   const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<string>>(new Set());
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todos");
   const [filtroOrigem, setFiltroOrigem] = useState<FiltroOrigem>("todas");
+  // Busca por texto: só o celular tem o campo (FiltrosFinancasCelular); no desktop fica "" e não filtra nada.
+  const [busca, setBusca] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -1002,6 +1204,13 @@ export default function Financas() {
       if (categoriasSelecionadas.size > 0 && !categoriasSelecionadas.has(conta.categoriaId)) return false;
       if (filtroStatus !== "todos" && conta.status !== filtroStatus) return false;
       if (filtroOrigem !== "todas" && conta.origem !== filtroOrigem) return false;
+      const termoBusca = normalizarBusca(busca);
+      if (termoBusca) {
+        const alvoBusca = normalizarBusca(
+          [conta.descricao, conta.historico, conta.categoria?.descricao, conta.categoria?.nome, conta.formaPagamento?.nome].filter(Boolean).join(" "),
+        );
+        if (!alvoBusca.includes(termoBusca)) return false;
+      }
       return true;
     });
     
@@ -1623,7 +1832,8 @@ export default function Financas() {
           >
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
           </svg>
-          <span className="hidden sm:inline">Trazer dados do Bling</span>
+          {/* Sem `hidden`: no celular o botão do estado vazio era só um ícone, a única saída da tela. */}
+          <span>Trazer dados do Bling</span>
         </>
       )}
     </button>
@@ -1739,7 +1949,7 @@ export default function Financas() {
               </select>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 max-md:flex-col-reverse max-md:[&>button]:h-12 max-md:[&>button]:flex-none max-md:[&>button]:text-[15px] max-md:[&>button]:font-semibold">
               <button
                 type="button"
                 onClick={handleCloseModal}
@@ -1824,7 +2034,7 @@ export default function Financas() {
               <p className="text-xs text-tinta-suave mt-1">Deixe vazio para criar uma categoria principal. Selecione uma categoria para criar uma subcategoria.</p>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 max-md:flex-col-reverse max-md:[&>button]:h-12 max-md:[&>button]:flex-none max-md:[&>button]:text-[15px] max-md:[&>button]:font-semibold">
               <button
                 type="button"
                 onClick={handleCloseModal}
@@ -1870,7 +2080,7 @@ export default function Financas() {
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 max-md:flex-col-reverse max-md:[&>button]:h-12 max-md:[&>button]:flex-none max-md:[&>button]:text-[15px] max-md:[&>button]:font-semibold">
               <button
                 type="button"
                 onClick={handleCloseModal}
@@ -1926,7 +2136,9 @@ export default function Financas() {
             e os cartoes brancos se destacam dele. */}
       </div>
 
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] ${mdMlVar}`}>
+      {/* No celular o conteúdo ganha 1rem de respiro sob o cabeçalho de 56px; no desktop
+          o `main` continua colado na barra, como sempre foi. */}
+      <main className={`relative z-20 pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)] ${mdMlVar}`}>
         <section className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
           <HeaderFinancas
             activeTab={activeTab}
@@ -1965,12 +2177,18 @@ export default function Financas() {
                       const t = (c.tipo || '').toString().toUpperCase();
                       return t === tipoAlvo;
                     })
+                    // A API devolve as categorias numa lista plana (pais e filhos) e cada pai ainda traz os
+                    // filhos em `subCategorias`: o flatMap acima repete as subcategorias, e isso gerava
+                    // `key` duplicada na lista do filtro. Mesmas opções, sem repetição.
+                    .filter((c: any, i: number, todas: any[]) => todas.findIndex((x: any) => x.id === c.id) === i)
                     .map((c: any) => ({ id: c.id, nome: c.nome, descricao: c.descricao }));
                 })()}
                 filtroStatus={filtroStatus}
                 onStatusChange={setFiltroStatus}
                 filtroOrigem={filtroOrigem}
                 onOrigemChange={setFiltroOrigem}
+                busca={busca}
+                onBuscaChange={setBusca}
               />
             ) : undefined}
           />
@@ -2000,13 +2218,15 @@ export default function Financas() {
                   helper: "Valor já liquidado",
                 },
               ].map((kpi) => (
-                <article key={kpi.label} className={`rounded-cartao border bg-superficie p-4 shadow-cz-1 ${kpi.attention ? "border-amber-200" : "border-hairline"}`}>
+                <article key={kpi.label} className={`rounded-cartao border bg-superficie p-4 max-md:p-3 shadow-cz-1 ${kpi.attention ? "border-amber-200" : "border-hairline"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold text-tinta-suave">{kpi.label}</p>
                     {kpi.attention && <span className="h-2 w-2 rounded-full bg-amber-500" aria-label="Requer atenção" />}
                   </div>
-                  <p className="mt-2 text-lg font-bold tracking-tight text-tinta sm:text-xl">{formatCurrencyBRL(kpi.value)}</p>
-                  <p className="mt-1 truncate text-[11px] text-tinta-fraca">{kpi.helper}</p>
+                  {/* Celular: o cartão tem ~150px de miolo, e "R$ 1.234.567,00" a 18px estourava.
+                      16px cabe com 7 dígitos; de 8 em diante desce para 14px. Desktop: 20px, como era. */}
+                  <p className={`mt-2 max-md:mt-1 font-bold tracking-tight text-tinta max-md:tabular-nums text-base md:text-xl ${formatCurrencyBRL(kpi.value).length > 15 ? "max-md:text-[14px]" : ""}`}>{formatCurrencyBRL(kpi.value)}</p>
+                  <p className="mt-1 truncate text-[12px] text-tinta-fraca md:text-[11px]">{kpi.helper}</p>
                 </article>
               ))}
             </section>
@@ -2020,8 +2240,24 @@ export default function Financas() {
               ) : isLoading ? (
                 <LoadingFinancialState />
               ) : formasPagamento.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-hairline">
+                <div className="md:overflow-x-auto">
+                  {/* Celular: cartões no lugar da tabela (que fica só do md para cima). A paginação, logo
+                      abaixo, é a mesma nos dois. */}
+                  <div className="space-y-2 bg-fundo p-3 md:hidden">
+                    {paginatedFormasPagamento.map((forma) => (
+                      <CartaoCadastroCelular
+                        key={forma.id}
+                        titulo={forma.nome}
+                        apoio={forma.descricao}
+                        tipo={forma.tipo}
+                        ativo={!!forma.ativo}
+                        rodape={`Sincronizado ${formatDateBR(forma.sincronizadoEm)}`}
+                        onEdit={() => handleEdit(forma)}
+                        onDelete={() => handleDelete(forma)}
+                      />
+                    ))}
+                  </div>
+                  <table className="min-w-full divide-y divide-hairline max-md:hidden">
                     <thead className="bg-fundo">
                       <tr>
                         <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">
@@ -2126,8 +2362,22 @@ export default function Financas() {
               ) : isLoading ? (
                 <LoadingFinancialState />
               ) : categorias.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-hairline">
+                <div className="md:overflow-x-auto">
+                  {/* Celular: cartões no lugar da tabela; subcategorias recuadas, como na tabela. */}
+                  <div className="space-y-2 bg-fundo p-3 md:hidden">
+                    {paginatedCategorias.map((cat) => (
+                      <CartaoCadastroCelular
+                        key={cat.id}
+                        titulo={cat.descricao || cat.nome}
+                        tipo={cat.tipo}
+                        ativo={!!cat.ativo}
+                        recuado={!!cat.categoriaPaiId}
+                        onEdit={() => handleEdit(cat)}
+                        onDelete={() => handleDelete(cat)}
+                      />
+                    ))}
+                  </div>
+                  <table className="min-w-full divide-y divide-hairline max-md:hidden">
                     <thead className="bg-fundo">
                       <tr>
                         <th className="px-3 py-2 sm:px-6 sm:py-3 text-left text-xs font-medium text-tinta-suave uppercase tracking-wider">Descrição</th>
@@ -2601,7 +2851,7 @@ export default function Financas() {
               {JSON.stringify(jsonItem, null, 2)}
             </pre>
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end max-md:[&>button]:h-12 max-md:[&>button]:w-full max-md:[&>button]:rounded-lg">
             <button
               onClick={handleCloseJsonModal}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"

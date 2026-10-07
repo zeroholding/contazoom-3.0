@@ -52,19 +52,20 @@ export default function DriveLayoutWrapper() {
   };
 
   return (
-    <div ref={containerRef} className="flex h-screen bg-[var(--cz-fundo)] font-sans">
+    <div ref={containerRef} className="flex h-screen max-md:h-[calc(100dvh-var(--cz-bottom-offset,0px))] bg-[var(--cz-fundo)] font-sans">
       <Sidebar 
         collapsed={isSidebarCollapsed} 
         mobileOpen={isSidebarMobileOpen} 
         onMobileClose={() => setIsSidebarMobileOpen(false)} 
       />
-      <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden transition-[margin] duration-200 md:ml-[var(--sidebar-w)]">
+      <div className="flex h-screen max-md:h-[calc(100dvh-var(--cz-bottom-offset,0px))] min-w-0 flex-1 flex-col overflow-hidden transition-[margin] duration-200 md:ml-[var(--sidebar-w)]">
         <Topbar 
           collapsed={isSidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
           onMobileMenu={() => setIsSidebarMobileOpen(true)} 
         />
-        <main className="flex-1 overflow-auto pt-[var(--cz-topbar-h)]">
+        {/* Respiro de 1rem sob o cabeçalho fixo no celular; no desktop segue colado, como antes. */}
+        <main className="flex-1 overflow-auto pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)]">
           <DriveDocumentos />
         </main>
       </div>

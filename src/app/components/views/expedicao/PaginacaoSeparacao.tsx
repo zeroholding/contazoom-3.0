@@ -22,6 +22,8 @@
  * muda ao navegar — antes de existir esta função, o rodapé crescia e encolhia a
  * cada clique e a tabela acima dançava com ele.
  */
+import { useCelular } from "@/hooks/useMediaQuery";
+
 function paginasVisiveis(atual: number, total: number): Array<number | "…"> {
   if (total <= 7) {
     return Array.from({ length: Math.max(total, 1) }, (_, i) => i + 1);
@@ -56,6 +58,51 @@ export default function PaginacaoSeparacao({
   onPorPagina: (v: number) => void;
 }) {
   const total = Math.max(totalPaginas, 1);
+  const celular = useCelular();
+
+  // Celular: Anterior / "3 / 12" / Próxima em botões de 44px, e o tamanho da página
+  // numa linha abaixo. A fileira numerada (1 … 4 5 6 … 58) tem botões de 32px, abaixo
+  // do alvo de toque, e numa tela de 390px aperta tudo contra a borda.
+  if (celular) {
+    const botao =
+      "h-11 flex-1 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 text-[14px] font-semibold text-[var(--cz-texto)] transition-colors active:bg-[#F4F5F7] disabled:cursor-not-allowed disabled:opacity-40";
+    const opcoes = [20, 50, 100].includes(porPagina)
+      ? [20, 50, 100]
+      : [20, 50, 100, porPagina].sort((a, b) => a - b);
+
+    return (
+      <div className="flex flex-col gap-3 border-t border-[var(--cz-hairline)] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => onPagina(pagina - 1)} disabled={pagina <= 1} className={botao}>
+            Anterior
+          </button>
+          <span className="min-w-[4.5rem] shrink-0 text-center text-[14px] font-bold tabular-nums text-[var(--cz-texto)]">
+            {pagina} / {total}
+          </span>
+          <button type="button" onClick={() => onPagina(pagina + 1)} disabled={pagina >= total} className={botao}>
+            Próxima
+          </button>
+        </div>
+        {/* `div` e não `label`: o `globals.css` força `label { display: block }` sem camada,
+            o que desfaria o `flex` e empilharia o texto sobre o campo. */}
+        <div className="flex items-center justify-between gap-3 text-[13px] text-[var(--cz-texto-suave)]">
+          Pacotes por página
+          <select
+            aria-label="Pacotes por página"
+            value={porPagina}
+            onChange={(e) => onPorPagina(Number(e.target.value))}
+            className="h-11 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 text-[14px] font-semibold text-[var(--cz-texto)] outline-none focus:border-[var(--cz-laranja)]"
+          >
+            {opcoes.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] px-4 py-3">

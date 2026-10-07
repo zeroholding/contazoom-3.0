@@ -136,14 +136,23 @@ export function Cabecalho({
   acao?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="cz-titulo text-[24px] leading-8">{titulo}</h1>
+    <header className="flex flex-wrap items-start justify-between gap-4 max-md:gap-3">
+      <div className="min-w-0">
+        {/* Celular: 22px. O título do cabeçalho fixo já repete o nome da tela, então
+            aqui ele é o início do conteúdo, não um letreiro. */}
+        <h1 className="cz-titulo text-[24px] leading-8 max-md:text-[22px] max-md:leading-7">{titulo}</h1>
         <p className="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-[var(--cz-texto-suave)]">
           {descricao}
         </p>
       </div>
-      {acao}
+      {/* Celular: a ação principal ocupa a largura toda, abaixo do texto. Um botão
+          de 44px encostado no canto direito de uma linha de 358px fica longe do
+          polegar e empurra o título para uma coluna estreita. */}
+      {acao && (
+        <div className="md:contents max-md:flex max-md:w-full max-md:flex-col max-md:gap-2 max-md:[&>*]:w-full">
+          {acao}
+        </div>
+      )}
     </header>
   );
 }
@@ -239,7 +248,7 @@ export function Campo({
           painel — a ordem exatamente invertida. `--cz-texto-suave` no lugar de
           `--cz-texto-fraco` pelo mesmo motivo: o fraco é para nota de pé, não
           para o nome do campo. */}
-      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
+      <span className="mb-1.5 block text-[11px] max-md:text-[12px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
         {rotulo}
       </span>
       {children}
@@ -333,11 +342,16 @@ export function CaixaBusca({
 }) {
   return (
     <div
-      className={`flex ${compacta ? "h-10" : "h-11"} items-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] pl-3 pr-1 transition-colors focus-within:border-[var(--cz-laranja)] focus-within:ring-2 focus-within:ring-[var(--cz-laranja-suave)] ${className}`}
+      className={`flex ${compacta ? "h-10 max-md:h-11" : "h-11"} items-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] pl-3 pr-1 transition-colors focus-within:border-[var(--cz-laranja)] focus-within:ring-2 focus-within:ring-[var(--cz-laranja-suave)] ${className}`}
     >
       <IconeBusca className="h-4 w-4 shrink-0 text-[var(--cz-texto-fraco)]" />
+      {/* SEM `type`, de propósito. Um <input> sem o atributo é um campo de texto do
+          mesmo jeito (e `enterKeyHint` continua pedindo o teclado de busca), mas
+          escapa dos seletores `input[type="text"]` do `globals.css`, que cravam
+          altura de 44px, borda, padding, fundo branco e anel de foco laranja. Com
+          `type="text"` o campo ganhava TUDO isso por dentro do invólucro, e a caixa
+          de busca virava uma caixa dentro de outra (com dois anéis de foco). */}
       <input
-        type="text"
         enterKeyHint="search"
         value={valor}
         onChange={(e) => onMudar(e.target.value)}
@@ -346,7 +360,7 @@ export function CaixaBusca({
         }}
         placeholder={placeholder}
         aria-label={rotuloAcessivel}
-        className={`min-w-0 flex-1 bg-transparent text-[var(--cz-texto)] outline-none placeholder:text-[var(--cz-texto-fraco)] ${
+        className={`h-full min-w-0 flex-1 bg-transparent p-0 text-[var(--cz-texto)] outline-none placeholder:text-[var(--cz-texto-fraco)] ${
           compacta ? "text-[13px]" : "text-[13.5px]"
         }`}
       />
@@ -459,7 +473,7 @@ export function MultiSelecao({
 
   return (
     <div className={className}>
-      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
+      <span className="mb-1.5 block text-[11px] max-md:text-[12px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-suave)]">
         {rotulo}
       </span>
 
@@ -602,26 +616,26 @@ export function Kpi({
 
   return (
     <div
-      className={`flex items-start gap-3 rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] ${casca}`}
+      className={`flex items-start gap-3 rounded-[var(--cz-raio-cartao)] border p-4 max-md:p-3.5 shadow-[var(--cz-elev-1)] ${casca}`}
     >
       {icone && (
         <span
-          className={`grid size-10 shrink-0 place-items-center rounded-[var(--cz-raio)] ${caixaIcone}`}
+          className={`grid size-10 max-md:size-9 shrink-0 place-items-center rounded-[var(--cz-raio)] ${caixaIcone}`}
         >
           {icone}
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <span className="block text-[11px] font-bold uppercase leading-tight tracking-[0.05em] text-[var(--cz-texto-suave)]">
+        <span className="block text-[11px] max-md:text-[12px] font-bold uppercase leading-tight tracking-[0.05em] text-[var(--cz-texto-suave)]">
           {rotulo}
         </span>
         {/* `cz-valor` carrega peso 800 e o tracking apertado dos números grandes
             do painel — o mesmo tratamento do login e do admin. */}
-        <strong className={`cz-valor mt-1 block text-[26px] leading-none ${cor}`}>
+        <strong className={`cz-valor mt-1 block text-[26px] max-md:text-[22px] leading-none ${cor}`}>
           {valor}
         </strong>
         {nota && (
-          <span className="mt-1.5 block text-[11px] leading-snug text-[var(--cz-texto-suave)]">
+          <span className="mt-1.5 block text-[11px] max-md:text-[12px] leading-snug text-[var(--cz-texto-suave)]">
             {nota}
           </span>
         )}
@@ -727,7 +741,12 @@ export function GrupoRecorte<C extends string>({
 
   return (
     <div className={`mt-5 ${className}`}>
-      <div className="flex flex-wrap gap-2" role="group">
+      {/* Celular: UMA linha que o dedo arrasta (sangrando até a borda da tela, que
+          é a pista de que há mais), e não três linhas de pastilhas quebradas. */}
+      <div
+        className="flex flex-wrap gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>*]:shrink-0"
+        role="group"
+      >
         {opcoes.map((o) => {
           const selecionada = o.chave === valor;
           return (
@@ -736,7 +755,7 @@ export function GrupoRecorte<C extends string>({
               type="button"
               onClick={() => onMudar(o.chave)}
               aria-pressed={selecionada}
-              className={`inline-flex h-10 items-center gap-2 rounded-[var(--cz-raio)] border px-4 text-[13.5px] font-semibold transition-colors ${
+              className={`inline-flex h-10 max-md:h-11 items-center gap-2 rounded-[var(--cz-raio)] border px-4 text-[13.5px] font-semibold transition-colors ${
                 selecionada
                   ? "border-[var(--cz-laranja)] bg-[var(--cz-laranja)] text-white"
                   : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)]"
@@ -807,7 +826,7 @@ export function Selo({
       /* 11px e `py-1`: a 10,5px numa cápsula de 20px de altura o selo lia como
          borrão colorido, não como palavra. Continua sendo o menor texto da
          tabela, mas agora é legível sem aproximar o rosto da tela. */
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-[11px] font-bold leading-none ${CASCA_SELO[tom]} ${className}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-[11px] max-md:text-[12px] font-bold leading-none ${CASCA_SELO[tom]} ${className}`}
     >
       {children}
     </span>
@@ -1116,19 +1135,22 @@ export function Paginacao({
   const ate = Math.min(pagina * porPagina, total);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-5 py-2.5 text-[12.5px] text-[var(--cz-texto-suave)]">
+    // Celular: o texto "Mostrando x a y de z" ganha a linha de cima e os controles
+    // a de baixo, com botões de 44px. Lado a lado, em 358px, o "Por página" e os
+    // dois botões de 36px se espremiam e o rótulo quebrava em três linhas.
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-5 py-2.5 text-[12.5px] text-[var(--cz-texto-suave)] max-md:flex-col max-md:items-stretch max-md:px-4 max-md:py-3">
       <span>
         Mostrando <strong className="text-[var(--cz-texto)]">{inteiro(de)}</strong> a{" "}
         <strong className="text-[var(--cz-texto)]">{inteiro(ate)}</strong> de{" "}
         <strong className="text-[var(--cz-texto)]">{inteiro(total)}</strong> {rotulo}
       </span>
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-1.5">
+      <div className="flex items-center gap-3 max-md:flex-col max-md:items-stretch">
+        <label className="flex items-center gap-1.5 max-md:justify-between">
           Por página
           <select
             value={porPagina}
             onChange={(e) => onPorPagina(Number(e.target.value))}
-            className="h-9 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2 text-[12.5px] font-semibold text-[var(--cz-texto)]"
+            className="h-9 max-md:h-11 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2 max-md:px-3 text-[12.5px] font-semibold text-[var(--cz-texto)]"
           >
             {opcoesPorPagina.map((n) => (
               <option key={n} value={n}>
@@ -1137,12 +1159,12 @@ export function Paginacao({
             ))}
           </select>
         </label>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 max-md:gap-2">
           <button
             type="button"
             onClick={() => onPagina(pagina - 1)}
             disabled={pagina <= 1}
-            className="h-9 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-9 max-md:h-11 max-md:flex-1 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Anterior
           </button>
@@ -1153,7 +1175,7 @@ export function Paginacao({
             type="button"
             onClick={() => onPagina(pagina + 1)}
             disabled={pagina >= totalPaginas}
-            className="h-9 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-9 max-md:h-11 max-md:flex-1 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-3 font-semibold transition hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Próxima
           </button>

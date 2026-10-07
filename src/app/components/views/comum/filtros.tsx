@@ -32,6 +32,8 @@ import {
   type ReactNode,
 } from "react";
 
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
+import { useCelular } from "@/hooks/useMediaQuery";
 import { inteiro } from "./formato";
 import { IconeBusca, IconeFechar, IconeFiltro, IconeSeta } from "./icones";
 
@@ -123,6 +125,7 @@ export function ListaOpcoes({
   vazio?: string;
 }) {
   const [busca, setBusca] = useState("");
+  const celular = useCelular();
   const marcados = new Set(selecionados);
 
   const alternar = (valor: string) => {
@@ -147,11 +150,13 @@ export function ListaOpcoes({
             <IconeBusca className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--cz-texto-fraco)]" />
             <input
               type="text"
-              autoFocus
+              // No celular, foco automático abriria o teclado por cima da lista
+              // que a pessoa acabou de abrir para ler.
+              autoFocus={!celular}
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder={buscaPlaceholder}
-              className="h-9 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] pl-8 pr-2 text-[13px] text-[var(--cz-texto)] focus:border-[var(--cz-laranja)] focus:outline-none"
+              className="h-9 max-md:h-11 w-full rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] pl-8 pr-2 text-[13px] text-[var(--cz-texto)] focus:border-[var(--cz-laranja)] focus:outline-none"
             />
           </span>
         </div>
@@ -168,7 +173,7 @@ export function ListaOpcoes({
             return (
               <label
                 key={o.valor}
-                className={`flex cursor-pointer items-center gap-2 rounded-[var(--cz-raio)] px-2 py-2 text-[13px] transition-colors ${
+                className={`flex cursor-pointer items-center gap-2 rounded-[var(--cz-raio)] px-2 py-2 max-md:gap-3 max-md:py-3 max-md:text-[14px] text-[13px] transition-colors ${
                   ativo
                     ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
                     : "text-[var(--cz-texto)] hover:bg-[var(--cz-fundo)]"
@@ -178,7 +183,7 @@ export function ListaOpcoes({
                   type="checkbox"
                   checked={ativo}
                   onChange={() => alternar(o.valor)}
-                  className="size-3.5 shrink-0 accent-[var(--cz-laranja)]"
+                className="size-3.5 max-md:size-5 shrink-0 accent-[var(--cz-laranja)]"
                 />
                 {o.icone}
                 <span className="min-w-0 flex-1 truncate" title={o.rotulo}>
@@ -243,8 +248,50 @@ export function resumoSelecao(
  * é menor que "Modalidade de envio") e num grid cada uma ocuparia a mesma coluna,
  * deixando buracos. Quebra de linha só quando a tela é estreita de verdade.
  */
-export function BarraFiltros({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap items-center gap-2">{children}</div>;
+export function BarraFiltros({
+  children,
+  busca,
+  ativos = 0,
+  onLimpar,
+}: {
+  children: ReactNode;
+  /**
+   * A caixa de busca da barra. No desktop ela abre a linha, antes das pastilhas.
+   * No celular fica FORA da folha de filtros, ao lado do botão "Filtros": busca é
+   * o filtro mais usado e não pode ficar atrás de um toque a mais.
+   */
+  busca?: ReactNode;
+  /** Quantos filtros estão ligados. Vira o selo do botão "Filtros" no celular. */
+  ativos?: number;
+  /** "Limpar" da folha, no celular. */
+  onLimpar?: () => void;
+}) {
+  const celular = useCelular();
+
+  if (!celular) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {busca}
+        {children}
+      </div>
+    );
+  }
+
+  // Celular: busca + UM botão "Filtros". As pastilhas (e tudo o mais que vier em
+  // `children`) viram linhas de largura cheia dentro da folha — ver `FiltroRapido`.
+  return (
+    <div className="flex items-center gap-2">
+      {busca && <div className="min-w-0 flex-1">{busca}</div>}
+      <FiltrosSheet
+        titulo="Filtros"
+        ativos={ativos}
+        onLimpar={onLimpar}
+        classeBotao={busca ? "shrink-0" : "w-full"}
+      >
+        {children}
+      </FiltrosSheet>
+    </div>
+  );
 }
 
 /** A altura de toda pastilha e do campo de busca da barra. Um valor só. */
@@ -281,15 +328,20 @@ export function FiltroRapido({
   larguraPainel?: string;
 }) {
   const { aberto, setAberto, caixa } = usePainelAncorado();
+  const celular = useCelular();
   const ativo = selecionados.length > 0;
 
   return (
     <div className="relative" ref={caixa}>
+      {/* Celular: a pastilha vira uma linha de largura cheia (rótulo à esquerda,
+          valor à direita) e o painel abre EMBAIXO dela, no fluxo, em vez de flutuar.
+          Dentro da folha de filtros um painel `absolute` seria cortado pela
+          rolagem da folha. */}
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
         aria-expanded={aberto}
-        className={`inline-flex ${ALTURA_PASTILHA} max-w-[16rem] items-center gap-1.5 rounded-[var(--cz-raio)] border px-3 text-[13px] transition-colors ${
+        className={`inline-flex ${celular ? "h-11 w-full justify-between text-[14px]" : `${ALTURA_PASTILHA} max-w-[16rem] text-[13px]`} items-center gap-1.5 rounded-[var(--cz-raio)] border px-3 transition-colors ${
           ativo
             ? "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]"
             : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:border-[var(--cz-laranja-borda)]"
@@ -297,7 +349,7 @@ export function FiltroRapido({
       >
         {icone && <span className="shrink-0 opacity-70">{icone}</span>}
         <span className="shrink-0 text-[var(--cz-texto-suave)]">{rotulo}:</span>
-        <span className="min-w-0 truncate font-semibold">
+        <span className={`min-w-0 truncate font-semibold ${celular ? "ml-auto text-right" : ""}`}>
           {resumoSelecao(opcoes, selecionados, placeholder)}
         </span>
         <IconeSeta
@@ -311,7 +363,11 @@ export function FiltroRapido({
         // `left-0` com largura própria, e não `left-0 right-0`: a pastilha tem a
         // largura do texto, e um painel do tamanho dela cortaria nome de conta.
         <div
-          className={`absolute left-0 z-30 mt-1 ${larguraPainel} max-w-[min(19rem,90vw)] overflow-hidden rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] shadow-lg`}
+          className={
+            celular
+              ? "mt-2 overflow-hidden rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)]"
+              : `absolute left-0 z-30 mt-1 ${larguraPainel} max-w-[min(19rem,90vw)] overflow-hidden rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] shadow-lg`
+          }
         >
           <ListaOpcoes
             opcoes={opcoes}
@@ -346,7 +402,7 @@ export function BotaoAvancados({
       type="button"
       onClick={onAlternar}
       aria-expanded={aberto}
-      className={`inline-flex ${ALTURA_PASTILHA} items-center gap-1.5 rounded-[var(--cz-raio)] border px-3 text-[13px] font-semibold transition-colors ${
+      className={`inline-flex ${ALTURA_PASTILHA} max-md:h-11 items-center gap-1.5 rounded-[var(--cz-raio)] border px-3 text-[13px] font-semibold transition-colors ${
         ativos > 0
           ? "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]"
           : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto)] hover:border-[var(--cz-laranja-borda)]"
@@ -410,7 +466,7 @@ export function ChipsFiltro({
           type="button"
           onClick={chip.remover}
           title={`Remover o filtro ${chip.grupo}: ${chip.rotulo}`}
-          className="group inline-flex max-w-[18rem] items-center gap-1.5 rounded-full border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] py-1 pl-2.5 pr-1.5 text-[12px] transition-colors hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)]"
+          className="group inline-flex max-w-[18rem] max-md:max-w-full items-center gap-1.5 rounded-full border border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] py-1 max-md:py-2 pl-2.5 pr-1.5 text-[12px] max-md:text-[13px] transition-colors hover:border-[var(--cz-laranja-borda)] hover:bg-[var(--cz-laranja-suave)]"
         >
           {chip.icone}
           <span className="shrink-0 text-[var(--cz-texto-fraco)]">{chip.grupo}</span>

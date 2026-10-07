@@ -4,7 +4,7 @@ import { useRef, useEffect, useLayoutEffect, useState, lazy, Suspense } from "re
 import gsap from "gsap";
 import Sidebar from "../views/ui/Sidebar";
 import Topbar from "../views/ui/Topbar";
-import HeaderDashboard from "../views/ui/HeaderDashboard";
+import HeaderDashboard, { FILTROS_PADRAO } from "../views/ui/HeaderDashboard";
 import DashboardStats from "../views/ui/DashboardStats";
 import { FiltroPeriodo } from "../views/ui/FiltrosDashboard";
 
@@ -77,7 +77,7 @@ export default function Dashboard() {
   const [periodoAtivo, setPeriodoAtivo] = useState<FiltroPeriodo>("hoje");
   const [dataInicioPersonalizada, setDataInicioPersonalizada] = useState<Date | null>(null);
   const [dataFimPersonalizada, setDataFimPersonalizada] = useState<Date | null>(null);
-  const [canalAtivo, setCanalAtivo] = useState<FiltroCanal>("todos");
+  const [canalAtivo, setCanalAtivo] = useState<FiltroCanal>(FILTROS_PADRAO.canal);
   
   // Alerta de custo de SKU
   const [pendingSkusCount, setPendingSkusCount] = useState<number>(0);
@@ -87,10 +87,10 @@ export default function Dashboard() {
   });
   const [isPendingSkuAlertHidden, setIsPendingSkuAlertHidden] = useState(false);
 
-  const [statusAtivo, setStatusAtivo] = useState<FiltroStatus>("pagos");
-  const [tipoAnuncioAtivo, setTipoAnuncioAtivo] = useState<FiltroTipoAnuncio>("todos");
-  const [modalidadeEnvioAtiva, setModalidadeEnvioAtiva] = useState<FiltroModalidadeEnvio>("todos");
-  const [agrupamentoSKUAtivo, setAgrupamentoSKUAtivo] = useState<FiltroAgrupamentoSKU>("mlb");
+  const [statusAtivo, setStatusAtivo] = useState<FiltroStatus>(FILTROS_PADRAO.status);
+  const [tipoAnuncioAtivo, setTipoAnuncioAtivo] = useState<FiltroTipoAnuncio>(FILTROS_PADRAO.tipoAnuncio);
+  const [modalidadeEnvioAtiva, setModalidadeEnvioAtiva] = useState<FiltroModalidadeEnvio>(FILTROS_PADRAO.modalidadeEnvio);
+  const [agrupamentoSKUAtivo, setAgrupamentoSKUAtivo] = useState<FiltroAgrupamentoSKU>(FILTROS_PADRAO.agrupamento);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
 
@@ -220,9 +220,24 @@ export default function Dashboard() {
       </div>
 
       {/* Conteúdo */}
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="w-full">
-          {/* Sistema de orientação do usuário */}
+      {/* No celular o conteúdo ganha 16px de respiro sob o cabeçalho fixo; sem isso
+          o título "Dashboard" encostava na borda inferior da barra. */}
+      <main className={`relative z-20 pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
+        {/* Cada gráfico é um componente à parte, então os ajustes de celular dos cartões abaixo
+            entram por seletores de descendente neste container (todos com `max-md:`):
+            - gráfico de linhas: 240px de altura, legenda em 2 colunas;
+            - texto "Mostrando top 10…" dos cabeçalhos some (apertava o título);
+            - barras empilhadas (por conta/modalidade): 240px em vez de 420px (o height é inline,
+              por isso o `!`), com menos espaço entre a barra e a legenda;
+            - mapa: siglas dos estados maiores (o SVG é reduzido a ~64%, as de 9px ficavam ilegíveis). */}
+        <section className="w-full max-md:[&_.h-96]:h-60 max-md:[&_.flex-wrap.justify-center.gap-4]:grid max-md:[&_.flex-wrap.justify-center.gap-4]:grid-cols-2 max-md:[&_.flex-wrap.justify-center.gap-4]:justify-items-start max-md:[&_.flex-wrap.justify-center.gap-4]:gap-x-3 max-md:[&_.flex-wrap.justify-center.gap-4]:gap-y-2 max-md:[&_.text-sm.text-gray-600]:hidden max-md:[&_.gap-6.items-start]:gap-3 max-md:[&_[style*='420px']]:h-[240px]! max-md:[&_svg.h-auto_text]:text-[14px] max-md:[&_.rounded-xl.py-3]:py-2 max-md:[&_.bg-gray-100.rounded-lg_button]:min-h-10 max-md:[&_[class*='text-[10px]']]:text-xs">
+          {/* Sistema de orientação do usuário.
+              O wrapper existe só para compactar os avisos no celular:
+              `UserGuidanceNotification` é compartilhado (p-4, botão de ação do
+              tamanho do texto, "X" de 20px) e não é desta tela, então os ajustes
+              entram aqui por seletores de descendente, sem mexer nele. No desktop
+              o wrapper não aplica nada. */}
+          <div className="max-md:[&>div]:mb-3 max-md:[&>div]:p-3 max-md:[&_p]:mb-2 max-md:[&_p]:text-[13px] max-md:[&_p]:leading-snug max-md:[&_h3]:mb-0.5 max-md:[&_.min-w-0_button]:min-h-11 max-md:[&_.min-w-0_button]:w-full max-md:[&_.min-w-0_button]:justify-center max-md:[&_.items-start>button]:-m-3 max-md:[&_.items-start>button]:p-3">
           {!isLoading && showConnectAccounts && (
             <UserGuidanceNotification
               type="warning"
@@ -259,6 +274,8 @@ export default function Dashboard() {
             />
           )}
 
+          </div>
+
           {/* Alerta de SKU sem custo.
               Era um bloco de 45 linhas escrito à mão, com três SVG colados
               (triângulo, seta, X), paleta `red-*` crua e raio `rounded-lg` que
@@ -269,7 +286,7 @@ export default function Dashboard() {
           {pendingSkusCount > 0 && !isPendingSkuAlertHidden && (
             <Faixa
               tom="critico"
-              className="mb-6 mt-0"
+              className="mb-6 mt-0 max-md:mb-4"
               icone={<IconeAlerta className="h-5 w-5" />}
               acao={
                 <button
@@ -297,7 +314,7 @@ export default function Dashboard() {
               </p>
               <a
                 href="/sku?pendentes=1"
-                className="mt-3 inline-flex h-9 items-center gap-2 rounded-[var(--cz-raio)] bg-rose-600 px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-rose-700"
+                className="mt-3 inline-flex h-9 items-center gap-2 rounded-[var(--cz-raio)] bg-rose-600 px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-rose-700 max-md:flex max-md:h-11 max-md:w-full max-md:justify-center max-md:text-[14px]"
               >
                 Cadastrar custos
                 <IconeSeta className="h-4 w-4" />
@@ -363,7 +380,7 @@ export default function Dashboard() {
           </div>
 
           {/* Top Produtos - Faturamento e Margem */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 max-md:mt-4 max-md:gap-4">
             <Suspense fallback={<div className="h-96 bg-gray-50 rounded-lg animate-pulse" />}>
               <TopProdutosFaturamento
                 periodoAtivo={periodoAtivo}
@@ -396,7 +413,7 @@ export default function Dashboard() {
 
           {/* Gráficos Donut - Origem e Exposição (apenas para Mercado Livre e Todos) */}
           {canalAtivo !== 'shopee' && (
-            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 max-md:mt-4 max-md:gap-4">
               <Suspense fallback={<div className="h-96 bg-gray-50 rounded-lg animate-pulse" />}>
                 <FaturamentoPorTipoAnuncio
                   periodoAtivo={periodoAtivo}
@@ -429,7 +446,7 @@ export default function Dashboard() {
           )}
 
           {/* Gráfico Faturamento por Conta e Modalidade */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 max-md:mt-4 max-md:gap-4">
             <Suspense fallback={<div className="h-96 bg-gray-50 rounded-lg animate-pulse" />}>
               <FaturamentoPorConta
                 periodoAtivo={periodoAtivo}

@@ -646,7 +646,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
   if (carregando && !empresa) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Carregando texto="Carregando empresa" />
       </div>
     );
@@ -654,7 +654,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
   if (naoEncontrada) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Cabecalho
           titulo="Empresa não encontrada"
           icone="Building2"
@@ -681,7 +681,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
   if (!empresa) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Cabecalho
           titulo="Empresa"
           icone="Building2"
@@ -722,7 +722,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
     .join(" · ");
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       <Cabecalho
         titulo={empresa.razaoSocial}
         descricao={descricao}
@@ -782,7 +782,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
 
       {/* ---------------------------- Faixa resumo -------------------------- */}
 
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--cz-hairline)] bg-white px-5 py-4 shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--cz-hairline)] bg-white px-5 py-4 shadow-sm max-md:px-4">
         {/* Plano interno onde antes ficava a situação: é ele que diz o estado
             operacional da empresa desde a mudança pedida pelo escritório. */}
         <SeloPlanoInterno plano={empresa.planoInterno} />
@@ -818,7 +818,7 @@ export default function EmpresaDetalheView({ id }: { id: string }) {
         titulo="Cadastro"
         descricao="CNPJ e regime não são editados aqui. Ver as notas de cada um abaixo."
       >
-        <dl className="grid gap-x-6 gap-y-5 px-5 py-5 sm:grid-cols-2 lg:grid-cols-3">
+        <dl className="grid gap-x-6 gap-y-5 px-5 py-5 max-md:px-4 sm:grid-cols-2 lg:grid-cols-3">
           <Dado rotulo="CNPJ">
             {empresa.cnpjFormatado ? (
               <span className="font-mono">{empresa.cnpjFormatado}</span>

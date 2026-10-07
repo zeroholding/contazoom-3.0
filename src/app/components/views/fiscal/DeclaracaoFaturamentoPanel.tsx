@@ -262,7 +262,10 @@ export default function DeclaracaoFaturamentoPanel({
 
       {periodo && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {/* Celular (<640px): os dois totais em reais ("R$ 9.876.543,21") ocupam a linha toda e só os
+              contadores curtos (meses prontos, divergências) dividem a linha. Meio cartão não comporta
+              um valor de 7 dígitos a 26px. */}
+          <div className="grid grid-cols-2 gap-4 max-md:gap-3 sm:grid-cols-2 xl:grid-cols-4 max-sm:[&>*:nth-child(-n+2)]:col-span-2">
             <CartaoKpi
               titulo="Faturamento no período"
               valor={real(periodo.total)}
@@ -312,7 +315,10 @@ export default function DeclaracaoFaturamentoPanel({
               <table className="w-full min-w-[54rem] border-collapse text-[13px]">
                 <thead>
                   <tr className="border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-left text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-suave)]">
-                    <th className="px-4 py-2.5">Competência</th>
+                    {/* Celular: tabela realmente tabular (12 meses x valores), então a rolagem horizontal
+                        fica CONTIDA no `overflow-x-auto` e a coluna do mês fica fixa à esquerda
+                        (`sticky left-0`, com fundo próprio para não transparecer o que passa por baixo). */}
+                    <th className="px-4 py-2.5 max-md:sticky max-md:left-0 max-md:z-10 max-md:bg-[var(--cz-fundo)]">Competência</th>
                     <th className="px-4 py-2.5">Origem</th>
                     <th className="px-4 py-2.5 text-right">Apurado XML</th>
                     <th className="px-4 py-2.5 text-right">Valor que vale</th>
@@ -329,7 +335,7 @@ export default function DeclaracaoFaturamentoPanel({
                         : null;
                     return (
                       <tr key={item.chave} className="hover:bg-[#FCFCFD]">
-                        <td className="px-4 py-2.5">
+                        <td className="px-4 py-2.5 max-md:sticky max-md:left-0 max-md:z-10 max-md:whitespace-nowrap max-md:border-r max-md:border-[var(--cz-hairline)] max-md:bg-white">
                           <span className="font-bold text-[var(--cz-texto)]">{item.label}</span>
                           <span className="cz-num mt-0.5 block text-[11px] text-[var(--cz-texto-fraco)]">
                             {item.documentos} documento(s)

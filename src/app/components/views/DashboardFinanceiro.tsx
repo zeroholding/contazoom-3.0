@@ -154,8 +154,14 @@ export default function DashboardFinanceiro() {
             e os cartoes brancos se destacam dele. */}
       </div>
 
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">
+      {/* 16px de respiro sob o cabeçalho fixo no celular (no desktop segue colado, como era). */}
+      <main className={`relative z-20 pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
+        {/* `max-md:p-0`: o `main` já dá 16px laterais, e o `p-3` da seção somava mais 12px (28px
+            de margem em 390px). O resto são ajustes de celular por seletores de descendente
+            (todos `max-md:`): os KPIs viram grade de 2 colunas compacta (1º e último cartão
+            ocupam as duas; o valor usa clamp para 'R$ 1.284.930,45' caber na coluna), e o alerta
+            de SKUs pendentes fica compacto, com o botão de ação em largura total e 44px. */}
+        <section className="p-3 sm:p-6 max-md:p-0 max-md:[&_.grid-cols-1.gap-3]:grid-cols-2 max-md:[&_.grid-cols-1.gap-3]:gap-2.5 max-md:[&_.grid-cols-1.gap-3>:first-child]:col-span-2 max-md:[&_.grid-cols-1.gap-3>:last-child]:col-span-2 max-md:[&_.grid-cols-1.gap-3_.text-lg]:text-[clamp(14px,4.2vw,20px)] max-md:[&_.grid-cols-1.gap-3>:first-child_.text-lg]:text-[26px] max-md:[&>.border-red-200]:mb-4 max-md:[&>.border-red-200]:p-3 max-md:[&>.border-red-200_.text-red-700]:text-[13px] max-md:[&>.border-red-200_.text-red-700]:leading-snug max-md:[&_a.bg-red-600]:flex max-md:[&_a.bg-red-600]:min-h-11 max-md:[&_a.bg-red-600]:w-full max-md:[&_a.bg-red-600]:justify-center">
           {pendingSkusCount > 0 && (
             <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
               <div className="flex items-start gap-4">

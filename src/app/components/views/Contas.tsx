@@ -105,14 +105,14 @@ function Seta({ aberto }: { aberto: boolean }) {
 function Dado({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?: string }) {
   return (
     <div>
-      <span className="block text-[10px] font-bold uppercase tracking-[0.07em] text-[var(--cz-texto-fraco)]">
+      <span className="block text-[10px] max-md:text-xs font-bold uppercase tracking-[0.07em] text-[var(--cz-texto-fraco)]">
         {rotulo}
       </span>
-      <span className="mt-0.5 block text-[13px] font-semibold text-[var(--cz-texto)]">
+      <span className="mt-0.5 block text-[13px] max-md:text-sm max-md:break-words font-semibold text-[var(--cz-texto)]">
         {valor}
       </span>
       {nota && (
-        <span className="block text-[10.5px] text-[var(--cz-texto-suave)]">{nota}</span>
+        <span className="block text-[10.5px] max-md:text-xs text-[var(--cz-texto-suave)]">{nota}</span>
       )}
     </div>
   );
@@ -144,7 +144,7 @@ function CartaoConta({
               {conta.nome}
             </h4>
             <span
-              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.04em] ${SITUACAO_CONTA_SELO[conta.situacao]}`}
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10.5px] max-md:text-xs font-bold uppercase tracking-[0.04em] ${SITUACAO_CONTA_SELO[conta.situacao]}`}
             >
               {SITUACAO_CONTA_ROTULO[conta.situacao]}
             </span>
@@ -152,18 +152,18 @@ function CartaoConta({
           {/* A explicação só aparece quando há algo a fazer. Repetir "está tudo
               bem" em cada conta ativa seria ruído em cima do selo verde. */}
           {conta.situacao !== "ativa" && (
-            <p className="mt-1 max-w-2xl text-[11.5px] leading-relaxed text-[var(--cz-texto-suave)]">
+            <p className="mt-1 max-w-2xl text-[11.5px] max-md:text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
               {SITUACAO_CONTA_EXPLICACAO[conta.situacao]}
             </p>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-md:w-full max-md:[&>*]:flex-1">
           {conta.situacao === "expirada" && (
             <BotaoSecundario
               onClick={onRenovar}
               desabilitado={ocupado}
-              className="h-9 px-3 text-[12.5px]"
+              className="h-9 px-3 text-[12.5px] max-md:h-11 max-md:text-sm"
             >
               {ocupado ? "Renovando…" : "Renovar agora"}
             </BotaoSecundario>
@@ -172,7 +172,7 @@ function CartaoConta({
             <BotaoPrimario
               onClick={onReconectar}
               desabilitado={ocupado}
-              className="h-9 px-3 text-[12.5px]"
+              className="h-9 px-3 text-[12.5px] max-md:h-11 max-md:text-sm"
             >
               Reconectar
             </BotaoPrimario>
@@ -181,7 +181,7 @@ function CartaoConta({
             type="button"
             onClick={onExcluir}
             disabled={ocupado}
-            className="inline-flex h-9 items-center justify-center rounded-[var(--cz-raio)] border border-rose-200 bg-white px-3 text-[12.5px] font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 max-md:h-11 items-center justify-center rounded-[var(--cz-raio)] border border-rose-200 bg-white px-3 text-[12.5px] max-md:text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {ocupado ? "Aguarde…" : "Excluir"}
           </button>
@@ -197,7 +197,11 @@ function CartaoConta({
           valor={validadeToken(conta.tokenExpiraEm)}
           nota={`renovado ${dataHoraSP(conta.tokenAtualizadoEm)}`}
         />
-        <Dado rotulo="Vendas sincronizadas" valor={inteiro(conta.vendas)} />
+        {/* Uma conta recém-conectada, ou uma resposta parcial durante a
+            sincronização, pode ainda não trazer `vendas`. Exibir zero é o estado
+            honesto até o próximo sync — chamar `toLocaleString` em `undefined`
+            derrubava a página inteira. */}
+        <Dado rotulo="Vendas sincronizadas" valor={inteiro(conta.vendas ?? 0)} />
         <Dado rotulo="Venda mais recente" valor={dataSP(conta.ultimaVenda)} />
         <Dado rotulo="Último sync" valor={dataHoraSP(conta.ultimoSync)} />
       </div>
@@ -253,7 +257,7 @@ function CartaoPlataforma({
           <span className="block text-[15px] font-bold text-[var(--cz-texto)]">
             {CANAL_CONTA_NOME[canal]}
           </span>
-          <span className="mt-0.5 block text-[12px] text-[var(--cz-texto-suave)]">
+          <span className="mt-0.5 block text-[12px] max-md:text-[13px] text-[var(--cz-texto-suave)]">
             {contas.length === 0
               ? "Nenhuma conta conectada"
               : `${inteiro(contas.length)} ${contas.length === 1 ? "conta" : "contas"} · ${inteiro(ativas)} ${ativas === 1 ? "ativa" : "ativas"}${
@@ -272,6 +276,15 @@ function CartaoPlataforma({
             requer atenção
           </span>
         )}
+        {problemas > 0 && !aberto && (
+          <span
+            role="img"
+            aria-label="Requer atenção"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-amber-100 text-xs font-bold text-amber-800 sm:hidden"
+          >
+            !
+          </span>
+        )}
         <Seta aberto={aberto} />
       </button>
 
@@ -287,7 +300,7 @@ function CartaoPlataforma({
         <div className="overflow-hidden">
           <div className="border-t border-[var(--cz-hairline)] p-4 sm:p-5">
             {contas.length === 0 ? (
-              <div className="flex flex-col items-start gap-3">
+              <div className="flex flex-col items-start gap-3 max-md:items-stretch">
                 <p className="text-[12.5px] leading-relaxed text-[var(--cz-texto-suave)]">
                   {CANAL_CONTA_DESCRICAO[canal]} Conecte uma conta para começar a
                   sincronizar.
@@ -310,7 +323,7 @@ function CartaoPlataforma({
                     />
                   ))}
                 </ul>
-                <div className="mt-4 flex justify-start">
+                <div className="mt-4 flex justify-start max-md:[&>*]:w-full">
                   <BotaoSecundario onClick={() => onConectar(canal)}>
                     Conectar outra conta
                   </BotaoSecundario>
@@ -589,7 +602,7 @@ export default function Contas() {
       />
 
       {pendentes > 0 && (
-        <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] leading-relaxed text-rose-800">
+        <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] max-md:text-sm leading-relaxed text-rose-800">
           <strong>
             {pendentes === 1
               ? "1 conta precisa ser reconectada"
@@ -602,7 +615,7 @@ export default function Contas() {
       )}
 
       {erro && (
-        <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+        <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] max-md:text-sm text-rose-800">
           Não foi possível carregar as contas: {erro}
         </div>
       )}
@@ -633,7 +646,7 @@ export default function Contas() {
                 titulo="Nenhuma conta conectada ainda"
                 texto="Conecte o Mercado Livre ou a Shopee para o CONTAZOOM começar a trazer vendas, anúncios, estoque e a fila de expedição."
                 acao={
-                  <div className="flex flex-wrap justify-center gap-2">
+                  <div className="flex flex-wrap justify-center gap-2 max-md:flex-col max-md:[&>*]:w-full">
                     <BotaoPrimario onClick={() => conectar("ML")}>
                       Conectar Mercado Livre
                     </BotaoPrimario>

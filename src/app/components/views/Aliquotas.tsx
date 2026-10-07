@@ -9,6 +9,75 @@ import Modal from "./ui/Modal";
 import EditModal from "./ui/EditModal";
 import DeleteModal from "./ui/DeleteModal";
 import { useToast } from "./ui/toaster";
+import { useCelular } from "@/hooks/useMediaQuery";
+
+// Cartão de alíquota para o celular. A tabela de 6 colunas não cabe em 390px
+// (o nome da conta quebrava letra a letra e a descrição ficava cortada), então
+// no celular cada linha vira um cartão: conta + mês à esquerda, percentual em
+// destaque à direita, descrição em até 2 linhas e ações com 44px de altura.
+function CartaoAliquota({
+  conta,
+  percentual,
+  mesAno,
+  descricao,
+  ativo,
+  onEditar,
+  onExcluir,
+}: {
+  conta: string;
+  percentual: string;
+  mesAno: string;
+  descricao?: string;
+  ativo: boolean;
+  onEditar: () => void;
+  onExcluir: () => void;
+}) {
+  return (
+    <li className="overflow-hidden rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] shadow-sm">
+      <div className="flex items-start justify-between gap-3 p-4 pb-2">
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 break-words text-[15px] font-semibold leading-snug text-gray-900">{conta}</p>
+          <p className="mt-1 text-sm text-gray-600">{mesAno}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="text-2xl font-bold leading-none tabular-nums text-gray-900">{percentual}</p>
+          <span
+            className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              ativo ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+            }`}
+          >
+            {ativo ? "Ativo" : "Inativo"}
+          </span>
+        </div>
+      </div>
+      {descricao ? <p className="line-clamp-2 px-4 pb-3 text-sm text-gray-600">{descricao}</p> : null}
+      <div className="flex divide-x divide-[var(--cz-hairline)] border-t border-[var(--cz-hairline)]">
+        <button
+          type="button"
+          onClick={onEditar}
+          aria-label={`Editar alíquota de ${conta}`}
+          className="flex min-h-12 flex-1 items-center justify-center gap-2 text-sm font-semibold text-orange-600 active:bg-orange-50"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Editar
+        </button>
+        <button
+          type="button"
+          onClick={onExcluir}
+          aria-label={`Excluir alíquota de ${conta}`}
+          className="flex min-h-12 flex-1 items-center justify-center gap-2 text-sm font-semibold text-red-600 active:bg-red-50"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Excluir
+        </button>
+      </div>
+    </li>
+  );
+}
 
 const FULL_W = "16rem";
 const RAIL_W = "4rem";
@@ -40,6 +109,8 @@ interface Conta {
 
 export default function Aliquotas() {
   const { toast } = useToast();
+  // Celular: a lista de alíquotas vira cartões (a tabela de 6 colunas não cabe em 390px).
+  const celular = useCelular();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSidebarMobileOpen, setIsSidebarMobileOpen] = useState(false);
 
@@ -421,18 +492,19 @@ export default function Aliquotas() {
         />
       </div>
 
-      <div className="flex gap-3 pt-4">
+      {/* Celular: botões empilhados (Salvar em cima), largura total e 48px de altura, como no EditModal. */}
+      <div className="flex gap-3 pt-4 max-md:flex-col-reverse">
         <button
           type="button"
           onClick={handleCloseModal}
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors max-md:h-12 max-md:flex-none"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={isSaving}
-          className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white ${
+          className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white max-md:h-12 max-md:flex-none ${
             isSaving ? "bg-orange-400 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600"
           }`}
         >
@@ -487,8 +559,9 @@ export default function Aliquotas() {
         onMobileMenu={() => setIsSidebarMobileOpen(true)}
       />
 
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">
+      {/* Respiro de 1rem sob o cabeçalho fixo no celular; margens laterais de 16px (o p-3 da seção somava 28px). */}
+      <main className={`relative z-20 pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
+        <section className="p-3 max-md:p-0 sm:p-6">
           {/* Header */}
           <div className="mb-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
@@ -500,10 +573,11 @@ export default function Aliquotas() {
                   Gerencie as alíquotas de impostos sobre faturamento por conta e período.
                 </p>
               </div>
-              <div className="flex items-center gap-3">
+              {/* Celular: botão de criar em largura total e com 48px de altura. */}
+              <div className="flex items-center gap-3 max-md:w-full">
                 <button
                   onClick={handleOpenModal}
-                  className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-600 transition-colors shadow-sm max-md:h-12 max-md:w-full max-md:justify-center"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -570,8 +644,29 @@ export default function Aliquotas() {
               }}
             />
           ) : (
-            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
+            // Celular: sem a moldura de tabela em volta (os cartões têm a própria borda) e só UMA das duas listas é montada.
+            <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] shadow-sm overflow-hidden max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none max-md:overflow-visible">
+              <div className="overflow-x-auto max-md:overflow-visible">
+                {celular && (
+                  <ul className="space-y-3">
+                    {aliquotas.map((aliquota) => {
+                      const mes = formatMesAno(aliquota.dataInicio);
+                      return (
+                        <CartaoAliquota
+                          key={aliquota.id}
+                          conta={aliquota.conta}
+                          percentual={formatPercent(aliquota.aliquota)}
+                          mesAno={mes.charAt(0).toUpperCase() + mes.slice(1)}
+                          descricao={aliquota.descricao}
+                          ativo={aliquota.ativo}
+                          onEditar={() => handleEdit(aliquota)}
+                          onExcluir={() => handleDelete(aliquota)}
+                        />
+                      );
+                    })}
+                  </ul>
+                )}
+                {!celular && (
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -647,6 +742,7 @@ export default function Aliquotas() {
                     ))}
                   </tbody>
                 </table>
+                )}
               </div>
             </div>
           )}

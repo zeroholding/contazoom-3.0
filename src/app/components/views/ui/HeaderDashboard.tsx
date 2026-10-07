@@ -8,6 +8,25 @@ import FiltroSKU, { type FiltroAgrupamentoSKU } from "./FiltroSKU";
 import BotaoSincronizarDashboard from "./BotaoSincronizarDashboard";
 import { LogoCanal, type CanalLogo } from "../comum/logos";
 import { API_CONFIG } from "@/lib/api-config";
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
+
+/**
+ * Valores de fábrica dos filtros do Dashboard.
+ *
+ * Moram aqui, e o `Dashboard` parte deles, porque dois lugares precisam da mesma
+ * resposta para "isto é o padrão?": o estado inicial da tela e o "Limpar" da folha
+ * de filtros do celular (que também conta quantos filtros fogem do padrão para
+ * mostrar o selo no botão). Com o número escrito nos dois, o selo passaria a
+ * acusar um filtro ativo que ninguém mexeu — foi o que o `status: pagos`
+ * provocaria se o padrão fosse assumido como "todos".
+ */
+export const FILTROS_PADRAO = {
+  agrupamento: "mlb" as FiltroAgrupamentoSKU,
+  canal: "todos" as FiltroCanal,
+  status: "pagos" as FiltroStatus,
+  tipoAnuncio: "todos" as FiltroTipoAnuncio,
+  modalidadeEnvio: "todos" as FiltroModalidadeEnvio,
+};
 
 /** Plataforma da conta escolhida no dropdown (`todos` = sem filtro de conta). */
 type PlataformaConta = 'meli' | 'shopee' | 'tiktok' | 'todos';
@@ -120,8 +139,31 @@ export default function HeaderDashboard({
     onForceRefresh();
   };
 
+  // Folha de filtros do celular: quantos filtros fogem do padrão, e como voltar.
+  // Período e conta ficam FORA da folha (são os dois que mudam toda hora), então
+  // não entram na conta.
+  const filtrosAtivos =
+    Number(agrupamentoSKUAtivo !== FILTROS_PADRAO.agrupamento) +
+    Number(canalAtivo !== FILTROS_PADRAO.canal) +
+    Number(statusAtivo !== FILTROS_PADRAO.status) +
+    Number(tipoAnuncioAtivo !== FILTROS_PADRAO.tipoAnuncio) +
+    Number(modalidadeEnvioAtiva !== FILTROS_PADRAO.modalidadeEnvio);
+
+  const limparFiltros = () => {
+    onAgrupamentoSKUChange(FILTROS_PADRAO.agrupamento);
+    onCanalChange(FILTROS_PADRAO.canal);
+    onStatusChange(FILTROS_PADRAO.status);
+    onTipoAnuncioChange(FILTROS_PADRAO.tipoAnuncio);
+    onModalidadeEnvioChange(FILTROS_PADRAO.modalidadeEnvio);
+  };
+
   return (
-    <div className="mb-6">
+    <div className="mb-6 max-md:mb-4 max-md:[&_button.h-10]:h-12 max-md:[&_button.h-11]:px-3 max-md:[&_button[class*='max-md:min-h-11']]:px-3 max-md:[&_.smart-dropdown_button]:min-h-11 max-md:[&_.smart-dropdown_button.underline]:text-[13px] max-md:[&_.smart-dropdown_li]:py-0 max-md:[&_.smart-dropdown_li]:text-sm max-md:[&_[role=status]_span]:text-xs max-md:[&_[role=status]_span.truncate]:whitespace-normal max-md:[&_[role=status]_span.truncate]:line-clamp-2">
+      {/* Celular, por seletores de descendente (todos `max-md:`): o botão de sincronizar vai
+          a 48px; toda opção dos dropdowns de Período e Contas ganha 44px de altura (a lista
+          de contas tinha linhas de ~26px, com o botão só do tamanho do texto); e o texto de
+          progresso da sincronização passa de 11px para 12px e pode quebrar em 2 linhas, em
+          vez de cortar "Mercado Livre: falha ao…" no meio. */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
         <div className="text-left w-full sm:flex-1">
           <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">Dashboard</h1>
@@ -138,24 +180,30 @@ export default function HeaderDashboard({
       </div>
 
       {/* Filtros e Contas */}
-      <div className="mt-4 sm:mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-wrap w-full">
-          {/* Filtro de Agrupamento por SKU */}
-          <FiltroSKU
-            agrupamentoAtivo={agrupamentoSKUAtivo}
-            onAgrupamentoChange={onAgrupamentoSKUChange}
-          />
-          
-          <FiltrosDashboardExtra 
-            canalAtivo={canalAtivo}
-            onCanalChange={onCanalChange}
-            statusAtivo={statusAtivo}
-            onStatusChange={onStatusChange}
-            tipoAnuncioAtivo={tipoAnuncioAtivo}
-            onTipoAnuncioChange={onTipoAnuncioChange}
-            modalidadeEnvioAtiva={modalidadeEnvioAtiva}
-            onModalidadeEnvioChange={onModalidadeEnvioChange}
-          />
+      {/* No celular as três peças (Filtros, período e contas) dividem UMA linha,
+          quebrando para a seguinte só se não couberem; os sete chips de antes
+          empilhavam ~200px no topo da tela. */}
+      <div className="mt-4 sm:mt-6 flex flex-col xl:flex-row xl:items-center justify-between gap-4 max-md:flex-row max-md:flex-wrap max-md:items-center max-md:justify-start max-md:gap-2">
+        <div className="flex items-center gap-3 flex-wrap w-full max-md:w-auto max-md:gap-2">
+          {/* Agrupamento por SKU e filtros extras: no desktop ficam soltos aqui,
+              como sempre; no celular viram o botão "Filtros" + folha inferior. */}
+          <FiltrosSheet titulo="Filtros" ativos={filtrosAtivos} onLimpar={limparFiltros}>
+            <FiltroSKU
+              agrupamentoAtivo={agrupamentoSKUAtivo}
+              onAgrupamentoChange={onAgrupamentoSKUChange}
+            />
+
+            <FiltrosDashboardExtra
+              canalAtivo={canalAtivo}
+              onCanalChange={onCanalChange}
+              statusAtivo={statusAtivo}
+              onStatusChange={onStatusChange}
+              tipoAnuncioAtivo={tipoAnuncioAtivo}
+              onTipoAnuncioChange={onTipoAnuncioChange}
+              modalidadeEnvioAtiva={modalidadeEnvioAtiva}
+              onModalidadeEnvioChange={onModalidadeEnvioChange}
+            />
+          </FiltrosSheet>
           <FiltrosDashboard
             periodoAtivo={periodoAtivo}
             onPeriodoChange={onPeriodoChange}
@@ -164,12 +212,12 @@ export default function HeaderDashboard({
         </div>
 
         {/* Contas Dropdown */}
-        <div className="flex-shrink-0 w-full sm:w-auto">
-          <div className="relative w-full">
+        <div className="flex-shrink-0 w-full sm:w-auto max-md:w-auto">
+          <div className="relative w-full max-md:w-auto">
             <button
               ref={contasDropdown.triggerRef}
               onClick={() => setShowContasDropdown(!showContasDropdown)}
-              className={`w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
+              className={`w-full sm:w-auto max-md:w-auto justify-center inline-flex items-center gap-2 px-3 py-1.5 max-md:min-h-11 max-md:px-3.5 max-md:text-[14px] rounded-md border text-xs font-medium transition-all duration-200 ${
                 showContasDropdown 
                   ? "border-gray-400 bg-gray-50 text-gray-900" 
                   : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
@@ -201,7 +249,9 @@ export default function HeaderDashboard({
                 className={`smart-dropdown w-80 ${contasDropdown.isOpen ? 'dropdown-enter' : 'dropdown-exit'}`}
                 style={contasDropdown.position}
               >
-                <div className="p-3 space-y-3">
+                {/* Celular: o conteúdo rola dentro do dropdown (55% da altura da janela). Com três
+                    listas de contas ele passava de 450px e ia parar por baixo da barra de abas. */}
+                <div className="p-3 space-y-3 max-md:max-h-[55dvh] max-md:overflow-y-auto max-md:overscroll-contain">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <h3 className="text-xs font-semibold text-gray-900">Selecionar conta</h3>
                     <button

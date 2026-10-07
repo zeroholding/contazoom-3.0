@@ -8,6 +8,8 @@ import EditModal from "./EditModal";
 import DeleteModal from "./DeleteModal";
 import Modal from "./Modal";
 import HistoricoCustosModal from "./HistoricoCustosModal";
+import { useCelular } from "@/hooks/useMediaQuery";
+import ListaSKUMobile, { FolhaAcoesSKU, FolhaCustoSKU } from "./ListaSKUMobile";
 
 // Tipos atualizados para SKU
 export interface SKU {
@@ -160,6 +162,11 @@ export default function TabelaGestaoSKU({
   onPrefillConsumed,
 }: TabelaGestaoSKUProps) {
   const { toast } = useToast();
+  // Celular: lista de cartões + folhas inferiores (editor de custo e menu de ações).
+  // Desktop: a tabela de sempre. Só um dos dois é montado, nunca os dois.
+  const celular = useCelular();
+  const [custoSKU, setCustoSKU] = useState<SKU | null>(null);
+  const [acoesSKU, setAcoesSKU] = useState<SKU | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
@@ -603,6 +610,27 @@ export default function TabelaGestaoSKU({
     return <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">Individual Solto</span>;
   };
 
+  // Editor de custo do celular: muda SÓ o custo. O PUT aceita atualização parcial
+  // (é o que os botões de ativar/inativar em lote já usam).
+  const salvarCusto = async (sku: SKU, custo: number) => {
+    const response = await fetch(`/api/sku/${sku.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custoUnitario: custo }),
+    });
+    if (!response.ok) {
+      const erro = await response.json().catch(() => null);
+      throw new Error(erro?.error || "Não foi possível atualizar o custo");
+    }
+    toast({
+      variant: "success",
+      title: "Custo atualizado",
+      description: `${sku.sku} agora custa ${formatCurrency(custo)}.`,
+    });
+    const atualizado = await response.json().catch(() => null);
+    onEditSKU?.(atualizado ?? sku);
+  };
+
   // Ícones para o empty state
   const emptyStateIcons = [
     <svg key="1" className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -695,67 +723,24 @@ export default function TabelaGestaoSKU({
         conteúdo, e um nome de produto longo empurraria as outras colunas a cada
         página — a tabela "dançaria" ao filtrar.
       */}
-      {/* Cards móveis: preservam toda a informação sem comprimir colunas. */}
-      <div className="divide-y divide-[var(--cz-hairline)] md:hidden">
-        {skusOrdenadosHier.map((sku) => {
-          const isSelected = selectedSKUs.includes(sku.id);
-          const isHiddenByParent = sku.skuPai ? !!collapsedKits[sku.skuPai] : false;
-          if (isHiddenByParent) return null;
-          const image = getImagemUrl(sku);
-
-          return (
-            <article key={sku.id} className={`p-4 ${isSelected ? "bg-blue-50" : sku.skuPai ? "border-l-4 border-blue-300 bg-blue-50/30" : "bg-[var(--cz-superficie)]"}`}>
-              <div className="flex items-start gap-3">
-                {isMultiSelect && (
-                  <label className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--cz-raio)]" aria-label={`Selecionar SKU ${sku.sku}`}>
-                    <input type="checkbox" checked={isSelected} onChange={() => handleSelectSKU(sku.id)} className="h-5 w-5 rounded border-[var(--cz-hairline-forte)] text-[var(--cz-laranja)] focus:ring-[var(--cz-laranja)]" />
-                  </label>
-                )}
-                {image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={image} alt="" className="h-12 w-12 shrink-0 rounded-lg border border-[var(--cz-hairline)] bg-white object-cover" loading="lazy" />
-                ) : (
-                  <button type="button" onClick={() => handleBuscarImagem(sku)} disabled={loadingImagem === sku.id} aria-label={`Buscar imagem do SKU ${sku.sku}`} className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-dashed border-[var(--cz-hairline-forte)] bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)] transition-colors hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja)] disabled:opacity-50">
-                    {loadingImagem === sku.id ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m4 16 4-4 4 4 3-3 5 5M6 20h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2ZM15 8h.01" /></svg>}
-                  </button>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1">
-                        {sku.tipo === "pai" && (
-                          <button type="button" onClick={() => setCollapsedKits((current) => ({ ...current, [sku.sku]: !current[sku.sku] }))} aria-label={`${collapsedKits[sku.sku] ? "Expandir" : "Recolher"} itens do kit ${sku.sku}`} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-[var(--cz-laranja)] hover:bg-[var(--cz-laranja-suave)]">
-                            <svg className={`h-5 w-5 transition-transform ${collapsedKits[sku.sku] ? "" : "rotate-90"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden><path fillRule="evenodd" d="M7.3 14.7a1 1 0 0 1 0-1.4l3.3-3.3-3.3-3.3a1 1 0 1 1 1.4-1.4l4 4a1 1 0 0 1 0 1.4l-4 4a1 1 0 0 1-1.4 0Z" clipRule="evenodd" /></svg>
-                          </button>
-                        )}
-                        <p className="truncate font-mono text-sm font-bold text-[var(--cz-texto)]">{sku.sku}</p>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm leading-snug text-[var(--cz-texto-suave)]">{sku.produto}</p>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">{getTipoBadge(sku)}{getStatusBadge(sku)}</div>
-                  {sku.skuPai && <p className="mt-2 text-xs font-medium text-blue-700">Item do kit {sku.skuPai}</p>}
-                  {(sku.hierarquia1 || sku.hierarquia2) && <p className="mt-1 truncate text-xs text-[var(--cz-texto-fraco)]">{[sku.hierarquia1, sku.hierarquia2].filter(Boolean).join(" › ")}</p>}
-                </div>
-              </div>
-
-              <dl className="mt-4 grid grid-cols-3 divide-x divide-[var(--cz-hairline)] rounded-[var(--cz-raio)] bg-[var(--cz-fundo)] py-3 text-center">
-                <div className="px-2"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--cz-texto-fraco)]">Custo</dt><dd><button type="button" onClick={() => { setSelectedSKUForHistorico(sku); setShowHistoricoModal(true); }} className="min-h-11 text-xs font-bold text-[var(--cz-laranja-forte)] underline decoration-dashed underline-offset-4" aria-label={`Ver histórico de custos do SKU ${sku.sku}`}>{formatCurrency(sku.custoUnitario)}</button></dd></div>
-                <div className="px-2"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--cz-texto-fraco)]">Qtd.</dt><dd className="mt-3 text-sm font-bold text-[var(--cz-texto)]">{sku.tipo === "pai" ? "—" : sku.quantidade}</dd></div>
-                <div className="px-2"><dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--cz-texto-fraco)]">Vendas</dt><dd className="mt-3 text-sm font-bold text-[var(--cz-texto)]">{sku.salesCount ?? "—"}</dd></div>
-              </dl>
-
-              <div className="mt-3 flex items-center justify-end gap-1 border-t border-[var(--cz-hairline)] pt-3" aria-label={`Ações do SKU ${sku.sku}`}>
-                <button type="button" onClick={() => { setSelectedSKU(sku); setShowEditModal(true); }} aria-label={`Editar SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-[var(--cz-laranja)] hover:bg-[var(--cz-laranja-suave)]"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m4 20 4-1 11-11-3-3L5 16zM14 6l3 3" /></svg></button>
-                <button type="button" onClick={() => { setSelectedSKU(sku); setShowToggleStatusModal(true); }} aria-label={`${sku.ativo ? "Inativar" : "Ativar"} SKU ${sku.sku}`} className={`grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] ${sku.ativo ? "text-amber-700 hover:bg-amber-50" : "text-emerald-700 hover:bg-emerald-50"}`}><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>{sku.ativo ? <path d="M18.4 18.4A9 9 0 0 1 5.6 5.6m12.8 12.8L5.6 5.6" /> : <path d="m9 12 2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />}</svg></button>
-                <button type="button" onClick={() => handleAplicarRetroativo(sku)} disabled={isApplyingRetroactive === sku.id} aria-label={`Aplicar custo retroativo do SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-blue-700 hover:bg-blue-50 disabled:opacity-50"><svg className={`h-5 w-5 ${isApplyingRetroactive === sku.id ? "animate-spin" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 4v5h5M20 20v-5h-5M5.5 15a8 8 0 0 0 13-3M18.5 9a8 8 0 0 0-13 3" /></svg></button>
-                <button type="button" onClick={() => handleBuscarImagem(sku)} disabled={loadingImagem === sku.id} aria-label={`Atualizar imagem do SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-[var(--cz-texto-suave)] hover:bg-[var(--cz-fundo)] disabled:opacity-50"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m4 16 4-4 4 4 3-3 5 5M6 20h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z" /></svg></button>
-                <button type="button" onClick={() => { setSelectedSKU(sku); setShowDeleteSingleModal(true); }} aria-label={`Excluir SKU ${sku.sku}`} className="grid h-11 w-11 place-items-center rounded-[var(--cz-raio)] text-rose-700 hover:bg-rose-50"><svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 7h16m-10 4v6m4-6v6M9 7V4h6v3m-9 0 1 14h10l1-14" /></svg></button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      {/* Celular: um cartão por SKU, com o custo em destaque. A tabela abaixo não
+          recebe linhas nessa largura (ver o `tbody`), então o DOM não dobra. */}
+      {celular && (
+        <ListaSKUMobile
+          skus={skusOrdenadosHier}
+          colapsados={collapsedKits}
+          multiSelecao={isMultiSelect}
+          selecionados={selectedSKUs}
+          imagem={getImagemUrl}
+          imagemCarregando={loadingImagem}
+          onAlternarKit={(codigo) => setCollapsedKits((atual) => ({ ...atual, [codigo]: !atual[codigo] }))}
+          onSelecionar={handleSelectSKU}
+          onSelecionarTodos={handleSelectAll}
+          onBuscarImagem={handleBuscarImagem}
+          onEditarCusto={setCustoSKU}
+          onMaisAcoes={setAcoesSKU}
+        />
+      )}
 
       <div className="hidden md:block">
         <table ref={tableRef} className="w-full table-fixed divide-y divide-[var(--cz-hairline)]">
@@ -801,7 +786,7 @@ export default function TabelaGestaoSKU({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {skusOrdenadosHier.map((sku) => {
+            {(celular ? [] : skusOrdenadosHier).map((sku) => {
               const isSelected = selectedSKUs.includes(sku.id);
               const isHiddenByParent = sku.skuPai ? !!collapsedKits[sku.skuPai] : false;
               if (isHiddenByParent) return null;
@@ -1368,11 +1353,11 @@ export default function TabelaGestaoSKU({
           )}
 
           {/* Rodapé */}
-          <div className="flex gap-3 pt-2 border-t border-gray-100">
+          <div className="flex gap-3 pt-2 border-t border-gray-100 max-md:flex-col-reverse">
             <button
               type="button"
               onClick={() => { setShowCreateModal(false); resetForm(); }}
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors mt-4"
+              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors mt-4 max-md:mt-0 max-md:h-12 max-md:flex-none"
               disabled={isSaving}
             >
               Cancelar
@@ -1381,7 +1366,7 @@ export default function TabelaGestaoSKU({
               type="button"
               onClick={handleCreateSku}
               disabled={isSaving}
-              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 transition-all mt-4"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-orange-600 rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 transition-all mt-4 max-md:mt-0 max-md:h-12 max-md:flex-none"
             >
               {isSaving ? (
                 <>
@@ -1404,26 +1389,26 @@ export default function TabelaGestaoSKU({
 
       {/* Modal de confirmação de exclusão em lote */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 max-md:items-end max-md:z-[9990]">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-md:mx-0 max-md:max-w-none max-md:rounded-b-none max-md:rounded-t-2xl max-md:pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
             <h3 className="text-lg font-medium text-gray-900 mb-4">
               Confirmar Exclusão
             </h3>
             <p className="text-sm text-gray-600 mb-6">
               Tem certeza que deseja excluir {skusToDelete.length} SKU(s)? Esta ação não pode ser desfeita.
             </p>
-            <div className="flex space-x-3">
+            <div className="flex space-x-3 max-md:flex-col-reverse max-md:gap-3 max-md:space-x-0">
               <button
                 onClick={() => setShowDeleteModal(false)}
                 disabled={isBulkSaving}
-                className="min-h-11 flex-1 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-4 py-2 text-sm font-semibold text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)] disabled:opacity-50"
+                className="min-h-11 flex-1 max-md:min-h-12 max-md:flex-none rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-4 py-2 text-sm font-semibold text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)] disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmBulkDelete}
                 disabled={isBulkSaving}
-                className="min-h-11 flex-1 rounded-[var(--cz-raio)] bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
+                className="min-h-11 flex-1 max-md:min-h-12 max-md:flex-none rounded-[var(--cz-raio)] bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
               >
                 {isBulkSaving ? "Excluindo…" : "Excluir"}
               </button>
@@ -1605,14 +1590,14 @@ export default function TabelaGestaoSKU({
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 max-md:flex-col-reverse">
               <button
                 type="button"
                 onClick={() => {
                   setShowToggleStatusModal(false);
                   setSelectedSKU(null);
                 }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors max-md:h-12 max-md:flex-none"
               >
                 Cancelar
               </button>
@@ -1630,7 +1615,7 @@ export default function TabelaGestaoSKU({
                   }
                 }}
                 disabled={isBulkSaving}
-                className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white ${
+                className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white max-md:h-12 max-md:flex-none ${
                   selectedSKU.ativo
                     ? "bg-yellow-600 hover:bg-yellow-700"
                     : "bg-green-600 hover:bg-green-700"
@@ -1641,6 +1626,47 @@ export default function TabelaGestaoSKU({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Celular: editor de custo e menu de ações, em folhas inferiores */}
+      {celular && (
+        <>
+          <FolhaCustoSKU
+            sku={custoSKU}
+            onClose={() => setCustoSKU(null)}
+            onSalvar={salvarCusto}
+            onHistorico={(s) => {
+              setCustoSKU(null);
+              setSelectedSKUForHistorico(s);
+              setShowHistoricoModal(true);
+            }}
+          />
+          <FolhaAcoesSKU
+            sku={acoesSKU}
+            onClose={() => setAcoesSKU(null)}
+            onCusto={setCustoSKU}
+            onHistorico={(s) => {
+              setSelectedSKUForHistorico(s);
+              setShowHistoricoModal(true);
+            }}
+            onEditar={(s) => {
+              setSelectedSKU(s);
+              setShowEditModal(true);
+            }}
+            onStatus={(s) => {
+              setSelectedSKU(s);
+              setShowToggleStatusModal(true);
+            }}
+            onRetroativo={handleAplicarRetroativo}
+            onImagem={handleBuscarImagem}
+            onExcluir={(s) => {
+              setSelectedSKU(s);
+              setShowDeleteSingleModal(true);
+            }}
+            retroativoEmAndamento={isApplyingRetroactive}
+            imagemEmAndamento={loadingImagem}
+          />
+        </>
       )}
 
       {/* Modal Histórico de Custos */}

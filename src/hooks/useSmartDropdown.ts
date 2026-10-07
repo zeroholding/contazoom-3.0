@@ -6,6 +6,29 @@ export interface DropdownPosition {
   left?: number;
   right?: number;
   transform?: string;
+  /** Só no celular: altura máxima quando o painel não cabe inteiro nem acima nem abaixo. */
+  maxHeight?: number;
+}
+
+/** Mesmo corte do resto do produto (`md:` do Tailwind). */
+const LARGURA_CELULAR = 768;
+
+/**
+ * Quantos pixels do rodapé da janela pertencem à barra de abas do celular.
+ *
+ * `--cz-bottom-offset` é um `calc(...)` com `env()`, e uma variável CSS guarda
+ * esse texto sem resolver — ler o valor direto devolve a string. A sonda abaixo
+ * deixa o navegador fazer a conta: um elemento invisível com `height` igual à
+ * variável mede, em pixels, exatamente o que a barra ocupa (0 fora do celular).
+ */
+function alturaReservadaEmbaixo(): number {
+  const sonda = document.createElement("div");
+  sonda.style.cssText =
+    "position:fixed;left:0;bottom:0;width:0;visibility:hidden;pointer-events:none;height:var(--cz-bottom-offset,0px)";
+  document.body.appendChild(sonda);
+  const altura = sonda.getBoundingClientRect().height;
+  sonda.remove();
+  return altura;
 }
 
 export interface SmartDropdownOptions {
@@ -40,8 +63,14 @@ export function useSmartDropdown<T extends HTMLElement = HTMLElement>({
 
     const newPosition: DropdownPosition = {};
 
+    // Celular: a barra de abas fixa no rodapé tira espaço da janela, e o painel não
+    // pode abrir por baixo dela. Fora do celular `reservado` vale 0 e a conta é a
+    // de sempre.
+    const celular = viewport.width < LARGURA_CELULAR;
+    const reservado = celular ? alturaReservadaEmbaixo() : 0;
+
     // Determinar posição vertical (absoluta na tela com position:fixed)
-    const spaceBelow = viewport.height - trigger.bottom - offset;
+    const spaceBelow = viewport.height - reservado - trigger.bottom - offset;
     const spaceAbove = trigger.top - offset;
     
     const shouldShowAbove = (preferredPosition.includes('top') || spaceBelow < dropdown.height) 
@@ -53,6 +82,19 @@ export function useSmartDropdown<T extends HTMLElement = HTMLElement>({
     } else {
       // Posicionar abaixo do trigger (coordenada absoluta)
       newPosition.top = trigger.bottom + offset;
+    }
+
+    // Celular, lista maior que a tela: nem acima nem abaixo cabe inteiro. Fica no
+    // lado com mais espaço e limita a altura — o CSS (`.smart-dropdown`) rola por
+    // dentro. Sem isto a parte de baixo da lista saía da janela, sem como alcançar.
+    if (celular && spaceBelow < dropdown.height && spaceAbove < dropdown.height) {
+      if (spaceAbove > spaceBelow) {
+        const altura = Math.max(120, spaceAbove - minDistanceFromEdge);
+        newPosition.maxHeight = altura;
+        newPosition.top = trigger.top - altura - offset;
+      } else {
+        newPosition.maxHeight = Math.max(120, spaceBelow - minDistanceFromEdge / 2);
+      }
     }
 
     // Determinar posição horizontal (absoluta na tela com position:fixed)
@@ -78,6 +120,15 @@ export function useSmartDropdown<T extends HTMLElement = HTMLElement>({
       } else {
         newPosition.left = leftPosition;
       }
+    }
+
+    // Celular: mantém o painel dentro da janela, com a margem mínima dos dois lados.
+    // Antes o CSS somava `margin: 0 16px` ao `left` calculado aqui, e um painel
+    // alinhado à direita de um botão perto da borda saía 16px da tela.
+    if (celular && newPosition.left !== undefined) {
+      const maisEsquerda = minDistanceFromEdge;
+      const maisDireita = viewport.width - dropdown.width - minDistanceFromEdge;
+      newPosition.left = Math.max(maisEsquerda, Math.min(newPosition.left, maisDireita));
     }
 
     setPosition(newPosition);

@@ -453,9 +453,9 @@ const VARIANTE: Record<string, string> = {
  * que deixava o secundário com a mesma presença do primário.
  */
 const TAMANHO_BOTAO: Record<string, string> = {
-  sm: "gap-1.5 rounded-[10px] px-2.5 py-1.5 text-xs leading-4 font-semibold",
-  md: "gap-2 rounded-[10px] px-3.5 py-2 text-[0.8125rem] leading-5 font-semibold",
-  lg: "gap-2 rounded-[10px] px-5 py-2.5 text-sm leading-5 font-semibold",
+  sm: "gap-1.5 rounded-[10px] px-2.5 py-1.5 text-xs leading-4 font-semibold max-md:min-h-11 max-md:px-3.5 max-md:text-[13px]",
+  md: "gap-2 rounded-[10px] px-3.5 py-2 text-[0.8125rem] leading-5 font-semibold max-md:min-h-11 max-md:text-sm",
+  lg: "gap-2 rounded-[10px] px-5 py-2.5 text-sm leading-5 font-semibold max-md:min-h-11",
 };
 
 const TAMANHO_ICONE: Record<string, string> = {
@@ -524,7 +524,7 @@ export function Abas({
             role="tab"
             aria-selected={selecionada}
             onClick={() => onMudar(aba.chave)}
-            className={`relative -mb-px flex items-center gap-2 whitespace-nowrap rounded-t-[10px] px-3.5 pb-3 pt-2.5 text-sm transition-colors ${
+            className={`relative -mb-px flex items-center gap-2 whitespace-nowrap rounded-t-[10px] px-3.5 pb-3 pt-2.5 text-sm transition-colors max-md:min-h-11 ${
               selecionada
                 ? "font-semibold text-[#C2410C]"
                 : "font-medium text-[#6B7280] hover:bg-[#F8F9FB] hover:text-[#14161B]"
@@ -574,7 +574,7 @@ export function Alternador({
       role="group"
       // Trilha em cinza de fundo com hairline em volta, sem sombra. Raio 12 por
       // fora e 8 por dentro: com o p-1 de 4px as duas curvas ficam paralelas.
-      className="inline-flex items-center gap-0.5 rounded-xl border border-[#DCE0E7] bg-[#F8F9FB] p-1"
+      className="inline-flex items-center gap-0.5 rounded-xl border border-[#DCE0E7] bg-[#F8F9FB] p-1 max-md:flex max-md:w-full max-md:overflow-x-auto"
     >
       {opcoes.map((o) => {
         const ativo = o.valor === valor;
@@ -588,7 +588,7 @@ export function Alternador({
             // laranja forte sobre laranja suave dá 3,7:1 de contraste, e texto
             // pequeno precisa de 4,5:1. Escuro sobre claro resolve sem gastar a
             // cor de ação, que no módulo significa "aqui você clica para agir".
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.8125rem] leading-5 font-semibold transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[0.8125rem] leading-5 font-semibold transition-colors max-md:min-h-10 max-md:flex-1 max-md:justify-center max-md:whitespace-nowrap ${
               ativo
                 ? "bg-[#14161B] text-white"
                 : "text-[#4B5563] hover:bg-white hover:text-[#14161B]"

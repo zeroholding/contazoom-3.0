@@ -123,7 +123,7 @@ export default function ListaEtapas({
         return (
           <li
             key={etapa.id}
-            className={`relative px-5 py-4 transition-colors ${
+            className={`relative px-5 py-4 transition-colors max-md:px-4 ${
               emCurso ? "bg-orange-50/50" : ""
             }`}
           >
@@ -205,7 +205,7 @@ export default function ListaEtapas({
 
                 {/* Ações só na etapa em curso, e só para quem é dono dela. */}
                 {emCurso && !encerrada && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 max-md:*:flex-1">
                     {minha ? (
                       <Fragment>
                         <Botao

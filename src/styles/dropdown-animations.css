@@ -76,3 +76,17 @@
     margin: 0 16px;
   }
 }
+
+/* Celular (abaixo de 768px): quem posiciona o painel é o hook `useSmartDropdown`,
+   que já mantém 16px de cada lado e desconta a barra de abas do rodapé. A margem
+   lateral acima somava 16px ao `left` calculado e empurrava painéis alinhados à
+   direita para fora da tela, então aqui ela zera. A altura máxima garante que uma
+   lista longa (contas, SKUs) role por dentro em vez de passar da janela. */
+@media (max-width: 767px) {
+  .smart-dropdown {
+    margin: 0;
+    max-height: calc(100dvh - var(--cz-topbar-h, 3.5rem) - var(--cz-bottom-offset, 0px) - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

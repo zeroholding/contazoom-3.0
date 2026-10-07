@@ -169,7 +169,7 @@ function BotaoOlho({
       onClick={onAlternar}
       aria-label={visivel ? `Ocultar ${rotulo}` : `Mostrar ${rotulo}`}
       aria-pressed={visivel}
-      className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#14161B]"
+      className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#14161B] max-md:right-1 max-md:h-10 max-md:w-10"
     >
       {visivel ? (
         <EyeOff className="h-[17px] w-[17px]" aria-hidden="true" />
@@ -328,9 +328,12 @@ export default function Cadastro() {
   };
 
   return (
-    <div className="cz-auth min-h-screen bg-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+    <div className="cz-auth min-h-screen max-md:min-h-dvh bg-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       {/* ------------------------------ Formulário ----------------------------- */}
-      <div className="flex min-h-screen flex-col px-6 py-10 sm:px-10 lg:min-h-0 lg:px-16 xl:px-24">
+      {/* Celular: `dvh` acompanha a barra de endereço do navegador (100vh é maior que a tela visível e
+          cria rolagem à toa) e o respiro de baixo soma a área segura do iPhone, para o botão de
+          enviar não ficar colado no indicador de início. */}
+      <div className="flex min-h-screen flex-col px-6 py-10 max-md:min-h-dvh max-md:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-md:pt-6 sm:px-10 lg:min-h-0 lg:px-16 xl:px-24">
         {/* No celular o painel da marca não existe, então é aqui que a pessoa
             reconhece onde está. A imagem do logo é usada porque o fundo é
             branco, que é para o que ela foi feita. */}
@@ -348,7 +351,7 @@ export default function Cadastro() {
           />
         </div>
 
-        <div className="flex flex-1 flex-col justify-center py-10">
+        <div className="flex flex-1 flex-col justify-center py-10 max-md:justify-start max-md:py-8">
           <div className="w-full max-w-[25rem]">
             <h1 className="cz-titulo text-[1.75rem] leading-9">
               Criar sua conta
@@ -357,7 +360,9 @@ export default function Cadastro() {
               Leva um minuto. Depois você entra com o e-mail e a senha.
             </p>
 
-            <form onSubmit={handleSubmit} className="mt-8 space-y-4" noValidate>
+            {/* Campo de 48px no celular. O `!` é necessário: `.cz-auth input` (globals.css) é CSS sem camada e
+              vence utilitária comum, então só `!important` troca os 44px do desktop. */}
+            <form onSubmit={handleSubmit} className="mt-8 space-y-4 max-md:[&_input]:h-12! max-md:[&_select]:h-12!" noValidate>
               {/* ------------------------------ Nome ---------------------------- */}
               <div>
                 <Rotulo id={idNome} texto="Nome completo" />
@@ -477,7 +482,7 @@ export default function Cadastro() {
                     return (
                       <li
                         key={r.chave}
-                        className={`flex items-center gap-1.5 text-[12px] ${
+                        className={`flex items-center gap-1.5 text-[12px] max-md:text-[13px] ${
                           ok
                             ? "font-medium text-[#D9500A]"
                             : "text-[#9AA1AC]"
@@ -591,7 +596,7 @@ export default function Cadastro() {
                 type="submit"
                 disabled={isLoading}
                 aria-busy={isLoading || undefined}
-                className="group mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-transparent bg-[#F26212] text-sm font-semibold text-white transition-colors hover:bg-[#D9500A] active:bg-[#C34706] disabled:cursor-not-allowed disabled:opacity-60"
+                className="group mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-transparent bg-[#F26212] text-sm font-semibold text-white transition-colors hover:bg-[#D9500A] active:bg-[#C34706] disabled:cursor-not-allowed disabled:opacity-60 max-md:h-12 max-md:text-base"
               >
                 {isLoading ? (
                   <>
@@ -618,7 +623,7 @@ export default function Cadastro() {
                 Já tem uma conta?{" "}
                 <Link
                   href="/login"
-                  className="font-semibold text-[#D9500A] underline-offset-4 transition-colors hover:text-[#F26212] hover:underline"
+                  className="font-semibold text-[#D9500A] underline-offset-4 transition-colors hover:text-[#F26212] hover:underline max-md:-my-2 max-md:inline-block max-md:py-3"
                 >
                   Fazer login
                 </Link>

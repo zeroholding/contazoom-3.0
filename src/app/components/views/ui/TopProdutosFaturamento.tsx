@@ -206,7 +206,28 @@ export default function TopProdutosFaturamento({
         </div>
       </div>
 
-      <div className="flex-1 min-h-[400px] -mb-4">
+      {/* Celular: lista ranqueada no lugar do gráfico de barras. O eixo de categorias do
+          recharts reserva 150px para o nome, e em 390px sobravam ~160px para as barras, com
+          nomes de 80 caracteres quebrados em 4–5 linhas. Aqui o nome fica em até 2 linhas, o
+          valor à direita e a barra proporcional embaixo. O bloco some de md para cima. */}
+      <ol className="md:hidden flex flex-col divide-y divide-[var(--cz-hairline)]">
+        {dados.map((item, i) => (
+          <li key={`${item.sku}-${i}`} className="py-2.5 first:pt-0 last:pb-0">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-bold tabular-nums text-gray-600">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-[13px] font-medium leading-snug text-gray-800" title={item.produto}>{item.produto}</p>
+                <p className="mt-0.5 truncate text-xs text-gray-500">{item.sku} · {item.quantidade} un.</p>
+              </div>
+              <span className="shrink-0 text-[14px] font-bold tabular-nums text-gray-900">{formatCurrency(item.faturamento)}</span>
+            </div>
+            <div className="ml-9 mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.max(2, ((item.faturamento || 0) / Math.max(...dados.map((d) => d.faturamento || 0), 1)) * 100)}%` }} />
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="flex-1 min-h-[400px] -mb-4 max-md:hidden">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"

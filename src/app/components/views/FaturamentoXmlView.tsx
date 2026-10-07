@@ -74,6 +74,90 @@ import DeclaracaoFaturamentoPanel from "@/app/components/views/fiscal/Declaracao
 import { useSessao } from "@/hooks/useSessao";
 import { PAPEL } from "@/lib/papeis";
 import type { ApuracaoDetalhe } from "@/app/components/views/ui/tarefas/tipos";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
+
+/**
+ * Nota fiscal como CARTÃO, para o celular.
+ *
+ * A tabela tem seis colunas e pede 44rem: em 390px ela virava um quadro que rola de lado e
+ * deixava valor e situação fora da dobra. Aqui a leitura é vertical: número, data e situação
+ * em cima; quem comprou no meio; canal, valor e download embaixo. Todos os dados da linha da
+ * tabela continuam presentes, inclusive o riscado do valor de nota que não soma.
+ *
+ * Usa `real`, `dataCurta` e `CelulaCanal`, declarados mais abaixo: só rodam no render, depois
+ * que o módulo inteiro foi avaliado. O download é um alvo de 44px (`size-11`) porque o ícone
+ * de 28px da tabela é pequeno demais para o dedo.
+ */
+function CartaoNota({ nota, canais }: { nota: Documento; canais: CanalResumo[] }) {
+  const cancelada = nota.situacao === "CANCELADA";
+  const naoSoma = !nota.contaFaturamento;
+  const tom = cancelada ? "critico" : nota.precisaConferencia ? "alerta" : naoSoma ? "neutro" : "bom";
+  const rotulo = cancelada
+    ? "Cancelada"
+    : nota.precisaConferencia
+      ? "Conferir"
+      : naoSoma
+        ? "Não soma"
+        : "Autorizada";
+
+  return (
+    <li className="min-w-0 rounded-[12px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="cz-num text-[15px] font-bold leading-5 text-[var(--cz-texto)]">
+            NF {nota.numero}
+            <span className="font-medium text-[var(--cz-texto-fraco)]"> / {nota.serie}</span>
+          </p>
+          <p className="cz-num mt-0.5 text-[12.5px] text-[var(--cz-texto-suave)]">
+            {dataCurta(nota.emitidoEm)}
+            {nota.cfop ? ` · CFOP ${nota.cfop}` : ""}
+          </p>
+        </div>
+        {/* O selo vem de `comum/shell` com 11px; no cartão a situação é dado de leitura, então 12px. */}
+        <span className="shrink-0 [&>*]:text-[12px]!">
+          <Selo tom={tom}>{rotulo}</Selo>
+        </span>
+      </div>
+
+      {/* O motivo em prosa vem do servidor e explica por que "não soma". */}
+      {naoSoma && nota.motivoExclusaoLabel && (
+        <p className="mt-1.5 text-[12.5px] leading-snug text-[var(--cz-texto-suave)]">
+          {nota.motivoExclusaoLabel}
+        </p>
+      )}
+
+      <p className="mt-3 line-clamp-2 break-words text-[14px] leading-snug text-[var(--cz-texto)]">
+        {nota.nomeDestinatario ?? "Consumidor final"}
+      </p>
+      <p className="cz-num mt-0.5 break-words text-[12.5px] text-[var(--cz-texto-suave)]">
+        {nota.tipoDocumentoDestinatario ?? "sem documento"}
+        {nota.pedidoMarketplace ? ` · pedido ${nota.pedidoMarketplace}` : ""}
+      </p>
+
+      <div className="mt-3 flex items-center gap-3 border-t border-[var(--cz-hairline)] pt-3">
+        <div className="min-w-0 flex-1 text-[13px] text-[var(--cz-texto)]">
+          <CelulaCanal canal={nota.canal} canais={canais} />
+        </div>
+        <span
+          className={`cz-num shrink-0 text-[16px] font-bold ${
+            naoSoma ? "text-[var(--cz-texto-fraco)] line-through" : "text-[var(--cz-texto)]"
+          }`}
+        >
+          {real(nota.valorTotal)}
+        </span>
+        <a
+          href={`/api/fiscal/xml/${nota.id}`}
+          className="grid size-11 shrink-0 place-items-center rounded-[10px] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition-colors active:bg-[var(--cz-fundo)]"
+          title={`Baixar o XML da nota ${nota.numero}`}
+          aria-label={`Baixar o XML da nota ${nota.numero}`}
+        >
+          <Icone nome="Download" className="h-[18px] w-[18px]" />
+        </a>
+      </div>
+    </li>
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /*                          Formato das respostas                             */
@@ -1254,16 +1338,25 @@ export default function FaturamentoXmlView() {
   const documentos = lista?.documentos ?? [];
   const canais = resumo?.canais ?? [];
 
+  // Celular: layout de cartões, folha de filtros e rótulos curtos nas abas (os longos escondiam a
+  // terceira aba atrás da rolagem horizontal). Declarado antes dos retornos antecipados: é um hook.
+  const celular = useCelular();
+
+  // Barra fixa de "Salvar canais": só no celular, só na aba de canais e só quando há mudança a salvar.
+  // No desktop continua valendo o botão do cabeçalho do painel.
+  const barraSalvarSeries =
+    celular && aba === "canais" && podeDefinirFaturamento && seriesAlteradas;
+
   const abas = useMemo(
     () =>
       [
-        { chave: "geral", texto: "Apuração do mês", contagem: lista?.pagination.total },
-        { chave: "canais", texto: "Canais das séries", contagem: series?.naoMapeadas.length || undefined },
-        { chave: "declaracao", texto: "Declaração de 12 meses" },
+        { chave: "geral", texto: celular ? "Apuração" : "Apuração do mês", contagem: lista?.pagination.total },
+        { chave: "canais", texto: celular ? "Canais" : "Canais das séries", contagem: series?.naoMapeadas.length || undefined },
+        { chave: "declaracao", texto: celular ? "Declaração" : "Declaração de 12 meses" },
       ].map((item) =>
         ABAS_PENDENTES.has(item.chave) ? { ...item, texto: `${item.texto} · em breve` } : item,
       ),
-    [lista?.pagination.total, series?.naoMapeadas.length],
+    [celular, lista?.pagination.total, series?.naoMapeadas.length],
   );
 
   const empresaAtual = resumo?.empresa ?? empresas.find((e) => e.id === empresaId) ?? null;
@@ -1292,7 +1385,31 @@ export default function FaturamentoXmlView() {
   return (
     // `min-w-0` na raiz: a tela é filha do `<main>` do admin, e sem isso a largura
     // mínima do conteúdo vaza para fora da janela.
-    <div className="cz-tarefas mx-auto min-w-0 max-w-[1760px] space-y-4 p-4 sm:p-5">
+    <div
+      className={`cz-tarefas mx-auto min-w-0 max-w-[1760px] space-y-4 p-4 sm:p-5 ${
+        barraSalvarSeries ? "max-md:pb-28" : ""
+      }`}
+    >
+      {/* Barra fixa de salvar (celular), logo acima da barra de abas: no admin
+          `--cz-bottom-offset` vale a altura dela. `mb-0!` porque o `space-y-4` da raiz dá margem
+          inferior a todo filho que não é o último, e num elemento `fixed` essa margem levantaria
+          a barra 16px. O `pb-28` da raiz reserva o espaço para o fim da lista não ficar escondido. */}
+      {barraSalvarSeries && (
+        <div className="fixed inset-x-0 bottom-[var(--cz-bottom-offset,0px)] z-30 mb-0! flex items-center gap-3 border-t border-[var(--cz-hairline)] bg-white/95 px-4 py-3 backdrop-blur">
+          <p className="min-w-0 flex-1 text-[13px] leading-snug text-[var(--cz-texto-suave)]">
+            Há canais escolhidos que ainda não foram salvos.
+          </p>
+          <Botao
+            icone="Save"
+            className="shrink-0"
+            carregando={salvandoSeries}
+            onClick={() => void salvarSeries()}
+          >
+            Salvar canais
+          </Botao>
+        </div>
+      )}
+
       <Cabecalho
         compacto
         titulo="Faturamento (XML)"
@@ -1382,7 +1499,7 @@ export default function FaturamentoXmlView() {
 
       {/* ------------------- Contexto: empresa + competência ----------------- */}
 
-      <div className="flex flex-col gap-4 rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] px-5 py-4 shadow-[var(--cz-elev-1)] lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] px-5 py-4 shadow-[var(--cz-elev-1)] max-md:gap-3 max-md:px-4 max-md:py-3.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <span
             aria-hidden="true"
@@ -1391,10 +1508,12 @@ export default function FaturamentoXmlView() {
             <Icone nome="Landmark" className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-bold leading-tight text-[var(--cz-texto)]">
+            {/* Celular: até duas linhas. Razão social de 80 caracteres cortada em "Comercial Tech
+                Importadora e E…" não identifica a empresa. */}
+            <p className="truncate text-[15px] font-bold leading-tight text-[var(--cz-texto)] max-md:line-clamp-2 max-md:break-words max-md:whitespace-normal">
               {empresaAtual?.razaoSocial ?? "—"}
             </p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-[var(--cz-texto-suave)]">
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-[var(--cz-texto-suave)] max-md:text-[12.5px]">
               <span className="cz-num">{cnpjFormatado(empresaAtual?.cnpj ?? null)}</span>
               <span aria-hidden="true">·</span>
               <span>
@@ -1418,10 +1537,12 @@ export default function FaturamentoXmlView() {
 
         {/* Empresa seleciona o CNPJ que o upload ACEITA. Competência é input
             mensal, não select fechado: mês sem XML precisa existir para o valor
-            manual e para a declaração de 12 meses. */}
-        <div className="grid shrink-0 gap-3 sm:grid-cols-[minmax(14rem,1fr)_10rem] lg:w-[31rem]">
+            manual e para a declaração de 12 meses.
+            Celular (<640px): empresa e mês lado a lado, alinhados pela base dos campos, e o texto de
+            ajuda do mês some (`[&_p]:hidden`): numa coluna de ~150px ele quebraria em cinco linhas. */}
+        <div className="grid shrink-0 gap-3 max-sm:grid-cols-[minmax(0,1fr)_minmax(9.5rem,10.5rem)] max-sm:items-end max-sm:[&_p]:hidden sm:grid-cols-[minmax(14rem,1fr)_10rem] lg:w-[31rem]">
           <Escolha
-            rotulo="Empresa (CNPJ aceito no upload)"
+            rotulo={celular ? "Empresa" : "Empresa (CNPJ aceito no upload)"}
             vazio="Selecione a empresa"
             opcoes={empresas
               .filter((e) => e.cnpj)
@@ -1481,18 +1602,24 @@ export default function FaturamentoXmlView() {
         <Painel
           titulo="Resultado da importação"
           descricao={`${inteiro(resultado.arquivosEnviados)} arquivo(s) enviado(s).`}
+          // Celular: o X flutua no canto do painel. No cabeçalho em coluna ele ocupava uma linha
+          // inteira sozinho, sob o título, abrindo um vão de ~50px.
+          className="max-md:relative"
           acoes={
             <Botao
               variante="fantasma"
               icone="X"
               tamanho="sm"
+              className="max-md:absolute max-md:right-2 max-md:top-2"
               onClick={() => setResultado(null)}
               aria-label="Fechar o resultado da importação"
             />
           }
         >
           <div className="min-w-0 space-y-3 p-4">
-            <div className="grid gap-2 sm:grid-cols-5">
+            {/* Celular: duas colunas (eram cinco caixas empilhadas, ~300px de quase nada) e a quinta
+                ocupa a linha toda para não ficar sozinha pela metade. */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 max-sm:[&>*:last-child]:col-span-2">
               {[
                 { rotulo: "Importados", valor: resultado.importados, tom: "text-emerald-700" },
                 { rotulo: "Já existiam", valor: resultado.duplicados, tom: "text-[var(--cz-texto-suave)]" },
@@ -1504,7 +1631,7 @@ export default function FaturamentoXmlView() {
                   key={item.rotulo}
                   className="rounded-[10px] border border-[var(--cz-hairline)] bg-[#FCFCFD] px-3 py-2"
                 >
-                  <p className="text-[11px] uppercase tracking-[0.03em] text-[var(--cz-texto-suave)]">
+                  <p className="text-[11px] uppercase tracking-[0.03em] text-[var(--cz-texto-suave)] max-md:text-[12px]">
                     {item.rotulo}
                   </p>
                   <p className={`cz-num text-[17px] font-bold ${item.tom}`}>
@@ -1532,7 +1659,7 @@ export default function FaturamentoXmlView() {
                       key={item.chave}
                       type="button"
                       onClick={() => abrirCompetencia(item.chave)}
-                      className={`rounded-full border px-2.5 py-1 text-[12px] font-bold transition-colors ${
+                      className={`rounded-full border px-2.5 py-1 text-[12px] font-bold transition-colors max-md:min-h-11 max-md:px-4 max-md:text-[13px] ${
                         item.chave === competencia
                           ? "border-sky-700 bg-sky-700 text-white"
                           : "border-sky-300 bg-white text-sky-900 hover:bg-sky-100"
@@ -1642,7 +1769,17 @@ export default function FaturamentoXmlView() {
 
       {/* ------------------------------ Cartões ----------------------------- */}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Celular (<640px): duas colunas, mas valor em reais de 7 dígitos ("R$ 1.234.567,89") não cabe em
+          meio cartão a 26px. Então os dois primeiros (apurado e declarado) ocupam a linha toda e só os
+          curtos dividem a linha: "Arquivos lidos" e uma divergência zerada. Divergência longa também
+          ocupa a linha, e "Arquivos lidos" desce para o fim (`order-last`) para não ficar pela metade. */}
+      <div
+        className={`grid grid-cols-2 gap-4 max-md:gap-3 sm:grid-cols-2 xl:grid-cols-4 max-sm:[&>*:nth-child(-n+2)]:col-span-2 ${
+          real(divergencia).length > 9
+            ? "max-sm:[&>*:nth-child(n+3)]:col-span-2 max-sm:[&>*:nth-child(3)]:order-last"
+            : ""
+        }`}
+      >
         <CartaoKpi
           titulo="Apurado pelos XMLs"
           valor={real(apurado)}
@@ -1827,19 +1964,30 @@ export default function FaturamentoXmlView() {
                   return (
                     <li
                       key={`${item.serie}-${indice}`}
-                      className={`grid min-w-0 items-end gap-3 rounded-[12px] border p-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto] ${
+                      // Celular (<640px): série estreita + canal lado a lado; o 3º item (aviso "veio do
+                      // XML" ou lixeira) desce para a segunda linha, alinhado à direita. Antes eram três
+                      // blocos empilhados por série.
+                      className={`grid min-w-0 items-end gap-3 rounded-[12px] border p-3 max-sm:grid-cols-[6rem_minmax(0,1fr)] max-sm:items-start max-sm:[&>*:nth-child(3)]:col-span-2 max-sm:[&>*:nth-child(3)]:justify-self-end sm:grid-cols-[8rem_minmax(0,1fr)_auto] ${
                         encontrada
                           ? "border-amber-200 bg-amber-50/40"
                           : "border-[var(--cz-hairline)] bg-[#FCFCFD]"
                       }`}
                     >
+                      {/* Celular: rótulo curto ("Série encontrada" quebrava em duas linhas na coluna de 6rem
+                          e desalinhava o campo do seletor ao lado; o tom âmbar do cartão já diz que veio do XML). */}
                       <Entrada
-                        rotulo={encontrada ? "Série encontrada" : "Série"}
+                        rotulo={encontrada && !celular ? "Série encontrada" : "Série"}
                         inputMode="numeric"
                         maxLength={3}
                         value={item.serie}
                         disabled={!podeDefinirFaturamento || encontrada}
-                        ajuda={notas !== undefined ? `${inteiro(notas)} nota(s) já importada(s)` : undefined}
+                        ajuda={
+                          notas !== undefined
+                            ? celular
+                              ? `${inteiro(notas)} nota(s)`
+                              : `${inteiro(notas)} nota(s) já importada(s)`
+                            : undefined
+                        }
                         onChange={(e) =>
                           setRascunhoSeries((atual) =>
                             atual.map((s, i) =>
@@ -1984,23 +2132,30 @@ export default function FaturamentoXmlView() {
                       >
                         <Icone nome="UploadCloud" className="h-5 w-5" />
                       </span>
-                      <p className="text-[13.5px] font-bold text-[var(--cz-texto)]">
+                      <p className="text-[13.5px] font-bold text-[var(--cz-texto)] max-md:text-[16px]">
                         {importando
                           ? etapaImportacao || `Importando ${progresso.feitos} de ${progresso.total}…`
                           : !empresaId
                             ? "Escolha a empresa para liberar o upload"
-                            : "Arraste XMLs ou ZIPs aqui"}
+                            : celular
+                              ? "Escolha os XMLs ou ZIPs"
+                              : "Arraste XMLs ou ZIPs aqui"}
                       </p>
-                      <p className="mt-1 max-w-[19rem] text-[12px] leading-relaxed text-[var(--cz-texto-suave)]">
+                      <p className="mt-1 max-w-[19rem] text-[12px] leading-relaxed text-[var(--cz-texto-suave)] max-md:max-w-none max-md:text-[13px]">
                         XMLs soltos ou ZIPs inteiros. Cada ZIP é aberto no seu
                         navegador e enviado em lotes de até {MAX_ARQUIVOS_POR_LOTE} e
                         28 MB; reenviar não duplica nada.
                       </p>
-                      <div className="mt-3">
+                      {/* Celular: arrastar não existe, então o botão é a ação principal da área:
+                          laranja, na largura toda e com 48px de altura (`min-h-12!` vence o
+                          `min-h-11` do tamanho `lg`). No desktop continua a pílula branca pequena. */}
+                      <div className="mt-3 max-md:mt-4 max-md:w-full">
                         <Botao
-                          variante="secundario"
+                          variante={celular ? "primario" : "secundario"}
                           icone="FolderOpen"
-                          tamanho="sm"
+                          tamanho={celular ? "lg" : "sm"}
+                          larguraCheia={celular}
+                          className="max-md:min-h-12!"
                           carregando={importando}
                           disabled={!empresaId || !podeImportar || importando}
                           onClick={() => inputArquivos.current?.click()}
@@ -2096,14 +2251,16 @@ export default function FaturamentoXmlView() {
                           ].map((opcao) => (
                             <label
                               key={opcao.valor}
-                              className="flex cursor-pointer items-center gap-2.5 rounded-[10px] px-1 py-1 text-[13px] text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)]"
+                              // Celular: linha de 44px que se alinha de verdade. O `label { display:block }` do
+                              // CSS global anula o `flex`, então `flex!` e `mb-0!` (a margem do label também).
+                              className="flex cursor-pointer items-center gap-2.5 rounded-[10px] px-1 py-1 text-[13px] text-[var(--cz-texto)] transition-colors hover:bg-[var(--cz-fundo)] max-md:mb-0! max-md:flex! max-md:min-h-11 max-md:text-[14px]"
                             >
                               <input
                                 type="radio"
                                 name="origem-faturamento"
                                 checked={origem === opcao.valor}
                                 onChange={() => setOrigem(opcao.valor)}
-                                className="h-4 w-4 accent-[var(--cz-laranja)]"
+                                className="h-4 w-4 accent-[var(--cz-laranja)] max-md:size-5"
                               />
                               <span>{opcao.texto}</span>
                             </label>
@@ -2206,14 +2363,25 @@ export default function FaturamentoXmlView() {
             >
               {/* Os campos descem do mesmo `Campo`, então rótulo, altura e raio
                   saem de um lugar só. */}
-              <div className="grid min-w-0 items-end gap-3 border-b border-[var(--cz-hairline)] p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+              {/* Celular: a busca fica sempre visível e os três filtros de lista (canal, situação, "no
+                  faturamento") vão para a folha de filtros. No desktop o `FiltrosSheet` devolve os
+                  filhos como estão e a grade de cinco colunas é a de sempre. */}
+              <div className="grid min-w-0 items-end gap-3 border-b border-[var(--cz-hairline)] p-4 max-md:grid-cols-[minmax(0,1fr)_auto] md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
                 <Entrada
                   rotulo="Buscar"
                   type="search"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Nº, chave, destinatário ou pedido"
+                  placeholder={celular ? "Nº, chave ou pedido" : "Nº, chave, destinatário ou pedido"}
                 />
+                <FiltrosSheet
+                  titulo="Filtros"
+                  ativos={
+                    [canalFiltro, situacaoFiltro, contaFiltro, motivoFiltro, somenteConferencia].filter(Boolean)
+                      .length
+                  }
+                  onLimpar={limparFiltros}
+                >
                 <Escolha
                   rotulo="Canal"
                   vazio="Todos"
@@ -2242,14 +2410,16 @@ export default function FaturamentoXmlView() {
                   value={contaFiltro}
                   onChange={(e) => setContaFiltro(e.target.value)}
                 />
+                </FiltrosSheet>
                 {/* `mb-px` alinha o botão com a BASE dos campos: `items-end` alinha
-                    as caixas, e o campo tem um rótulo acima que o botão não tem. */}
+                    as caixas, e o campo tem um rótulo acima que o botão não tem. No celular o
+                    "Limpar" mora na folha de filtros e este botão sai. */}
                 <Botao
                   variante="secundario"
                   icone="RotateCcw"
                   onClick={limparFiltros}
                   disabled={!temFiltro}
-                  className="mb-px"
+                  className="mb-px max-md:hidden"
                 >
                   Limpar
                 </Botao>
@@ -2304,6 +2474,13 @@ export default function FaturamentoXmlView() {
                     }
                   />
                 </div>
+              ) : celular ? (
+                // Celular: um cartão por nota (ver `CartaoNota`) no lugar da tabela de seis colunas.
+                <ul className="space-y-2.5 p-3">
+                  {documentos.map((nota) => (
+                    <CartaoNota key={nota.id} nota={nota} canais={canais} />
+                  ))}
+                </ul>
               ) : (
                 // `min-w-0` no rolador e tabela de SETE colunas: o scroll horizontal
                 // fica DENTRO daqui em telas estreitas, em vez de empurrar a página.
@@ -2527,7 +2704,7 @@ export default function FaturamentoXmlView() {
                             setSomenteConferencia(false);
                             setAba("geral");
                           }}
-                          className="mt-1 text-[11.5px] font-medium text-[var(--cz-laranja-forte)] underline-offset-2 hover:underline"
+                          className="mt-1 text-[11.5px] font-medium text-[var(--cz-laranja-forte)] underline-offset-2 hover:underline max-md:mt-0 max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:text-[13px]"
                         >
                           ver na lista
                         </button>

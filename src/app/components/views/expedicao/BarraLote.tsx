@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useCelular } from "@/hooks/useMediaQuery";
 import { inteiro } from "../comum/formato";
 import {
   IconeAlerta,
@@ -151,6 +152,105 @@ export default function BarraLote({
   );
 
   const todosMarcados = elegiveis.length > 0 && quantos === elegiveis.length;
+  const celular = useCelular();
+
+  // Celular: a barra se parte em duas. No topo da lista, uma linha fina com a
+  // contagem e o "selecionar todos"; e, só com pacotes marcados, uma barra FIXA
+  // sobre a barra de abas com as duas ações de impressão. Lado a lado no topo, os
+  // botões de 32px e o texto de 12px quebravam em três linhas, e a ação ficava
+  // rolada para fora da tela justamente quando se descia a fila marcando pacotes.
+  if (celular) {
+    const arquivos = new Set(escolhidos.map((p) => p.accountId)).size;
+
+    return (
+      <>
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] py-1 pl-4 pr-2">
+          <span className="min-w-0 text-[13px] leading-snug text-[var(--cz-texto-suave)]">
+            Mostrando <strong className="text-[var(--cz-texto)]">{inteiro(totalNaPagina)}</strong> de{" "}
+            <strong className="text-[var(--cz-texto)]">{inteiro(totalGeral)}</strong> {rotuloTotal}
+            {atualizando && (
+              <span className="ml-2 inline-flex items-center gap-1 font-semibold text-[var(--cz-laranja-forte)]">
+                <IconeAtualizar className="h-3.5 w-3.5 animate-spin" />
+                atualizando…
+              </span>
+            )}
+          </span>
+          {elegiveis.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                onSelecionar(todosMarcados ? new Set() : new Set(elegiveis.map((p) => p.chave)))
+              }
+              disabled={imprimindo !== null}
+              className="min-h-11 shrink-0 px-2 text-[13px] font-semibold text-[var(--cz-laranja-forte)] disabled:opacity-40"
+            >
+              {todosMarcados ? "Desmarcar todos" : "Selecionar todos"}
+            </button>
+          )}
+        </div>
+
+        {quantos > 0 && (
+          <div className="fixed inset-x-0 bottom-[var(--cz-bottom-offset,0px)] z-30 border-t border-[var(--cz-laranja-borda)] bg-[var(--cz-superficie)] px-4 pb-3 pt-1.5 shadow-[0_-10px_28px_rgba(16,24,40,0.14)]">
+            {erro && (
+              <p
+                role="status"
+                className="mb-2 mt-1.5 flex items-start gap-2 rounded-[var(--cz-raio)] border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] leading-snug text-rose-800"
+              >
+                <IconeAlerta className="mt-0.5 h-4 w-4 shrink-0" />
+                {erro}
+              </p>
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[14px] font-bold tabular-nums text-[var(--cz-laranja-forte)]">
+                {inteiro(quantos)} selecionado(s)
+              </span>
+              <button
+                type="button"
+                onClick={() => onSelecionar(new Set())}
+                disabled={imprimindo !== null}
+                className="min-h-11 px-1 text-[13px] font-semibold text-[var(--cz-texto-suave)] underline decoration-dotted underline-offset-2 disabled:opacity-40"
+              >
+                Limpar seleção
+              </button>
+            </div>
+            {arquivos > 1 && (
+              <p className="-mt-1 mb-2 text-[12px] leading-snug text-[var(--cz-texto-suave)]">
+                {arquivos} arquivos, um por conta — a etiqueta sai autenticada na conta que vendeu.
+              </p>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => imprimir("pdf")}
+                disabled={imprimindo !== null}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-[var(--cz-raio)] bg-[var(--cz-laranja)] text-[14px] font-semibold text-white transition-colors active:bg-[var(--cz-laranja-forte)] disabled:opacity-60"
+              >
+                {imprimindo === "pdf" ? (
+                  <IconeAtualizar className="h-4 w-4 animate-spin" />
+                ) : (
+                  <IconeDocumento className="h-4 w-4" />
+                )}
+                {imprimindo === "pdf" ? "Gerando…" : "Etiquetas PDF"}
+              </button>
+              <button
+                type="button"
+                onClick={() => imprimir("zpl")}
+                disabled={imprimindo !== null}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[14px] font-semibold text-[var(--cz-texto)] transition-colors active:bg-[#F4F5F7] disabled:opacity-60"
+              >
+                {imprimindo === "zpl" ? (
+                  <IconeAtualizar className="h-4 w-4 animate-spin" />
+                ) : (
+                  <IconeBaixar className="h-4 w-4" />
+                )}
+                {imprimindo === "zpl" ? "Gerando…" : "Etiquetas ZPL"}
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-4 py-2.5">

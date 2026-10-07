@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CaixaBusca } from "../comum/shell";
+import FiltrosSheet, { CampoDaFolha, GrupoDePilulas } from "@/components/ui/FiltrosSheet";
+import { useCelular } from "@/hooks/useMediaQuery";
 
 interface FiltrosGestaoSKUProps {
   onFiltrosChange: (filtros: FiltrosSKU) => void;
@@ -49,6 +51,7 @@ export default function FiltrosGestaoSKU({
 }: FiltrosGestaoSKUProps) {
   const [filtros, setFiltros] = useState<FiltrosSKU>(FILTROS_INICIAIS);
   const [searchDraft, setSearchDraft] = useState("");
+  const celular = useCelular();
 
   useEffect(() => {
     onFiltrosChange(filtros);
@@ -93,6 +96,56 @@ export default function FiltrosGestaoSKU({
     { id: "inativos", label: "Inativos", activeClass: "border-rose-200 bg-rose-100 text-rose-900" },
     { id: "sem-estoque", label: "Sem estoque", activeClass: "border-amber-200 bg-amber-100 text-amber-900" },
   ];
+
+  // Celular: a busca fica SEMPRE à vista e, ao lado dela, o botão "Filtros" abre uma
+  // folha com tipo e situação. Antes, título + busca + tipo + modos + pastilhas
+  // ocupavam ~310px do topo e a lista só aparecia depois da primeira dobra.
+  if (celular) {
+    const naFolha = [filtros.tipo, filtros.ativo, filtros.temEstoque].filter((value) => value !== "" && value !== null).length;
+    return (
+      <section className="rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3 shadow-[var(--cz-elev-1)]" aria-label="Filtros de SKU">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-stretch gap-2">
+            <div className="min-w-0 flex-1">
+              <CaixaBusca valor={searchDraft} onMudar={setSearchDraft} placeholder="Buscar SKU ou produto…" rotuloAcessivel="Buscar SKU ou produto" />
+            </div>
+            <FiltrosSheet titulo="Filtros" ativos={naFolha} onLimpar={clearFilters} classeBotao="shrink-0">
+              <CampoDaFolha rotulo="Tipo de SKU">
+                <GrupoDePilulas
+                  rotulo="Tipo de SKU"
+                  opcoes={[
+                    { id: "", rotulo: "Todos" },
+                    { id: "pai", rotulo: "Kits" },
+                    { id: "filho", rotulo: "Individuais" },
+                  ]}
+                  estaAtiva={(id) => filtros.tipo === id}
+                  onEscolher={(id) => setFiltros((current) => ({ ...current, tipo: id, page: 1 }))}
+                />
+              </CampoDaFolha>
+              <CampoDaFolha rotulo="Situação">
+                <GrupoDePilulas
+                  rotulo="Situação"
+                  opcoes={statusOptions.map(({ id, label }) => ({ id, rotulo: label }))}
+                  estaAtiva={(id) => statusAtivo === id}
+                  onEscolher={(id) => changeStatus(id as FiltroStatus)}
+                />
+              </CampoDaFolha>
+            </FiltrosSheet>
+          </div>
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Modos da listagem">
+            <button type="button" onClick={onToggleEditMode} disabled={isLoading} aria-pressed={isEditMode} className={`inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border px-3 text-[13px] font-semibold transition-colors disabled:opacity-50 ${isEditMode ? "border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]" : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto-suave)]"}`}>
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m4 20 4-1 11-11-3-3L5 16zM14 6l3 3" /></svg>
+              Editar
+            </button>
+            <button type="button" onClick={onToggleMultiSelect} disabled={isLoading || !isEditMode} aria-pressed={isMultiSelect} className={`inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border px-3 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${isMultiSelect ? "border-blue-200 bg-blue-50 text-blue-800" : "border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] text-[var(--cz-texto-suave)]"}`}>
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="m9 12 2 2 4-4M4 5h16M4 19h16" /></svg>
+              Selecionar{isMultiSelect && selectedCount > 0 ? ` (${selectedCount})` : ""}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)]" aria-label="Filtros de SKU">

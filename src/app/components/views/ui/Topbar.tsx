@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import UserAvatar from "./UserAvatar";
+import BottomNav from "./BottomNav";
 
 type TopbarProps = {
   collapsed: boolean;
@@ -20,6 +21,18 @@ type TopbarProps = {
  * o breadcrumb anunciava a tela errada. Consultado ANTES do mapa por segmento.
  */
 const LABEL_POR_CAMINHO: Record<string, string> = {
+  // `dashboard` sozinho vale "Dashboard", e sob `/financeiro` isso lia
+  // "Dashboard › Financeiro › Dashboard". No celular só o último item aparece
+  // como título, e "Dashboard" ali seria idêntico ao da aba Início.
+  "/financeiro/dashboard": "Dashboard Financeiro",
+  // Os nomes do menu lateral. Sem estas linhas o título do celular (só o último
+  // item do caminho) lia "Mortos" e "Mais Vendidos", sem dizer de quê, e o
+  // fallback por segmento escrevia "Configuracoes Frete" sem acento.
+  "/anuncios": "Gestão de Anúncios",
+  "/anuncios/mais-vendidos": "Anúncios Mais Vendidos",
+  "/anuncios/mortos": "Anúncios Mortos",
+  "/financeiro/configuracoes-frete": "Configuração de Frete",
+  "/estoque-full": "Estoque Full",
   "/expedicao": "Expedição Geral",
   "/expedicao/mercado-livre": "Mercado Livre",
   "/expedicao/shopee": "Shopee",
@@ -65,6 +78,9 @@ export default function Topbar({
     const href = "/" + segments.slice(0, i + 1).join("/");
     return { href, label: toLabel(seg, href) };
   });
+  // No celular o caminho inteiro não cabe (nem faria sentido ler "Dashboard ›
+  // Central de Vendas › Vendas Shopee" em 390px): fica só onde a pessoa está.
+  const tituloAtual = crumbs.length > 0 ? crumbs[crumbs.length - 1].label : "Dashboard";
 
   /**
    * Só o CHEVRON gira, não o ícone inteiro.
@@ -99,12 +115,17 @@ export default function Topbar({
           "left-0 md:left-[var(--sidebar-w)]", // acompanha a var no desktop
         ].join(" ")}
       >
-        <div className="w-full px-3 sm:px-5">
+        {/* Celular: 4px à esquerda porque o botão de 44px já traz 12px de folga
+            ao redor do ícone, o que põe o desenho a 16px da borda — o mesmo
+            recuo do conteúdo da página. À direita, 16px cheios para o avatar. */}
+        <div className="w-full pl-1 pr-4 sm:px-5">
           <div className="flex items-center gap-2">
-            {/* Botão mobile (hambúrguer) */}
+            {/* Botão mobile (hambúrguer).
+                44px é o alvo mínimo de toque; os 36px de antes (p-2 + ícone de
+                20px) ficavam abaixo disso. */}
             <button
               type="button"
-              className="md:hidden inline-flex items-center justify-center rounded-lg p-2 text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]"
+              className="md:hidden inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)] active:bg-[#F4F5F7]"
               onClick={onMobileMenu}
               aria-label="Abrir menu"
             >
@@ -153,10 +174,17 @@ export default function Topbar({
               </svg>
             </button>
 
-            {/* Breadcrumb */}
+            {/* Título da tela, só no celular. `h1` NÃO: cada tela já tem o seu
+                título de página, e dois `h1` por documento confundem leitor de
+                tela. */}
+            <p className="cz-titulo min-w-0 flex-1 truncate text-[17px] leading-6 md:hidden">
+              {tituloAtual}
+            </p>
+
+            {/* Breadcrumb (desktop) */}
             <nav
               aria-label="Breadcrumb"
-              className="flex-1 flex items-center gap-2 text-sm overflow-hidden"
+              className="hidden md:flex flex-1 items-center gap-2 text-sm overflow-hidden"
             >
               <Link
                 href="/dashboard"
@@ -203,6 +231,10 @@ export default function Topbar({
         </div>
       </header>
 
+      {/* Barra de abas do celular. Mora aqui porque TODO quadro de tela inclui o
+          Topbar (são as telas antigas e a `MolduraTela`), então uma montagem
+          cobre o painel inteiro sem tocar nas quinze telas. */}
+      <BottomNav onMenu={onMobileMenu} />
     </>
   );
 }

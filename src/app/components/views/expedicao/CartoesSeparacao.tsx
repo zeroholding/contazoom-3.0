@@ -2,8 +2,10 @@
 
 import type { ReactNode } from "react";
 
+import { useCelular } from "@/hooks/useMediaQuery";
 import { inteiro } from "../comum/formato";
 import { IconeCaixa, IconeCerto } from "../comum/icones";
+import { Kpi } from "../comum/shell";
 
 type TomCartao = "azul" | "verde";
 
@@ -53,6 +55,21 @@ export default function CartoesSeparacao({
   vendas: number;
   itens: number;
 }) {
+  const celular = useCelular();
+
+  // Celular: os dois números lado a lado no `Kpi` do kit (o mesmo das outras telas),
+  // em vez de dois cartões largos empilhados que gastavam ~190px antes da fila. A
+  // dica ("previstas para o período") sai: o rótulo já diz o que é, e a linha de
+  // contagens logo acima da fila detalha pacotes, vendas, itens e unidades.
+  if (celular) {
+    return (
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Kpi rotulo="Vendas" valor={inteiro(vendas)} icone={<IconeCerto className="h-5 w-5" />} />
+        <Kpi rotulo="Itens" valor={inteiro(itens)} icone={<IconeCaixa className="h-5 w-5" />} />
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 grid gap-4 sm:grid-cols-2">
       <Cartao

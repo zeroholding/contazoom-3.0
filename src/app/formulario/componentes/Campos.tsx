@@ -475,7 +475,9 @@ export function CampoEndereco({
             value={valor.numero}
             onChange={(e) => campo("numero")(e.target.value)}
             erro={erro("numero")}
-            inputMode="numeric"
+            // `text` e não `numeric`: o teclado numérico do iOS não tem letras, e
+            // "S/N" ou "12B" são números de endereço comuns no Brasil.
+            inputMode="text"
             autoComplete="off"
             placeholder="123"
             className="cz-num"
@@ -678,7 +680,7 @@ export function SlotDocumento({
                 aria-label={`Remover ${arquivo.name}`}
                 // Sem confirmação: nada foi enviado ainda, e confirmar a remoção
                 // de algo que só existe na memória do navegador é atrito puro.
-                className="cz-campo-foco flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-[#98A2B3] transition-colors hover:bg-[#FEF3F2] hover:text-[#B42318]"
+                className="cz-campo-foco flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-[#98A2B3] transition-colors hover:bg-[#FEF3F2] hover:text-[#B42318] max-sm:h-11 max-sm:w-11"
               >
                 <Icone nome="Trash2" className="h-[1.125rem] w-[1.125rem]" />
               </button>
@@ -699,7 +701,7 @@ export function SlotDocumento({
           setArrastando(false);
           receber(e.dataTransfer.files);
         }}
-        className={`mt-3 flex min-h-[3.75rem] cursor-pointer items-center justify-center gap-2.5 rounded-[12px] border border-dashed px-4 py-3 text-center transition-colors duration-150 ${
+        className={`mt-3 flex max-sm:flex! min-h-[3.75rem] cursor-pointer items-center justify-center gap-2.5 rounded-[12px] border border-dashed px-4 py-3 text-center transition-colors duration-150 ${
           arrastando
             ? "border-[#F26212] bg-[#FFF4EC]"
             : erro

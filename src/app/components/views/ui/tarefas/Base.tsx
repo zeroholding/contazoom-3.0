@@ -197,26 +197,26 @@ export function CartaoKpi({
 
   const conteudo = (
     <>
-      <div className={`flex flex-1 gap-3 px-5 ${href ? "pt-[18px]" : "py-[18px]"}`}>
+      <div className={`flex flex-1 gap-3 px-5 max-md:px-4 ${href ? "pt-[18px] max-md:pt-3.5" : "py-[18px] max-md:py-3.5"}`}>
         {/* `min-w-[6.5rem]` é o piso do número: cabe um valor de cinco dígitos
             em 30px sem quebrar linha nem virar corpo menor. Piso diferente de
             zero não atrapalha o `truncate` do rótulo e do detalhe — o que
             quebraria truncamento em item flex é o `min-width: auto` do default,
             e este continua substituído. */}
         <div className="flex min-w-[6.5rem] flex-1 flex-col">
-          <p className="flex items-center gap-1.5 text-[13px] font-medium leading-5 text-[var(--cz-texto-suave)]">
+          <p className="flex items-center gap-1.5 text-[13px] font-medium leading-5 text-[var(--cz-texto-suave)] max-md:items-start max-md:leading-4">
             <Icone
               nome={icone}
               className={`h-[15px] w-[15px] shrink-0 ${corIcone}`}
             />
-            <span className="truncate">{titulo}</span>
+            <span className="truncate max-md:whitespace-normal">{titulo}</span>
           </p>
 
-          <p className="cz-valor mt-2 text-[1.875rem] leading-9">{valor}</p>
+          <p className="cz-valor mt-2 text-[1.875rem] leading-9 max-md:mt-1.5 max-md:text-[1.625rem] max-md:leading-8">{valor}</p>
 
           {temComparacao && (
             <p className="mt-auto flex items-center gap-1.5 pt-2 text-[12px] leading-[18px] text-[var(--cz-texto-suave)]">
-              {detalhe && <span className="truncate">{detalhe}</span>}
+              {detalhe && <span className="truncate max-md:whitespace-normal">{detalhe}</span>}
               {variacao && <Tendencia {...variacao} />}
             </p>
           )}
@@ -229,14 +229,14 @@ export function CartaoKpi({
           // grade fique com a mesma altura com e sem gráfico — o valor, o
           // rótulo e a linha de comparação continuam sendo o que define quanto
           // o cartão mede.
-          <div className="flex max-h-[4.75rem] min-w-0 max-w-[8.5rem] basis-[36%] items-center justify-end overflow-hidden">
+          <div className="flex max-h-[4.75rem] min-w-0 max-w-[8.5rem] basis-[36%] items-center justify-end overflow-hidden max-md:hidden">
             {grafico}
           </div>
         )}
       </div>
 
       {href && (
-        <span className="flex items-center gap-1 px-5 pb-[18px] pt-3 text-[12px] font-semibold leading-[18px] text-[var(--cz-laranja-forte)]">
+        <span className="flex items-center gap-1 px-5 pb-[18px] pt-3 text-[12px] font-semibold leading-[18px] text-[var(--cz-laranja-forte)] max-md:px-4 max-md:pb-3.5">
           {acaoTexto}
           <ChevronRight
             className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5"
@@ -292,7 +292,7 @@ function NavegacaoLocal({
         // antes do hover, que é o que faltava para as telas de detalhe.
         <Link
           href={voltarPara}
-          className="group inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-texto-fraco)] hover:text-[var(--cz-texto)]"
+          className="group inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-texto-fraco)] hover:text-[var(--cz-texto)] max-md:min-h-11 max-md:px-3.5"
         >
           <ChevronLeft
             className="h-4 w-4 transition-transform duration-150 group-hover:-translate-x-0.5"
@@ -425,7 +425,7 @@ export function Cabecalho({
       // título a barra tem a altura de um botão, então o `-mb-1` encurta o vão
       // até o primeiro painel — senão o respiro de 24px da tela, que existe
       // para separar blocos de conteúdo, sobraria como buraco embaixo dela.
-      <div className="-mb-1 space-y-3">
+      <div className="-mb-1 space-y-3 max-md:mb-4">
         <h1 className="sr-only">{titulo}</h1>
 
         {(temNavegacao || acoes) && (
@@ -434,7 +434,7 @@ export function Cabecalho({
             {acoes && (
               // `ml-auto` e não `justify-between`: com ou sem navegação à
               // esquerda, a barra de ação encosta na direita do mesmo jeito.
-              <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+              <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2 max-md:ml-0 max-md:w-full max-md:*:flex-1">
                 {acoes}
               </div>
             )}
@@ -453,14 +453,14 @@ export function Cabecalho({
       {navegacao}
 
       <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 max-w-full items-center gap-3">
           {icone && (
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] text-[var(--cz-laranja)]">
               <Icone nome={icone} className="h-5 w-5" />
             </span>
           )}
           <div className="min-w-0">
-            <h1 className="cz-titulo truncate text-2xl sm:text-[1.625rem]">
+            <h1 className="cz-titulo truncate text-2xl sm:text-[1.625rem] max-md:line-clamp-2 max-md:break-words max-md:whitespace-normal">
               {titulo}
             </h1>
             {descricao && (
@@ -473,7 +473,7 @@ export function Cabecalho({
           </div>
         </div>
         {acoes && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">{acoes}</div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2 max-md:w-full max-md:*:flex-1">{acoes}</div>
         )}
       </div>
 
@@ -737,7 +737,7 @@ export function Paginacao({
 
   const lista = paginasVisiveis(pagina, paginas);
   const passo =
-    "inline-flex items-center gap-1 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto)] transition-colors hover:border-[var(--cz-texto-fraco)] disabled:cursor-not-allowed disabled:opacity-40";
+    "inline-flex items-center gap-1 rounded-[10px] border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2.5 py-1.5 text-[13px] font-medium text-[var(--cz-texto)] transition-colors hover:border-[var(--cz-texto-fraco)] disabled:cursor-not-allowed disabled:opacity-40 max-md:min-h-11 max-md:px-4";
 
   return (
     <nav
@@ -845,7 +845,7 @@ export function Painel({
 }) {
   const sombra =
     elevacao === 2 ? "shadow-[var(--cz-elev-2)]" : "shadow-[var(--cz-elev-1)]";
-  const respiro = denso ? "px-4 py-3" : "px-5 py-4";
+  const respiro = denso ? "px-4 py-3" : "px-5 py-4 max-md:px-4";
 
   return (
     <section
@@ -888,7 +888,7 @@ export function Painel({
       {rodape && (
         <div
           className={`border-t border-[var(--cz-hairline)] ${
-            denso ? "px-4 py-2.5" : "px-5 py-3"
+            denso ? "px-4 py-2.5" : "px-5 py-3 max-md:px-4"
           }`}
         >
           {rodape}

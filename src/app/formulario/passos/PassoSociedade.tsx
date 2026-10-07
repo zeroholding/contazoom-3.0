@@ -63,7 +63,10 @@ export function PassoSociedade({
           {dados.socios.map((socio, i) => (
             <div
               key={i}
-              className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-start"
+              // Celular: coluna `minmax(0,1fr)`. Com a coluna `auto` padrão, um nome longo
+              // (nowrap + truncate) alargava a linha para 437px numa tela de 390 e o
+              // percentual saía cortado.
+              className="grid gap-3 max-sm:grid-cols-[minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_13rem] sm:items-start"
             >
               <div className="flex items-center gap-2.5 sm:pt-[2.4rem]">
                 <span
@@ -130,7 +133,11 @@ export function PassoSociedade({
           </Nota>
         ) : (
           <div className="mt-5 space-y-5">
-            <fieldset>
+            <fieldset
+              // `fieldset` tem `min-inline-size: min-content` por padrão do navegador:
+              // o nome longo de um sócio alargava o grupo além da tela (446px em 390).
+              className="min-w-0"
+            >
               <legend className="flex items-baseline gap-1.5 text-[0.9375rem] font-semibold leading-5 text-[#101828]">
                 Quem vai administrar a sociedade?
                 <span className="text-[#F04438]" aria-hidden="true">

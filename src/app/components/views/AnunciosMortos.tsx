@@ -2,13 +2,17 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { CampoDaFolha, GrupoDePilulas } from "@/components/ui/FiltrosSheet";
 import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
+import { useCelular } from "@/hooks/useMediaQuery";
 import {
   Aviso,
   BotaoAtualizar,
   Cabecalho,
   Campo,
+  CartaoAnuncioCelular,
   Esqueleto,
+  FiltrosAnuncioCelular,
   Kpi,
   LinkAbrir,
   MolduraTela,
@@ -18,7 +22,8 @@ import {
   SeloStatus,
   UltimaVenda,
 } from "./anuncios/comum";
-import { CampoBusca, Faixa, Miniatura, Selo } from "./comum/shell";
+import { CaixaBusca, CampoBusca, Faixa, Miniatura, Selo } from "./comum/shell";
+import type { ChipFiltro } from "./comum/filtros";
 import {
   IconeAlerta,
   IconeCaixa,
@@ -98,6 +103,84 @@ export default function AnunciosMortos() {
   const resumo = dados?.resumo ?? RESUMO_VAZIO;
   const linhas = useMemo(() => dados?.linhas ?? [], [dados]);
 
+  // Celular: o que está LIGADO dentro da folha (botão "Filtros (n)" e chips). O recorte
+  // "Qual fila você quer resolver?" (`estoque`) e a busca ficam fora dela, à vista.
+  const celular = useCelular();
+  const ORDENS_MORTOS = [
+    { id: "faturamento_desc", rotulo: "Faturamento que parou" },
+    { id: "unidades_desc", rotulo: "Unidades que vendia" },
+    { id: "dias_desc", rotulo: "Mais tempo parado" },
+    { id: "dias_asc", rotulo: "Parou há menos tempo" },
+    { id: "ultima_venda_asc", rotulo: "Última venda mais antiga" },
+  ];
+  const ROTULO_SITUACAO: Record<string, string> = {
+    active: "Ativo",
+    paused: "Pausado",
+    closed: "Finalizado",
+    under_review: "Em revisão",
+  };
+  const regraAlterada =
+    minUnidades !== 10 || minFaturamento !== 1000 || diasSemVenda !== 30 || relevancia !== "e";
+  const chips: ChipFiltro[] = [];
+  if (contaId) {
+    chips.push({
+      chave: "conta",
+      grupo: "Conta",
+      rotulo: contas.find((c) => c.id === contaId)?.nickname ?? contaId,
+      remover: () => {
+        setContaId("");
+        setPagina(1);
+      },
+    });
+  }
+  if (ordem !== "faturamento_desc") {
+    chips.push({
+      chave: "ordem",
+      grupo: "Ordem",
+      rotulo: ORDENS_MORTOS.find((o) => o.id === ordem)?.rotulo ?? ordem,
+      remover: () => {
+        setOrdem("faturamento_desc");
+        setPagina(1);
+      },
+    });
+  }
+  if (status) {
+    chips.push({
+      chave: "status",
+      grupo: "Situação",
+      rotulo: ROTULO_SITUACAO[status] ?? status,
+      remover: () => {
+        setStatus("");
+        setPagina(1);
+      },
+    });
+  }
+  if (regraAlterada) {
+    chips.push({
+      chave: "regra",
+      grupo: "Regra",
+      rotulo: `${relevancia === "e" ? "E" : "OU"} · ${inteiro(minUnidades)} un. · ${brl(minFaturamento)} · ${inteiro(diasSemVenda)} d`,
+      remover: () => {
+        setMinUnidades(10);
+        setMinFaturamento(1000);
+        setDiasSemVenda(30);
+        setRelevancia("e");
+        setPagina(1);
+      },
+    });
+  }
+
+  function limparFolha() {
+    setContaId("");
+    setOrdem("faturamento_desc");
+    setStatus("");
+    setMinUnidades(10);
+    setMinFaturamento(1000);
+    setDiasSemVenda(30);
+    setRelevancia("e");
+    setPagina(1);
+  }
+
   function mudarBusca(valor: string) {
     buscaRef.current = valor;
     setBusca(valor);
@@ -134,8 +217,10 @@ export default function AnunciosMortos() {
         aria-label="Canal analisado: Mercado Livre"
       >
         <div className="flex items-center gap-4">
-          <span className="grid min-h-16 min-w-24 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-white px-3">
-            <LogoMercadoLivre className="h-14 w-auto max-w-24" />
+          {/* Celular: o logo cai de 56 para 36px. Com 56px o aviso "canal exclusivo"
+              era o maior bloco acima da fila, e só diz uma coisa. */}
+          <span className="grid min-h-16 min-w-24 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-white px-3 max-md:min-h-12 max-md:min-w-16 max-md:px-2">
+            <LogoMercadoLivre className="h-14 w-auto max-w-24 max-md:h-9 max-md:max-w-14" />
           </span>
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-[var(--cz-laranja-forte)]">
@@ -175,7 +260,13 @@ export default function AnunciosMortos() {
             O motivo da parada define a próxima ação.
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="group" aria-label="Motivo da parada">
+        {/* Celular: três cartões empilhados gastavam ~250px. Viram uma faixa que o dedo
+            arrasta, cada opção com a largura de um cartão e a explicação à mostra. */}
+        <div
+          className="grid grid-cols-1 gap-2 sm:grid-cols-3 max-md:-mx-4 max-md:flex max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden max-md:[&>*]:w-[16.5rem] max-md:[&>*]:shrink-0"
+          role="group"
+          aria-label="Motivo da parada"
+        >
           {RECORTES.map((recorte) => {
             const selecionado = estoque === recorte.chave;
             const Icone = recorte.chave === "sem" ? IconeCaixa : recorte.chave === "com" ? IconeEditar : IconePausa;
@@ -210,6 +301,132 @@ export default function AnunciosMortos() {
         </div>
       </section>
 
+      {celular ? (
+        <>
+          <FiltrosAnuncioCelular
+            busca={
+              <CaixaBusca
+                valor={busca}
+                onMudar={mudarBusca}
+                onAplicar={aplicarBusca}
+                placeholder="MLB, título ou SKU"
+                rotuloAcessivel="Buscar anúncios"
+              />
+            }
+            ativos={chips.length}
+            onLimpar={limparFolha}
+            chips={chips}
+          >
+            <CampoDaFolha rotulo="Conta">
+              <select
+                aria-label="Conta"
+                value={contaId}
+                onChange={(e) => {
+                  setContaId(e.target.value);
+                  setPagina(1);
+                }}
+                className={ENTRADA}
+              >
+                <option value="">Todas as contas</option>
+                {contas.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nickname ?? c.id}</option>
+                ))}
+              </select>
+            </CampoDaFolha>
+
+            <CampoDaFolha rotulo="Ordenar por">
+              <GrupoDePilulas
+                rotulo="Ordenar por"
+                opcoes={ORDENS_MORTOS}
+                estaAtiva={(id) => ordem === id}
+                onEscolher={(id) => {
+                  setOrdem(id);
+                  setPagina(1);
+                }}
+              />
+            </CampoDaFolha>
+
+            <CampoDaFolha rotulo="Situação do anúncio">
+              <GrupoDePilulas
+                rotulo="Situação do anúncio"
+                opcoes={[{ id: "", rotulo: "Todas" }, ...Object.entries(ROTULO_SITUACAO).map(([id, rotulo]) => ({ id, rotulo }))]}
+                estaAtiva={(id) => status === id}
+                onEscolher={(id) => {
+                  setStatus(id);
+                  setPagina(1);
+                }}
+              />
+            </CampoDaFolha>
+
+            <CampoDaFolha rotulo="Regra de relevância">
+              <p className="mb-3 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
+                Combine o histórico por <strong>todos</strong> os mínimos ou por <strong>qualquer um</strong> deles.
+              </p>
+              <GrupoDePilulas
+                rotulo="Combinação dos critérios históricos"
+                opcoes={[
+                  { id: "e", rotulo: "Todos (E)" },
+                  { id: "ou", rotulo: "Qualquer (OU)" },
+                ]}
+                estaAtiva={(id) => relevancia === id}
+                onEscolher={(id) => {
+                  setRelevancia(id as "e" | "ou");
+                  setPagina(1);
+                }}
+              />
+              <div className="mt-3 space-y-2.5">
+                <CriterioNumero
+                  rotulo="Unidades vendidas"
+                  apoio="Mínimo no histórico"
+                  valor={minUnidades}
+                  min={0}
+                  passo={1}
+                  sufixo="un."
+                  onMudar={(valor) => {
+                    setMinUnidades(Math.max(0, valor || 0));
+                    setPagina(1);
+                  }}
+                />
+                <CriterioNumero
+                  rotulo="Faturamento"
+                  apoio="Mínimo acumulado"
+                  valor={minFaturamento}
+                  min={0}
+                  passo={0.01}
+                  prefixo="R$"
+                  onMudar={(valor) => {
+                    setMinFaturamento(Math.max(0, valor || 0));
+                    setPagina(1);
+                  }}
+                />
+                <CriterioNumero
+                  rotulo="Sem vender há"
+                  apoio="Obrigatório em qualquer regra"
+                  valor={diasSemVenda}
+                  min={1}
+                  passo={1}
+                  sufixo="dias"
+                  onMudar={(valor) => {
+                    setDiasSemVenda(Math.max(1, valor || 1));
+                    setPagina(1);
+                  }}
+                />
+              </div>
+              <p className="mt-3 border-l-2 border-[var(--cz-laranja)] pl-3 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">
+                <strong className="text-[var(--cz-texto)]">Regra ativa:</strong>{" "}
+                {relevancia === "e" ? "todos os cortes" : "unidades ou faturamento"} +{" "}
+                <strong>{inteiro(diasSemVenda)} dias</strong> sem venda.
+              </p>
+            </CampoDaFolha>
+          </FiltrosAnuncioCelular>
+          {(status || estoque) && (
+            <p className="mt-3 text-[12.5px] leading-relaxed text-amber-700">
+              Filtrar por situação ou estoque consulta os dados atuais de toda a lista e pode levar alguns segundos a mais.
+            </p>
+          )}
+        </>
+      ) : (
+      <>
       <PainelFiltros
         nota={
           status || estoque ? (
@@ -354,6 +571,8 @@ export default function AnunciosMortos() {
           </p>
         </fieldset>
       </PainelFiltros>
+      </>
+      )}
 
       <section aria-label="Resumo dos anúncios parados" className="mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
         <Kpi rotulo="Anúncios parados" valor={inteiro(resumo.anuncios)} tom="alerta" icone={<IconePausa className="h-5 w-5" />} />
@@ -398,7 +617,7 @@ export default function AnunciosMortos() {
             texto={estoque ? "Nenhum anúncio neste recorte. Veja todos os motivos ou reduza os mínimos." : "Reduza os mínimos ou os dias sem venda. Se nada aparecer, nenhum anúncio relevante está parado."}
           />
         ) : (
-          <div role="list" className="grid grid-cols-1 gap-3 p-3 xl:grid-cols-2">
+          <div role="list" className="grid grid-cols-1 gap-3 p-3 max-md:bg-[var(--cz-fundo)] xl:grid-cols-2">
             {linhas.map((l) => <AnuncioParadoCard key={`${l.canal}:${l.accountId}:${l.itemId}`} l={l} />)}
           </div>
         )}
@@ -460,6 +679,7 @@ function CriterioNumero({ rotulo, apoio, valor, min, passo, prefixo, sufixo, onM
 }
 
 function AnuncioParadoCard({ l }: { l: Linha }) {
+  const celular = useCelular();
   const motivo = motivoDeParada(l);
   const acao = motivo === "sem_estoque"
     ? {
@@ -487,6 +707,54 @@ function AnuncioParadoCard({ l }: { l: Linha }) {
           iconeCaixa: "bg-[var(--cz-superficie)] text-[var(--cz-texto-suave)]",
           borda: "border-l-[var(--cz-hairline-forte)]",
         };
+
+  // Celular: o cartão compartilhado com Mais Vendidos. A ação recomendada continua no
+  // topo (é a razão de a tela existir), mas em faixa fina; a grade de seis métricas
+  // vira quatro, com unidades e pedidos como nota do faturamento.
+  if (celular) {
+    return (
+      <CartaoAnuncioCelular
+        l={l}
+        alerta={motivo === "sem_estoque"}
+        faixa={
+          <section
+            className={`flex items-start gap-3 border-b p-3 ${acao.caixa}`}
+            aria-label={`Ação recomendada: ${acao.titulo}`}
+          >
+            <span className={`grid size-9 shrink-0 place-items-center rounded-[var(--cz-raio)] ${acao.iconeCaixa}`}>
+              {acao.icone}
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[14px] font-extrabold">{acao.titulo}</h2>
+              <p className="mt-0.5 text-[12.5px] leading-snug opacity-80">{acao.texto}</p>
+            </div>
+          </section>
+        }
+        selos={
+          <>
+            <SeloStatus status={l.status} />
+            {l.logisticType && <SeloEnvio tipo={l.logisticType} />}
+            {l.subStatus.includes("out_of_stock") && <Selo tom="alerta">pausado por falta de estoque</Selo>}
+          </>
+        }
+        metricas={[
+          { rotulo: "Sem vender há", valor: `${inteiro(l.diasSemVenda)} dias`, tom: l.diasSemVenda >= 90 ? "critico" : undefined },
+          {
+            rotulo: "Faturamento",
+            valor: brl(l.faturamento),
+            tom: "bom",
+            nota: `${inteiro(l.unidades)} un. · ${inteiro(l.pedidos)} pedidos`,
+          },
+          {
+            rotulo: "Estoque agora",
+            valor: l.estoque === null ? "Não consultado" : `${inteiro(l.estoque)} un.`,
+            tom: l.estoque === 0 ? "critico" : undefined,
+          },
+          { rotulo: "Preço atual", valor: l.preco === null ? "Não consultado" : brl(l.preco) },
+        ]}
+      />
+    );
+  }
 
   return (
     <article role="listitem" className={`min-w-0 rounded-[var(--cz-raio-cartao)] border border-l-4 border-[var(--cz-hairline)] ${acao.borda} bg-[var(--cz-superficie)] p-3.5 transition-colors hover:border-[var(--cz-hairline-forte)]`}>

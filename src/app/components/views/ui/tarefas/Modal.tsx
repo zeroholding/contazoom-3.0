@@ -133,7 +133,7 @@ export function Modal({
 
   return (
     <div
-      className="cz-modal-fundo fixed inset-0 z-50 flex items-center justify-center bg-[#14161B]/50 p-4 backdrop-blur-sm"
+      className="cz-modal-fundo fixed inset-0 z-50 flex items-center justify-center bg-[#14161B]/50 p-4 backdrop-blur-sm max-md:items-end max-md:p-0"
       onMouseDown={(evento) => {
         // Fecha só no clique no fundo. `onMouseDown` no lugar de `onClick`
         // evita fechar quando a pessoa começa a selecionar texto dentro e
@@ -149,10 +149,10 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={titulo}
-        className={`cz-tarefas cz-modal-caixa flex w-full ${larguras[largura]} max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[#EDEFF3] bg-white`}
+        className={`cz-tarefas cz-modal-caixa flex w-full ${larguras[largura]} max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[#EDEFF3] bg-white max-md:max-h-[92dvh] max-md:max-w-none max-md:rounded-b-none max-md:rounded-t-2xl`}
         style={{ boxShadow: "var(--cz-elev-3)" }}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDEFF3] px-6 py-4">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#EDEFF3] px-6 py-4 max-md:px-4">
           <div className="flex min-w-0 items-start gap-3">
             {icone && (
               <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[#FFD9BF] bg-[#FFF2E9] text-[#D9500A]">
@@ -176,18 +176,18 @@ export function Modal({
             type="button"
             onClick={onFechar}
             aria-label="Fechar"
-            className="-mr-1.5 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#14161B]"
+            className="-mr-1.5 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#14161B] max-md:h-11 max-md:w-11"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="cz-rolagem min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="cz-rolagem min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 max-md:px-4">
           {children}
         </div>
 
         {rodape && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-[#EDEFF3] bg-[#F8F9FB] px-6 py-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-[#EDEFF3] bg-[#F8F9FB] px-6 py-4 max-md:flex-col-reverse max-md:items-stretch max-md:px-4 max-md:pb-[calc(1rem+env(safe-area-inset-bottom,0px))] max-md:*:w-full">
             {rodape}
           </div>
         )}

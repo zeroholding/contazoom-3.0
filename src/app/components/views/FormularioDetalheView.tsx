@@ -115,7 +115,7 @@ export default function FormularioDetalheView({ id }: { id: string }) {
 
   if (carregando && !dados) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Carregando texto="Carregando formulário" />
       </div>
     );
@@ -123,7 +123,7 @@ export default function FormularioDetalheView({ id }: { id: string }) {
 
   if (!dados) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Painel>
           <div className="p-6">
             <Vazio
@@ -153,7 +153,7 @@ export default function FormularioDetalheView({ id }: { id: string }) {
   });
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       <Cabecalho
         titulo={dados.dados.nomeFantasia || dados.protocolo}
         descricao={`Protocolo ${dados.protocolo} · recebido em ${dataHora(dados.createdAt)}`}
@@ -209,7 +209,7 @@ export default function FormularioDetalheView({ id }: { id: string }) {
               placeholder="Anotação do escritório. O cliente nunca vê isto."
               ajuda="Não aparece no link do cliente."
             />
-            <div className="mt-2.5 flex items-center gap-3">
+            <div className="mt-2.5 flex items-center gap-3 max-md:flex-col max-md:items-stretch">
               <Botao
                 variante="primario"
                 icone="Save"

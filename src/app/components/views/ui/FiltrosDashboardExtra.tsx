@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useSmartDropdown } from "../../../../hooks/useSmartDropdown";
+import { useCelular } from "@/hooks/useMediaQuery";
+import { CampoDaFolha, GrupoDePilulas } from "@/components/ui/FiltrosSheet";
 
 export type FiltroCanal = string;
 export type FiltroStatus = string;
@@ -132,6 +134,7 @@ export default function FiltrosDashboardExtra({
   modalidadeEnvioAtiva,
   onModalidadeEnvioChange,
 }: FiltrosDashboardExtraProps) {
+  const celular = useCelular();
   const [showCanalDropdown, setShowCanalDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTipoAnuncioDropdown, setShowTipoAnuncioDropdown] = useState(false);
@@ -238,6 +241,33 @@ export default function FiltrosDashboardExtra({
       )}
     </div>
   );
+
+  // Celular: estes filtros moram na folha de filtros (ver HeaderDashboard). Lá
+  // cada um vira um grupo de pastilhas com todas as opções à vista, no lugar do
+  // chip que abre um dropdown. A regra do que um toque significa (alternar um
+  // item, voltar para "todos") é a MESMA do desktop: `toggleValue`.
+  if (celular) {
+    const grupos = [
+      { rotulo: "Canal", value: canalAtivo, options: canalOptions, onChange: onCanalChange },
+      { rotulo: "Status", value: statusAtivo, options: statusOptions, onChange: onStatusChange },
+      { rotulo: "Tipo de anúncio", value: tipoAnuncioAtivo, options: tipoAnuncioOptions, onChange: onTipoAnuncioChange },
+      { rotulo: "Envio", value: modalidadeEnvioAtiva, options: modalidadeOptions, onChange: onModalidadeEnvioChange },
+    ];
+    return (
+      <>
+        {grupos.map((g) => (
+          <CampoDaFolha key={g.rotulo} rotulo={g.rotulo}>
+            <GrupoDePilulas
+              rotulo={g.rotulo}
+              opcoes={g.options.map((o) => ({ id: o.id, rotulo: o.label }))}
+              estaAtiva={(id) => isOptionSelected(g.value, id)}
+              onEscolher={(id) => g.onChange(toggleValue(g.value, id, g.options))}
+            />
+          </CampoDaFolha>
+        ))}
+      </>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 sm:gap-4 flex-wrap">

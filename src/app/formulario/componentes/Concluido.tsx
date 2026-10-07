@@ -90,7 +90,7 @@ export function Concluido({
             escritório.
           </p>
 
-          <div className="mt-4 flex justify-center">
+          <div className="mt-4 flex justify-center max-sm:[&>button]:w-full">
             <BotaoForm
               variante={copiado === "protocolo" ? "secundario" : "primario"}
               icone={copiado === "protocolo" ? "CheckCircle2" : "Hash"}
@@ -126,7 +126,11 @@ export function Concluido({
               consegue selecionar e copiar à mão. */}
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
             <p className="min-w-0 flex-1 overflow-x-auto rounded-[10px] border border-[#E7EAEF] bg-[#F7F8FA] px-3.5 py-3 text-[0.8125rem] leading-5 text-[#344054]">
-              <span className="whitespace-nowrap font-medium">{linkCompleto}</span>
+              {/* Celular: o link quebra em linhas e aparece INTEIRO; rolar para os
+                  lados uma linha de 70 caracteres não deixa a pessoa conferir. */}
+              <span className="font-medium max-sm:break-all sm:whitespace-nowrap">
+                {linkCompleto}
+              </span>
             </p>
             <BotaoForm
               variante="secundario"

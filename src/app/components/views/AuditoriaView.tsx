@@ -1,5 +1,7 @@
 "use client";
 
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
+
 /**
  * Auditoria do módulo de tarefas: quem alterou o quê, quando.
  *
@@ -335,7 +337,7 @@ export default function AuditoriaView() {
   return (
     <Suspense
       fallback={
-        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
           <Carregando texto="Carregando auditoria" />
         </div>
       }
@@ -626,7 +628,7 @@ function Conteudo() {
   /* -------------------------------- Render ------------------------------- */
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       {/* `compacto`: o cabeçalho do admin já escreve "Auditoria" e o subtítulo
           da rota. A descrição só dizia o que a tela é — o bloco cinza logo
           abaixo, sobre o autor congelado, é o que traz informação que não está
@@ -706,7 +708,7 @@ function Conteudo() {
         }
       >
         <div className="space-y-4 px-5 py-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:[scrollbar-width:none] max-md:[&>*]:shrink-0">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               Período rápido
             </span>
@@ -718,10 +720,10 @@ function Conteudo() {
                   type="button"
                   aria-pressed={ativo}
                   onClick={() => alterar(atalho.calcular())}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors max-md:min-h-11 max-md:px-4 max-md:text-[13px] ${
                     ativo
                       ? "border-orange-500 bg-orange-500 text-white"
-                      : "border-gray-300 bg-white text-gray-600 hover:border-orange-400 hover:text-orange-600"
+                      : "border-gray-300 bg-white text-gray-600 hover:border-orange-400 hover:text-orange-600 max-md:min-h-11 max-md:px-4 max-md:text-[13px]"
                   }`}
                 >
                   {atalho.texto}
@@ -732,7 +734,7 @@ function Conteudo() {
               <button
                 type="button"
                 onClick={() => alterar({ dataInicio: "", dataFim: "" })}
-                className="inline-flex items-center gap-1 rounded-full border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-orange-400 hover:text-orange-600"
+                className="inline-flex items-center gap-1 rounded-full border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-orange-400 hover:text-orange-600 max-md:min-h-11 max-md:px-4 max-md:text-[13px]"
               >
                 <Icone nome="X" className="h-3 w-3" />
                 Todo o período
@@ -760,6 +762,12 @@ function Conteudo() {
               onChange={(e) => alterar({ dataFim: e.target.value })}
               ajuda="Conta até 23:59"
             />
+            <FiltrosSheet
+              titulo="Filtros"
+              ativos={[filtros.acao, filtros.autorId, filtros.empresaId, filtros.origem !== "tudo" ? "1" : ""].filter(Boolean).length}
+              onLimpar={limpar}
+              classeBotao="max-md:order-last"
+            >
             <Escolha
               rotulo="Ação"
               vazio="Todas as ações"
@@ -790,6 +798,7 @@ function Conteudo() {
               }
               ajuda="Age só nesta página"
             />
+            </FiltrosSheet>
           </div>
 
           <p className="flex items-start gap-1.5 text-xs text-gray-500">
@@ -1033,7 +1042,9 @@ function Linha({ log, ehVoce }: { log: LogAuditoria; ehVoce: boolean }) {
 /** O registro alterado: apuração ou processo, com a empresa e os links. */
 function Registro({ log }: { log: LogAuditoria }) {
   const classeLink =
-    "font-medium text-gray-700 underline decoration-gray-300 decoration-dotted underline-offset-2 transition-colors hover:text-orange-600 hover:decoration-orange-400";
+    // Celular: o link de texto (16px de altura) vira alvo de 44px. A linha do
+    // registro tem dois links lado a lado, e errar o toque era questão de tempo.
+    "font-medium text-gray-700 underline decoration-gray-300 decoration-dotted underline-offset-2 transition-colors hover:text-orange-600 hover:decoration-orange-400 max-md:inline-flex max-md:min-h-11 max-md:max-w-full max-md:items-center max-md:break-words max-md:px-1";
 
   if (log.apuracao) {
     const empresa = log.apuracao.empresa;

@@ -141,7 +141,7 @@ export function UserGuidanceNotification({
         {dismissible && (
           <button
             onClick={handleDismiss}
-            className="ml-4 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+            className="ml-4 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 max-md:-m-3 max-md:p-3"
             aria-label="Fechar"
           >
             <X className="h-5 w-5" />

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import DatePicker from "react-datepicker";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosVendasCelular from "../FiltrosVendasCelular";
 import { DataVendaFilter, VendaFilters } from "@/hooks/useVendasFilter";
 import {
   COLUNAS_PADRAO,
@@ -478,6 +480,93 @@ export default function FiltrosVendasV2({
     for (const c of colunasOferecidas) nenhuma[c.id] = false;
     onColunasChange(nenhuma);
   };
+
+  // CELULAR: abas de status e período à vista; conta, exposição, tipo e envio na
+  // folha "Filtros (n)". Fica depois de TODOS os hooks desta função (os
+  // `useState`/`useSmartDropdown` acima) para a ordem deles não mudar ao girar o
+  // aparelho, e reaproveita os mesmos handlers do desktop: a API recebe o mesmo.
+  const celular = useCelular();
+  if (celular) {
+    const grupos = [
+      ...(platform !== "Shopee"
+        ? [
+            {
+              id: "exposicao",
+              rotulo: "Exposição",
+              opcoes: exposicaoOptions.map((o) => ({ id: o.id, rotulo: o.label })),
+              atual: currentExposicaoOption as string,
+              padrao: "todas",
+              onEscolher: (id: string) =>
+                handleExposicaoFilter(exposicaoOptions.find((o) => o.id === id) ?? exposicaoOptions[0]),
+            },
+            {
+              id: "anuncio",
+              rotulo: "Tipo de anúncio",
+              opcoes: anuncioOptions.map((o) => ({ id: o.id, rotulo: o.label })),
+              atual: currentTipoAnuncioOption as string,
+              padrao: "todos",
+              onEscolher: (id: string) =>
+                handleTipoAnuncioFilter(anuncioOptions.find((o) => o.id === id) ?? anuncioOptions[0]),
+            },
+            {
+              id: "envio",
+              rotulo: "Modalidade de envio",
+              opcoes: modalidadeEnvioOptions.map((o) => ({ id: o.id, rotulo: o.label })),
+              atual: currentModalidadeEnvioOption as string,
+              padrao: "todos",
+              onEscolher: (id: string) =>
+                handleModalidadeEnvioFilter(
+                  modalidadeEnvioOptions.find((o) => o.id === id) ?? modalidadeEnvioOptions[0],
+                ),
+            },
+          ]
+        : []),
+      {
+        id: "conta",
+        rotulo: "Conta",
+        opcoes: [
+          { id: "todas", rotulo: "Todas as contas" },
+          ...contasDisponiveis.map((c) => ({ id: c.id, rotulo: c.nickname })),
+        ],
+        atual: (currentContaOption ?? "todas") as string,
+        padrao: "todas",
+        onEscolher: (id: string) =>
+          handleContaFilter(
+            contasDisponiveis.find((c) => c.id === id) ?? { id: "todas", nickname: "Todas" },
+          ),
+      },
+    ];
+
+    return (
+      <FiltrosVendasCelular
+        status={{
+          opcoes: statusOptions.map((o) => ({
+            id: o.id,
+            rotulo: o.label,
+            contagem: o.count,
+            cor: o.color as "green" | "red" | "gray",
+          })),
+          atual: currentStatusOption,
+          onEscolher: (id) => handleStatusFilterOnClick(id as FiltroStatus),
+        }}
+        periodo={{
+          opcoes: periodoOptions.map((o) => ({ id: o.id, rotulo: o.label })),
+          atual: currentPeriodoOption,
+          rotuloAtual: getPeriodoLabel(currentPeriodoOption),
+          onEscolher: (id) => handlePeriodoFilter(id as FiltroPeriodo),
+          onAplicarPersonalizado: (inicio, fim) => {
+            updateFilters({
+              dataVenda: { min: startOfDay(inicio), max: endOfDay(fim) },
+            });
+            setDataInicio(inicio);
+            setDataFim(fim);
+            setCurrentPeriodoOption("personalizado");
+          },
+        }}
+        grupos={grupos}
+      />
+    );
+  }
 
   const getFiltroClasses = (
     filtro: (typeof statusOptions)[0],

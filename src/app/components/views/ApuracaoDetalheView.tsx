@@ -814,7 +814,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
     : tarefa.etapaAtual;
 
   return (
-    <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
+    <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6 max-md:space-y-4 max-md:p-4 max-md:pb-28">
       <Cabecalho
         titulo={nomeEmpresa(empresa)}
         descricao={`${tarefa.competenciaLabel} · ${
@@ -824,12 +824,16 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
         voltarPara="/admin/tarefas/apuracao"
         voltarTexto="Apuração fiscal"
         acoes={
-          <>
+          /* Celular: as ações da competência ficam numa barra fixa embaixo, ao alcance do polegar
+              (acima da barra de abas, quando ela existe). No desktop o `md:contents` desfaz o invólucro
+              e os botões voltam a ser filhos diretos do cabeçalho, como antes. Sem botão nenhum a barra some. */
+          <div className="max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--cz-bottom-offset,0px)] max-md:z-30 max-md:hidden max-md:gap-2 max-md:border-t max-md:border-[var(--cz-hairline)] max-md:bg-white/95 max-md:px-4 max-md:py-3 max-md:backdrop-blur max-md:has-[button]:flex md:contents">
             {permissoes.gerenciarBloqueio && !bloqueada && !encerrada && (
               <Botao
                 variante="secundario"
                 icone="AlertTriangle"
                 disabled={ocupado}
+                className="max-md:min-h-12 max-md:min-w-0 max-md:flex-1 max-md:shrink max-md:whitespace-normal max-md:px-3 max-md:text-[14px] max-md:leading-tight"
                 onClick={() => abrirModal("bloquear")}
               >
                 Registrar pendência
@@ -840,6 +844,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
                 variante="primario"
                 icone="Unlock"
                 disabled={ocupado}
+                className="max-md:min-h-12 max-md:min-w-0 max-md:flex-1 max-md:shrink max-md:whitespace-normal max-md:px-3 max-md:text-[14px] max-md:leading-tight"
                 onClick={() => abrirModal("resolver")}
               >
                 Resolver pendência
@@ -850,6 +855,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
                 variante="escuro"
                 icone="ClipboardCheck"
                 disabled={ocupado}
+                className="max-md:min-h-12 max-md:min-w-0 max-md:flex-1 max-md:shrink max-md:whitespace-normal max-md:px-3 max-md:text-[14px] max-md:leading-tight"
                 onClick={() => abrirModal("encerrar")}
               >
                 Encerrar competência
@@ -860,12 +866,13 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
                 variante="perigo"
                 icone="RotateCcw"
                 disabled={ocupado}
+                className="max-md:min-h-12 max-md:min-w-0 max-md:flex-1 max-md:shrink max-md:whitespace-normal max-md:px-3 max-md:text-[14px] max-md:leading-tight"
                 onClick={() => abrirModal("reabrir")}
               >
                 Reabrir
               </Botao>
             )}
-          </>
+          </div>
         }
       />
 
@@ -937,7 +944,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
                 competencia: tarefa.competencia,
                 apuracaoId: tarefa.id,
               })}`}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--cz-laranja)] px-3.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--cz-laranja-forte)]"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[var(--cz-laranja)] px-3.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--cz-laranja-forte)] max-md:h-11 max-md:w-full"
             >
               <Icone nome="UploadCloud" className="h-4 w-4" />
               Abrir importação deste mês
@@ -959,7 +966,7 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
             <Carregando texto="Conferindo os XMLs desta competência" />
           ) : evidenciaXml ? (
             <>
-              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <dl className="grid gap-3 max-sm:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   {
                     rotulo: "Arquivos lidos",
@@ -982,10 +989,10 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
                     key={item.rotulo}
                     className="rounded-[10px] border border-[var(--cz-hairline)] bg-[#FCFCFD] px-3 py-2.5"
                   >
-                    <dt className="text-[11px] font-semibold uppercase tracking-[0.03em] text-gray-500">
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.03em] text-gray-500 max-md:text-xs">
                       {item.rotulo}
                     </dt>
-                    <dd className="cz-num mt-1 text-lg font-bold text-gray-900">
+                    <dd className="cz-num mt-1 text-lg font-bold text-gray-900 max-md:text-[15px] max-md:[overflow-wrap:anywhere]">
                       {item.valor}
                     </dd>
                   </div>
@@ -1054,9 +1061,9 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
           <Dado rotulo="Empresa">
             <Link
               href={`/admin/empresas/${empresa.id}`}
-              className="inline-flex items-center gap-1.5 text-orange-600 transition-colors hover:text-orange-700 hover:underline"
+              className="inline-flex max-w-full items-center gap-1.5 text-orange-600 transition-colors hover:text-orange-700 hover:underline"
             >
-              <span className="truncate">{empresa.razaoSocial}</span>
+              <span className="min-w-0 truncate">{empresa.razaoSocial}</span>
               <Icone nome="ExternalLink" className="h-3.5 w-3.5 shrink-0" />
             </Link>
           </Dado>

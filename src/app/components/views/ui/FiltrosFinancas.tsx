@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import DatePicker from "react-datepicker";
+import { Search, X } from "lucide-react";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosSheet, { CampoDaFolha, GrupoDePilulas } from "@/components/ui/FiltrosSheet";
 
 export type FiltroStatus = "todos" | "pendente" | "pago" | "vencido";
 export type FiltroPeriodo = "todos" | "mes_passado" | "este_mes" | "hoje" | "ontem" | "personalizado";
@@ -23,9 +26,12 @@ interface FiltrosFinancasProps {
   onStatusChange?: (status: FiltroStatus) => void;
   filtroOrigem?: FiltroOrigem;
   onOrigemChange?: (origem: FiltroOrigem) => void;
+  /** Busca por texto. Só o celular mostra o campo; sem estes dois, nada muda. */
+  busca?: string;
+  onBuscaChange?: (busca: string) => void;
 }
 
-export default function FiltrosFinancas({
+function FiltrosFinancasDesktop({
   tipo,
   periodoAtivo = "todos",
   onPeriodoChange,
@@ -700,3 +706,320 @@ export default function FiltrosFinancas({
   );
 }
 
+
+/* ===========================================================================
+ * Celular (<768px)
+ *
+ * O desktop (`FiltrosFinancasDesktop`, acima) fica exatamente como era: chips com
+ * dropdown numa linha. No celular isso virava um acordeão com cinco botões empilhados,
+ * cada um abrindo um dropdown FLUTUANTE por cima do outro. Aqui:
+ *   - sempre à vista: a busca, o período de pagamento (pastilhas que rolam) e o botão
+ *     "Filtros (n)";
+ *   - dentro da folha: pagamento (com calendário em linha), competência, categorias,
+ *     status e origem como pastilhas, com "Limpar" e a contagem do que está ligado.
+ * ========================================================================= */
+
+type Intervalo = [Date | null, Date | null];
+
+const PERIODOS_PILULAS: Array<{ id: FiltroPeriodo; rotulo: string }> = [
+  { id: "todos", rotulo: "Todos" },
+  { id: "hoje", rotulo: "Hoje" },
+  { id: "ontem", rotulo: "Ontem" },
+  { id: "este_mes", rotulo: "Este mês" },
+  { id: "mes_passado", rotulo: "Mês passado" },
+];
+
+const formatarDiaCurto = (d: Date) =>
+  d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+/** "Personalizado…" ou, já confirmado, "01/04/2026 – 15/04/2026". */
+function rotuloPersonalizado(ativo: FiltroPeriodo, intervalo: Intervalo) {
+  const [inicio, fim] = intervalo;
+  return ativo === "personalizado" && inicio && fim
+    ? `${formatarDiaCurto(inicio)} – ${formatarDiaCurto(fim)}`
+    : "Personalizado…";
+}
+
+/**
+ * Um filtro de período dentro da folha: pastilhas + calendário EM LINHA para o intervalo
+ * personalizado. No desktop o calendário abre num dropdown; dentro de uma folha isso seria
+ * uma janela flutuante sobre outra janela.
+ */
+function PeriodoNaFolha({
+  rotulo,
+  ativo,
+  intervalo,
+  onEscolher,
+  onConfirmar,
+}: {
+  rotulo: string;
+  ativo: FiltroPeriodo;
+  intervalo: Intervalo;
+  onEscolher: (periodo: FiltroPeriodo) => void;
+  onConfirmar: (inicio: Date, fim: Date) => void;
+}) {
+  const [calendario, setCalendario] = useState(false);
+  const [rascunho, setRascunho] = useState<Intervalo>([null, null]);
+
+  const opcoes = [
+    ...PERIODOS_PILULAS,
+    { id: "personalizado" as FiltroPeriodo, rotulo: rotuloPersonalizado(ativo, intervalo) },
+  ];
+
+  return (
+    <CampoDaFolha rotulo={rotulo}>
+      <GrupoDePilulas
+        rotulo={rotulo}
+        opcoes={opcoes}
+        estaAtiva={(id) => ativo === id}
+        onEscolher={(id) => {
+          if (id === "personalizado") {
+            setCalendario(true);
+            return;
+          }
+          setCalendario(false);
+          onEscolher(id as FiltroPeriodo);
+        }}
+      />
+      {calendario && (
+        <div className="mt-3 rounded-cz border border-hairline bg-fundo p-3">
+          <div className="flex justify-center">
+            <DatePicker
+              selected={rascunho[0]}
+              onChange={(dates: [Date | null, Date | null]) => setRascunho(dates)}
+              startDate={rascunho[0]}
+              endDate={rascunho[1]}
+              selectsRange
+              inline
+              locale="pt-BR"
+              dateFormat="dd/MM/yyyy"
+            />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCalendario(false);
+                setRascunho([null, null]);
+              }}
+              className="h-11 flex-1 rounded-cz border border-hairline-forte bg-superficie text-[14px] font-semibold text-tinta active:bg-fundo"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={!rascunho[0] || !rascunho[1]}
+              onClick={() => {
+                if (rascunho[0] && rascunho[1]) onConfirmar(rascunho[0], rascunho[1]);
+                setCalendario(false);
+              }}
+              className="h-11 flex-1 rounded-cz bg-marca text-[14px] font-semibold text-white active:bg-marca-forte disabled:opacity-40"
+            >
+              Aplicar período
+            </button>
+          </div>
+        </div>
+      )}
+    </CampoDaFolha>
+  );
+}
+
+function FiltrosFinancasCelular({
+  tipo,
+  periodoAtivo = "todos",
+  onPeriodoChange,
+  onPeriodoPersonalizadoChange,
+  periodoCompetenciaAtivo = "todos",
+  onPeriodoCompetenciaChange,
+  onPeriodoCompetenciaPersonalizadoChange,
+  categoriasSelecionadas = new Set(),
+  onCategoriasSelecionadasChange,
+  categoriasDisponiveis = [],
+  filtroStatus = "todos",
+  onStatusChange,
+  filtroOrigem = "todas",
+  onOrigemChange,
+  busca = "",
+  onBuscaChange,
+}: FiltrosFinancasProps) {
+  // O pai recebe o intervalo só por callback, e o rótulo "01/04 – 15/04" precisa dele: guarda aqui.
+  const [intervaloPagamento, setIntervaloPagamento] = useState<Intervalo>([null, null]);
+  const [intervaloCompetencia, setIntervaloCompetencia] = useState<Intervalo>([null, null]);
+
+  const ativos = [
+    periodoAtivo !== "todos",
+    periodoCompetenciaAtivo !== "todos",
+    categoriasSelecionadas.size > 0,
+    filtroStatus !== "todos",
+    filtroOrigem !== "todas",
+  ].filter(Boolean).length;
+
+  const limpar = () => {
+    onPeriodoChange?.("todos");
+    onPeriodoCompetenciaChange?.("todos");
+    onCategoriasSelecionadasChange?.(new Set());
+    onStatusChange?.("todos");
+    onOrigemChange?.("todas");
+    setIntervaloPagamento([null, null]);
+    setIntervaloCompetencia([null, null]);
+  };
+
+  const alternarCategoria = (id: string) => {
+    const proximas = new Set(categoriasSelecionadas);
+    if (proximas.has(id)) proximas.delete(id);
+    else proximas.add(id);
+    onCategoriasSelecionadasChange?.(proximas);
+  };
+
+  const opcoesStatus = [
+    { id: "todos", rotulo: "Todos" },
+    { id: "pendente", rotulo: "Pendente" },
+    { id: "pago", rotulo: tipo === "contas_receber" ? "Recebido" : "Pago" },
+    { id: "vencido", rotulo: "Vencido" },
+  ];
+  const opcoesOrigem = [
+    { id: "todas", rotulo: "Todas" },
+    { id: "MANUAL", rotulo: "Manual" },
+    { id: "BLING", rotulo: "Bling" },
+    { id: "EXCEL", rotulo: "Excel" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-tinta-suave" aria-hidden="true" />
+          {/* Sem o atributo `type` de propósito: o CSS global crava altura, borda e padding em
+              input[type=text|search]; um <input> sem type é texto e escapa desses seletores. */}
+          <input
+            value={busca}
+            onChange={(e) => onBuscaChange?.(e.target.value)}
+            inputMode="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            aria-label="Buscar nas contas"
+            placeholder="Buscar contas"
+            className="h-11 w-full rounded-cz border border-hairline-forte bg-superficie pl-9 pr-11 text-[16px] text-tinta placeholder:text-tinta-suave focus:border-marca focus:outline-none focus:ring-2 focus:ring-marca/30"
+          />
+          {busca && (
+            <button
+              type="button"
+              onClick={() => onBuscaChange?.("")}
+              aria-label="Limpar busca"
+              className="absolute right-0 top-0 grid h-11 w-11 place-items-center text-tinta-suave"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        <FiltrosSheet titulo="Filtros" ativos={ativos} onLimpar={limpar} classeBotao="shrink-0">
+          <PeriodoNaFolha
+            rotulo="Pagamento"
+            ativo={periodoAtivo}
+            intervalo={intervaloPagamento}
+            onEscolher={(p) => onPeriodoChange?.(p)}
+            onConfirmar={(a, b) => {
+              onPeriodoPersonalizadoChange?.(a, b);
+              onPeriodoChange?.("personalizado");
+              setIntervaloPagamento([a, b]);
+            }}
+          />
+          <PeriodoNaFolha
+            rotulo="Competência"
+            ativo={periodoCompetenciaAtivo}
+            intervalo={intervaloCompetencia}
+            onEscolher={(p) => onPeriodoCompetenciaChange?.(p)}
+            onConfirmar={(a, b) => {
+              onPeriodoCompetenciaPersonalizadoChange?.(a, b);
+              onPeriodoCompetenciaChange?.("personalizado");
+              setIntervaloCompetencia([a, b]);
+            }}
+          />
+          <CampoDaFolha rotulo={`Categorias (${categoriasSelecionadas.size}/${categoriasDisponiveis.length})`}>
+            {categoriasDisponiveis.length === 0 ? (
+              <p className="text-[14px] text-tinta-suave">Nenhuma categoria disponível</p>
+            ) : (
+              <>
+                <div className="-mt-1 mb-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onCategoriasSelecionadasChange?.(new Set(categoriasDisponiveis.map((c) => c.id)))}
+                    className="min-h-11 rounded-cz px-3 text-[14px] font-semibold text-marca-forte active:bg-fundo"
+                  >
+                    Selecionar todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCategoriasSelecionadasChange?.(new Set())}
+                    disabled={categoriasSelecionadas.size === 0}
+                    className="min-h-11 rounded-cz px-3 text-[14px] font-semibold text-tinta-suave active:bg-fundo disabled:opacity-40"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+                <GrupoDePilulas
+                  rotulo="Categorias"
+                  opcoes={categoriasDisponiveis.map((c) => ({ id: c.id, rotulo: c.descricao || c.nome }))}
+                  estaAtiva={(id) => categoriasSelecionadas.has(id)}
+                  onEscolher={alternarCategoria}
+                />
+              </>
+            )}
+          </CampoDaFolha>
+          <CampoDaFolha rotulo="Status">
+            <GrupoDePilulas
+              rotulo="Status"
+              opcoes={opcoesStatus}
+              estaAtiva={(id) => filtroStatus === id}
+              onEscolher={(id) => onStatusChange?.(id as FiltroStatus)}
+            />
+          </CampoDaFolha>
+          <CampoDaFolha rotulo="Origem">
+            <GrupoDePilulas
+              rotulo="Origem"
+              opcoes={opcoesOrigem}
+              estaAtiva={(id) => filtroOrigem === id}
+              onEscolher={(id) => onOrigemChange?.(id as FiltroOrigem)}
+            />
+          </CampoDaFolha>
+        </FiltrosSheet>
+      </div>
+
+      {/* Período de pagamento sempre à vista (é o filtro que muda toda hora): pastilhas que
+          rolam na horizontal. Competência, categorias, status e origem ficam na folha. */}
+      <div className="-mx-1.5 flex gap-2 overflow-x-auto px-1.5 pb-0.5 scrollbar-hidden" role="group" aria-label="Período de pagamento">
+        <span className="flex shrink-0 items-center text-[13px] font-semibold text-tinta-suave">Pagamento</span>
+        {PERIODOS_PILULAS.map((periodo) => {
+          const ativo = periodoAtivo === periodo.id;
+          return (
+            <button
+              key={periodo.id}
+              type="button"
+              aria-pressed={ativo}
+              onClick={() => onPeriodoChange?.(periodo.id)}
+              className={[
+                "inline-flex h-11 shrink-0 items-center rounded-full border px-4 text-[14px] transition-colors",
+                ativo
+                  ? "border-marca bg-marca-suave font-semibold text-marca-forte"
+                  : "border-hairline-forte bg-superficie font-medium text-tinta active:bg-fundo",
+              ].join(" ")}
+            >
+              {periodo.rotulo}
+            </button>
+          );
+        })}
+        {periodoAtivo === "personalizado" && (
+          <span className="inline-flex h-11 shrink-0 items-center rounded-full border border-marca bg-marca-suave px-4 text-[14px] font-semibold text-marca-forte">
+            {rotuloPersonalizado(periodoAtivo, intervaloPagamento)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function FiltrosFinancas(props: FiltrosFinancasProps) {
+  const celular = useCelular();
+  return celular ? <FiltrosFinancasCelular {...props} /> : <FiltrosFinancasDesktop {...props} />;
+}

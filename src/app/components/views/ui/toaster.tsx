@@ -106,7 +106,12 @@ function ToastViewport({
   const stack = toasts.slice(-MAX_STACK).reverse();
 
   return (
-    <div className="fixed bottom-4 right-4 z-[999] pointer-events-none">
+    // No celular o aviso sobe acima da barra de abas (`--cz-bottom-offset` já
+    // inclui a área segura do iPhone); sem a barra, só respeita a área segura. No
+    // desktop a variável vale 0 e sobra o `bottom-4` de sempre.
+    // z-10000: ACIMA dos modais (9998/9999). Com 999, o aviso de "salvo" ou de erro
+    // disparado de dentro de um modal ficava escondido atrás do fundo escurecido.
+    <div className="fixed right-4 bottom-[calc(max(var(--cz-bottom-offset,0px),env(safe-area-inset-bottom,0px))_+_1rem)] z-[10000] pointer-events-none">
       <div
         className="relative"
         style={{ width: "24rem", maxWidth: "calc(100vw - 2rem)" }}
@@ -198,7 +203,10 @@ function ToastViewport({
                 {isTop && (
                   <button
                     onClick={() => dismiss(t.id)}
-                    className="ml-2 rounded-md p-1 text-gray-500 hover:text-gray-900 focus:outline-none"
+                    // Celular: alvo de 44px. O × era um botão de ~18x32px no canto do
+                    // aviso; as margens negativas devolvem o espaço para o aviso não
+                    // engordar por causa do alvo.
+                    className="ml-2 rounded-md p-1 text-gray-500 hover:text-gray-900 focus:outline-none max-md:-mr-2 max-md:-mt-2.5 max-md:grid max-md:h-11 max-md:w-11 max-md:place-items-center max-md:text-[22px] max-md:leading-none"
                     aria-label="Fechar"
                   >
                     ×

@@ -91,7 +91,7 @@ export function PassoDocumentos({
                 </span>
                 {/* Nome da pessoa como cabeçalho do grupo: é o que faz a
                     propriedade do arquivo ficar óbvia de relance. */}
-                <h3 className="truncate text-[1rem] font-bold tracking-[-0.01em] text-[#101828]">
+                <h3 className="truncate text-[1rem] font-bold tracking-[-0.01em] text-[#101828] max-sm:whitespace-normal max-sm:break-words">
                   {grupo.titulo}
                 </h3>
               </div>

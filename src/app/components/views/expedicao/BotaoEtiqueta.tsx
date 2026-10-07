@@ -43,8 +43,10 @@ const MS_ERRO = 6_000;
 /** Um minuto. Ver o comentário do revoke, no `abrir`. */
 const MS_REVOKE = 60_000;
 
+// Celular: 44px de altura, largura da célula e 13px. O botão de 32px com 11px era
+// feito para o mouse; no cartão da fila ele é a AÇÃO da linha.
 const BASE =
-  "relative inline-flex h-8 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed";
+  "relative inline-flex h-8 items-center justify-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed max-md:h-11 max-md:w-full max-md:gap-2 max-md:px-3 max-md:text-[13px]";
 
 export default function BotaoEtiqueta({ shippingId, contaId, tipo }: PropsBotaoEtiqueta) {
   const [estado, setEstado] = useState<Estado>("idle");
@@ -187,7 +189,10 @@ export default function BotaoEtiqueta({ shippingId, contaId, tipo }: PropsBotaoE
       {estado === "erro" && mensagem ? (
         <span
           role="status"
-          className="absolute left-0 top-full z-20 mt-1 w-[260px] rounded-lg border border-rose-200 bg-[var(--cz-superficie)] px-2.5 py-2 text-[11px] leading-snug font-medium text-rose-700 shadow-lg"
+          // Celular: o aviso vira um cartão FIXO sobre a barra de abas. Preso ao botão
+          // ele sairia da tela (o botão de ZPL fica na coluna da direita) e o texto é
+          // instrução ("emita a NF-e"), que não pode ser cortada.
+          className="absolute left-0 top-full z-20 mt-1 w-[260px] rounded-lg border border-rose-200 bg-[var(--cz-superficie)] px-2.5 py-2 text-[11px] leading-snug font-medium text-rose-700 shadow-lg max-md:fixed max-md:inset-x-4 max-md:bottom-[calc(var(--cz-bottom-offset,0px)+1rem)] max-md:top-auto max-md:z-50 max-md:mt-0 max-md:w-auto max-md:px-3.5 max-md:py-3 max-md:text-[13.5px]"
         >
           {mensagem}
         </span>

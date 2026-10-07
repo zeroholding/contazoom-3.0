@@ -9,7 +9,7 @@ export default function HeaderCupom({ onNew }: HeaderCupomProps) {
         <h1 className="cz-titulo text-[20px] leading-7 sm:text-[22px]">Cupons</h1>
         <button
           onClick={onNew}
-          className="inline-flex items-center justify-center gap-2 px-3 py-2 h-10 rounded-md bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 active:bg-orange-800 transition-colors"
+          className="inline-flex items-center justify-center gap-2 px-3 py-2 h-10 rounded-md bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 active:bg-orange-800 transition-colors max-md:h-12 max-md:w-full max-md:text-base"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

@@ -385,8 +385,16 @@ export default function DRE() {
             e os cartoes brancos se destacam dele. */}
       </div>
 
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">
+      {/* 16px de respiro sob o cabeçalho fixo no celular (no desktop segue colado, como era). */}
+      <main className={`relative z-20 pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
+        {/* Celular, por seletores de descendente (todos `max-md:`). `p-0`: o `main` já dá 16px
+            laterais, e o `p-3` da seção somava mais 12px. A tabela é realmente tabular, então
+            segue rolando na horizontal DENTRO do cartão, com a 1ª coluna (nome da linha)
+            congelada e de largura fixa (132px): sem isso o nome de 4 linhas ("(-) TAXA E
+            COMISSÕES DE MARKETPLACES") empurrava os valores para fora da tela. Valores em
+            13px tabulares, para as vírgulas alinharem entre os meses. Chips de filtro e
+            opções de dropdown chegam a 44px. */}
+        <section className="p-3 sm:p-6 max-md:p-0 max-md:[&_td]:text-[13px] max-md:[&_td]:tabular-nums max-md:[&>div:nth-child(2)_td.sticky]:w-[132px] max-md:[&>div:nth-child(2)_td.sticky]:min-w-[132px] max-md:[&>div:nth-child(2)_td.sticky]:max-w-[132px] max-md:[&>div:nth-child(2)_td.sticky]:leading-snug max-md:[&>div:nth-child(2)_th.sticky]:w-[132px] max-md:[&>div:nth-child(2)_th.sticky]:min-w-[132px] max-md:[&_.p-4]:p-3 max-md:[&_button.inline-flex.rounded-md.border]:min-h-11 max-md:[&_button.inline-flex.rounded-md.border]:text-[14px] max-md:[&_.smart-dropdown_button]:min-h-11 max-md:[&_.smart-dropdown_label]:min-h-11 max-md:[&_button[role=switch]]:before:absolute max-md:[&_button[role=switch]]:before:inset-x-0 max-md:[&_button[role=switch]]:before:-inset-y-2.5">
           <HeaderDRE
             mesesSelecionados={mesesSelecionados}
             onMesesChange={setMesesSelecionados}
@@ -852,7 +860,7 @@ export default function DRE() {
                         <tr className="border-t border-gray-100">
                           <td className="sticky left-0 z-10 bg-white py-1.5 px-3 pl-6 text-xs text-gray-600 border-r border-[var(--cz-hairline)]">
                             → Frete TikTok Shop
-                            <span className="ml-1 text-[10px] text-gray-400">
+                            <span className="ml-1 text-[10px] max-md:text-xs text-gray-400">
                               (embutido na taxa do SFP)
                             </span>
                           </td>

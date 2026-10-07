@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
 import { useToast } from './toaster';
+import { useCelular } from '@/hooks/useMediaQuery';
 
 interface ImportSKUExcelModalProps {
   isOpen: boolean;
@@ -113,6 +114,7 @@ export function ImportSKUExcelModal({
   const [importResults, setImportResults] = useState<SKUImportResults | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const celular = useCelular();
 
   const isBusy = isAnalyzing || isApplying;
   const selectedCount = selectedRows.size;
@@ -332,14 +334,14 @@ export function ImportSKUExcelModal({
           <button
             onClick={downloadTemplate}
             disabled={isBusy}
-            className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+            className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 max-md:h-11 max-md:w-full max-md:justify-center"
           >
             Baixar template
           </button>
         </div>
 
         <div
-          className={`relative rounded-lg border-2 border-dashed p-5 text-center transition-colors ${
+          className={`relative rounded-lg border-2 border-dashed p-5 max-md:px-4 max-md:py-10 text-center transition-colors ${
             dragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
           }`}
           onDragEnter={handleDrag}
@@ -358,8 +360,12 @@ export function ImportSKUExcelModal({
             disabled={isBusy}
           />
           <div className="space-y-1">
-            <div className="text-sm font-semibold text-gray-900">
-              {isAnalyzing ? 'Analisando planilha...' : selectedFile?.name || 'Clique ou arraste a planilha aqui'}
+            {/* Celular: ícone grande, para a área inteira parecer um botão de toque */}
+            <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-orange-50 text-orange-600 md:hidden">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 16V4m0 0L8 8m4-4 4 4M5 14v6h14v-6" /></svg>
+            </div>
+            <div className="text-sm font-semibold text-gray-900 max-md:text-base">
+              {isAnalyzing ? 'Analisando planilha...' : selectedFile?.name || (celular ? 'Toque para escolher a planilha' : 'Clique ou arraste a planilha aqui')}
             </div>
             <div className="text-xs text-gray-500">XLSX, XLS ou CSV até 10MB</div>
           </div>
@@ -384,13 +390,13 @@ export function ImportSKUExcelModal({
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm">
-                <label className="inline-flex items-center gap-2">
+              <div className="flex items-center gap-2 text-sm max-md:flex-wrap">
+                <label className="inline-flex items-center gap-2 max-md:flex! max-md:min-h-11">
                   <input
                     type="checkbox"
                     checked={selectableRows.length > 0 && selectedRows.size === selectableRows.length}
                     onChange={(event) => setAllSelectable(event.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 max-md:h-5 max-md:w-5 rounded border-gray-300"
                   />
                   Selecionar todas aplicáveis
                 </label>
@@ -401,12 +407,64 @@ export function ImportSKUExcelModal({
               <button
                 onClick={handleApply}
                 disabled={isBusy || selectedRows.size === 0}
-                className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:h-12 max-md:w-full max-md:text-base"
               >
                 {isApplying ? 'Aplicando...' : `Aplicar ${selectedRows.size} linha(s)`}
               </button>
             </div>
 
+            {celular ? (
+              <ul className="space-y-3">
+                {preview.rows.map((row) => {
+                  const config = actionConfig[row.action];
+                  const marcada = selectedRows.has(row.id);
+                  return (
+                    <li
+                      key={row.id}
+                      className={`rounded-xl border p-3 ${marcada ? 'border-orange-300 bg-orange-50/60' : 'border-[var(--cz-hairline)] bg-white'}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <label className="-ml-1 grid! h-11 w-11 shrink-0 cursor-pointer place-items-center" aria-label={`Selecionar linha ${row.rowNumber}`}>
+                          <input
+                            type="checkbox"
+                            checked={marcada}
+                            disabled={!row.selectable || isBusy}
+                            onChange={() => toggleRow(row.id)}
+                            className="h-5 w-5 rounded border-gray-300 disabled:opacity-40"
+                          />
+                        </label>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="break-all font-mono text-sm font-bold text-gray-900">{row.sku || '—'}</span>
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${config.className}`}>{config.label}</span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-sm text-gray-700">{row.produto}</p>
+                          <p className="mt-0.5 text-xs text-gray-500">Linha {row.rowNumber} · {config.description}</p>
+                        </div>
+                      </div>
+                      {(row.changes.length > 0 || row.warnings.length > 0 || row.errors.length > 0) && (
+                        <div className="mt-2 space-y-1.5 border-t border-[var(--cz-hairline)] pt-2">
+                          {row.changes.map((change) => (
+                            <p key={`${row.id}-${change.field}`} className="text-sm text-gray-700">
+                              <span className="font-semibold">{change.label}:</span>{' '}
+                              <span className="text-gray-500">{change.current}</span>
+                              <span className="mx-1 text-gray-400">→</span>
+                              <span className="font-semibold text-gray-900">{change.incoming}</span>
+                            </p>
+                          ))}
+                          {row.warnings.map((warning, index) => (
+                            <p key={`w-${index}`} className="rounded bg-amber-50 px-2 py-1 text-sm text-amber-800">{warning}</p>
+                          ))}
+                          {row.errors.map((error, index) => (
+                            <p key={`e-${index}`} className="rounded bg-red-50 px-2 py-1 text-sm text-red-800">{error}</p>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
             <div className="overflow-hidden rounded-lg border border-[var(--cz-hairline)]">
               <div className="max-h-[52vh] overflow-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -483,6 +541,7 @@ export function ImportSKUExcelModal({
                 </table>
               </div>
             </div>
+            )}
           </div>
         )}
 

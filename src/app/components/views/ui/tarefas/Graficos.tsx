@@ -349,7 +349,7 @@ export function RoscaStatus({
                     "apuração",
                     "apurações",
                   )}`}
-                  className={`flex items-center justify-between gap-3 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[var(--cz-laranja-suave)] ${apagado}`}
+                  className={`flex items-center justify-between gap-3 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[var(--cz-laranja-suave)] max-md:min-h-11 ${apagado}`}
                 >
                   {conteudo}
                 </Link>
@@ -491,7 +491,7 @@ export function BarrasRegime({
             <Link
               key={barra.regime}
               href={linkDoRegime(barra.regime)}
-              className="group inline-flex items-center gap-1 text-[12.5px] font-semibold text-[var(--cz-laranja-forte)] transition-colors hover:text-[var(--cz-laranja)]"
+              className="group inline-flex items-center gap-1 text-[12.5px] font-semibold text-[var(--cz-laranja-forte)] transition-colors hover:text-[var(--cz-laranja)] max-md:min-h-11"
             >
               {barra.nome}
               <ChevronRight

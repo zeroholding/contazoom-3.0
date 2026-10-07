@@ -31,14 +31,19 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
+import { useCelular } from "@/hooks/useMediaQuery";
 import { inteiro } from "../comum/formato";
 import { LogoCanal } from "../comum/logos";
 import { IconeAbrirFora, IconeCamadas, IconeCaixa } from "../comum/icones";
+import { Miniatura } from "../comum/shell";
 import { PastilhaModalidade } from "./modalidade";
 import BotaoEtiqueta from "./BotaoEtiqueta";
 import {
   CANAL_ROTULO,
   URGENCIA_BARRA,
+  URGENCIA_CLASSE,
+  URGENCIA_ROTULO,
+  rotuloPrazo,
   type ItemPacote,
   type PacoteExpedicao,
 } from "@/lib/expedicao";
@@ -134,7 +139,7 @@ function BotaoCopiarId({ id }: { id: string }) {
       type="button"
       onClick={copiar}
       title={`Copiar ID da venda: ${id}`}
-      className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-mono text-[11.5px] text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-hairline)] hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-texto)]"
+      className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 font-mono text-[11.5px] text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-hairline)] hover:bg-[var(--cz-fundo)] hover:text-[var(--cz-texto)] max-md:mt-0 max-md:min-h-11 max-md:border-[var(--cz-hairline-forte)] max-md:bg-[var(--cz-superficie)] max-md:px-3 max-md:text-[13px]"
     >
       <svg
         viewBox="0 0 24 24"
@@ -377,6 +382,7 @@ export default function TabelaSeparacao({
   selecionados,
   onAlternarSelecao,
   elegiveis,
+  imprimindo = false,
 }: {
   pacotes: PacoteExpedicao[];
   offset: number;
@@ -384,7 +390,25 @@ export default function TabelaSeparacao({
   onAlternarSelecao: (chave: string) => void;
   /** Chaves que podem ir para a impressão em lote. */
   elegiveis: Set<string>;
+  /** Folha de impressão em curso: força a TABELA, que é o que o CSS de impressão espera. */
+  imprimindo?: boolean;
 }) {
+  const celular = useCelular();
+
+  // Celular: cartões. A tabela tem `min-w-[1040px]`, e o prazo — o dado que decide
+  // o que sai primeiro — é a ÚLTIMA coluna, fora da tela.
+  if (celular && !imprimindo) {
+    return (
+      <ListaCartoes
+        pacotes={pacotes}
+        offset={offset}
+        selecionados={selecionados}
+        onAlternarSelecao={onAlternarSelecao}
+        elegiveis={elegiveis}
+      />
+    );
+  }
+
   return (
     // `overflow-x-auto` só. Sem altura máxima: quem rola na vertical é a página,
     // e não uma caixa dentro dela.
@@ -495,5 +519,263 @@ export default function TabelaSeparacao({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                   Celular: a fila vira lista de cartões                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Um cartão por PACOTE, com a mesma informação da tabela em outra ordem de leitura.
+ *
+ * A tabela de seis colunas obrigava a arrastar de lado justamente para ver o
+ * PRAZO (a última coluna) e, nessa altura, já não se sabia de qual pacote era a
+ * linha. No cartão a prioridade se inverte: a urgência e a data no topo, depois os
+ * produtos com foto e quantidade (o que se tira da prateleira) e, por fim, quem
+ * comprou, de qual conta, em que estado está o envio e a etiqueta — com alvos de
+ * toque de 44px.
+ *
+ * A barra da esquerda continua sendo a cor da urgência (`URGENCIA_BARRA`): é o
+ * que permite achar os atrasados descendo o olho pela margem, sem ler nada.
+ */
+
+const CHIP_CEL =
+  "inline-block max-w-full truncate rounded-md border px-2 py-0.5 text-[12px] font-semibold leading-[1.5]";
+
+/** As três cascas de estado do CyberDock (igual à `LinhaItem`): verde, vermelho, laranja. */
+function cascaDoEstado(tom: ReturnType<typeof statusEnvio>["tom"]): string {
+  if (tom === "bom") return "border-[#bbf7d0] bg-[#f0fdf4] text-[#15803d]";
+  if (tom === "critico") return "border-[#fecaca] bg-[#fef2f2] text-[#b91c1c]";
+  return "border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]";
+}
+
+function CartaoPacote({
+  pacote,
+  numero,
+  podeLote,
+  marcado,
+  onAlternarSelecao,
+}: {
+  pacote: PacoteExpedicao;
+  numero: number;
+  podeLote: boolean;
+  marcado: boolean;
+  onAlternarSelecao: (chave: string) => void;
+}) {
+  const estado = statusEnvio(pacote.canal, pacote.shippingStatus, pacote.status);
+  const prazo = pacote.prazoDespacho;
+  const atrasado = pacote.urgencia === "atrasado";
+  const relativo = diaRelativo(prazo);
+  // Um botão de cópia por PEDIDO, não por item (ver a tabela).
+  const pedidos = Array.from(new Set(pacote.itens.map((i) => i.orderId)));
+
+  return (
+    <article
+      className={`overflow-hidden rounded-[var(--cz-raio-cartao)] border border-l-4 bg-[var(--cz-superficie)] ${
+        URGENCIA_BARRA[pacote.urgencia]
+      } ${marcado ? "border-[var(--cz-laranja)]" : "border-[var(--cz-hairline)]"}`}
+    >
+      {/* Topo: seleção para o lote, número do pacote e o SELO de urgência. */}
+      <header
+        className={`flex items-center gap-1 border-b border-[var(--cz-hairline)] py-1.5 pl-1 pr-3 ${
+          marcado ? "bg-[var(--cz-laranja-suave)]" : "bg-[#fff8f3]"
+        }`}
+      >
+        {podeLote ? (
+          // A caixa é de 20px, mas a área de toque é o rótulo inteiro (44px).
+          // `style` e não classe: o `globals.css` tem `label { display: block; margin-bottom }`
+          // SEM camada, que vence `grid` e `mb-0` das utilitárias — e a caixa ficava
+          // colada no canto de cima, fora do centro do alvo de 44px.
+          <label
+            className="size-11 shrink-0 cursor-pointer place-items-center"
+            style={{ display: "grid", marginBottom: 0 }}
+          >
+            <input
+              type="checkbox"
+              checked={marcado}
+              onChange={() => onAlternarSelecao(pacote.chave)}
+              aria-label={`Selecionar o pacote ${numero}`}
+              className="size-5 accent-[var(--cz-laranja)]"
+            />
+          </label>
+        ) : (
+          // Mesmo espaço da caixa, vazio: sem ele o "PACOTE n" dos cartões que não
+          // entram no lote (Shopee, TikTok, etiqueta ainda não pronta) começa 36px
+          // antes do dos outros, e a coluna de números da fila fica em zigue-zague.
+          <span aria-hidden className="size-11 shrink-0" />
+        )}
+        <div className="min-w-0 flex-1 py-0.5">
+          <p className="text-[13px] font-extrabold uppercase tracking-[0.03em] text-[var(--cz-laranja-forte)]">
+            Pacote {numero}
+          </p>
+          <p className="truncate font-mono text-[12px] text-[var(--cz-texto-suave)]">
+            {pacote.shippingId
+              ? `Envio ${pacote.shippingId}`
+              : `Pedido ${pacote.itens[0]?.orderId ?? "—"}`}
+          </p>
+        </div>
+        <span
+          className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[12px] font-bold leading-none ${
+            URGENCIA_CLASSE[pacote.urgencia]
+          }`}
+        >
+          {pacote.urgencia === "semPrazo"
+            ? URGENCIA_ROTULO.semPrazo
+            : rotuloPrazo(pacote.diasRestantes)}
+        </span>
+      </header>
+
+      {/* O prazo em destaque e a modalidade (a cor identifica a transportadora). */}
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 px-3.5 pb-3 pt-3">
+        <div className="min-w-0">
+          <p className="text-[12px] font-semibold text-[var(--cz-texto-suave)]">Despachar até</p>
+          <p
+            className={`mt-0.5 text-[18px] font-extrabold leading-tight tabular-nums ${
+              atrasado ? "text-[#dc2626]" : "text-[#b45309]"
+            }`}
+          >
+            {dataLonga(prazo)}
+            {relativo && (
+              <span className="ml-1.5 text-[13px] font-semibold text-[var(--cz-texto-suave)]">
+                {relativo}
+              </span>
+            )}
+          </p>
+        </div>
+        <PastilhaModalidade modalidade={pacote.modalidade} />
+      </div>
+
+      {/* Os produtos. A quantidade vai no canto da foto: é o número que se confere na
+          prateleira, e ao lado do título ele tomaria a largura de que o nome precisa. */}
+      <ul className="divide-y divide-[var(--cz-hairline)] border-t border-[var(--cz-hairline)] px-3.5">
+        {pacote.itens.map((item, i) => (
+          <li key={`${item.orderId}-${item.sku ?? i}`} className="flex items-start gap-3 py-3">
+            <span className="relative shrink-0">
+              <Miniatura src={item.thumbnailUrl} alt={item.titulo} tamanho={60} />
+              <span
+                className={`absolute -right-2 -top-2 grid h-6 min-w-6 place-items-center rounded-full border-2 border-[var(--cz-superficie)] px-1.5 text-[12px] font-extrabold leading-none tabular-nums text-white ${
+                  item.quantidade > 1 ? "bg-[var(--cz-laranja)]" : "bg-[#475569]"
+                }`}
+                title={`${item.quantidade} ${item.quantidade === 1 ? "unidade" : "unidades"}`}
+              >
+                ×{item.quantidade}
+              </span>
+            </span>
+
+            <div className="min-w-0 flex-1">
+              {item.permalink ? (
+                <a
+                  href={item.permalink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="line-clamp-2 text-[14px] font-semibold leading-snug text-[var(--cz-texto)]"
+                >
+                  {item.titulo}
+                </a>
+              ) : (
+                <p className="line-clamp-2 text-[14px] font-semibold leading-snug text-[var(--cz-texto)]">
+                  {item.titulo}
+                </p>
+              )}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className={`${CHIP_CEL} border-[#e2e8f0] bg-[#f8fafc] font-mono text-[#475569]`}>
+                  {item.sku ?? "—"}
+                </span>
+                {item.hierarquia1 && (
+                  <span
+                    className={`${CHIP_CEL} border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] text-[var(--cz-laranja-forte)]`}
+                  >
+                    <IconeCamadas className="mr-1 inline h-3 w-3 align-[-2px]" />
+                    {item.hierarquia1}
+                  </span>
+                )}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {/* Quem comprou, de onde, em que estado e a ação. */}
+      <footer className="space-y-3 border-t border-[var(--cz-hairline)] bg-[#fcfcfd] px-3.5 py-3">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]"
+            title={CANAL_ROTULO[pacote.canal]}
+          >
+            <LogoCanal canal={pacote.canal} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] font-semibold text-[var(--cz-texto)]">{pacote.conta}</p>
+            <p className="truncate text-[12.5px] text-[var(--cz-texto-suave)]">
+              {CANAL_ROTULO[pacote.canal]}
+            </p>
+          </div>
+        </div>
+
+        <div className="text-[13.5px] leading-snug">
+          <p className="line-clamp-2">
+            <span className="text-[var(--cz-texto-suave)]">Comprador: </span>
+            <span className="font-semibold text-[var(--cz-texto)]">{pacote.comprador || "—"}</span>
+          </p>
+          {pacote.pedidos > 1 && (
+            <p className="mt-1 inline-flex items-center gap-1 font-semibold text-[var(--cz-laranja-forte)]">
+              <IconeCaixa className="h-3.5 w-3.5" />
+              {pacote.pedidos} pedidos juntos
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`${CHIP_CEL} ${cascaDoEstado(estado.tom)}`}>{estado.rotulo}</span>
+          {pedidos.map((id) => (
+            <BotaoCopiarId key={id} id={id} />
+          ))}
+        </div>
+        {/* No desktop a explicação mora num `title`, que o toque não abre. */}
+        {estado.explicacao && (
+          <p className="text-[12.5px] leading-snug text-[var(--cz-texto-suave)]">{estado.explicacao}</p>
+        )}
+
+        {pacote.canal === "ML" && (
+          <div className="grid grid-cols-2 gap-2">
+            <BotaoEtiqueta shippingId={pacote.shippingId} contaId={pacote.accountId} tipo="pdf" />
+            <BotaoEtiqueta shippingId={pacote.shippingId} contaId={pacote.accountId} tipo="zpl" />
+          </div>
+        )}
+      </footer>
+    </article>
+  );
+}
+
+function ListaCartoes({
+  pacotes,
+  offset,
+  selecionados,
+  onAlternarSelecao,
+  elegiveis,
+}: {
+  pacotes: PacoteExpedicao[];
+  offset: number;
+  selecionados: Set<string>;
+  onAlternarSelecao: (chave: string) => void;
+  elegiveis: Set<string>;
+}) {
+  return (
+    // Fundo cinza claro: o cartão branco precisa de onde se destacar dentro da
+    // seção, que também é branca.
+    <ul className="flex flex-col gap-3 bg-[var(--cz-fundo)] p-3" aria-label="Pacotes a despachar">
+      {pacotes.map((pacote, indice) => (
+        <li key={pacote.chave}>
+          <CartaoPacote
+            pacote={pacote}
+            numero={offset + indice + 1}
+            podeLote={elegiveis.has(pacote.chave)}
+            marcado={selecionados.has(pacote.chave)}
+            onAlternarSelecao={onAlternarSelecao}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }

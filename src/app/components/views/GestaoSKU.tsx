@@ -392,19 +392,19 @@ export default function GestaoSKU() {
           isLoading={isLoading}
         />
 
-        <div className="grid gap-3 sm:grid-cols-3" aria-label="Resumo de SKUs">
-          <div className="rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)]">
-            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-fraco)]">Total cadastrado</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Resumo de SKUs">
+          <div className="rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)] max-md:p-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-fraco)] max-md:text-xs">Total cadastrado</p>
             <p className="mt-2 text-2xl font-bold text-[var(--cz-texto)]">{skuStats.totalSkus}</p>
             <p className="mt-1 text-xs text-[var(--cz-texto-suave)]">SKUs na sua operação</p>
           </div>
-          <div className={`rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] ${skuStats.skusSemCusto > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-            <p className={`text-[11px] font-bold uppercase tracking-[0.06em] ${skuStats.skusSemCusto > 0 ? "text-amber-800" : "text-emerald-800"}`}>Pendências</p>
+          <div className={`rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] max-md:p-3 ${skuStats.skusSemCusto > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+            <p className={`text-[11px] max-md:text-xs font-bold uppercase tracking-[0.06em] ${skuStats.skusSemCusto > 0 ? "text-amber-800" : "text-emerald-800"}`}>Pendências</p>
             <p className={`mt-2 text-2xl font-bold ${skuStats.skusSemCusto > 0 ? "text-amber-900" : "text-emerald-900"}`}>{skuStats.skusSemCusto}</p>
             <p className={`mt-1 text-xs ${skuStats.skusSemCusto > 0 ? "text-amber-800" : "text-emerald-800"}`}>{skuStats.skusSemCusto > 0 ? "Requer atenção" : "Tudo em dia"}</p>
           </div>
-          <div className="rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)]">
-            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-fraco)]">Detalhamento</p>
+          <div className="col-span-2 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)] max-md:p-3 sm:col-span-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-fraco)] max-md:text-xs">Detalhamento</p>
             <div className="mt-2 flex items-end justify-between gap-4">
               <div><p className="text-xl font-bold text-[var(--cz-texto)]">{skuStats.semCusto}</p><p className="text-xs text-[var(--cz-texto-suave)]">sem custo</p></div>
               <div className="text-right"><p className="text-xl font-bold text-[var(--cz-texto)]">{skuStats.naoCadastrados}</p><p className="text-xs text-[var(--cz-texto-suave)]">não cadastrados</p></div>

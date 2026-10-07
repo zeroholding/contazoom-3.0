@@ -449,7 +449,7 @@ export default function DriveDocumentos() {
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           placeholder="Buscar por nome do arquivo"
-          className="h-11 w-full rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] pl-10 pr-10 text-sm text-[var(--cz-texto)] outline-none placeholder:text-[var(--cz-texto-fraco)] focus:border-[var(--cz-laranja)] focus:ring-2 focus:ring-[var(--cz-laranja-suave)]"
+          className="h-11 w-full rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] pl-10 pr-10 text-sm max-md:pl-10! max-md:pr-10! text-[var(--cz-texto)] outline-none placeholder:text-[var(--cz-texto-fraco)] focus:border-[var(--cz-laranja)] focus:ring-2 focus:ring-[var(--cz-laranja-suave)]"
         />
         {searchTerm && (
           <button
@@ -497,7 +497,7 @@ export default function DriveDocumentos() {
           />
           <aside
             ref={drawerRef}
-            className="absolute inset-y-0 left-0 flex w-[min(88vw,20rem)] flex-col border-r border-[var(--cz-hairline)] bg-[var(--cz-fundo)] shadow-[var(--cz-elev-1)]"
+            className="absolute inset-y-0 left-0 flex w-[min(88vw,20rem)] flex-col pb-[env(safe-area-inset-bottom,0px)] border-r border-[var(--cz-hairline)] bg-[var(--cz-fundo)] shadow-[var(--cz-elev-1)]"
           >
             <div className="flex min-h-16 items-center justify-between border-b border-[var(--cz-hairline)] px-4">
               <div>
@@ -530,7 +530,9 @@ export default function DriveDocumentos() {
                 className="grid size-11 shrink-0 place-items-center rounded-lg border border-[var(--cz-hairline)] text-[var(--cz-texto-suave)] hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] xl:hidden"
                 aria-label="Abrir navegação de pastas"
               >
-                <Menu className="size-5" />
+                <Menu className="size-5 max-md:hidden" />
+                {/* No celular o hambúrguer já pertence ao cabeçalho do app (menu): aqui vai o ícone de pasta. */}
+                <Folder className="hidden size-5 max-md:block" />
               </button>
               {currentFolderId && (
                 <button
@@ -548,7 +550,7 @@ export default function DriveDocumentos() {
                     Documentos
                   </button>
                   {currentPath.map((folder) => (
-                    <span key={folder.id} className="flex min-w-0 items-center">
+                    <span key={folder.id} className="flex min-w-0 items-center max-md:shrink-0 max-md:whitespace-nowrap">
                       <ChevronRight className="mx-1 size-3 shrink-0" />
                       <button
                         type="button"
@@ -570,7 +572,7 @@ export default function DriveDocumentos() {
             </div>
 
             {isAdmin && users.length > 0 && (
-              <label className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-3 text-xs font-semibold text-[var(--cz-laranja-forte)] sm:w-auto">
+              <label className="flex min-h-11 w-full items-center gap-2 rounded-lg border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-3 text-xs font-semibold text-[var(--cz-laranja-forte)] max-md:mb-0! max-md:flex! sm:w-auto">
                 <UserRound className="size-4 shrink-0" />
                 <span className="shrink-0">Cliente</span>
                 <select
@@ -691,16 +693,21 @@ export default function DriveDocumentos() {
                             className="flex min-h-11 max-w-full items-center truncate text-left text-sm font-bold text-[var(--cz-texto)] hover:text-[var(--cz-laranja-forte)]"
                             title={document.originalName}
                           >
-                            <span className="truncate">{document.originalName}</span>
+                            {/* Celular: nome em até 2 linhas (antes virava 1 linha cortada em "Guia DAS Simples Nacional - C…"). */}
+                            <span className="truncate max-md:line-clamp-2 max-md:whitespace-normal max-md:break-words">{document.originalName}</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => openDocumentFolder(document)}
-                            className="flex min-h-11 max-w-full items-center gap-1 text-left text-xs text-[var(--cz-texto-suave)] hover:text-[var(--cz-laranja-forte)] sm:-mt-2 sm:min-h-8"
+                            className="flex min-h-11 max-w-full items-center gap-1 text-left text-xs text-[var(--cz-texto-suave)] hover:text-[var(--cz-laranja-forte)] max-md:min-h-9 sm:-mt-2 sm:min-h-8"
                           >
                             <MapPin className="size-3 shrink-0" />
                             <span className="truncate">{documentLocation(document)}</span>
                           </button>
+                          {/* Celular: tamanho e data (a coluna da direita só existe a partir de sm). */}
+                          <p className="pb-1 text-xs text-[var(--cz-texto-suave)] sm:hidden">
+                            {formatSize(document.sizeBytes)} · {new Date(document.createdAt).toLocaleDateString("pt-BR")}
+                          </p>
                         </div>
                         <div className="hidden shrink-0 text-right sm:block">
                           <p className="text-xs font-semibold text-[var(--cz-texto-suave)]">
@@ -780,7 +787,7 @@ export default function DriveDocumentos() {
               )}
 
               {currentIsTaxes && availableYears.length > 0 && (
-                <div className="flex flex-wrap gap-2" aria-label="Filtros por período">
+                <div className="flex flex-wrap gap-2 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:[scrollbar-width:none] max-md:[&>button]:shrink-0" aria-label="Filtros por período">
                   <button
                     type="button"
                     onClick={() => openFolder(currentFolderId)}

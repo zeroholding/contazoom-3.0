@@ -7,22 +7,23 @@ import {
   useCallback,
   useMemo,
   useState,
-  type FormEvent,
   type ReactNode,
   type UIEvent,
 } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import gsap from "gsap";
 import {
   ChevronRight,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Search,
   Settings,
   UserRound,
 } from "lucide-react";
 import AdminSidebar from "./AdminSidebar";
+import AdminBottomNav from "./AdminBottomNav";
+import BuscaEmpresa, { ROTA_BUSCA } from "./BuscaEmpresa";
 import { useSessao } from "@/hooks/useSessao";
 import { papelLabel } from "@/lib/papeis";
 import { iniciais } from "@/app/components/views/ui/tarefas/formato";
@@ -32,9 +33,6 @@ const RAIL_W = "4rem";
 const LS_KEY = "cz_sidebar_collapsed";
 
 const useIsoLayout = typeof window !== "undefined" ? useLayoutEffect : useEffect;
-
-/** Única tela do admin que filtra empresa por texto. Ver `BuscaEmpresa`. */
-const ROTA_BUSCA = "/admin/tarefas/apuracao";
 
 /** Tela de usuários e níveis de acesso. Destino do atalho de configuração. */
 const ROTA_ACESSOS = "/admin";
@@ -236,52 +234,6 @@ function Trilha({ migalhas }: { migalhas: Migalha[] }) {
 }
 
 /**
- * Busca de empresa.
- *
- * Campo real, não decoração: ao enviar, navega para a lista de apuração com
- * `?busca=`, que é lido por `lerFiltros` daquela tela e filtra por razão social,
- * fantasia e CNPJ. O `placeholder` diz exatamente o que o campo faz, para
- * ninguém digitar "boleto" esperando busca global.
- *
- * Some na própria `/admin/tarefas/apuracao`: aquela tela lê a URL só na
- * montagem, então trocar o parâmetro sem sair da rota mudaria o endereço e não a
- * lista — a tela mostraria um resultado e a URL prometeria outro. E lá o campo
- * de busca próprio, com debounce, já está na tela.
- */
-function BuscaEmpresa() {
-  const router = useRouter();
-  const [termo, setTermo] = useState("");
-
-  const enviar = (evento: FormEvent<HTMLFormElement>) => {
-    evento.preventDefault();
-    const limpo = termo.trim();
-    if (!limpo) return;
-    router.push(`${ROTA_BUSCA}?busca=${encodeURIComponent(limpo)}`);
-  };
-
-  return (
-    <form
-      role="search"
-      onSubmit={enviar}
-      className="relative hidden w-80 shrink-0 lg:block"
-    >
-      <Search
-        aria-hidden="true"
-        className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--cz-texto-fraco)]"
-      />
-      <input
-        type="search"
-        className="cz-busca"
-        value={termo}
-        onChange={(evento) => setTermo(evento.target.value)}
-        placeholder="Buscar empresa por nome ou CNPJ"
-        aria-label="Buscar empresa por nome ou CNPJ na apuração fiscal"
-      />
-    </form>
-  );
-}
-
-/**
  * Atalho para usuários e acessos.
  *
  * A referência tem um ícone de engrenagem no header. Aqui ele só existe quando
@@ -302,7 +254,7 @@ function AtalhoAcessos() {
       href={ROTA_ACESSOS}
       title="Usuários e acessos"
       aria-label="Abrir usuários e acessos"
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--cz-hairline)] text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-hairline-forte)] hover:text-[var(--cz-texto)]"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--cz-hairline)] text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-hairline-forte)] hover:text-[var(--cz-texto)] max-md:hidden"
     >
       <Settings aria-hidden="true" className="h-[18px] w-[18px]" />
     </Link>
@@ -369,7 +321,7 @@ function Identidade() {
       className="flex min-w-0 items-center gap-2.5"
       title={`${nome} · ${sessao.email} · ${rotulo}`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cz-laranja-suave)] text-[11px] font-bold text-[var(--cz-laranja-forte)] ring-1 ring-inset ring-[var(--cz-laranja-borda)]">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--cz-laranja-suave)] text-[11px] font-bold text-[var(--cz-laranja-forte)] ring-1 ring-inset ring-[var(--cz-laranja-borda)] max-md:text-xs">
         {iniciais(nome)}
       </span>
       <div className="hidden min-w-0 max-w-[10rem] sm:block lg:max-w-[12rem]">
@@ -390,6 +342,13 @@ function Identidade() {
 
 export default function AdminLayoutWrapper({ children }: { children?: ReactNode }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  // Gaveta de navegação do celular. Estado SEPARADO do recolher/expandir do
+  // desktop: "recolhida" é uma preferência de quem tem tela larga e persiste em
+  // localStorage; "aberta" é um estado momentâneo que nasce fechado a cada
+  // página.
+  const [menuAberto, setMenuAberto] = useState(false);
+  const fecharMenu = useCallback(() => setMenuAberto(false), []);
+  const abrirMenu = useCallback(() => setMenuAberto(true), []);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const conteudoRef = useRef<HTMLElement | null>(null);
   const hasInitialSet = useRef(false);
@@ -478,7 +437,11 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
       ref={containerRef}
       className="cz-admin fixed inset-0 flex bg-[var(--cz-fundo)] font-sans"
     >
-      <AdminSidebar collapsed={isSidebarCollapsed} />
+      <AdminSidebar
+        collapsed={isSidebarCollapsed}
+        mobileOpen={menuAberto}
+        onMobileClose={fecharMenu}
+      />
 
       {/* A sidebar aparece em `md`, então a margem do conteúdo tem de começar em
           `md` também — em `lg` ela cobria o conteúdo entre 768px e 1024px. */}
@@ -486,13 +449,35 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
           janela, então a coluna do conteúdo tem de seguir o PAI. Continuar em
           100vh aqui daria o mesmo número hoje e passaria a divergir no instante em
           que a casca ganhasse qualquer recuo. */}
-      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden transition-all duration-200 md:ml-[var(--sidebar-w)]">
+      {/* Celular: o `padding-bottom` da coluna é a altura da barra de abas (mais a
+          área segura do iPhone). Assim o `<main>` TERMINA onde a barra começa, em
+          vez de rolar por baixo dela: nenhum botão ou última linha de lista fica
+          escondido, e um `sticky bottom-0` dentro do conteúdo cola exatamente em
+          cima da barra. Lê `--cz-tabbar-h` direto (e não `--cz-bottom-offset`)
+          porque a classe que liga essa variável só entra depois da montagem — o
+          espaço tem de existir já no primeiro quadro. */}
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden transition-all duration-200 max-md:pb-[calc(var(--cz-tabbar-h,3.5rem)+env(safe-area-inset-bottom,0px))] md:ml-[var(--sidebar-w)]">
+        {/* Altura pelo token `--cz-topbar-h`: 4.5rem no desktop (o mesmo valor de
+            antes) e 3.5rem no celular, igual ao cabeçalho do resto do produto. */}
         <header
-          className={`z-20 flex h-[4.5rem] shrink-0 items-center justify-between gap-3 border-b border-[var(--cz-hairline)] bg-[var(--cz-superficie)] px-4 transition-shadow duration-200 sm:px-6 ${
+          className={`z-20 flex h-[var(--cz-topbar-h)] shrink-0 items-center justify-between gap-3 border-b border-[var(--cz-hairline)] bg-[var(--cz-superficie)] pl-1 pr-4 transition-shadow duration-200 md:px-6 ${
             rolado ? "shadow-[var(--cz-elev-2)]" : "shadow-none"
           }`}
         >
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3 max-md:gap-1">
+            {/* Hambúrguer do celular: abre a gaveta. 44px é o alvo mínimo de
+                toque. No desktop quem aparece é o botão de recolher, logo abaixo. */}
+            <button
+              type="button"
+              onClick={abrirMenu}
+              aria-label="Abrir menu"
+              aria-expanded={menuAberto}
+              aria-controls="cz-menu-admin"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--cz-texto-suave)] transition-colors hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)] active:bg-[#F4F5F7] md:hidden"
+            >
+              <Menu aria-hidden="true" className="h-5 w-5" />
+            </button>
+
             <button
               type="button"
               onClick={handleToggleSidebar}
@@ -510,10 +495,18 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
             </button>
 
             <div className="min-w-0">
-              <Trilha migalhas={migalhas} />
-              <h2 className="cz-titulo truncate text-[22px] leading-7">{titulo}</h2>
+              {/* No celular a trilha e o subtítulo saem: o cabeçalho de 56px tem
+                  uma linha só, o título. A trilha continua um toque atrás — a
+                  própria tela de detalhe traz o "voltar" — e o subtítulo é texto
+                  de apoio que a tela já repete no corpo. */}
+              <div className="max-md:hidden">
+                <Trilha migalhas={migalhas} />
+              </div>
+              <h2 className="cz-titulo truncate text-[22px] leading-7 max-md:text-[17px] max-md:leading-6">
+                {titulo}
+              </h2>
               {subtitulo && (
-                <p className="truncate text-[13px] leading-4 text-[var(--cz-texto-suave)]">
+                <p className="truncate text-[13px] leading-4 text-[var(--cz-texto-suave)] max-md:hidden">
                   {subtitulo}
                 </p>
               )}
@@ -543,6 +536,10 @@ export default function AdminLayoutWrapper({ children }: { children?: ReactNode 
           {children}
         </main>
       </div>
+
+      {/* Barra de abas do celular. Irmã da coluna (e não filha): `fixed` em relação
+          à casca `fixed inset-0`, que mede exatamente a janela. */}
+      <AdminBottomNav onMenu={abrirMenu} />
     </div>
   );
 }

@@ -191,7 +191,8 @@ const HeaderVendasShopee = ({
   };
 
   return (
-    <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    // Celular: título menor, linha de título que quebra, alvos de toque de 44px.
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 max-md:mb-4 max-md:gap-3 max-md:[&_h1]:text-xl max-md:[&_.text-left>div:first-child]:flex-wrap max-md:[&_.text-left>div:first-child]:gap-2 max-md:[&_button]:min-h-11 max-md:[&_button]:min-w-11">
       <div className="text-left">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -205,7 +206,9 @@ const HeaderVendasShopee = ({
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            Dashboard
+            {/* Celular: só o ícone (o título já ocupa a linha e a aba "Início" leva ao
+              mesmo lugar); o texto segue disponível para leitores de tela. */}
+          <span className="max-md:sr-only">Dashboard</span>
           </button>
           <div className="relative">
             <button
@@ -536,7 +539,9 @@ export default function VendasShopee() {
       />
 
       <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">
+        {/* Celular: sem o padding duplicado (o `main` já dá os 16px laterais) e com
+            16px de respiro sob o cabeçalho fixo. A partir de `sm` volta o p-6. */}
+        <section className="p-0 pt-4 sm:p-6">
           <HeaderVendasShopee
             vendas={vendas || []}
             lastSyncedAt={lastSyncedAt || null}

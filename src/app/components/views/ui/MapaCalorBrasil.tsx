@@ -388,8 +388,8 @@ export default function MapaCalorBrasil({
                 return (
                   <div key={nome}>
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-[11px] md:text-xs text-gray-600 font-medium">{nome}</span>
-                      <span className="text-[11px] md:text-xs font-bold text-gray-800">{pct.toFixed(1)}%</span>
+                      <span className="text-xs text-gray-600 font-medium">{nome}</span>
+                      <span className="text-xs font-bold text-gray-800">{pct.toFixed(1)}%</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div

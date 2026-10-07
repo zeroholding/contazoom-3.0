@@ -12,11 +12,12 @@ import {
   useImperativeHandle,
   useCallback,
 } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardList, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, RefreshCw, X } from "lucide-react";
 import gsap from "gsap";
 import { LogoCanal, type CanalLogo } from "../comum/logos";
 import { useSyncAll } from "@/contexts/SyncAllContext";
 import { isSyncAllTerminal } from "@/lib/sync-all-types";
+import { travarRolagem } from "@/lib/trava-rolagem";
 
 type Leaf = { href: string; label: string };
 type Branch = {
@@ -50,7 +51,11 @@ const Chevron = ({ open }: { open: boolean }) => (
     />
   </svg>
 );
-const DashboardIcon = () => (
+// Os quatro ícones abaixo são exportados porque a barra de abas do celular
+// (BottomNav) mostra os mesmos destinos. Reusar o desenho, e não redesenhar, é o
+// que impede a aba "Vendas" e o item "Central de Vendas" de parecerem telas
+// diferentes.
+export const DashboardIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -68,7 +73,7 @@ const DashboardIcon = () => (
     <path d="M6.4 20a9 9 0 1 1 11.2 0z" />
   </svg>
 );
-const SalesIcon = () => (
+export const SalesIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -125,7 +130,7 @@ const CaixasIcon = () => (
 // Caminhão de entrega. Distinto do CaixasIcon (caixa fechada, que é o Estoque
 // Full) de propósito: as duas telas falam de pacote, e ícones parecidos fariam
 // o menu recolhido — onde só o ícone aparece — virar adivinhação.
-const CaminhaoIcon = () => (
+export const CaminhaoIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -180,7 +185,7 @@ const UsersIcon = () => (
     <path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
   </svg>
 );
-const MoneyBagIcon = () => (
+export const MoneyBagIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
@@ -903,14 +908,106 @@ export default function Sidebar({
     }
   }, []);
 
+  /* ------------------------------------------------------------------------ */
+  /* Gaveta no celular                                                        */
+  /* ------------------------------------------------------------------------ */
+
+  const botaoFecharRef = useRef<HTMLButtonElement | null>(null);
+
+  // Enquanto a gaveta está aberta no celular: a página por baixo não rola, o ESC
+  // fecha, e o foco vai para dentro dela (voltando ao botão de origem ao fechar).
+  //
+  // `mobileOpen` pode continuar `true` se a tela crescer até o layout de desktop
+  // (girar um tablet com a gaveta aberta). Lá a barra é uma coluna fixa, então não
+  // há o que travar — e a própria mudança de tamanho fecha a gaveta, para o
+  // estado não ficar preso em "aberta" sem ninguém ver.
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const celular = window.matchMedia("(max-width: 767px)");
+    if (!celular.matches) return;
+
+    const soltarRolagem = travarRolagem();
+    const origem =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    botaoFecharRef.current?.focus({ preventScroll: true });
+
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onMobileCloseRef.current?.();
+    };
+    const aoMudarTamanho = (e: MediaQueryListEvent) => {
+      if (!e.matches) onMobileCloseRef.current?.();
+    };
+    document.addEventListener("keydown", aoTeclar);
+    celular.addEventListener("change", aoMudarTamanho);
+
+    return () => {
+      soltarRolagem();
+      document.removeEventListener("keydown", aoTeclar);
+      celular.removeEventListener("change", aoMudarTamanho);
+      origem?.focus?.({ preventScroll: true });
+    };
+  }, [mobileOpen]);
+
+  // Arrastar a gaveta para a esquerda fecha. A gaveta acompanha o dedo (via
+  // `transform` inline, que se soma ao `translate` da classe) e, ao soltar,
+  // devolve o controle ao CSS: passou de ~30% da largura fecha, senão volta.
+  //
+  // O gesto só "pega" quando é claramente horizontal e para a esquerda. Qualquer
+  // outra direção é rolagem da lista de itens e não pode ser sequestrada.
+  const gesto = useRef<{ x: number; y: number; dx: number; horizontal: boolean | null } | null>(null);
+
+  function aoTocarInicio(e: React.TouchEvent<HTMLElement>) {
+    if (!mobileOpen) return;
+    const toque = e.touches[0];
+    gesto.current = { x: toque.clientX, y: toque.clientY, dx: 0, horizontal: null };
+  }
+
+  function aoTocarMover(e: React.TouchEvent<HTMLElement>) {
+    const g = gesto.current;
+    const el = asideRef.current;
+    if (!g || !el) return;
+    const toque = e.touches[0];
+    const dx = toque.clientX - g.x;
+    const dy = toque.clientY - g.y;
+    if (g.horizontal === null) {
+      // Zona morta: um toque "parado" sempre treme alguns pixels.
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      g.horizontal = dx < 0 && Math.abs(dx) > Math.abs(dy) * 1.2;
+      // Sem transição enquanto o dedo arrasta; senão a gaveta "atrasa" o dedo.
+      if (g.horizontal) el.style.transition = "none";
+    }
+    if (!g.horizontal) return;
+    g.dx = Math.min(0, dx);
+    el.style.transform = `translateX(${g.dx}px)`;
+  }
+
+  function aoTocarFim(cancelado = false) {
+    const g = gesto.current;
+    gesto.current = null;
+    const el = asideRef.current;
+    if (!g || !el || !g.horizontal) return;
+    el.style.transition = "";
+    el.style.transform = "";
+    if (!cancelado && g.dx < -Math.min(96, el.offsetWidth * 0.3)) {
+      onMobileCloseRef.current?.();
+    }
+  }
+
   return (
     <>
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/25 md:hidden"
-          onClick={handleBackdropClick}
-        />
-      )}
+      {/* Sempre montada, com fade. Antes só existia enquanto a gaveta estava
+          aberta, então a tela escurecia de uma vez e clareava de uma vez — o
+          corte seco é o que faz uma gaveta parecer "de site" e não "de app".
+          z-55 fica entre a barra de abas/cabeçalho (40) e a gaveta (60). */}
+      <div
+        aria-hidden="true"
+        className={[
+          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200 md:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        ].join(" ")}
+        onClick={handleBackdropClick}
+      />
 
       {/* A barra e SUPERFICIE branca com um fio a direita, e nao um bloco cinza.
           Era `bg-[#F3F3F3]`, do mesmo cinza do fundo, entao a barra e o conteudo
@@ -918,14 +1015,31 @@ export default function Sidebar({
           de 1px — a mesma decisao do login e do painel admin. */}
       <aside
         ref={asideRef}
+        onTouchStart={aoTocarInicio}
+        onTouchMove={aoTocarMover}
+        onTouchEnd={() => aoTocarFim()}
+        onTouchCancel={() => aoTocarFim(true)}
         className={[
           // `width` entra na transicao junto com `transform`: a largura vem de
           // `--sidebar-w`, e trocar o valor da variavel anima a barra sem
           // precisar de GSAP. Antes so `transform` transicionava, e a largura
           // saltava de 16rem para 4rem num quadro.
-          "fixed inset-y-0 left-0 z-50 flex transform flex-col border-r border-[var(--cz-hairline)] bg-[var(--cz-superficie)] transition-[transform,width] duration-200 ease-in-out",
-          "w-64 md:w-[var(--sidebar-w,16rem)]",
-          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          //
+          // `translate` TAMBEM entra na lista: no Tailwind 4 as utilitarias
+          // `translate-x-*` escrevem a propriedade `translate`, e nao
+          // `transform`. Com so `transform` na lista, a gaveta aparecia e sumia
+          // num quadro, sem deslizar. `visibility` fecha a gaveta para o teclado
+          // e para o leitor de tela so DEPOIS de ela terminar de sair.
+          "fixed inset-y-0 left-0 z-50 flex transform flex-col border-r border-[var(--cz-hairline)] bg-[var(--cz-superficie)] transition-[transform,translate,width,visibility] duration-200 ease-in-out",
+          // Celular: gaveta de 82% da tela (no maximo 19rem), e nao os 16rem
+          // fixos — em 320px os 256px tapavam 80% da tela e nao sobrava onde
+          // tocar para fechar. Acima da barra de abas e do fundo escurecido.
+          // `touch-pan-y` deixa a rolagem vertical com o navegador e entrega o
+          // arrasto horizontal para o gesto de fechar acima.
+          "w-[82vw] max-w-[19rem] touch-pan-y max-md:z-[60] md:w-[var(--sidebar-w,16rem)] md:max-w-none",
+          mobileOpen
+            ? "translate-x-0 max-md:shadow-[var(--cz-elev-3)]"
+            : "max-md:invisible -translate-x-full md:translate-x-0",
         ].join(" ")}
         aria-label="Barra lateral de navegação"
       >
@@ -937,7 +1051,9 @@ export default function Sidebar({
             quando a barra estava recolhida e colada em `px-4` quando aberta, então
             ela pulava de lugar ao recolher — e, ao lado do bloco de menu que é
             centrado, ficava visivelmente torta. */}
-        <div className="flex h-[var(--cz-topbar-h)] shrink-0 items-center justify-center border-b border-[var(--cz-hairline)] px-2">
+        {/* Celular: marca à esquerda e X à direita (a gaveta é um painel que se
+            dispensa, não uma coluna). Desktop: marca centrada, como sempre. */}
+        <div className="flex h-[var(--cz-topbar-h)] shrink-0 items-center justify-between border-b border-[var(--cz-hairline)] pl-4 pr-1 md:justify-center md:px-2">
           <Image
             src="/contazoom-logo.svg"
             alt="ContaZoom"
@@ -956,13 +1072,23 @@ export default function Sidebar({
               collapsed
                 // Barra recolhida tem 4rem (64px). A marca é horizontal (proporção
                 // ~2,8:1), então quem manda aqui é a LARGURA: fixar altura faria
-                // ela vazar para fora da barra.
-                ? "h-auto w-12 max-w-full object-contain"
+                // ela vazar para fora da barra. "Recolhida" é um estado de
+                // DESKTOP: na gaveta do celular a marca fica no tamanho cheio.
+                ? "h-[41px] w-auto max-w-full object-contain md:h-auto md:w-12"
                 // 41px = os 36px de antes com os 15% pedidos.
                 : "h-[41px] w-auto max-w-full object-contain"
             }
             priority
           />
+          <button
+            ref={botaoFecharRef}
+            type="button"
+            onClick={() => onMobileCloseRef.current?.()}
+            aria-label="Fechar menu"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--cz-texto-suave)] transition-colors active:bg-[#F4F5F7] md:hidden"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
         </div>
 
         {isAdmin && (
@@ -1015,7 +1141,10 @@ export default function Sidebar({
           // que ninguem tenha pedido. E `md:` nao serve aqui: o prefixo de
           // breakpoint do Tailwind so funciona nas utilitarias dele, e esta e uma
           // classe da folha global.
-          className={`flex-1 space-y-1 overflow-y-auto px-4 py-4 ${
+          // `overscroll-contain`: ao chegar no fim da lista, o arrasto NAO passa
+          // para a pagina por baixo. O padding de baixo soma a area segura do
+          // iPhone para o ultimo item nao ficar sob a barra de gestos.
+          className={`flex-1 space-y-1 overflow-y-auto overscroll-contain px-4 py-4 max-md:pb-[calc(1rem_+_env(safe-area-inset-bottom,0px))] ${
             collapsed && !mobileOpen ? "cz-nav-recolhida" : ""
           }`}
         >
@@ -1147,7 +1276,9 @@ export default function Sidebar({
                           href={leaf.href}
                           aria-current={active ? "page" : undefined}
                           className={[
-                            "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors",
+                            // Celular: py-3 + linha de 20px = 44px de alvo (eram 30px,
+                            // feitos para o mouse).
+                            "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors max-md:py-3 max-md:text-[14px]",
                             active
                               ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
                               : "text-[var(--cz-texto-suave)] hover:bg-[#F4F5F7] hover:text-[var(--cz-texto)]",

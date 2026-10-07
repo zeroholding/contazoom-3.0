@@ -216,7 +216,27 @@ export default function TopProdutosMargem({
         </div>
       </div>
 
-      <div className="flex-1 min-h-[400px] -mb-4">
+      {/* Celular: lista ranqueada no lugar do gráfico de barras (mesmo motivo do Top
+          Produtos Faturamento: o eixo de 150px do recharts come a largura). Mostra também a
+          % de margem, que no gráfico só aparecia no tooltip. O bloco some de md para cima. */}
+      <ol className="md:hidden flex flex-col divide-y divide-[var(--cz-hairline)]">
+        {dados.map((item, i) => (
+          <li key={`${item.sku}-${i}`} className="py-2.5 first:pt-0 last:pb-0">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gray-100 text-xs font-bold tabular-nums text-gray-600">{i + 1}</span>
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-[13px] font-medium leading-snug text-gray-800" title={item.produto}>{item.produto}</p>
+                <p className="mt-0.5 truncate text-xs text-gray-500">{formatPercentage(item.percentualMargem)} de margem · {item.quantidade} un.</p>
+              </div>
+              <span className="shrink-0 text-[14px] font-bold tabular-nums text-gray-900">{formatCurrency(item.margemContribuicao)}</span>
+            </div>
+            <div className="ml-9 mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(2, ((item.margemContribuicao || 0) / Math.max(...dados.map((d) => d.margemContribuicao || 0), 1)) * 100)}%` }} />
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="flex-1 min-h-[400px] -mb-4 max-md:hidden">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"

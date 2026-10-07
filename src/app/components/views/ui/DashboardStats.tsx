@@ -162,7 +162,17 @@ const DashboardStats = memo(function DashboardStats({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-md:grid-cols-2 max-md:gap-2.5 max-md:[&>:first-child]:col-span-2 max-md:[&>:last-child]:col-span-2 max-md:[&_.text-lg]:text-[clamp(14px,4.2vw,20px)] max-md:[&>:first-child_.text-lg]:text-[26px] max-md:[&_.justify-between]:flex-wrap max-md:[&_a.border-blue-200]:mt-1 max-md:[&_a.border-blue-200]:w-full max-md:[&_a.border-blue-200]:py-2.5 max-md:[&_a.border-blue-200]:text-center max-md:[&_a.border-blue-200]:text-xs max-md:[&_a.text-orange-700]:py-1 max-md:[&_a.text-orange-700]:text-xs max-md:[&_span.inline-flex]:text-xs max-md:[&_.gap-2.mt-1]:flex-wrap">
+      {/* Celular: 2 colunas de cartões compactos (eram 12 cartões de 1 coluna, ~105px cada).
+          Todo o ajuste entra por seletores de descendente AQUI, com `max-md:`, para o markup
+          de cada cartão (e o desktop) ficar exatamente como estava:
+          - o 1º cartão (Faturamento) e o último (SKUs pendentes) ocupam as 2 colunas;
+          - o valor usa clamp(14px, 4.2vw, 20px): 'R$ 1.284.930,45' (15 caracteres) ainda cabe
+            na coluna de ~148px em 390px e em ~133px em 360px, sem cortar dígito;
+          - o cabeçalho do cartão quebra linha, então "Cadastrar alíquota" desce para baixo do
+            título em vez de espremê-lo;
+          - os textos de 10px (valor por canal, SKUs pendentes) sobem para 12px e os valores
+            por canal podem quebrar linha. */}
       {/* Faturamento Total */}
       <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor total das vendas">
         <div className="flex items-center justify-between mb-2">

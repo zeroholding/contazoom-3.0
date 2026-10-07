@@ -59,13 +59,26 @@ export default function ResumoPorConta({
   if (!Array.isArray(itens) || itens.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-4 py-2">
+    // No celular as pastilhas sobem de 10–11px para 12px (é dado que se lê, não
+    // enfeite) e ganham respiro. `[&_span]` pega o rótulo, as contas e o total
+    // de uma vez, sem mexer na marcação do desktop.
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-4 py-2 max-md:gap-2 max-md:px-3 max-md:py-3 max-md:[&_span]:text-[12px]">
       {rotulo && (
-        <span className="mr-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)]">
+        <span className="mr-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--cz-texto-fraco)] max-md:order-1">
           {rotulo}
         </span>
       )}
 
+      {/* `contents` no desktop: as pastilhas continuam sendo filhas diretas do flex,
+          exatamente como antes. No celular o grupo vira uma fileira própria, abaixo
+          de "Nesta página ... Total", e as contas quebram de linha dentro dele. */}
+      <div
+        className={
+          rotulo
+            ? "contents max-md:order-3 max-md:flex max-md:basis-full max-md:flex-wrap max-md:gap-2"
+            : "contents"
+        }
+      >
       {itens.map((item, indice) => {
         const nome = item.conta || "Sem conta";
         const titulo = `${nome}: ${formatarNumero(item.total)} vendas`;
@@ -95,11 +108,13 @@ export default function ResumoPorConta({
         );
       })}
 
+      </div>
+
       {/* O total fica por ÚLTIMO e em laranja: é o número que resume a tela, e
           separá-lo das contas evita que se leia como "mais uma conta chamada
           Total". */}
       <span
-        className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-2.5 py-[3px] text-[11px] leading-none text-[var(--cz-laranja-forte)]"
+        className="ml-auto inline-flex items-center gap-1.5 rounded-full border max-md:order-2 border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] px-2.5 py-[3px] text-[11px] leading-none text-[var(--cz-laranja-forte)]"
         title={`Total do filtro: ${formatarNumero(totalGeral)} vendas`}
       >
         <span className="font-bold uppercase tracking-[0.04em]">Total</span>

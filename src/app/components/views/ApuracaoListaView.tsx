@@ -107,6 +107,8 @@ import {
   REGIME_LABEL,
 } from "@/lib/tarefa-etapas";
 import { useSessao } from "@/hooks/useSessao";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
 
 /* -------------------------------------------------------------------------- */
 /*                            Contratos das rotas                             */
@@ -285,6 +287,8 @@ function Conteudo() {
   const pathname = usePathname();
   const params = useSearchParams();
   const { permissoes, sessao, papel } = useSessao();
+  // Celular: filtros secundários numa folha, lista em cartões e Kanban que desliza de coluna em coluna.
+  const celular = useCelular();
   const podeImportarXml =
     papel === PAPEL.ADMIN ||
     papel === PAPEL.CONTABIL ||
@@ -322,6 +326,8 @@ function Conteudo() {
     try {
       const salva = localStorage.getItem("cz_apuracao_visao");
       if (salva === "lista" || salva === "kanban") setVisao(salva);
+      // Sem preferência salva, o celular abre em cartões: o Kanban tem até nove colunas de 19,5rem.
+      else if (window.matchMedia("(max-width: 767px)").matches) setVisao("lista");
     } catch {
       // Modo privado pode bloquear o storage. A visão padrão resolve.
     }
@@ -896,11 +902,15 @@ function Conteudo() {
   /* -------------------------------- Render ------------------------------- */
 
   const acoesCabecalho = (
-    <>
+    // Celular: as três ações empilham, cada uma com a largura inteira (o seletor Kanban/Lista fica
+    // no tamanho natural). Em linha, o "Importar faturamento XML" empurrava o seletor para fora da
+    // tela. No desktop o `md:contents` desfaz o invólucro e os botões voltam a ser filhos diretos.
+    <div className="flex flex-col items-start gap-2 max-md:w-full md:contents">
       {podeImportarXml && (
         <Botao
           variante="secundario"
           icone="FileSpreadsheet"
+          className="max-md:w-full"
           onClick={() =>
             router.push(
               `/admin/tarefas/faturamento${query({
@@ -922,11 +932,11 @@ function Conteudo() {
         onMudar={mudarVisao}
       />
       {permissoes.criarProcesso && (
-        <Botao icone="CalendarPlus" onClick={abrirNova}>
+        <Botao icone="CalendarPlus" onClick={abrirNova} className="max-md:w-full">
           Nova competência
         </Botao>
       )}
-    </>
+    </div>
   );
 
   const vazioComFiltro = temFiltroAlemDaCompetencia(filtros);
@@ -946,7 +956,7 @@ function Conteudo() {
   )}`;
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       <Cabecalho
         compacto
         titulo="Apuração fiscal"
@@ -976,7 +986,7 @@ function Conteudo() {
           ) : undefined
         }
       >
-        <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-4 px-5 py-4 max-md:px-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Entrada
             rotulo="Competência"
             type="month"
@@ -984,6 +994,12 @@ function Conteudo() {
             onChange={(e) => alterar({ competencia: e.target.value })}
             ajuda="Vazio mostra todas"
           />
+          <FiltrosSheet
+            titulo="Filtros"
+            ativos={[filtros.regime, filtros.status, filtros.responsavelId, filtros.prazo].filter(Boolean).length}
+            onLimpar={limpar}
+            classeBotao="max-md:order-last"
+          >
           <Escolha
             rotulo="Regime"
             vazio="Todos os regimes"
@@ -1012,6 +1028,7 @@ function Conteudo() {
             value={filtros.prazo}
             onChange={(e) => alterar({ prazo: e.target.value })}
           />
+          </FiltrosSheet>
           <Entrada
             rotulo="Buscar empresa"
             type="search"
@@ -1022,8 +1039,8 @@ function Conteudo() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-3">
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-3 max-md:px-4">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700 max-md:mb-0! max-md:flex! max-md:min-h-11 max-md:items-center max-md:gap-2.5">
             <input
               type="checkbox"
               checked={filtros.bloqueada}
@@ -1033,7 +1050,7 @@ function Conteudo() {
             Só com pendência
           </label>
 
-          <p className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500">
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-gray-500 max-md:hidden">
             <Icone nome="Filter" className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate" title={resumoFiltro}>
               Filtrando por {resumoFiltro}
@@ -1044,7 +1061,7 @@ function Conteudo() {
             <button
               type="button"
               onClick={() => alterar({ empresaId: "" })}
-              className="inline-flex items-center gap-1 rounded-full border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-orange-400 hover:text-orange-600"
+              className="inline-flex items-center gap-1 rounded-full border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-orange-400 hover:text-orange-600 max-md:min-h-11 max-md:px-4 max-md:text-[13px]"
             >
               <Icone nome="X" className="h-3 w-3" />
               Remover filtro de empresa
@@ -1124,7 +1141,7 @@ function Conteudo() {
               </p>
 
               <div
-                className="flex gap-4 overflow-x-auto pb-3"
+                className="flex gap-4 overflow-x-auto pb-3 max-md:-mx-4 max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:px-4 max-md:scroll-pl-4"
                 onDragEnd={() => {
                   setArrastando(null);
                   setColunaSobre(null);
@@ -1167,7 +1184,7 @@ function Conteudo() {
                         evento.preventDefault();
                         soltar(coluna);
                       }}
-                      className={`flex w-[19.5rem] shrink-0 flex-col overflow-hidden rounded-xl border bg-gray-50 transition-all ${
+                      className={`flex w-[19.5rem] shrink-0 flex-col overflow-hidden rounded-xl border bg-gray-50 transition-all max-md:w-[85vw] max-md:snap-start ${
                         destacada
                           ? "border-orange-400 bg-orange-50 ring-2 ring-orange-300"
                           : "border-[var(--cz-hairline)]"
@@ -1195,7 +1212,7 @@ function Conteudo() {
                         </span>
                       </header>
 
-                      <div className="cz-kanban-coluna max-h-[calc(100vh-22rem)] space-y-2.5 overflow-y-auto p-2.5">
+                      <div className="cz-kanban-coluna max-h-[calc(100vh-22rem)] space-y-2.5 overflow-y-auto p-2.5 max-md:max-h-[calc(100dvh-16rem)]">
                         {lista.length === 0 ? (
                           <p className="px-1 py-6 text-center text-xs text-gray-400">
                             {arrastandoAgora && aceita
@@ -1246,6 +1263,16 @@ function Conteudo() {
           {/* ---------------------------- Lista --------------------------- */}
           {visao === "lista" && (
             <Painel>
+              {celular ? (
+                <ListaCartoesApuracao
+                  tarefas={tarefas}
+                  podeEditar={permissoes.gerenciarBloqueio}
+                  podeExcluir={permissoes.excluir}
+                  onAbrir={(destino) => router.push(destino)}
+                  onEditar={abrirEdicao}
+                  onExcluir={(t) => setAlvoExclusao(t.id)}
+                />
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1180px] text-sm">
                   <thead className="border-b border-[var(--cz-hairline)] bg-gray-50 text-gray-500">
@@ -1448,6 +1475,7 @@ function Conteudo() {
                   </tbody>
                 </table>
               </div>
+              )}
 
               <Paginacao
                 pagina={pagina}
@@ -1767,5 +1795,170 @@ function Conteudo() {
         onConfirmar={resolverPendencia}
       />
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                        Lista em cartões (celular)                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A tabela tem nove colunas e `min-w-[1180px]`: em 390px sobrariam duas colunas e uma rolagem
+ * lateral só para achar o "Abrir". Aqui cada competência vira um cartão com o que se decide num
+ * relance (empresa, mês, situação, prazo, etapa) e as ações numa linha de alvos de 44px. O cartão
+ * inteiro navega, como a linha da tabela; os botões interrompem a propagação para não abrir o
+ * detalhe por engano.
+ */
+function ListaCartoesApuracao({
+  tarefas,
+  podeEditar,
+  podeExcluir,
+  onAbrir,
+  onEditar,
+  onExcluir,
+}: {
+  tarefas: ApuracaoLista[];
+  podeEditar: boolean;
+  podeExcluir: boolean;
+  onAbrir: (destino: string) => void;
+  onEditar: (tarefa: ApuracaoLista) => void;
+  onExcluir: (tarefa: ApuracaoLista) => void;
+}) {
+  return (
+    <ul className="divide-y divide-[var(--cz-hairline)]">
+      {tarefas.map((tarefa) => {
+        const destino = `/admin/tarefas/apuracao/${tarefa.id}`;
+        const responsavel =
+          tarefa.responsavel?.name?.trim() || tarefa.responsavel?.email || null;
+        const contagem = textoContagemCurto(tarefa.contagemPrazo);
+
+        return (
+          <li
+            key={tarefa.id}
+            onClick={() => onAbrir(destino)}
+            className="cursor-pointer space-y-3 px-4 py-4 active:bg-orange-50/40"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p
+                  className="truncate text-[15px] font-semibold text-gray-900"
+                  title={tarefa.empresa.razaoSocial}
+                >
+                  {nomeEmpresa(tarefa.empresa)}
+                </p>
+                <p className="mt-0.5 text-[13px] text-gray-500">
+                  {tarefa.empresa.cnpj
+                    ? formatarCnpj(tarefa.empresa.cnpj)
+                    : "Em abertura"}
+                  {" · "}
+                  {competenciaLabel(tarefa.ano, tarefa.mes)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <SeloStatus status={tarefa.status} curto />
+              <SeloRegime regime={tarefa.regime} />
+              <SeloPrazo
+                situacao={tarefa.prazo.situacao}
+                dias={tarefa.prazo.dias}
+              />
+              {contagem && (
+                <span
+                  className={`text-[13px] font-semibold ${
+                    tarefa.contagemPrazo?.atrasado
+                      ? "text-[#B42318]"
+                      : tarefa.contagemPrazo?.hoje
+                        ? "text-[#B54708]"
+                        : "text-gray-500"
+                  }`}
+                >
+                  {contagem}
+                </span>
+              )}
+              {tarefa.bloqueada && (
+                <SeloBloqueio
+                  responsavel={tarefa.bloqueioResponsavel}
+                  dias={tarefa.diasEmBloqueio}
+                />
+              )}
+            </div>
+
+            <div>
+              <p className="text-[13px] font-semibold text-gray-700">
+                Etapa {tarefa.etapaAtual}/{tarefa.totalEtapas}
+                {tarefa.tituloEtapaAtual && (
+                  <span className="font-normal text-gray-500">
+                    {" · "}
+                    {tarefa.tituloEtapaAtual}
+                  </span>
+                )}
+              </p>
+              <Progresso
+                feito={tarefa.etapasConcluidas}
+                total={tarefa.totalEtapas}
+                className="mt-1.5"
+              />
+            </div>
+
+            <p className="flex items-center gap-2 text-[13px] text-gray-600">
+              {responsavel ? (
+                <>
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[11px] font-bold text-white">
+                    {iniciais(responsavel)}
+                  </span>
+                  <span className="min-w-0 truncate">{responsavel}</span>
+                </>
+              ) : (
+                <span className="text-gray-400">Sem responsável</span>
+              )}
+              {tarefa.anexos > 0 && (
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-semibold text-gray-500">
+                  <Icone nome="Paperclip" className="h-3.5 w-3.5" />
+                  <span className="cz-num">{tarefa.anexos}</span>
+                </span>
+              )}
+            </p>
+
+            <div className="flex items-center gap-2">
+              {podeEditar && (
+                <Botao
+                  variante="secundario"
+                  icone="Pencil"
+                  className="min-h-11 flex-1"
+                  onClick={(evento) => {
+                    evento.stopPropagation();
+                    onEditar(tarefa);
+                  }}
+                >
+                  Editar
+                </Botao>
+              )}
+              <Link
+                href={destino}
+                onClick={(evento) => evento.stopPropagation()}
+                className="inline-flex min-h-11 flex-1 items-center justify-center gap-1 rounded-[10px] bg-[var(--cz-laranja)] px-4 text-sm font-semibold text-white transition-colors active:bg-[var(--cz-laranja-forte)]"
+              >
+                Abrir
+                <Icone nome="ChevronRight" className="h-4 w-4" />
+              </Link>
+              {podeExcluir && (
+                <button
+                  type="button"
+                  aria-label={`Excluir competência de ${nomeEmpresa(tarefa.empresa)}`}
+                  onClick={(evento) => {
+                    evento.stopPropagation();
+                    onExcluir(tarefa);
+                  }}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-gray-200 text-gray-500 active:bg-[#FEF2F2] active:text-[#B42318]"
+                >
+                  <Icone nome="Trash2" className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

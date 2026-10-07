@@ -382,6 +382,30 @@ export function openVendaDetails(venda: Venda) {
     </style>
 </head>
 <body>
+    <style>
+        /* Celular: esta página abre em outra aba, então ela É a tela cheia. Sem
+           moldura de cartão, uma coluna, rótulo à esquerda e valor à direita, e
+           um botão de fechar de 48px que acompanha a rolagem. */
+        .fechar-mobile { display: none; }
+        @media (max-width: 768px) {
+            html, body { max-width: 100%; overflow-x: hidden; }
+            body { padding: 0 !important; }
+            .fechar-mobile { display: flex; position: sticky; top: 0; z-index: 100; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; border: 0; background: #1a202c; color: #fff; font: 600 16px/1 system-ui, sans-serif; cursor: pointer; }
+            .container { border-radius: 0 !important; box-shadow: none !important; }
+            .header { padding: 24px 16px !important; }
+            .header h1 { font-size: 20px !important; line-height: 1.3; overflow-wrap: anywhere; }
+            .content { padding: 16px 12px !important; }
+            .section { padding: 16px !important; }
+            .info-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+            .info-item { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 16px !important; }
+            .info-item:hover { transform: none !important; }
+            .info-item strong { margin: 0 !important; flex-shrink: 0; }
+            .info-item span { min-width: 0; text-align: right; font-size: 16px !important; overflow-wrap: anywhere; }
+            .json-container, pre { max-width: 100%; overflow-x: auto; }
+            table { display: block; max-width: 100%; overflow-x: auto; }
+        }
+    </style>
+    <button type="button" class="fechar-mobile" onclick="window.close()">✕ Fechar</button>
     <div class="container">
         <div class="header">
             <div class="header-content">

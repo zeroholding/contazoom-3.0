@@ -41,6 +41,10 @@ import {
 } from "../comum/shell";
 import { brl, dataCurta, horaCurta, inteiro, type Linha } from "./tipos";
 import { LogoCanal } from "../comum/logos";
+import { ChipsFiltro, type ChipFiltro } from "../comum/filtros";
+import { IconeAbrirFora } from "../comum/icones";
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
+import { useCelular } from "@/hooks/useMediaQuery";
 
 /* -------------------------------------------------------------------------- */
 /*                  Moldura e peças genéricas: vêm do shell                   */
@@ -154,11 +158,42 @@ export function AvisoDoisTempos({
 }: {
   contexto?: "ML" | "todos" | "sem-ml";
 }) {
+  const celular = useCelular();
   if (contexto === "sem-ml") return null;
   const atual =
     contexto === "todos"
       ? "Nas linhas Mercado Livre, situação, estoque e preço: agora"
       : "Situação, estoque e preço: agora no Mercado Livre";
+
+  // Celular: a legenda vira duas LINHAS com bolinha. As duas cápsulas do desktop são
+  // `inline-flex` de texto + negrito + texto, e em 358px o flex partia a frase em
+  // três pedaços soltos ("…última venda:" / "histórico" / "do período"), cada um
+  // numa altura. Em linha corrida, com o negrito dentro do mesmo parágrafo, a
+  // frase quebra onde uma frase quebra.
+  if (celular) {
+    return (
+      <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] p-3.5">
+        <ul className="space-y-2.5 text-[13px] leading-snug">
+          <li className="flex items-start gap-2.5 text-emerald-900">
+            <span aria-hidden className="mt-[5px] size-2 shrink-0 rounded-full bg-emerald-500" />
+            <span className="font-semibold">{atual}</span>
+          </li>
+          <li className="flex items-start gap-2.5 text-[var(--cz-texto-suave)]">
+            <span aria-hidden className="mt-[5px] size-2 shrink-0 rounded-full bg-[var(--cz-texto-fraco)]" />
+            <span className="font-semibold">
+              Unidades, faturamento e última venda:{" "}
+              <strong className="text-[var(--cz-texto)]">histórico</strong> do período
+            </span>
+          </li>
+        </ul>
+        <p className="mt-3 border-t border-[var(--cz-hairline)] pt-2.5 text-[12.5px] leading-snug text-[var(--cz-texto-suave)]">
+          Quando disponível, o preço exibido é o da etiqueta hoje, não o preço praticado nas vendas
+          listadas.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -528,3 +563,191 @@ export function SeloEnvio({ tipo }: { tipo: string }) {
 }
 
 
+
+/* -------------------------------------------------------------------------- */
+/*                 Celular: filtros em folha e cartão de anúncio               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Filtros das telas de anúncios e de estoque no celular.
+ *
+ *   [ 🔍 busca ........................ Buscar ]
+ *   [ período / ordenação ▾ ]  [ Filtros (n) ]
+ *   [Conta × ] [Situação × ] ...  [Limpar tudo]      ← rola de lado
+ *
+ * Duas linhas, e não uma: a busca dessas telas só consulta no botão "Buscar" (a
+ * consulta chama a API do Mercado Livre), então a caixa carrega o botão dentro e
+ * precisa da largura toda. O controle que se troca a toda hora (período, ordem)
+ * fica FORA da folha, ao lado do botão; o resto — conta, situação, estoque e as
+ * regras — vai para dentro dela.
+ *
+ * Os chips são a única pista de que a lista está filtrada enquanto a folha está
+ * fechada; cada um remove o seu filtro com um toque.
+ */
+export function FiltrosAnuncioCelular({
+  busca,
+  destaque,
+  ativos,
+  onLimpar,
+  chips,
+  children,
+}: {
+  /** A caixa de busca (com o botão Buscar dentro). */
+  busca: ReactNode;
+  /** O controle sempre à vista ao lado do botão da folha (período, ordem). */
+  destaque?: ReactNode;
+  ativos: number;
+  onLimpar: () => void;
+  chips: ChipFiltro[];
+  /** O conteúdo da folha. */
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-4 space-y-2.5">
+      {busca}
+      <div className="flex items-center gap-2">
+        {destaque && <div className="min-w-0 flex-1">{destaque}</div>}
+        <FiltrosSheet
+          titulo="Filtros"
+          ativos={ativos}
+          onLimpar={onLimpar}
+          classeBotao={destaque ? "shrink-0" : "w-full"}
+        >
+          {children}
+        </FiltrosSheet>
+      </div>
+      {chips.length > 0 && (
+        // `ChipsFiltro` quebra linha por padrão; na faixa que rola, o filho tem a largura
+        // do conteúdo (`flex-shrink: 0` do `.cz-hscroll`) e nada quebra.
+        <div className="cz-hscroll cz-hscroll-sangra pb-0.5 [&>div]:mt-0">
+          <ChipsFiltro chips={chips} onLimparTudo={onLimpar} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export type MetricaCartao = {
+  rotulo: string;
+  valor: ReactNode;
+  /** Linha miúda sob o valor. */
+  nota?: string;
+  tom?: "bom" | "critico";
+};
+
+/**
+ * O cartão de anúncio do celular, comum a Mais Vendidos e Mortos.
+ *
+ * Ordem de leitura: FOTO + TÍTULO (duas linhas) + de onde é, os SELOS de situação,
+ * quatro métricas em 2×2 e, no pé, a última venda com o botão de abrir o anúncio.
+ * A posição do ranking vai no canto da foto: como coluna própria ela tomava 32px
+ * da largura do título, que já é o dado que mais precisa de espaço.
+ */
+export function CartaoAnuncioCelular({
+  l,
+  posicao,
+  faixa,
+  selos,
+  metricas,
+  alerta = false,
+}: {
+  l: Linha;
+  posicao?: number;
+  /** Bloco acima do corpo (a ação recomendada, em Anúncios Mortos). */
+  faixa?: ReactNode;
+  selos?: ReactNode;
+  metricas: MetricaCartao[];
+  /** Realça a borda (esgotado). */
+  alerta?: boolean;
+}) {
+  const canal = l.canal === "ML" ? "Mercado Livre" : l.canal === "SP" ? "Shopee" : "TikTok Shop";
+  const ultima = l.ultimaVenda ? `${dataCurta(l.ultimaVenda)} · ${horaCurta(l.ultimaVenda)}` : "—";
+
+  return (
+    <article
+      role="listitem"
+      className={`min-w-0 overflow-hidden rounded-[var(--cz-raio-cartao)] border bg-[var(--cz-superficie)] ${
+        alerta ? "border-rose-200" : "border-[var(--cz-hairline)]"
+      }`}
+    >
+      {faixa}
+      <div className="p-3.5">
+        <div className="flex items-start gap-3">
+          <span className="relative shrink-0">
+            <Miniatura src={l.thumbnailUrl} alt={l.titulo} tamanho={64} />
+            {posicao !== undefined && (
+              <span
+                className={`absolute -left-2 -top-2 grid h-7 min-w-7 place-items-center rounded-full border-2 border-[var(--cz-superficie)] px-1 text-[12px] font-extrabold leading-none tabular-nums text-white ${
+                  posicao <= 3 ? "bg-emerald-600" : "bg-[#475569]"
+                }`}
+                aria-label={`Posição ${posicao}`}
+              >
+                {posicao}
+              </span>
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="line-clamp-2 text-[14px] font-bold leading-snug text-[var(--cz-texto)]">
+              {l.titulo}
+            </h3>
+            <p className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px] text-[var(--cz-texto-suave)]">
+              <LogoCanal canal={l.canal} />
+              <span className="truncate font-mono">{l.itemId}</span>
+            </p>
+            <p className="truncate text-[12.5px] text-[var(--cz-texto-suave)]">{l.conta || l.accountId}</p>
+          </div>
+        </div>
+
+        {selos && <div className="mt-2.5 flex flex-wrap items-center gap-1.5">{selos}</div>}
+
+        <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-[var(--cz-hairline)]">
+          {metricas.map((m) => (
+            <div key={m.rotulo} className="min-w-0 bg-[var(--cz-fundo)] px-3 py-2.5">
+              <dt className="text-[12px] font-semibold text-[var(--cz-texto-suave)]">{m.rotulo}</dt>
+              <dd
+                className={`mt-0.5 break-words text-[16px] font-extrabold leading-tight tracking-tight tabular-nums ${
+                  m.tom === "critico"
+                    ? "text-rose-700"
+                    : m.tom === "bom"
+                      ? "text-emerald-700"
+                      : "text-[var(--cz-texto)]"
+                }`}
+              >
+                {m.valor}
+              </dd>
+              {m.nota && <dd className="mt-0.5 text-[12px] text-[var(--cz-texto-suave)]">{m.nota}</dd>}
+            </div>
+          ))}
+        </dl>
+
+        <div className="mt-3 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-[var(--cz-texto-suave)]">Última venda</p>
+            <p className="text-[13.5px] font-semibold tabular-nums text-[var(--cz-texto)]">{ultima}</p>
+          </div>
+          {l.permalink && (
+            <a
+              href={l.permalink}
+              target="_blank"
+              rel="noreferrer"
+              title={`Abrir ${l.titulo} na ${canal}`}
+              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] px-3.5 text-[13.5px] font-semibold text-[var(--cz-texto)] transition-colors active:bg-[#F4F5F7]"
+            >
+              <IconeAbrirFora className="h-4 w-4" />
+              Abrir anúncio
+            </a>
+          )}
+        </div>
+
+        {l.skus.length > 0 && (
+          <p
+            className="mt-2 truncate font-mono text-[12px] text-[var(--cz-texto-suave)]"
+            title={l.skus.join(" · ")}
+          >
+            SKU {l.skus.join(" · ")}
+          </p>
+        )}
+      </div>
+    </article>
+  );
+}

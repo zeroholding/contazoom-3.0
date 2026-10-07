@@ -95,7 +95,7 @@ export function Resumo({
                 >
                   {i + 1}
                 </span>
-                <p className="min-w-0 flex-1 truncate text-[1rem] font-bold text-[#101828]">
+                <p className="min-w-0 flex-1 truncate text-[1rem] font-bold text-[#101828] max-sm:min-w-[12rem] max-sm:whitespace-normal max-sm:break-words">
                   {socio.nome || `Sócio ${i + 1}`}
                 </p>
                 {socio.administrador && (
@@ -310,7 +310,7 @@ function Dado({
         {rotulo}
       </dt>
       <dd
-        className={`mt-0.5 text-[0.9375rem] font-semibold leading-6 text-[#101828] ${
+        className={`mt-0.5 break-words text-[0.9375rem] font-semibold leading-6 text-[#101828] ${
           numerico ? "cz-num" : ""
         }`}
       >

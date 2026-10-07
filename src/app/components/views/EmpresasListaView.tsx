@@ -75,6 +75,11 @@ import {
   SeloRegime,
 } from "@/app/components/views/ui/tarefas/Selos";
 import Icone from "@/app/components/views/ui/tarefas/Icone";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosSheet, {
+  CampoDaFolha,
+  GrupoDePilulas,
+} from "@/components/ui/FiltrosSheet";
 import {
   PLANO_INTERNO,
   PLANO_INTERNO_LABEL,
@@ -258,7 +263,7 @@ export default function EmpresasListaView() {
   return (
     <Suspense
       fallback={
-        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
           <Carregando texto="Carregando empresas" />
         </div>
       }
@@ -272,9 +277,124 @@ export default function EmpresasListaView() {
 /*                                  Conteúdo                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Cartão de empresa do celular, no lugar da tabela de 1340px.
+ *
+ * Razão social (duas linhas no máximo) com grupo/fantasia e CNPJ embaixo, os dois
+ * selos (regime e plano) e quatro dados de conferência em grade 2×2. A tela
+ * inteira do cartão abre a ficha — como a linha da tabela —, com a razão social
+ * como link de verdade para o teclado e o leitor de tela. A lixeira (só admin)
+ * tem 44px e não navega.
+ */
+function CartaoEmpresa({
+  empresa,
+  podeExcluir,
+  onAbrir,
+  onExcluir,
+}: {
+  empresa: EmpresaLista;
+  podeExcluir: boolean;
+  onAbrir: () => void;
+  onExcluir: () => void;
+}) {
+  return (
+    <li
+      onClick={(evento) => {
+        // Link e botão já cuidam do próprio toque; sem esta guarda o cartão
+        // navegaria de novo por cima deles.
+        if ((evento.target as HTMLElement).closest("a,button") !== null) return;
+        onAbrir();
+      }}
+      className="cursor-pointer px-4 py-4 transition-colors active:bg-orange-50/60"
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/admin/empresas/${empresa.id}`}
+            // Alvo de 44px mesmo quando a razão social cabe numa linha. O cartão
+            // inteiro reage ao toque, mas este é o link semântico que o teclado e
+            // a auditoria de acessibilidade enxergam.
+            className="line-clamp-2 min-h-11 py-0.5 text-[15px] font-semibold leading-5 text-gray-900"
+          >
+            {empresa.razaoSocial}
+          </Link>
+          {(empresa.grupo || empresa.nomeFantasia) && (
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[13px] text-gray-500">
+              {empresa.grupo && (
+                <span className="inline-flex items-center gap-1 font-semibold text-gray-600">
+                  <Icone nome="Layers" className="h-3 w-3 shrink-0" />
+                  {empresa.grupo}
+                </span>
+              )}
+              {empresa.grupo && empresa.nomeFantasia && <span>·</span>}
+              {empresa.nomeFantasia && <span>{empresa.nomeFantasia}</span>}
+            </p>
+          )}
+          <p className="mt-1 font-mono text-[13px] text-gray-600">
+            {empresa.cnpjFormatado ?? (
+              <span className="inline-flex items-center gap-1 font-sans font-semibold text-gray-400">
+                <Icone nome="Hourglass" className="h-3.5 w-3.5" />
+                Em abertura
+              </span>
+            )}
+          </p>
+        </div>
+        {podeExcluir && (
+          <button
+            type="button"
+            aria-label={`Excluir ${empresa.razaoSocial}`}
+            onClick={(evento) => {
+              evento.stopPropagation();
+              onExcluir();
+            }}
+            className="-mr-2 -mt-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-400 transition-colors active:bg-[#FEF2F2] active:text-[#B42318]"
+          >
+            <Icone nome="Trash2" className="h-[18px] w-[18px]" />
+          </button>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <SeloRegime regime={empresa.regime} completo />
+        <SeloPlanoInterno plano={empresa.planoInterno} />
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+        <div className="min-w-0">
+          <dt className="text-gray-500">Sócio administrador</dt>
+          <dd className="truncate font-medium text-gray-900">
+            {empresa.socioAdmNome ?? "—"}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-gray-500">UF / Município</dt>
+          <dd className="truncate font-medium text-gray-900">
+            {empresa.uf || empresa.municipio
+              ? `${empresa.uf ?? "—"}${empresa.municipio ? ` · ${empresa.municipio}` : ""}`
+              : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-gray-500">Competências</dt>
+          <dd className="font-medium text-gray-900">
+            {empresa._count.apuracoes}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-gray-500">Processos</dt>
+          <dd className="font-medium text-gray-900">
+            {empresa._count.processos}
+          </dd>
+        </div>
+      </dl>
+    </li>
+  );
+}
+
 function Conteudo() {
   const router = useRouter();
   const pathname = usePathname();
+  const celular = useCelular();
   const params = useSearchParams();
   const { permissoes } = useSessao();
 
@@ -623,7 +743,7 @@ function Conteudo() {
   }, []);
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       {/* O cabeçalho do admin já traz "Empresas" e o subtítulo da rota. */}
       <Cabecalho
         compacto
@@ -649,7 +769,7 @@ function Conteudo() {
 
       {/* -------------------------------- KPIs ------------------------------ */}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {KPIS.map((kpi) => (
           <CartaoKpi
             key={kpi.plano}
@@ -691,6 +811,51 @@ function Conteudo() {
 
       {/* ------------------------------ Filtros ----------------------------- */}
 
+      {celular ? (
+        // Celular: a busca fica SEMPRE à vista; regime e plano (dois selects)
+        // vão para a folha de filtros, como pastilhas tocáveis.
+        <div className="space-y-2">
+          <div className="flex items-end gap-2">
+            <Entrada
+              rotulo="Buscar empresa"
+              type="search"
+              placeholder="Razão social, CNPJ, sócio…"
+              value={textoBusca}
+              onChange={(e) => setTextoBusca(e.target.value)}
+              wrapperClassName="min-w-0 flex-1"
+            />
+            <FiltrosSheet
+              ativos={(filtros.regime ? 1 : 0) + (filtros.planoInterno ? 1 : 0)}
+              onLimpar={limpar}
+              classeBotao="shrink-0"
+            >
+              <CampoDaFolha rotulo="Regime">
+                <GrupoDePilulas
+                  rotulo="Regime"
+                  opcoes={[
+                    { id: "", rotulo: "Todos" },
+                    ...OPCOES_REGIME.map((o) => ({ id: o.valor, rotulo: o.texto })),
+                  ]}
+                  estaAtiva={(id) => filtros.regime === id}
+                  onEscolher={(id) => alterar({ regime: id })}
+                />
+              </CampoDaFolha>
+              <CampoDaFolha rotulo="Situação (plano interno)">
+                <GrupoDePilulas
+                  rotulo="Situação"
+                  opcoes={[
+                    { id: "", rotulo: "Todos" },
+                    ...OPCOES_PLANO.map((o) => ({ id: o.valor, rotulo: o.texto })),
+                  ]}
+                  estaAtiva={(id) => filtros.planoInterno === id}
+                  onEscolher={(id) => alterar({ planoInterno: id })}
+                />
+              </CampoDaFolha>
+            </FiltrosSheet>
+          </div>
+          <p className="text-xs text-gray-500">{resumoLista}</p>
+        </div>
+      ) : (
       <Painel
         titulo="Filtros"
         descricao={resumoLista}
@@ -731,6 +896,7 @@ function Conteudo() {
           />
         </div>
       </Painel>
+      )}
 
       {/* ------------------------------ Estados ----------------------------- */}
 
@@ -777,6 +943,19 @@ function Conteudo() {
         )
       ) : (
         <Painel className="overflow-hidden">
+          {celular ? (
+            <ul className="divide-y divide-gray-100">
+              {empresas.map((empresa) => (
+                <CartaoEmpresa
+                  key={empresa.id}
+                  empresa={empresa}
+                  podeExcluir={Boolean(permissoes.excluir)}
+                  onAbrir={() => abrirEmpresa(empresa.id)}
+                  onExcluir={() => setAlvoExclusao(empresa)}
+                />
+              ))}
+            </ul>
+          ) : (
           <div className="overflow-x-auto">
             {/* Subiu de 1120 para 1340 com a coluna de sócio administrador. A
                 tabela rola na horizontal em tela estreita, e é o certo aqui:
@@ -949,6 +1128,7 @@ function Conteudo() {
               </tbody>
             </table>
           </div>
+          )}
 
           <Paginacao
             pagina={paginacao.page}

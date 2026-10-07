@@ -85,7 +85,7 @@ export default function EditModal({
   };
 
   const renderField = (field: EditField) => {
-    const commonClasses = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900";
+    const commonClasses = "w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 max-md:min-h-12";
     
     switch (field.type) {
       case "textarea":
@@ -123,6 +123,7 @@ export default function EditModal({
         return (
           <input
             type="number"
+            inputMode="decimal"
             name={field.name}
             value={formData[field.name] || ""}
             onChange={handleInputChange}
@@ -179,18 +180,18 @@ export default function EditModal({
           </div>
         ))}
 
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-3 pt-4 max-md:flex-col-reverse">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors max-md:h-12 max-md:flex-none"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={isSaving || isLoading}
-            className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white ${
+            className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white max-md:h-12 max-md:flex-none ${
               isSaving || isLoading
                 ? "bg-orange-400 cursor-not-allowed"
                 : "bg-orange-500 hover:bg-orange-600"

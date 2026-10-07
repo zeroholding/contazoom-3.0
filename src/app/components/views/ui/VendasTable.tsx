@@ -8,6 +8,8 @@ import TaxaDetailsDropdown from "./TaxaDetailsDropdown";
 import FinanceiroDetailsDropdown from "./FinanceiroDetailsDropdown";
 import ReceitaLiquidaDetailsDropdown from "./ReceitaLiquidaDetailsDropdown";
 import { PlataformaBadge } from "@/components/ui/PlataformaBadge";
+import { useCelular } from "@/hooks/useMediaQuery";
+import ListaCartoesVendas, { EsqueletoCartoesVendas } from "./ListaCartoesVendas";
 import {
   GRUPOS_COLUNA,
   LARGURA_GRUPO,
@@ -190,6 +192,10 @@ export default function VendasTable({
 }: VendasTableProps) {
   const [pendingSkuStatus, setPendingSkuStatus] = useState<Record<string, PendingSkuStatus>>({});
 
+  // No celular a tabela de 7 colunas vira lista de cartões (ver `ListaCartoesVendas`).
+  // O hook fica AQUI, com os demais, e o retorno antecipado só depois de todos.
+  const celular = useCelular();
+
   // `normalizarColunas` em vez de um default no destructuring: o que chega pode
   // ser parcial (preferência salva antes de uma coluna nova existir), e o que
   // falta tem de virar o PADRÃO e não `undefined` — que seria falso, e faria a
@@ -312,7 +318,20 @@ export default function VendasTable({
 
 
   if (isLoading) {
-    return <TabelaVendasSkeleton colunas={GRUPOS_COLUNA.filter(mostrar).length || 1} />;
+    return celular ? (
+      <EsqueletoCartoesVendas />
+    ) : (
+      <TabelaVendasSkeleton colunas={GRUPOS_COLUNA.filter(mostrar).length || 1} />
+    );
+  }
+
+  if (celular) {
+    return (
+      <ListaCartoesVendas
+        vendas={paginatedVendas}
+        statusDoSku={(v) => (v.sku ? pendingSkuStatus[skuStatusKey(v.sku)] : undefined)}
+      />
+    );
   }
 
   return (

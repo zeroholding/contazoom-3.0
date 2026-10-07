@@ -77,7 +77,7 @@ export default function FormularioListaView() {
   return (
     <Suspense
       fallback={
-        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+        <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
           <Carregando texto="Carregando formulários" />
         </div>
       }
@@ -154,7 +154,7 @@ function Conteudo() {
     : "Carregando";
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       {/* `compacto`: o cabeçalho do admin já escreve "Formulários de abertura" e
           o subtítulo da rota. Repetir aqui gastaria a área mais visível da tela
           com a informação que a pessoa acabou de ler. */}
@@ -206,14 +206,20 @@ function Conteudo() {
             placeholder="Protocolo, nome do sócio, CPF, telefone, razão social ou e-mail"
             ajuda="O protocolo pode ser digitado com ou sem o CZ-. Enter para buscar."
           />
-          <Escolha
-            rotulo="Situação"
-            vazio="Todas as situações"
-            opcoes={SITUACAO_FORMULARIO_OPCOES}
-            value={situacaoUrl}
-            onChange={(e) => navegar({ situacao: e.target.value })}
-            ajuda="Andamento da análise do escritório."
-          />
+          {/* Celular: a busca fica à vista e a situação vai para a folha de filtros
+              (mesmo padrão da Auditoria). No desktop o FiltrosSheet devolve o
+              <Escolha> exatamente onde estava. */}
+          <FiltrosSheet
+            titulo="Filtros"
+            ativos={situacaoUrl ? 1 : 0}
+            onLimpar={() => navegar({ situacao: "" })}
+            classeBotao="w-full"
+          >
+            <FiltroSituacao
+              valor={situacaoUrl}
+              onMudar={(situacao) => navegar({ situacao })}
+            />
+          </FiltrosSheet>
           {/* O submit existe para o Enter funcionar; o botão fica escondido do
               layout porque a busca também dispara ao trocar a situação, e dois
               gatilhos visíveis para a mesma coisa confundem. */}
@@ -403,6 +409,54 @@ function Conteudo() {
         </Painel>
       )}
     </div>
+  );
+}
+
+import FiltrosSheet, {
+  CampoDaFolha,
+  GrupoDePilulas,
+} from "@/components/ui/FiltrosSheet";
+import { useCelular } from "@/hooks/useMediaQuery";
+
+/**
+ * Filtro de situação. Dentro da folha de filtros do celular são pastilhas
+ * tocáveis, todas à vista (um toque escolhe, outro desmarca); no desktop segue o
+ * `<Escolha>` de sempre, com a mesma ajuda.
+ */
+function FiltroSituacao({
+  valor,
+  onMudar,
+}: {
+  valor: string;
+  onMudar: (situacao: string) => void;
+}) {
+  const celular = useCelular();
+
+  if (!celular) {
+    return (
+      <Escolha
+        rotulo="Situação"
+        vazio="Todas as situações"
+        opcoes={SITUACAO_FORMULARIO_OPCOES}
+        value={valor}
+        onChange={(e) => onMudar(e.target.value)}
+        ajuda="Andamento da análise do escritório."
+      />
+    );
+  }
+
+  return (
+    <CampoDaFolha rotulo="Situação">
+      <GrupoDePilulas
+        rotulo="Situação"
+        opcoes={SITUACAO_FORMULARIO_OPCOES.map((o) => ({
+          id: o.valor,
+          rotulo: o.texto,
+        }))}
+        estaAtiva={(id) => id === valor}
+        onEscolher={(id) => onMudar(id === valor ? "" : id)}
+      />
+    </CampoDaFolha>
   );
 }
 

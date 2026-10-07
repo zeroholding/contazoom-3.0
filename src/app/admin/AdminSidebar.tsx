@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Shield,
   Users,
   ArrowLeft,
+  X,
   CalendarClock,
   ChevronRight,
   FileSpreadsheet,
@@ -22,8 +23,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useSessao } from "@/hooks/useSessao";
+import { useCelular } from "@/hooks/useMediaQuery";
+import { travarRolagem } from "@/lib/trava-rolagem";
 import { papelLabel } from "@/lib/papeis";
 import { iniciais } from "@/app/components/views/ui/tarefas/formato";
+import BuscaEmpresa, { ROTA_BUSCA } from "./BuscaEmpresa";
 
 type Folha = {
   href: string;
@@ -366,8 +370,119 @@ function BlocoUsuario({ collapsed }: { collapsed: boolean }) {
 /*                                  Sidebar                                   */
 /* -------------------------------------------------------------------------- */
 
-export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
+export default function AdminSidebar({
+  collapsed: preferenciaRecolhida,
+  mobileOpen,
+  onMobileClose,
+}: {
+  /** Preferência de DESKTOP (trilho de 4rem). Ignorada na gaveta do celular. */
+  collapsed: boolean;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+}) {
   const pathname = usePathname();
+  const celular = useCelular();
+
+  // "Recolhida" é um estado de DESKTOP, guardado em localStorage. Na gaveta do
+  // celular a barra aparece inteira, com os rótulos, mesmo que a preferência
+  // salva seja "recolhida" — centrar só os ícones ali esconderia os nomes sem que
+  // ninguém tenha pedido. Daqui para baixo, `collapsed` já é o valor efetivo.
+  const collapsed = preferenciaRecolhida && !celular;
+
+  // Ref estável: os efeitos abaixo chamam a versão atual do callback sem
+  // declará-la como dependência (ela muda de identidade a cada render do pai).
+  const onMobileCloseRef = useRef(onMobileClose);
+  useEffect(() => {
+    onMobileCloseRef.current = onMobileClose;
+  }, [onMobileClose]);
+
+  const asideRef = useRef<HTMLElement | null>(null);
+  const botaoFecharRef = useRef<HTMLButtonElement | null>(null);
+
+  // Navegar fecha a gaveta (cada página do admin monta o próprio wrapper, mas a
+  // troca de rota dentro do mesmo layout também passa por aqui).
+  useEffect(() => {
+    onMobileCloseRef.current?.();
+  }, [pathname]);
+
+  // Enquanto a gaveta está aberta no celular: a página por baixo não rola, o ESC
+  // fecha, e o foco vai para dentro dela (voltando ao botão de origem ao fechar).
+  //
+  // `mobileOpen` pode continuar `true` se a tela crescer até o layout de desktop
+  // (girar um tablet com a gaveta aberta). Lá a barra é uma coluna fixa, então
+  // não há o que travar — e a própria mudança de tamanho fecha a gaveta, para o
+  // estado não ficar preso em "aberta" sem ninguém ver.
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const consulta = window.matchMedia("(max-width: 767px)");
+    if (!consulta.matches) return;
+
+    const soltarRolagem = travarRolagem();
+    const origem =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    botaoFecharRef.current?.focus({ preventScroll: true });
+
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onMobileCloseRef.current?.();
+    };
+    const aoMudarTamanho = (e: MediaQueryListEvent) => {
+      if (!e.matches) onMobileCloseRef.current?.();
+    };
+    document.addEventListener("keydown", aoTeclar);
+    consulta.addEventListener("change", aoMudarTamanho);
+
+    return () => {
+      soltarRolagem();
+      document.removeEventListener("keydown", aoTeclar);
+      consulta.removeEventListener("change", aoMudarTamanho);
+      origem?.focus?.({ preventScroll: true });
+    };
+  }, [mobileOpen]);
+
+  // Arrastar a gaveta para a esquerda fecha. Ela acompanha o dedo (via
+  // `transform` inline, que se soma ao `translate` da classe) e, ao soltar,
+  // devolve o controle ao CSS: passou de ~30% da largura fecha, senão volta. O
+  // gesto só "pega" quando é claramente horizontal e para a esquerda; qualquer
+  // outra direção é rolagem da lista e não pode ser sequestrada.
+  const arrasto = useRef<{ x: number; y: number; dx: number; horizontal: boolean | null } | null>(null);
+
+  function aoTocarInicio(e: TouchEvent<HTMLElement>) {
+    if (!mobileOpen) return;
+    const toque = e.touches[0];
+    arrasto.current = { x: toque.clientX, y: toque.clientY, dx: 0, horizontal: null };
+  }
+
+  function aoTocarMover(e: TouchEvent<HTMLElement>) {
+    const g = arrasto.current;
+    const el = asideRef.current;
+    if (!g || !el) return;
+    const toque = e.touches[0];
+    const dx = toque.clientX - g.x;
+    const dy = toque.clientY - g.y;
+    if (g.horizontal === null) {
+      // Zona morta: um toque "parado" sempre treme alguns pixels.
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      g.horizontal = dx < 0 && Math.abs(dx) > Math.abs(dy) * 1.2;
+      // Sem transição enquanto o dedo arrasta; senão a gaveta "atrasa" o dedo.
+      if (g.horizontal) el.style.transition = "none";
+    }
+    if (!g.horizontal) return;
+    g.dx = Math.min(0, dx);
+    el.style.transform = `translateX(${g.dx}px)`;
+  }
+
+  function aoTocarFim(cancelado = false) {
+    const g = arrasto.current;
+    arrasto.current = null;
+    const el = asideRef.current;
+    if (!g || !el || !g.horizontal) return;
+    el.style.transition = "";
+    el.style.transform = "";
+    if (!cancelado && g.dx < -Math.min(96, el.offsetWidth * 0.3)) {
+      onMobileCloseRef.current?.();
+    }
+  }
 
   // Subrota mantém o item pai aceso: `/admin/tarefas/apuracao/<id>` continua
   // marcando "Competências", senão a pessoa perde a referência ao abrir um
@@ -405,18 +520,57 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
   const padLista = collapsed ? "px-2" : "px-4";
 
   return (
+    <>
+      {/* Fundo escurecido da gaveta. Sempre montado, com fade: a tela escurecer de
+          uma vez e clarear de uma vez é o que faz uma gaveta parecer "de site" e
+          não "de app". z-55 fica entre a barra de abas/cabeçalho (40) e a gaveta
+          (60). Só existe no celular. */}
+      <div
+        aria-hidden="true"
+        className={`fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200 md:hidden ${
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => onMobileCloseRef.current?.()}
+      />
+
     <aside
+      ref={asideRef}
       id="cz-menu-admin"
+      onTouchStart={aoTocarInicio}
+      onTouchMove={aoTocarMover}
+      onTouchEnd={() => aoTocarFim()}
+      onTouchCancel={() => aoTocarFim(true)}
+      // Tocar em qualquer link da gaveta a fecha, inclusive o link da rota em que
+      // a pessoa já está (nesse caso o `pathname` não muda e o efeito de rota não
+      // dispararia). Delegação aqui em vez de `onClick` em cada item.
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("a")) onMobileCloseRef.current?.();
+      }}
       // A largura vem da MESMA variável que dá a margem ao conteúdo. Antes eram
       // dois valores (classe aqui, `--sidebar-w` lá) que precisavam combinar na
       // mão e dessincronizavam durante a animação.
-      className="fixed inset-y-0 left-0 z-50 hidden flex-col border-r border-[var(--cz-hairline)] bg-[var(--cz-superficie)] md:flex md:w-[var(--sidebar-w)]"
+      //
+      // Celular: gaveta de 82% da tela (no máximo 19rem) que desliza com
+      // `translate` e fica `invisible` quando fechada — `visibility` troca só
+      // DEPOIS da animação de saída, e fecha a gaveta para o teclado e o leitor de
+      // tela. `translate` entra na lista de transição porque no Tailwind 4
+      // `-translate-x-full` escreve a propriedade `translate`, não `transform`
+      // (o `transform` inline é do gesto de arrastar). No desktop nada disso vale:
+      // a barra é a coluna fixa de sempre, sem transição própria (quem anima a
+      // largura é o GSAP, na variável).
+      className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[var(--cz-hairline)] bg-[var(--cz-superficie)] max-md:z-[60] max-md:w-[82vw] max-md:max-w-[19rem] max-md:touch-pan-y max-md:transition-[transform,translate,visibility] max-md:duration-200 max-md:ease-in-out md:w-[var(--sidebar-w)] ${
+        mobileOpen
+          ? "max-md:translate-x-0 max-md:shadow-[var(--cz-elev-3)]"
+          : "max-md:invisible max-md:-translate-x-full"
+      }`}
     >
-      {/* Marca. A altura casa com a do cabeçalho (4.5rem) para as duas linhas
-          finas virarem uma só linha contínua atravessando a tela. */}
+      {/* Marca. A altura casa com a do cabeçalho (`--cz-topbar-h`: 4.5rem no
+          desktop, 3.5rem no celular) para as duas linhas finas virarem uma só
+          linha contínua atravessando a tela. No celular o X de fechar ocupa a
+          ponta direita, com o mesmo recuo do hambúrguer do cabeçalho. */}
       <div
-        className={`flex h-[4.5rem] shrink-0 items-center border-b border-[var(--cz-hairline)] ${
-          collapsed ? "justify-center px-0" : "gap-2.5 px-4"
+        className={`flex h-[var(--cz-topbar-h)] shrink-0 items-center border-b border-[var(--cz-hairline)] ${
+          collapsed ? "justify-center px-0" : "gap-2.5 pl-4 pr-4 max-md:pr-1"
         }`}
       >
         <span
@@ -435,11 +589,34 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
             </span>
           </span>
         )}
+        <button
+          ref={botaoFecharRef}
+          type="button"
+          onClick={() => onMobileCloseRef.current?.()}
+          aria-label="Fechar menu"
+          className="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[var(--cz-texto-suave)] transition-colors active:bg-[#F4F5F7] md:hidden"
+        >
+          <X aria-hidden="true" className="h-5 w-5" />
+        </button>
       </div>
+
+      {/* Busca de empresa: no desktop ela mora no cabeçalho (a partir de `lg`); o
+          cabeçalho do celular é enxuto, então a MESMA busca abre a gaveta. Some
+          na própria rota de apuração pelo mesmo motivo da versão do cabeçalho. */}
+      {pathname !== ROTA_BUSCA && (
+        <div className="shrink-0 px-4 pt-3 md:hidden">
+          <BuscaEmpresa
+            className="relative"
+            aoEnviar={() => onMobileCloseRef.current?.()}
+          />
+        </div>
+      )}
 
       <nav
         aria-label="Navegação do admin"
-        className={`cz-rolagem flex-1 overflow-y-auto py-4 ${padLista} ${
+        // `overscroll-contain`: ao chegar no fim da lista, o arrasto NÃO passa
+        // para a página por baixo.
+        className={`cz-rolagem flex-1 overflow-y-auto overscroll-contain py-4 ${padLista} ${
           collapsed ? "cz-nav-recolhida" : ""
         }`}
       >
@@ -485,8 +662,10 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
         <BlocoUsuario collapsed={collapsed} />
       </div>
 
+      {/* O último bloco soma a área segura do iPhone: sem isso o "Sair do Admin"
+          ficaria colado na barra de gestos do aparelho. */}
       <div
-        className={`shrink-0 border-t border-[var(--cz-hairline)] py-3 ${padLista} ${
+        className={`shrink-0 border-t border-[var(--cz-hairline)] py-3 max-md:pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] ${padLista} ${
           collapsed ? "cz-nav-recolhida" : ""
         }`}
       >
@@ -500,5 +679,6 @@ export default function AdminSidebar({ collapsed }: { collapsed: boolean }) {
         </Link>
       </div>
     </aside>
+    </>
   );
 }

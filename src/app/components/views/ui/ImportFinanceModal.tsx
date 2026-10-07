@@ -328,21 +328,21 @@ export function ImportFinanceModal({
       size="full"
     >
       <div className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
           <div className="text-sm text-gray-600">
             O sistema analisa duplicados, erros e cadastros auxiliares antes de gravar qualquer linha.
           </div>
           <button
             onClick={downloadTemplate}
             disabled={isBusy}
-            className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+            className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 max-md:h-11 max-md:justify-center"
           >
             Baixar modelo
           </button>
         </div>
 
         <div
-          className={`relative rounded-lg border-2 border-dashed p-5 text-center transition-colors ${
+          className={`relative rounded-lg border-2 border-dashed p-5 max-md:py-10 text-center transition-colors ${
             dragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
           }`}
           onDragEnter={handleDrag}
@@ -361,15 +361,25 @@ export function ImportFinanceModal({
             disabled={isBusy}
           />
           <div className="space-y-1">
-            <div className="text-sm font-semibold text-gray-900">
-              {isAnalyzing ? 'Analisando planilha...' : selectedFile?.name || 'Clique ou arraste a planilha aqui'}
+            {/* Celular: não existe "arrastar". A área vira um convite ao toque (largura total, ícone
+                grande), e o <input> invisível por cima continua sendo o alvo. */}
+            <svg className="mx-auto mb-2 h-9 w-9 text-orange-500 md:hidden" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <div className="text-sm font-semibold text-gray-900 max-md:text-[15px]">
+              {isAnalyzing ? 'Analisando planilha...' : selectedFile?.name || (
+                <>
+                  <span className="md:hidden">Toque para escolher a planilha</span>
+                  <span className="hidden md:inline">Clique ou arraste a planilha aqui</span>
+                </>
+              )}
             </div>
             <div className="text-xs text-gray-500">XLSX, XLS ou CSV até 10MB</div>
           </div>
         </div>
 
         {preview && (
-          <div className="space-y-4">
+          <div className="space-y-4 max-md:flex max-md:flex-col max-md:gap-4 max-md:space-y-0">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               {[
                 ['Linhas', preview.total, 'bg-gray-100 text-gray-800'],
@@ -378,20 +388,22 @@ export function ImportFinanceModal({
                 ['Erros', preview.errors, 'bg-red-50 text-red-800'],
                 ['Selecionados', selectedRows.size, 'bg-orange-50 text-orange-800'],
               ].map(([label, value, color]) => (
-                <div key={String(label)} className={`rounded-lg p-3 ${color}`}>
+                <div key={String(label)} className={`rounded-lg p-3 max-md:last:col-span-2 ${color}`}>
                   <div className="text-xs font-medium">{label}</div>
                   <div className="mt-1 text-xl font-bold">{value}</div>
                 </div>
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="inline-flex items-center gap-2 text-sm">
+            {/* Celular: a barra de aplicar vai para o FIM (order-last) e gruda no rodapé da folha, para o
+                botão continuar à mão com a lista rolando. No desktop segue acima da tabela, como era. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 max-md:sticky max-md:bottom-0 max-md:z-10 max-md:order-last max-md:-mx-5 max-md:flex-nowrap max-md:border-t max-md:border-gray-200 max-md:bg-white max-md:px-5 max-md:py-3">
+              <label className="inline-flex items-center gap-2 text-sm max-md:mb-0! max-md:flex! max-md:min-h-11">
                 <input
                   type="checkbox"
                   checked={selectableRows.length > 0 && selectedRows.size === selectableRows.length}
                   onChange={(event) => setAllSelectable(event.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-gray-300 max-md:h-5 max-md:w-5"
                 />
                 Selecionar todas aplicáveis
                 <span className="text-gray-500">({selectableRows.length} linha(s))</span>
@@ -399,13 +411,55 @@ export function ImportFinanceModal({
               <button
                 onClick={handleApply}
                 disabled={isBusy || selectedRows.size === 0}
-                className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50 max-md:h-12 max-md:shrink-0"
               >
                 {isApplying ? 'Aplicando...' : `Aplicar ${selectedRows.size} linha(s)`}
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-[var(--cz-hairline)]">
+            {/* Celular: a prévia vira lista de cartões. A tabela de 5 colunas não cabe em 390px, e a
+                rolagem lateral escondia justamente "Ação" e "Detalhes". Rolagem contida na lista. */}
+            {/* `gap` e não `space-y`: o `mb-0!` dos cartões (o CSS global dá margem a <label>) zerava a margem
+                que o `space-y` usa, e os cartões ficavam colados. */}
+            <div className="flex max-h-[46dvh] flex-col gap-2 overflow-y-auto overscroll-contain md:hidden">
+              {preview.rows.map((row) => {
+                const config = actionConfig[row.action];
+                return (
+                  <label
+                    key={row.id}
+                    className={`flex! mb-0! items-start gap-3 rounded-lg border p-3 ${
+                      selectedRows.has(row.id) ? 'border-orange-300 bg-orange-50/50' : 'border-[var(--cz-hairline)] bg-white'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.has(row.id)}
+                      disabled={!row.selectable || isBusy}
+                      onChange={() => toggleRow(row.id)}
+                      className="mt-0.5 h-5 w-5 shrink-0 rounded border-gray-300 disabled:opacity-40"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 break-words text-[14px] font-semibold leading-5 text-gray-900">{row.title || `Linha ${row.rowNumber}`}</span>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[12px] font-semibold ${config.className}`}>{config.label}</span>
+                      </span>
+                      <span className="mt-0.5 block text-[12px] text-gray-500">Linha {row.rowNumber} · {config.description}</span>
+                      {row.details.map((detail, index) => (
+                        <span key={`d-${index}`} className="mt-1 block text-[13px] leading-5 text-gray-700">{detail}</span>
+                      ))}
+                      {row.warnings.map((warning, index) => (
+                        <span key={`w-${index}`} className="mt-1 block rounded bg-amber-50 px-2 py-1 text-[12px] leading-4 text-amber-800">{warning}</span>
+                      ))}
+                      {row.errors.map((error, index) => (
+                        <span key={`e-${index}`} className="mt-1 block rounded bg-red-50 px-2 py-1 text-[12px] leading-4 text-red-800">{error}</span>
+                      ))}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="overflow-hidden rounded-lg border border-[var(--cz-hairline)] max-md:hidden">
               <div className="max-h-[52vh] overflow-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="sticky top-0 z-10 bg-gray-50">
@@ -479,7 +533,7 @@ export function ImportFinanceModal({
                 ['Categorias', importResults.createdCategories, 'bg-blue-50 text-blue-800'],
                 ['Formas Pgto.', importResults.createdPaymentMethods, 'bg-purple-50 text-purple-800'],
               ].map(([label, value, color]) => (
-                <div key={String(label)} className={`rounded-lg p-3 ${color}`}>
+                <div key={String(label)} className={`rounded-lg p-3 max-md:last:col-span-2 ${color}`}>
                   <div className="text-xs font-medium">{label}</div>
                   <div className="mt-1 text-xl font-bold">{value}</div>
                 </div>

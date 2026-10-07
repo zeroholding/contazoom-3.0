@@ -186,7 +186,7 @@ export default function FiltrosDashboard({
         <button
           ref={periodoDropdown.triggerRef}
           onClick={() => setShowPeriodoDropdown(!showPeriodoDropdown)}
-          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
+          className={`inline-flex items-center gap-2 px-3 py-1.5 max-md:min-h-11 max-md:px-3.5 max-md:text-[14px] rounded-md border text-xs font-medium transition-all duration-200 ${
             showPeriodoDropdown 
               ? "border-gray-400 bg-gray-50 text-gray-900" 
               : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"

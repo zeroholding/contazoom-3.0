@@ -5,6 +5,7 @@ import { UploadCloud, CheckCircle2, FileText, Loader2, Users, Store, Eye, Downlo
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 import { LogoTikTok } from "@/app/components/views/comum/logos";
+import { travarRolagem } from "@/lib/trava-rolagem";
 
 type UserData = {
   id: string;
@@ -88,6 +89,18 @@ export default function AdminDocumentos() {
   const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<DocumentFolder | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Celular: arquivos e envio não cabem lado a lado, então viram duas abas. Em md+
+  // o painel de envio segue como a 3ª coluna e `aba` não tem efeito nenhum.
+  const [aba, setAba] = useState<"arquivos" | "enviar">("arquivos");
+
+  // Os três modais desta tela são próprios (não usam `ui/Modal`): no celular viram
+  // folha inferior, e a lista por baixo não pode rolar enquanto estão abertos.
+  const algumModalAberto = !!confirmDelete || !!confirmDeleteFolder || showFolderModal;
+  useEffect(() => {
+    if (!algumModalAberto) return;
+    return travarRolagem();
+  }, [algumModalAberto]);
+
   useEffect(() => { fetchUsers(); }, []);
 
   useEffect(() => {
@@ -106,7 +119,12 @@ export default function AdminDocumentos() {
   const fetchUsers = async () => {
     try {
       const res = await fetch("/api/admin/users");
-      if (res.ok) { setUsers(await res.json()); }
+      if (res.ok) {
+        // Cadastro sem nome existe (só o e-mail): `name.charAt`/`toLowerCase` abaixo
+        // derrubavam a tela inteira. O e-mail passa a ser o nome nesse caso.
+        const lista = (await res.json()) as UserData[];
+        setUsers(lista.map((u) => ({ ...u, name: u.name || u.email, connectedAccounts: u.connectedAccounts ?? [] })));
+      }
       else { setError("Erro ao carregar lista de clientes."); }
     } catch { setError("Erro de conexão."); }
     finally { setLoading(false); }
@@ -312,14 +330,18 @@ export default function AdminDocumentos() {
             <h2 className="text-base font-bold text-gray-900 flex items-center">
               <Users className="w-4 h-4 mr-2 text-orange-500" /> Clientes
             </h2>
-            <span className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{users.length}</span>
+            <span className="text-[10px] max-md:text-xs font-bold bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">{users.length}</span>
           </div>
           <div className="mt-3 relative">
-            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input 
-              type="text" placeholder="Buscar cliente..." value={searchTerm}
+            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            {/* Sem `type`: o campo continua sendo texto, mas escapa da regra global
+                `input[type=text]`, que substituía `pl-10` e punha o texto em cima
+                da lupa. Aqui o invólucro define o acabamento inteiro. */}
+            <input
+              placeholder="Buscar cliente..."
+              value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 bg-gray-50 border border-[var(--cz-hairline)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+              className="h-11 w-full rounded-lg border border-[var(--cz-hairline)] bg-gray-50 py-2 pl-10 pr-3 text-sm transition-all focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
             />
           </div>
         </div>
@@ -344,24 +366,24 @@ export default function AdminDocumentos() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className={`text-sm font-semibold truncate ${selectedUser === u.id ? 'text-orange-900' : 'text-gray-800'}`}>{u.name}</p>
-                  <p className="text-[11px] text-gray-400 truncate">{u.email}</p>
+                  <p className="text-[11px] max-md:text-xs text-gray-400 truncate">{u.email}</p>
                 </div>
                 {u.connectedAccounts.length > 0 && (
                   <div className="flex flex-col gap-1 shrink-0 items-end">
                     {u.connectedAccounts.filter(a => a.provider === 'mercadolivre').length > 0 && (
-                      <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 text-yellow-700 px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm">
+                      <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 text-yellow-700 px-1.5 py-0.5 rounded text-[9px] max-md:text-xs font-bold shadow-sm">
                         <MeliIcon className="w-2.5 h-2.5" />
                         {u.connectedAccounts.filter(a => a.provider === 'mercadolivre').length}
                       </div>
                     )}
                     {u.connectedAccounts.filter(a => a.provider === 'shopee').length > 0 && (
-                      <div className="flex items-center gap-1 bg-orange-50 border border-orange-200 text-orange-700 px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm">
+                      <div className="flex items-center gap-1 bg-orange-50 border border-orange-200 text-orange-700 px-1.5 py-0.5 rounded text-[9px] max-md:text-xs font-bold shadow-sm">
                         <ShopeeIcon className="w-2.5 h-2.5" />
                         {u.connectedAccounts.filter(a => a.provider === 'shopee').length}
                       </div>
                     )}
                     {u.connectedAccounts.filter(a => a.provider === 'tiktok').length > 0 && (
-                      <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded text-[9px] font-bold shadow-sm">
+                      <div className="flex items-center gap-1 bg-zinc-50 border border-zinc-200 text-zinc-700 px-1.5 py-0.5 rounded text-[9px] max-md:text-xs font-bold shadow-sm">
                         <LogoTikTok className="w-2.5 h-2.5" />
                         {u.connectedAccounts.filter(a => a.provider === 'tiktok').length}
                       </div>
@@ -375,15 +397,18 @@ export default function AdminDocumentos() {
       </aside>
 
       {/* ═══ COL 2 — DOCUMENTS ═══ */}
-      <main className={`flex-1 flex flex-col min-w-0 overflow-hidden ${!selectedUser ? 'hidden lg:flex' : 'flex'}`}>
+      {/* Na aba "Enviar" (celular) o `main` encolhe ao tamanho do cabeçalho + abas e
+          o painel de envio ocupa o resto da altura. */}
+      <main className={`flex-1 flex flex-col min-w-0 overflow-hidden ${!selectedUser ? 'hidden lg:flex' : 'flex'} ${aba === "enviar" ? "max-md:flex-none" : ""}`}>
         {/* Header */}
-        <header className="px-6 py-4 bg-white border-b border-[var(--cz-hairline)] shrink-0">
+        <header className="px-6 py-4 max-md:px-4 max-md:py-3 bg-white border-b border-[var(--cz-hairline)] shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {selectedUser && (
                 <button
-                  onClick={() => setSelectedUser("")}
-                  className="lg:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                  onClick={() => { setSelectedUser(""); setAba("arquivos"); }}
+                  aria-label="Voltar para a lista de clientes"
+                  className="lg:hidden p-2 -ml-2 max-md:flex max-md:h-11 max-md:w-11 max-md:items-center max-md:justify-center text-gray-600 hover:bg-gray-100 rounded-lg"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
@@ -419,8 +444,29 @@ export default function AdminDocumentos() {
           )}
         </header>
 
+        {/* Celular: abas "Arquivos" / "Enviar arquivo". De md para cima as duas áreas
+            já aparecem juntas e esta barra não existe. */}
+        {activeUser && (
+          <div role="tablist" aria-label="Seções do cliente" className="grid grid-cols-2 gap-1.5 border-b border-[var(--cz-hairline)] bg-white px-4 py-3 md:hidden">
+            {([["arquivos", `Arquivos (${userDocuments.length})`], ["enviar", "Enviar arquivo"]] as const).map(([id, rotulo]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={aba === id}
+                onClick={() => setAba(id)}
+                className={`h-11 rounded-xl text-sm font-semibold transition-colors ${
+                  aba === id ? "bg-orange-500 text-white shadow-sm" : "bg-gray-100 text-gray-600 active:bg-gray-200"
+                }`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 xl:p-8">
+        <div className={`flex-1 overflow-y-auto p-6 xl:p-8 max-md:p-4 ${aba === "enviar" ? "max-md:hidden" : ""}`}>
           {!activeUser ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-xs mx-auto">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -445,25 +491,25 @@ export default function AdminDocumentos() {
                 const stores = getStoreBadges(doc);
                 
                 return (
-                  <div key={doc.id} className="bg-white rounded-xl border border-[var(--cz-hairline)] hover:shadow-lg hover:border-orange-200 transition-all flex flex-col overflow-hidden group">
+                  <div key={doc.id} className="bg-white rounded-xl border border-[var(--cz-hairline)] hover:shadow-lg hover:border-orange-200 transition-all flex flex-col overflow-hidden group max-md:[&_button]:min-h-11 max-md:[&_button]:min-w-11 max-md:[&_p]:text-xs max-md:[&_span]:text-xs max-md:[&_div]:text-xs">
                     <div className={`h-1 w-full ${isPdf ? 'bg-gradient-to-r from-red-400 to-red-500' : 'bg-gradient-to-r from-blue-400 to-blue-500'}`} />
                     <div className="p-5 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-3">
                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isPdf ? 'bg-red-50' : 'bg-blue-50'} group-hover:scale-110 transition-transform`}>
                         <FileText className={`w-5 h-5 ${isPdf ? 'text-red-500' : 'text-blue-500'}`} />
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${isPdf ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>{fileExt}</span>
+                      <span className={`text-[10px] max-md:text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${isPdf ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>{fileExt}</span>
                     </div>
                     
                     <h4 className="text-sm font-semibold text-gray-900 truncate mb-1" title={doc.originalName}>{doc.originalName}</h4>
-                    <p className="text-[11px] text-gray-400 mb-3">{new Date(doc.createdAt).toLocaleDateString('pt-BR')} • {(doc.sizeBytes / 1024 / 1024).toFixed(1)} MB</p>
+                    <p className="text-[11px] max-md:text-xs text-gray-400 mb-3">{new Date(doc.createdAt).toLocaleDateString('pt-BR')} • {(doc.sizeBytes / 1024 / 1024).toFixed(1)} MB</p>
                     
                     <div className="flex flex-wrap gap-1.5 mb-auto">
-                      <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                      <span className="text-[10px] max-md:text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
                         {doc.folder?.name || CATEGORIES.find(c => c.id === doc.category)?.name.replace(/^\d+\.\s*/, '') || "Geral"}
                       </span>
                       {stores?.map((s, i) => (
-                        <span key={i} className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-medium">
+                        <span key={i} className="inline-flex items-center text-[10px] max-md:text-xs px-2 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 font-medium">
                           <Store className="w-2.5 h-2.5 mr-1" />{s}
                         </span>
                       ))}
@@ -477,11 +523,11 @@ export default function AdminDocumentos() {
                         const uniqueDownloaders = Array.from(new Set(downloads.map(d => d.user.name.split(' ')[0])));
                         return (
                           <>
-                            <div className="flex items-center gap-1 text-[10px] text-gray-500 cursor-help" title={uniqueViewers.length > 0 ? `Visualizado por: ${uniqueViewers.join(', ')}` : 'Nenhuma visualização'}>
+                            <div className="flex items-center gap-1 text-[10px] max-md:text-xs text-gray-500 cursor-help" title={uniqueViewers.length > 0 ? `Visualizado por: ${uniqueViewers.join(', ')}` : 'Nenhuma visualização'}>
                               <Eye className={`w-3.5 h-3.5 ${views.length > 0 ? 'text-blue-500' : 'text-gray-300'}`} />
                               <span className="font-semibold">{views.length}</span>
                             </div>
-                            <div className="flex items-center gap-1 text-[10px] text-gray-500 cursor-help" title={uniqueDownloaders.length > 0 ? `Baixado por: ${uniqueDownloaders.join(', ')}` : 'Nenhum download'}>
+                            <div className="flex items-center gap-1 text-[10px] max-md:text-xs text-gray-500 cursor-help" title={uniqueDownloaders.length > 0 ? `Baixado por: ${uniqueDownloaders.join(', ')}` : 'Nenhum download'}>
                               <Download className={`w-3.5 h-3.5 ${downloads.length > 0 ? 'text-orange-500' : 'text-gray-300'}`} />
                               <span className="font-semibold">{downloads.length}</span>
                             </div>
@@ -497,17 +543,17 @@ export default function AdminDocumentos() {
                         <button onClick={() => setConfirmDelete({ id: doc.id, name: doc.originalName })} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                       </div>
                       <button onClick={() => setExpandedDocLogs(expandedDocLogs === doc.id ? null : doc.id)}
-                        className={`text-[11px] px-2.5 py-1 rounded-full font-medium flex items-center gap-1 transition-colors ${expandedDocLogs === doc.id ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        className={`text-[11px] max-md:text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1 transition-colors ${expandedDocLogs === doc.id ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                       ><History className="w-3 h-3" /> Logs</button>
                     </div>
 
                     {expandedDocLogs === doc.id && (
                       <div className="mt-3 pt-3 border-t border-gray-100 bg-gray-50 -mx-5 -mb-5 px-5 pb-4 rounded-b-xl">
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Histórico</p>
+                        <p className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Histórico</p>
                         {doc.logs?.length > 0 ? (
                           <div className="space-y-1 max-h-28 overflow-y-auto">
                             {doc.logs.map((log, i) => (
-                              <div key={i} className="flex justify-between items-center text-[10px] bg-white p-1.5 rounded border border-gray-100">
+                              <div key={i} className="flex justify-between items-center text-[10px] max-md:text-xs bg-white p-1.5 rounded border border-gray-100">
                                 <div className="flex items-center gap-1.5">
                                   <span className={`w-1.5 h-1.5 rounded-full ${log.action === 'CREATED' ? 'bg-green-500' : log.action === 'VIEWED' ? 'bg-blue-500' : 'bg-orange-500'}`} />
                                   <span className="text-gray-700 font-medium">{log.user.name}</span>
@@ -516,7 +562,7 @@ export default function AdminDocumentos() {
                               </div>
                             ))}
                           </div>
-                        ) : <p className="text-[10px] text-gray-400 italic">Nenhum log.</p>}
+                        ) : <p className="text-[10px] max-md:text-xs text-gray-400 italic">Nenhum log.</p>}
                       </div>
                     )}
                     </div>
@@ -530,27 +576,35 @@ export default function AdminDocumentos() {
 
       {/* ═══ COL 3 — UPLOAD PANEL ═══ */}
       {activeUser && (
-        <aside className="w-72 xl:w-80 bg-white border-l border-[var(--cz-hairline)] flex flex-col shrink-0">
-          <div className="p-5 border-b border-gray-100">
+        <aside
+          className={`w-72 xl:w-80 bg-white border-l border-[var(--cz-hairline)] flex flex-col shrink-0 max-md:w-full max-md:min-h-0 max-md:flex-1 max-md:border-l-0 max-md:[&_button[type=submit]]:h-12 max-md:[&_button[type=submit]]:text-base ${
+            aba === "arquivos" ? "max-md:hidden" : ""
+          }`}
+        >
+          {/* Celular: a aba "Enviar arquivo" e o cabeçalho já dizem isto; o bloco gastava ~110px. */}
+          <div className="p-5 border-b border-gray-100 max-md:hidden">
             <h2 className="text-base font-bold text-gray-900 flex items-center">
               <UploadCloud className="w-4 h-4 mr-2 text-orange-500" /> Novo Upload
             </h2>
-            <p className="text-[11px] text-gray-400 mt-0.5">Envie arquivos para {activeUser.name.split(' ')[0]}</p>
+            <p className="text-[11px] max-md:text-xs text-gray-400 mt-0.5">Envie arquivos para {activeUser.name.split(' ')[0]}</p>
           </div>
 
           <div className="flex-1 overflow-y-auto p-5">
-            <form id="upload-form" onSubmit={handleUploadDocument} className="space-y-5">
+            {/* Celular: todo botão do formulário (lojas, pastas, "+ Nova") vira alvo de 44px, os
+                rótulos de 9–10px sobem para 12px e as ações da pasta (renomear/excluir,
+                que só apareciam no hover do mouse) ficam sempre visíveis. */}
+            <form id="upload-form" onSubmit={handleUploadDocument} className="space-y-5 max-md:[&_button]:min-h-11 max-md:[&_button]:min-w-11 max-md:[&_button]:text-[13px] max-md:[&_label]:text-xs max-md:[&_div.opacity-0]:opacity-100 max-md:[&_.group]:w-auto max-md:[&_.truncate]:whitespace-normal max-md:[&_.truncate]:text-left">
               
               {/* Stores */}
               {activeUser.connectedAccounts.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Vincular Lojas</label>
+                  <label className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">Vincular Lojas</label>
                   <div className="flex flex-wrap gap-1.5">
                     {activeUser.connectedAccounts.map((acc, i) => {
                       const sel = selectedStores.includes(acc.label);
                       return (
                         <button key={i} type="button" onClick={() => handleToggleStore(acc.label)}
-                          className={`flex items-center text-[11px] px-2.5 py-1.5 rounded-full border transition-all font-medium ${
+                          className={`flex items-center text-[11px] max-md:text-xs px-2.5 py-1.5 rounded-full border transition-all font-medium ${
                             sel ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-white border-[var(--cz-hairline)] text-gray-500 hover:bg-gray-50'
                           }`}
                         >
@@ -566,8 +620,8 @@ export default function AdminDocumentos() {
               {/* Folders */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pasta do Cliente</label>
-                  <button type="button" onClick={() => { setEditingFolder(null); setFolderNameInput(""); setFolderParentId(""); setShowFolderModal(true); }} className="text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded transition-colors">+ Nova</button>
+                  <label className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-wider">Pasta do Cliente</label>
+                  <button type="button" onClick={() => { setEditingFolder(null); setFolderNameInput(""); setFolderParentId(""); setShowFolderModal(true); }} className="text-[10px] max-md:text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-0.5 rounded transition-colors">+ Nova</button>
                 </div>
                 <div className="space-y-1">                  
                   {(() => {
@@ -579,16 +633,19 @@ export default function AdminDocumentos() {
                       const hasChildren = children.length > 0;
                       return (
                         <div key={f.id}>
-                          <div className={`w-full flex items-center justify-between text-left text-[11px] px-3 py-2.5 rounded-lg border transition-all group ${
+                          <div className={`w-full flex items-center justify-between text-left text-[11px] max-md:text-xs px-3 py-2.5 rounded-lg border transition-all group ${
                             selectedFolderId === f.id
                               ? 'bg-blue-50 border-blue-300 shadow-sm ring-1 ring-blue-300/50'
                               : 'bg-white border-[var(--cz-hairline)] hover:bg-gray-50'
                           }`} style={{ marginLeft: depth > 0 ? `${depth * 14}px` : undefined }}>
                             <button type="button" onClick={() => setSelectedFolderId(f.id)} className="flex items-center flex-1 min-w-0">
                               {hasChildren && (
-                                <button type="button" className="mr-1 text-gray-400 hover:text-gray-600" onClick={(e) => { e.stopPropagation(); setExpandedFolders(prev => ({...prev, [f.id]: !isExpanded})); }}>
+                                // `span role="button"` e não `button`: este controle mora DENTRO do botão que seleciona a
+                                // pasta, e <button> dentro de <button> é HTML inválido (o React acusa erro de
+                                // hidratação no console). No celular ganha 44px de altura para o toque.
+                                <span role="button" tabIndex={0} aria-label={isExpanded ? "Recolher subpastas" : "Expandir subpastas"} className="mr-1 text-gray-400 hover:text-gray-600 max-md:inline-flex max-md:h-11 max-md:w-9 max-md:items-center max-md:justify-center" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setExpandedFolders(prev => ({...prev, [f.id]: !isExpanded})); } }} onClick={(e) => { e.stopPropagation(); setExpandedFolders(prev => ({...prev, [f.id]: !isExpanded})); }}>
                                   <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
-                                </button>
+                                </span>
                               )}
                               {!hasChildren && depth > 0 && <span className="mr-1 w-3" />}
                               <div className={`w-4 h-4 mr-2 shrink-0 flex items-center justify-center ${selectedFolderId === f.id ? 'text-blue-500' : 'text-gray-400'}`}>
@@ -619,7 +676,7 @@ export default function AdminDocumentos() {
                       );
                     };
                     if (loadingFolders) return <div className="flex justify-center py-4"><svg className="w-4 h-4 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg></div>;
-                    if (topLevel.length === 0) return <div className="text-[11px] text-gray-400 text-center py-2 bg-gray-50 rounded-lg border border-gray-100">Nenhuma pasta criada.</div>;
+                    if (topLevel.length === 0) return <div className="text-[11px] max-md:text-xs text-gray-400 text-center py-2 bg-gray-50 rounded-lg border border-gray-100">Nenhuma pasta criada.</div>;
                     return <>{topLevel.map(f => renderFolder(f))}</>;
                   })()}
                 </div>
@@ -629,14 +686,14 @@ export default function AdminDocumentos() {
               {userFolders.find(f => f.id === selectedFolderId)?.name.toUpperCase().includes("IMPOSTO") && (
                 <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <div>
-                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Mês</label>
-                    <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full border-[var(--cz-hairline)] rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
+                    <label className="block text-[9px] max-md:text-xs font-bold text-gray-400 uppercase mb-1">Mês</label>
+                    <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="w-full border-[var(--cz-hairline)] rounded text-[11px] max-md:text-xs px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
                       {MONTHS.map(m => <option key={m} value={m}>{m.split(' - ')[0]}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1">Ano</label>
-                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="w-full border-[var(--cz-hairline)] rounded text-[11px] px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
+                    <label className="block text-[9px] max-md:text-xs font-bold text-gray-400 uppercase mb-1">Ano</label>
+                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="w-full border-[var(--cz-hairline)] rounded text-[11px] max-md:text-xs px-2 py-1.5 border focus:border-orange-400 focus:ring-orange-400 bg-white">
                       {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
@@ -645,15 +702,15 @@ export default function AdminDocumentos() {
 
               {/* File */}
               <div>
-                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Arquivo</label>
+                <label className="text-[10px] max-md:text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">Arquivo</label>
                 <div className="relative border-2 border-dashed border-gray-300 rounded-xl px-4 py-6 text-center hover:bg-orange-50/50 hover:border-orange-300 transition-colors cursor-pointer group">
                   <input id="file-upload" type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required onChange={e => setUploadFile(e.target.files?.[0] || null)} />
                   <UploadCloud className="mx-auto w-7 h-7 text-gray-300 group-hover:text-orange-400 transition-colors mb-2" />
                   <p className="text-xs font-medium text-orange-600">Anexar arquivo</p>
-                  <p className="text-[10px] text-gray-400">PDF, Imagem, Zip</p>
+                  <p className="text-[10px] max-md:text-xs text-gray-400">PDF, Imagem, Zip</p>
                 </div>
                 {uploadFile && (
-                  <div className="mt-2 p-2.5 bg-orange-50 text-orange-800 rounded-lg text-[11px] font-semibold border border-orange-200 flex items-center justify-between">
+                  <div className="mt-2 p-2.5 bg-orange-50 text-orange-800 rounded-lg text-[11px] max-md:text-xs font-semibold border border-orange-200 flex items-center justify-between">
                     <span className="truncate">{uploadFile.name}</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-orange-500 shrink-0 ml-2" />
                   </div>
@@ -671,7 +728,7 @@ export default function AdminDocumentos() {
             )}
             
             {uploadSuccess && (
-              <div className="mb-2.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-[11px] font-medium flex items-center border border-green-200">
+              <div className="mb-2.5 px-3 py-2 bg-green-50 text-green-700 rounded-lg text-[11px] max-md:text-xs font-medium flex items-center border border-green-200">
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" /> {uploadSuccess}
               </div>
             )}
@@ -770,7 +827,7 @@ export default function AdminDocumentos() {
       {showFolderModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !isSavingFolder && setShowFolderModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95 duration-200 max-md:[&_button]:min-h-11 max-md:[&_button]:min-w-11 max-md:[&_form_button]:flex-1 max-md:[&_form_button]:justify-center">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-gray-900">{editingFolder ? "Renomear Pasta" : "Nova Pasta"}</h3>
               <button onClick={() => setShowFolderModal(false)} className="text-gray-400 hover:bg-gray-100 p-1 rounded-full transition-colors"><X className="w-5 h-5" /></button>

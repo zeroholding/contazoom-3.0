@@ -5,6 +5,7 @@ import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import FiltroMesesCheckbox from "./FiltroMesesCheckbox";
 import DatePicker from "react-datepicker";
 import { FiltroPeriodo } from "./FiltrosDashboard";
+import FiltrosSheet from "@/components/ui/FiltrosSheet";
 
 interface FormaPagamento {
   id: string;
@@ -265,7 +266,10 @@ export default function HeaderFinanceiro({
           <p className="mt-1 text-[13px] leading-relaxed text-[var(--cz-texto-suave)]">KPIs financeiros com filtros por período, portador e categoria.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+        {/* Celular (seletores `max-md:`): o seletor Caixa/Competência ocupa a 1ª linha, com área
+            de toque de 44px (o botão é h-6; o ::before estende a área sem mexer no desenho), e
+            "Filtros" + "12 meses" dividem a 2ª. Os dropdowns de meses ganham opções de 44px. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4 max-md:[&>div:first-child]:w-full max-md:[&>div.relative>button]:min-h-11 max-md:[&>div.relative>button]:text-[14px] max-md:[&_.smart-dropdown_button]:min-h-11 max-md:[&_.smart-dropdown_label]:min-h-11 max-md:[&_button[role=switch]]:before:absolute max-md:[&_button[role=switch]]:before:inset-x-0 max-md:[&_button[role=switch]]:before:-inset-y-2.5">
           {/* Switch Caixa/Competência */}
           {onTipoVisualizacaoChange && (
             <div className="flex items-center gap-3">
@@ -296,6 +300,27 @@ export default function HeaderFinanceiro({
             </div>
           )}
 
+          {/* Celular: Pagamento, Competência, Despesas e Portador saem da linha (eram 4 linhas de
+              chips, ~230px do topo) e vão para a folha "Filtros", como no Dashboard de vendas.
+              Ficam à vista o Caixa/Competência e o período em meses, os que mudam toda hora.
+              No desktop o FiltrosSheet devolve os filhos como estão; o invólucro `contents` não
+              gera caixa, então os quatro filtros seguem filhos diretos da linha. */}
+          <FiltrosSheet
+            titulo="Filtros"
+            ativos={
+              Number(filtroPeriodoPagamento !== "todos") +
+              Number(filtroPeriodoCompetencia !== "todos") +
+              Number(categoriasSelecionadas.size > 0) +
+              Number(!!portadorId)
+            }
+            onLimpar={() => {
+              onFiltroPeriodoPagamentoChange?.("todos");
+              onFiltroPeriodoCompetenciaChange?.("todos");
+              onCategoriasSelecionadasChange(new Set());
+              onPortadorChange(null);
+            }}
+          >
+          <div className="contents max-md:flex max-md:flex-col max-md:gap-3 max-md:[&_.relative>button]:min-h-11 max-md:[&_.relative>button]:w-full max-md:[&_.relative>button]:justify-between max-md:[&_.relative>button]:text-[14px] max-md:[&_.smart-dropdown_button]:min-h-11 max-md:[&_.smart-dropdown_label]:min-h-11">
           {/* Filtro de Pagamento */}
           {onFiltroPeriodoPagamentoChange && (
             <div className="relative">
@@ -593,6 +618,9 @@ export default function HeaderFinanceiro({
               </div>
             )}
           </div>
+
+          </div>
+          </FiltrosSheet>
 
           {/* Filtro de Meses */}
           <FiltroMesesCheckbox

@@ -46,7 +46,10 @@ const HeaderVendasGeral = ({ totalItems = 0 }: HeaderVendasGeralProps) => {
   });
 
   return (
-    <div className="mb-6">
+    // Celular: título menor, linha de título que quebra em vez de estourar, e
+    // todo botão do cabeçalho com alvo de toque de 44px (`[&_button]` cobre o
+    // Dashboard e o "i" sem mexer na marcação do desktop).
+    <div className="mb-6 max-md:mb-4 max-md:[&_h1]:text-xl max-md:[&_.text-left>div:first-child]:flex-wrap max-md:[&_.text-left>div:first-child]:gap-2 max-md:[&_button]:min-h-11 max-md:[&_button]:min-w-11">
       <div className="text-left">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold text-gray-900">
@@ -59,7 +62,9 @@ const HeaderVendasGeral = ({ totalItems = 0 }: HeaderVendasGeralProps) => {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            Dashboard
+            {/* Celular: só o ícone (o título já ocupa a linha e a aba "Início" leva ao
+              mesmo lugar); o texto segue disponível para leitores de tela. */}
+          <span className="max-md:sr-only">Dashboard</span>
           </button>
           <div className="relative">
             <button
@@ -257,11 +262,18 @@ function VendasGeralContent() {
       </div>
 
       <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">
+        {/* Celular: sem o padding duplicado (o `main` já dá os 16px laterais) e com
+            16px de respiro sob o cabeçalho fixo. A partir de `sm` volta o p-6. */}
+        <section className="p-0 pt-4 sm:p-6">
           <HeaderVendasGeral
             totalItems={pagination.totalItems}
           />
 
+          {/* O wrapper só existe para compactar os avisos no celular (mesma receita
+              do Dashboard): `UserGuidanceNotification` é compartilhado e tem p-4 e
+              botões pequenos, então os ajustes entram por seletores de descendente,
+              sem mexer nele. No desktop o wrapper não aplica nada. */}
+          <div className="max-md:[&>div]:mb-3 max-md:[&>div]:p-3 max-md:[&_p]:mb-2 max-md:[&_p]:leading-snug max-md:[&_h3]:mb-0.5 max-md:[&_.min-w-0_button]:min-h-11 max-md:[&_.min-w-0_button]:w-full max-md:[&_.min-w-0_button]:justify-center max-md:[&_.items-start>button]:-m-3 max-md:[&_.items-start>button]:p-3">
           {!isLoadingGuidance && showConnectAccounts && (
             <UserGuidanceNotification
               type="warning"
@@ -297,6 +309,8 @@ function VendasGeralContent() {
               onDismiss={() => dismissNotification('showViewDashboard')}
             />
           )}
+
+          </div>
 
           <FiltrosVendasV2 
             totalVendas={countVendas.all}

@@ -24,8 +24,8 @@
  * milhares, a rota precisa ganhar paginação antes desta tela.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Lock, MoreVertical } from "lucide-react";
 
 import {
   ErroApi,
@@ -71,6 +71,11 @@ import { invalidarSessao, useSessao } from "@/hooks/useSessao";
 import { MeliIcon } from "@/components/icons/MeliIcon";
 import { ShopeeIcon } from "@/components/icons/ShopeeIcon";
 import { LogoTikTok } from "@/app/components/views/comum/logos";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosSheet, {
+  CampoDaFolha,
+  GrupoDePilulas,
+} from "@/components/ui/FiltrosSheet";
 
 /* -------------------------------------------------------------------------- */
 /*                            Contratos das rotas                             */
@@ -220,6 +225,166 @@ function SemPermissao() {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                      Celular: cartão de usuário e menu                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Menu de ações do cartão (celular).
+ *
+ * Hoje só existe "Alterar perfil", mas as ações ficam atrás de um "⋯" de 44px
+ * porque o cartão é estreito: um botão por cartão repetiria o mesmo rótulo em
+ * todas as linhas e competiria com o nome, que é o dado que a pessoa procura. O
+ * menu fecha ao tocar fora e no ESC.
+ */
+function MenuAcoesUsuario({
+  nome,
+  onAlterarPerfil,
+}: {
+  nome: string;
+  onAlterarPerfil: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const raiz = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const aoTocarFora = (evento: PointerEvent) => {
+      if (raiz.current && !raiz.current.contains(evento.target as Node)) {
+        setAberto(false);
+      }
+    };
+    const aoTeclar = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") setAberto(false);
+    };
+    document.addEventListener("pointerdown", aoTocarFora);
+    document.addEventListener("keydown", aoTeclar);
+    return () => {
+      document.removeEventListener("pointerdown", aoTocarFora);
+      document.removeEventListener("keydown", aoTeclar);
+    };
+  }, [aberto]);
+
+  return (
+    <div ref={raiz} className="relative shrink-0">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={aberto}
+        aria-label={`Ações para ${nome}`}
+        onClick={() => setAberto((valor) => !valor)}
+        className="-mr-2 -mt-1 inline-flex h-11 w-11 items-center justify-center rounded-xl text-gray-500 transition-colors active:bg-gray-100"
+      >
+        <MoreVertical className="h-5 w-5" aria-hidden="true" />
+      </button>
+      {aberto && (
+        <div
+          role="menu"
+          className="absolute right-0 top-11 z-20 w-52 rounded-xl border border-[var(--cz-hairline)] bg-white p-1 shadow-[var(--cz-elev-3)]"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setAberto(false);
+              onAlterarPerfil();
+            }}
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[15px] font-medium text-gray-900 active:bg-gray-100"
+          >
+            <Icone nome="Pencil" className="h-4 w-4 text-gray-500" />
+            Alterar perfil
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Cartão de usuário do celular: no lugar da tabela de 900px de largura.
+ *
+ * Nome e e-mail em cima (truncados: há e-mail de 60 caracteres), o perfil em
+ * selo logo abaixo, e os dois dados secundários — data de cadastro e contas
+ * conectadas — lado a lado. Cadastro e contas são "dado de conferência", não o
+ * que se procura, então ficam no corpo pequeno e cinza.
+ */
+function CartaoUsuario({
+  usuario,
+  ehVoceMesmo,
+  podeGerenciar,
+  onAlterar,
+}: {
+  usuario: UsuarioAdmin;
+  ehVoceMesmo: boolean;
+  podeGerenciar: boolean;
+  onAlterar: () => void;
+}) {
+  const papel = usuario.role || PAPEL.USER;
+  const contas = usuario.connectedAccounts ?? [];
+  const nome = usuario.name?.trim() || "Sem nome";
+
+  return (
+    <li className="px-4 py-4">
+      <div className="flex items-start gap-3">
+        <CirculoIniciais nome={usuario.name} />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-[15px] font-semibold text-gray-900">
+            <span className="truncate">{nome}</span>
+            {ehVoceMesmo && (
+              <span className="shrink-0 rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                você
+              </span>
+            )}
+          </p>
+          <p className="truncate text-[13px] text-gray-500">{usuario.email}</p>
+        </div>
+        {podeGerenciar && (
+          <MenuAcoesUsuario nome={nome} onAlterarPerfil={onAlterar} />
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <SeloPapel papel={papel} />
+        <span className="text-[13px] text-gray-500">
+          {PAPEL_RESUMO[papel] ?? "Perfil não reconhecido"}
+        </span>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[13px]">
+        <div>
+          <dt className="text-gray-500">Cadastrado em</dt>
+          <dd className="font-medium text-gray-900">
+            {dataCurta(usuario.createdAt)}
+          </dd>
+          <dd className="text-xs text-gray-500">
+            {tempoRelativo(usuario.createdAt)}
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-gray-500">Contas conectadas</dt>
+          {contas.length === 0 ? (
+            <dd className="text-gray-400">Nenhuma conta</dd>
+          ) : (
+            <dd>
+              <ul className="space-y-1">
+                {contas.map((conta, indice) => (
+                  <li
+                    key={`${usuario.id}-${conta.provider}-${indice}`}
+                    className="flex items-center gap-2"
+                  >
+                    <IconeProvedor provider={conta.provider} />
+                    <span className="truncate text-gray-700">{conta.label}</span>
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          )}
+        </div>
+      </dl>
+    </li>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*                        Painel: o que cada perfil faz                       */
 /* -------------------------------------------------------------------------- */
 
@@ -242,7 +407,7 @@ function PainelPerfis({
           onClick={onAlternar}
           aria-expanded={aberto}
           aria-controls="lista-perfis"
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100"
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 max-md:min-h-11"
         >
           {aberto ? "Recolher" : "Expandir"}
           {aberto ? (
@@ -256,7 +421,7 @@ function PainelPerfis({
       {aberto && (
         <div
           id="lista-perfis"
-          className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3"
+          className="grid gap-4 p-5 max-md:p-4 sm:grid-cols-2 xl:grid-cols-3"
         >
           {ORDEM_PAPEL.map((papel) => {
             const quantas = contagem[papel] ?? 0;
@@ -388,7 +553,7 @@ function ModalAlterarPapel({
           />
         )}
 
-        <div className="flex items-center gap-3 rounded-xl border border-[var(--cz-hairline)] bg-gray-50 p-4">
+        <div className="flex items-center gap-3 rounded-xl border border-[var(--cz-hairline)] bg-gray-50 p-4 max-md:flex-wrap">
           <CirculoIniciais nome={usuario.name} />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-gray-900">
@@ -396,11 +561,11 @@ function ModalAlterarPapel({
             </p>
             <p className="truncate text-xs text-gray-500">{usuario.email}</p>
           </div>
-          <div className="ml-auto shrink-0 text-right">
+          <div className="ml-auto shrink-0 text-right max-md:ml-0 max-md:w-full max-md:text-left">
             <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
               Perfil atual
             </p>
-            <div className="mt-1 flex justify-end">
+            <div className="mt-1 flex justify-end max-md:justify-start">
               <SeloPapel papel={usuario.role} />
             </div>
           </div>
@@ -622,7 +787,13 @@ export default function UsuariosView() {
   const [textoBusca, setTextoBusca] = useState("");
   const [busca, setBusca] = useState("");
 
-  const [perfisAberto, setPerfisAberto] = useState(true);
+  // `null` = ainda sem gesto. No desktop o painel nasce aberto (a informação
+  // importa no momento de dar acesso); no celular nasce recolhido, porque cinco
+  // cartões de perfil empurrariam a lista de pessoas — o motivo da tela — para
+  // fora da primeira dobra.
+  const celular = useCelular();
+  const [perfisGesto, setPerfisGesto] = useState<boolean | null>(null);
+  const perfisAberto = perfisGesto ?? !celular;
   const [alvo, setAlvo] = useState<UsuarioAdmin | null>(null);
   const [criando, setCriando] = useState(false);
 
@@ -763,7 +934,7 @@ export default function UsuariosView() {
   const podeGerenciar = permissoes.gerenciarUsuarios;
 
   return (
-    <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
+    <div className="cz-tarefas p-6 max-md:p-4 max-w-[1800px] mx-auto space-y-6 max-md:space-y-4">
       {/* `compacto`: o cabeçalho do admin já escreve "Usuários" e o subtítulo
           "Perfis de acesso e contas da equipe". O título aqui vira h1 de leitor
           de tela e a descrição sai — o painel "O que cada perfil permite",
@@ -812,7 +983,7 @@ export default function UsuariosView() {
         </div>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <CartaoKpi
               titulo="Total de usuários"
               valor={usuarios.length}
@@ -845,7 +1016,7 @@ export default function UsuariosView() {
           <PainelPerfis
             contagem={contagemPorPapel}
             aberto={perfisAberto}
-            onAlternar={() => setPerfisAberto((valor) => !valor)}
+            onAlternar={() => setPerfisGesto(!perfisAberto)}
           />
 
           <Painel
@@ -856,38 +1027,90 @@ export default function UsuariosView() {
                 : plural(usuarios.length, "usuário", "usuários")
             }
           >
-            <div className="flex flex-col gap-3 border-b border-[var(--cz-hairline)] p-5 lg:flex-row lg:items-end">
-              <Escolha
-                rotulo="Perfil"
-                vazio="Todos os perfis"
-                value={filtroPapel}
-                opcoes={OPCOES_PAPEL}
-                onChange={(evento) => setFiltroPapel(evento.target.value)}
-                wrapperClassName="w-full lg:w-56"
-              />
-              <Entrada
-                rotulo="Buscar"
-                type="search"
-                value={textoBusca}
-                placeholder="Nome ou e-mail"
-                onChange={(evento) => setTextoBusca(evento.target.value)}
-                wrapperClassName="w-full lg:max-w-xs"
-              />
-              <div className="flex flex-wrap items-center gap-3 lg:ml-auto lg:pb-0.5">
-                <Alternador
-                  opcoes={OPCOES_ESCOPO}
-                  valor={escopo}
-                  onMudar={setEscopo}
-                />
-                <Botao
-                  variante="fantasma"
-                  icone="X"
-                  onClick={limparFiltros}
-                  disabled={!temFiltro}
-                >
-                  Limpar filtros
-                </Botao>
-              </div>
+            <div className="flex flex-col gap-3 border-b border-[var(--cz-hairline)] p-5 max-md:p-4 lg:flex-row lg:items-end">
+              {celular ? (
+                // Celular: a busca fica SEMPRE à vista; perfil e escopo (dois
+                // controles de escolha) vão para a folha de filtros, como
+                // pastilhas tocáveis em vez de dropdown.
+                <div className="flex items-end gap-2">
+                  <Entrada
+                    rotulo="Buscar"
+                    type="search"
+                    value={textoBusca}
+                    placeholder="Nome ou e-mail"
+                    onChange={(evento) => setTextoBusca(evento.target.value)}
+                    wrapperClassName="min-w-0 flex-1"
+                  />
+                  <FiltrosSheet
+                    ativos={
+                      (filtroPapel !== "" ? 1 : 0) +
+                      (escopo !== ESCOPO.TODOS ? 1 : 0)
+                    }
+                    onLimpar={limparFiltros}
+                    classeBotao="shrink-0"
+                  >
+                    <CampoDaFolha rotulo="Perfil">
+                      <GrupoDePilulas
+                        rotulo="Perfil"
+                        opcoes={[
+                          { id: "", rotulo: "Todos" },
+                          ...OPCOES_PAPEL.map((o) => ({
+                            id: o.valor,
+                            rotulo: o.texto,
+                          })),
+                        ]}
+                        estaAtiva={(id) => filtroPapel === id}
+                        onEscolher={setFiltroPapel}
+                      />
+                    </CampoDaFolha>
+                    <CampoDaFolha rotulo="Quem">
+                      <GrupoDePilulas
+                        rotulo="Quem"
+                        opcoes={OPCOES_ESCOPO.map((o) => ({
+                          id: o.valor,
+                          rotulo: o.texto,
+                        }))}
+                        estaAtiva={(id) => escopo === id}
+                        onEscolher={setEscopo}
+                      />
+                    </CampoDaFolha>
+                  </FiltrosSheet>
+                </div>
+              ) : (
+                <>
+                  <Escolha
+                    rotulo="Perfil"
+                    vazio="Todos os perfis"
+                    value={filtroPapel}
+                    opcoes={OPCOES_PAPEL}
+                    onChange={(evento) => setFiltroPapel(evento.target.value)}
+                    wrapperClassName="w-full lg:w-56"
+                  />
+                  <Entrada
+                    rotulo="Buscar"
+                    type="search"
+                    value={textoBusca}
+                    placeholder="Nome ou e-mail"
+                    onChange={(evento) => setTextoBusca(evento.target.value)}
+                    wrapperClassName="w-full lg:max-w-xs"
+                  />
+                  <div className="flex flex-wrap items-center gap-3 lg:ml-auto lg:pb-0.5">
+                    <Alternador
+                      opcoes={OPCOES_ESCOPO}
+                      valor={escopo}
+                      onMudar={setEscopo}
+                    />
+                    <Botao
+                      variante="fantasma"
+                      icone="X"
+                      onClick={limparFiltros}
+                      disabled={!temFiltro}
+                    >
+                      Limpar filtros
+                    </Botao>
+                  </div>
+                </>
+              )}
             </div>
 
             {visiveis.length === 0 ? (
@@ -921,6 +1144,18 @@ export default function UsuariosView() {
                   }
                 />
               </div>
+            ) : celular ? (
+              <ul className="divide-y divide-gray-100">
+                {visiveis.map((usuario) => (
+                  <CartaoUsuario
+                    key={usuario.id}
+                    usuario={usuario}
+                    ehVoceMesmo={sessao?.userId === usuario.id}
+                    podeGerenciar={podeGerenciar}
+                    onAlterar={() => setAlvo(usuario)}
+                  />
+                ))}
+              </ul>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[900px] text-left text-sm">

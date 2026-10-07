@@ -121,7 +121,7 @@ function TabelaResumo({
         {/* Cabeçalho miúdo, mas presente: sem ele, "12 / 40 un. / R$ 900" obriga a
             adivinhar o que é 12 — pacote, venda ou item. */}
         <thead>
-          <tr className="border-b border-[var(--cz-hairline)] text-[10.5px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-fraco)]">
+          <tr className="border-b border-[var(--cz-hairline)] text-[10.5px] max-md:text-[11.5px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-fraco)]">
             <th className="px-3.5 py-1.5 text-left font-bold">
               {titulo.replace("Por ", "")}
             </th>
@@ -166,7 +166,7 @@ function TabelaResumo({
                 >
                   {inteiro(linha.vendas)}
                 </td>
-                <td className="relative px-2 py-2 text-right text-[12px] tabular-nums text-[var(--cz-texto-suave)]">
+                <td className="relative whitespace-nowrap px-2 py-2 text-right text-[12px] tabular-nums text-[var(--cz-texto-suave)]">
                   {inteiro(linha.unidades)} un.
                 </td>
                 <td className="relative px-3.5 py-2 text-right text-[12px] font-semibold tabular-nums text-[var(--cz-texto)]">
@@ -435,17 +435,29 @@ export default function Expedicao({
 
   return (
     <MolduraTela>
-      <div className={imprimindo ? "cz-imprimir-fila" : ""}>
+      {/* `max-md:pb-32`: com pacotes marcados, a barra de impressão em lote fica FIXA
+          sobre a barra de abas (ver `BarraLote`) e cobriria o fim da lista. */}
+      <div
+        className={`${imprimindo ? "cz-imprimir-fila" : ""} ${
+          selecionados.size > 0 ? "max-md:pb-32" : ""
+        }`}
+      >
         {/* ─────────────────────────── CABEÇALHO ─────────────────────────── */}
-        <header className="cz-nao-imprimir flex flex-wrap items-start justify-between gap-4">
+        <header className="cz-nao-imprimir flex flex-wrap items-start justify-between gap-4 max-md:gap-3">
           <div>
-            <h1 className="cz-titulo text-[24px] leading-8">{textos.titulo}</h1>
+            {/* Celular: 22px, como o `Cabecalho` do kit. O cabeçalho fixo já repete o
+                nome da tela, então o título aqui é o início do conteúdo. */}
+            <h1 className="cz-titulo text-[24px] leading-8 max-md:text-[22px] max-md:leading-7">{textos.titulo}</h1>
             <p className="mt-1 max-w-3xl text-[13.5px] leading-relaxed text-[var(--cz-texto-suave)]">
               {textos.descricao}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          {/* Celular: grade de duas colunas. "Sincronizar vendas" (o primeiro filho) e
+              "Imprimir PDF" (o último) ocupam a linha toda; "Atualizar" e "Exportar"
+              dividem a do meio. Quatro botões quebrando em linha livre, como no
+              desktop, davam três linhas de larguras diferentes e nenhum alinhamento. */}
+          <div className="flex flex-wrap items-center gap-2.5 max-md:grid max-md:w-full max-md:grid-cols-2 max-md:gap-2 max-md:[&>:first-child]:col-span-2 max-md:[&>:last-child]:col-span-2">
             <BotaoSincronizarDashboard
               canais={
                 canalFixo
@@ -541,7 +553,7 @@ export default function Expedicao({
 
         {/* ───────────────────────── A TABELA ───────────────────────── */}
         <section className="mt-5 overflow-hidden rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)]">
-          <div className="cz-nao-imprimir flex flex-wrap items-center justify-between gap-3 border-b border-[var(--cz-hairline)] px-4 py-3">
+          <div className="cz-nao-imprimir flex flex-wrap items-center justify-between gap-3 border-b border-[var(--cz-hairline)] px-4 py-3 max-md:flex-col max-md:items-stretch max-md:gap-2.5">
             {/* Três contagens porque são três coisas: PACOTE é etiqueta a
                 imprimir, ITEM é linha de produto a conferir na prateleira, e
                 UNIDADE é peça a tirar. Um pedido de três produtos diferentes é 1
@@ -551,15 +563,15 @@ export default function Expedicao({
               {inteiro(dados?.itens ?? 0)} itens · {inteiro(dados?.unidades ?? 0)} unidades
             </span>
 
-            <label className="flex items-center gap-2 text-[13px] text-[var(--cz-texto-suave)]">
-              Ordenar por
+            <label className="flex items-center gap-2 text-[13px] text-[var(--cz-texto-suave)] max-md:text-[14px]">
+              <span className="shrink-0">Ordenar por</span>
               <select
                 value={ordemAtual}
                 onChange={(e) => {
                   const o = ORDENS.find((x) => x.chave === e.target.value);
                   if (o) mudarBarra({ ordem: o.ordem, direcao: o.direcao });
                 }}
-                className="h-8 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2 text-[12.5px] font-semibold text-[var(--cz-texto)] outline-none focus:border-[var(--cz-laranja)]"
+                className="h-8 max-md:h-11 max-md:min-w-0 max-md:flex-1 max-md:px-3 rounded-lg border border-[var(--cz-hairline-forte)] bg-[var(--cz-superficie)] px-2 text-[12.5px] font-semibold text-[var(--cz-texto)] outline-none focus:border-[var(--cz-laranja)]"
               >
                 {ORDENS.map((o) => (
                   <option key={o.chave} value={o.chave}>
@@ -617,7 +629,10 @@ export default function Expedicao({
                 />
               </div>
 
+              {/* `imprimindo`: na folha de impressão a fila volta a ser TABELA mesmo no
+                  celular — o CSS de impressão (`cz-imprimir-fila`) foi feito para ela. */}
               <TabelaSeparacao
+                imprimindo={imprimindo}
                 pacotes={pacotes}
                 offset={(filtros.pagina - 1) * filtros.porPagina}
                 selecionados={selecionados}

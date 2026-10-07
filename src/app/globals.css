@@ -956,14 +956,20 @@ select.error {
 
 /* Barra recolhida: o container perde o padding lateral, e o traco iria para
    fora da tela. */
-.cz-nav-recolhida .cz-nav-item {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-}
+/* So no desktop (768px+): "recolhida" e um estado da coluna fixa. Na gaveta do
+   celular a barra mostra os rotulos sempre, e sem o `@media` o item centrado
+   piscava durante a animacao de fechar (o React desliga a gaveta antes dela
+   terminar de sair). */
+@media (min-width: 768px) {
+    .cz-nav-recolhida .cz-nav-item {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
 
-.cz-nav-recolhida .cz-nav-item[aria-current="page"]::before {
-    left: -0.5rem;
+    .cz-nav-recolhida .cz-nav-item[aria-current="page"]::before {
+        left: -0.5rem;
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1379,5 +1385,176 @@ select.error {
     .cz-declaracao-imprimir footer {
         break-inside: avoid;
         page-break-inside: avoid;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Camada mobile                                                              */
+/*                                                                            */
+/* Vale para o painel INTEIRO em tela estreita e vem por ULTIMO de proposito.  */
+/* Esta folha e sem camada, e CSS sem camada vence as utilitarias do Tailwind  */
+/* (que moram em `@layer utilities`) — entao cada regra aqui e curta, fica     */
+/* dentro de uma media query e so toca a propriedade que precisa. Uma regra     */
+/* larga demais apagaria decisoes de layout que as telas tomaram por classe.   */
+/*                                                                            */
+/* Decisao de corte: 767px, o mesmo ponto em que o Tailwind liga `md:` e em     */
+/* que a barra lateral deixa de ser gaveta e vira coluna fixa. Abaixo disso o  */
+/* produto e "celular", acima e "painel".                                     */
+/* -------------------------------------------------------------------------- */
+
+:root {
+    /* Altura da barra de abas do celular, sem a area segura do iOS. */
+    --cz-tabbar-h: 3.5rem;
+
+    /* Quanto o conteudo (e qualquer elemento fixo de rodape) precisa deixar
+       livre embaixo. Zero no desktop e nas telas sem a barra de abas; o celular
+       com a barra liga o valor real em `html.cz-com-tabbar` logo abaixo. */
+    --cz-bottom-offset: 0px;
+}
+
+html {
+    /* O iOS reescala o texto ao girar o aparelho e deixa parte da tela em corpo
+       diferente; 100% desliga isso sem impedir o zoom do usuario. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* O clarao cinza que o navegador pinta em todo toque e o que faz uma
+       interface web parecer web. O estado :active dos botoes ja diz "tocou". */
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Tira o atraso do duplo-toque-para-zoom nos controles, sem desligar o
+   pinch-zoom da pagina (que e acessibilidade, nao enfeite). */
+a,
+button,
+[role="button"],
+input,
+select,
+textarea,
+label,
+summary {
+    touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+    :root {
+        /* 72px de cabecalho num aparelho de 844px de altura sao 8,5% da tela so
+           de moldura. 56px mantem o alvo de toque do menu e devolve o espaco. O
+           token e lido pelo cabecalho, pelo bloco da marca na gaveta e pelo
+           padding-top do conteudo, entao a troca vale para todas as telas. */
+        --cz-topbar-h: 3.5rem;
+    }
+
+    /* A barra de abas (BottomNav) liga esta classe no <html> enquanto existe. */
+    html.cz-com-tabbar {
+        --cz-bottom-offset: calc(var(--cz-tabbar-h) + env(safe-area-inset-bottom, 0px));
+    }
+
+    html.cz-com-tabbar body {
+        padding-bottom: var(--cz-bottom-offset);
+    }
+
+    /* 16px em todo campo de texto. Abaixo disso o Safari do iOS AMPLIA a pagina
+       ao focar o campo e nao desfaz, e a pessoa passa a navegar numa tela
+       cortada. A lista repete os escopos (.cz-tarefas, .cz-auth, .cz-admin)
+       porque eles declaram font-size com especificidade maior que a do seletor
+       de elemento, e esta regra vem depois para empatar e vencer. */
+    input:not([type]),
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="search"],
+    input[type="date"],
+    input[type="time"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="week"],
+    textarea,
+    select,
+    .cz-tarefas input[type="text"],
+    .cz-tarefas input[type="email"],
+    .cz-tarefas input[type="password"],
+    .cz-tarefas input[type="number"],
+    .cz-tarefas input[type="tel"],
+    .cz-tarefas input[type="search"],
+    .cz-tarefas input[type="date"],
+    .cz-tarefas input[type="month"],
+    .cz-tarefas textarea,
+    .cz-tarefas select,
+    .cz-auth input[type="text"],
+    .cz-auth input[type="email"],
+    .cz-auth input[type="password"],
+    .cz-auth select,
+    .cz-admin input.cz-busca {
+        font-size: 1rem;
+    }
+
+    /* Itens do menu com alvo de toque de 44px+ (eram ~38px, feitos para o mouse). */
+    .cz-nav-item {
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+        font-size: 0.9375rem;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Faixa que rola na horizontal                                               */
+/*                                                                            */
+/* Para chips, abas e seletores de periodo: uma linha que o dedo arrasta em    */
+/* vez de quebrar em quatro linhas e empurrar o conteudo para baixo. Sem barra  */
+/* visivel (o corte do ultimo item ja diz "tem mais"), e o scroll nao vaza para */
+/* a pagina.                                                                   */
+/*                                                                            */
+/* `.cz-hscroll-sangra` faz a faixa encostar nas bordas da tela: o conteudo     */
+/* passa por baixo do padding da pagina em vez de parar 16px antes da borda, o  */
+/* que e a pista visual de que a lista continua.                                */
+/* -------------------------------------------------------------------------- */
+
+.cz-hscroll {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.cz-hscroll::-webkit-scrollbar {
+    display: none;
+}
+
+.cz-hscroll > * {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+}
+
+@media (max-width: 767px) {
+    .cz-hscroll-sangra {
+        margin-inline: -1rem;
+        padding-inline: 1rem;
+        scroll-padding-inline: 1rem;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Gaveta e folha inferior                                                    */
+/*                                                                            */
+/* Enquanto uma gaveta ou folha esta aberta, a pagina por baixo nao pode rolar: */
+/* o dedo que arrasta a lista da folha nao deve arrastar a tabela do fundo.     */
+/* `overscroll-behavior: contain` nas proprias folhas cuida do fim da lista; a   */
+/* classe abaixo cuida do resto.                                               */
+/* -------------------------------------------------------------------------- */
+
+html.cz-trava-rolagem,
+html.cz-trava-rolagem body {
+    overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cz-hscroll {
+        scroll-behavior: auto;
     }
 }

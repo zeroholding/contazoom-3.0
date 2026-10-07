@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { useSmartDropdown } from "../../../../hooks/useSmartDropdown";
+import { useCelular } from "@/hooks/useMediaQuery";
+import { CampoDaFolha, GrupoDePilulas } from "@/components/ui/FiltrosSheet";
 
 export type FiltroAgrupamentoSKU = "mlb" | "sku" | "hierarquia1" | "hierarquia2" | "kit";
+
+const AGRUPAMENTOS: FiltroAgrupamentoSKU[] = ["mlb", "sku", "hierarquia1", "hierarquia2", "kit"];
 
 interface FiltroSKUProps {
   agrupamentoAtivo: FiltroAgrupamentoSKU;
@@ -15,6 +19,7 @@ export default function FiltroSKU({
   onAgrupamentoChange,
 }: FiltroSKUProps) {
 
+  const celular = useCelular();
   const [showAgrupamentoDropdown, setShowAgrupamentoDropdown] = useState(false);
 
   const agrupamentoDropdown = useSmartDropdown<HTMLButtonElement>({
@@ -46,6 +51,25 @@ export default function FiltroSKU({
       default: return "Agrupa por código MLB do produto";
     }
   };
+
+  // Celular: este filtro mora na folha de filtros (ver HeaderDashboard), e lá as
+  // cinco opções cabem todas à vista como pastilhas. O chip com dropdown continua
+  // sendo o do desktop.
+  if (celular) {
+    return (
+      <CampoDaFolha rotulo="Agrupar por">
+        <GrupoDePilulas
+          rotulo="Agrupar por"
+          opcoes={AGRUPAMENTOS.map((id) => ({ id, rotulo: getAgrupamentoLabel(id) }))}
+          estaAtiva={(id) => id === agrupamentoAtivo}
+          onEscolher={(id) => onAgrupamentoChange(id as FiltroAgrupamentoSKU)}
+        />
+        <p className="mt-2.5 text-[13px] leading-snug text-[var(--cz-texto-suave)]">
+          {getAgrupamentoDescription(agrupamentoAtivo)}
+        </p>
+      </CampoDaFolha>
+    );
+  }
 
   return (
     <div className="relative">

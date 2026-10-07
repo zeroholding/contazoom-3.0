@@ -78,18 +78,18 @@ export default function DeleteModal({
           </div>
         </div>
 
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-3 pt-4 max-md:flex-col-reverse">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors max-md:h-12 max-md:flex-none"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirm}
             disabled={isDeleting || isLoading}
-            className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white ${
+            className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white max-md:h-12 max-md:flex-none ${
               isDeleting || isLoading
                 ? "bg-red-400 cursor-not-allowed"
                 : "bg-red-600 hover:bg-red-700"

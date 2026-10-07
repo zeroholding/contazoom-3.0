@@ -9,13 +9,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { CampoDaFolha, GrupoDePilulas } from "@/components/ui/FiltrosSheet";
 import { useAoSincronizarVendas } from "@/hooks/useAoSincronizarVendas";
+import { useCelular } from "@/hooks/useMediaQuery";
+import { FiltrosAnuncioCelular } from "./anuncios/comum";
+import { FiltroRapido, type ChipFiltro } from "./comum/filtros";
 import {
   Aviso,
   BotaoAtualizar,
   Cabecalho,
   CabecalhoTabela,
   Campo,
+  CaixaBusca,
   CampoBusca,
   Esqueleto,
   Faixa,
@@ -365,6 +370,75 @@ export default function EstoqueFull() {
     Boolean(hierarquia2),
   ].filter(Boolean).length;
 
+  // Celular: o que está LIGADO dentro da folha, para o botão "Filtros (n)" e os chips.
+  // A busca, a ordenação e o recorte de situação ficam à vista, fora dela.
+  const celular = useCelular();
+  const chips: ChipFiltro[] = [];
+  for (const id of contas) {
+    chips.push({
+      chave: `conta-${id}`,
+      grupo: "Conta",
+      rotulo: dados?.contasDisponiveis.find((c) => c.id === id)?.nickname ?? id,
+      remover: () => {
+        setContas((atual) => atual.filter((x) => x !== id));
+        setPagina(1);
+      },
+    });
+  }
+  for (const s of skus) {
+    chips.push({
+      chave: `sku-${s}`,
+      grupo: "SKU",
+      rotulo: s,
+      remover: () => {
+        setSkus((atual) => atual.filter((x) => x !== s));
+        setPagina(1);
+      },
+    });
+  }
+  if (estoque) {
+    chips.push({
+      chave: "estoque",
+      grupo: "Estoque",
+      rotulo: estoque === "sem" ? "Esgotado" : "Com estoque",
+      remover: () => {
+        setEstoque("");
+        setPagina(1);
+      },
+    });
+  }
+  if (hierarquia1) {
+    chips.push({
+      chave: "h1",
+      grupo: "Hierarquia 1",
+      rotulo: hierarquia1,
+      remover: () => {
+        setHierarquia1("");
+        setPagina(1);
+      },
+    });
+  }
+  if (hierarquia2) {
+    chips.push({
+      chave: "h2",
+      grupo: "Hierarquia 2",
+      rotulo: hierarquia2,
+      remover: () => {
+        setHierarquia2("");
+        setPagina(1);
+      },
+    });
+  }
+
+  function limparFolha() {
+    setContas([]);
+    setSkus([]);
+    setEstoque("");
+    setHierarquia1("");
+    setHierarquia2("");
+    setPagina(1);
+  }
+
   const pctProgresso =
     progresso && progresso.total > 0
       ? Math.min(97, Math.round((progresso.atual / Math.max(1, progresso.total)) * 100))
@@ -415,9 +489,131 @@ export default function EstoqueFull() {
         }}
       />
 
+      {/* Celular: busca + ordenação à vista e UM botão "Filtros". A seção abaixo (desktop
+          e tablet) fica escondida por CSS (`max-md:hidden`), que vale já no primeiro
+          quadro, antes de o JavaScript decidir qual dos dois desenhar. */}
+      {celular && (
+        <FiltrosAnuncioCelular
+          busca={
+            <CaixaBusca
+              valor={busca}
+              onMudar={setBusca}
+              onAplicar={() => {
+                setBuscaAplicada(busca);
+                setPagina(1);
+              }}
+              placeholder="Título, SKU, código ou MLB"
+              rotuloAcessivel="Buscar no estoque Full"
+            />
+          }
+          destaque={
+            <select
+              aria-label="Ordenar"
+              value={`${ordem}:${direcao}`}
+              onChange={(e) => {
+                const [campo, dir] = e.target.value.split(":") as [Ordem, Direcao];
+                ordenar(campo, dir);
+              }}
+              className={ENTRADA}
+            >
+              {CAMPOS_ORDEM.flatMap((campo) => [
+                <option key={`${campo.chave}:desc`} value={`${campo.chave}:desc`}>
+                  {campo.rotulo} — maior primeiro
+                </option>,
+                <option key={`${campo.chave}:asc`} value={`${campo.chave}:asc`}>
+                  {campo.rotulo} — menor primeiro
+                </option>,
+              ])}
+            </select>
+          }
+          ativos={chips.length}
+          onLimpar={limparFolha}
+          chips={chips}
+        >
+          <CampoDaFolha rotulo="Conta">
+            <GrupoDePilulas
+              rotulo="Conta"
+              opcoes={(dados?.contasDisponiveis ?? []).map((c) => ({ id: c.id, rotulo: c.nickname ?? c.id }))}
+              estaAtiva={(id) => contas.includes(id)}
+              onEscolher={(id) => {
+                setContas((atual) => (atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id]));
+                setPagina(1);
+              }}
+            />
+          </CampoDaFolha>
+
+          <CampoDaFolha rotulo="Estoque">
+            <GrupoDePilulas
+              rotulo="Estoque"
+              opcoes={[
+                { id: "", rotulo: "Todos" },
+                { id: "com", rotulo: "Com estoque" },
+                { id: "sem", rotulo: "Esgotado" },
+              ]}
+              estaAtiva={(id) => estoque === id}
+              onEscolher={(id) => {
+                setEstoque(id);
+                setPagina(1);
+              }}
+            />
+          </CampoDaFolha>
+
+          <FiltroRapido
+            rotulo="SKU"
+            placeholder="Todos"
+            buscaPlaceholder="Digite o código do SKU…"
+            vazio="Nenhum SKU no snapshot do Full"
+            opcoes={(dados?.skusDisponiveis ?? []).map((s) => ({ valor: s, rotulo: s }))}
+            selecionados={skus}
+            onMudar={(v) => {
+              setSkus(v);
+              setPagina(1);
+            }}
+          />
+
+          <CampoDaFolha rotulo="Hierarquia 1">
+            <select
+              aria-label="Hierarquia 1"
+              value={hierarquia1}
+              onChange={(e) => {
+                setHierarquia1(e.target.value);
+                setPagina(1);
+              }}
+              className={ENTRADA}
+            >
+              <option value="">Todas</option>
+              {(dados?.hierarquias1 ?? []).map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </CampoDaFolha>
+
+          <CampoDaFolha rotulo="Hierarquia 2">
+            <select
+              aria-label="Hierarquia 2"
+              value={hierarquia2}
+              onChange={(e) => {
+                setHierarquia2(e.target.value);
+                setPagina(1);
+              }}
+              className={ENTRADA}
+            >
+              <option value="">Todas</option>
+              {(dados?.hierarquias2 ?? []).map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </CampoDaFolha>
+        </FiltrosAnuncioCelular>
+      )}
+
       <section
         aria-label="Filtros e ordenação"
-        className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3 shadow-[var(--cz-elev-1)] sm:p-4"
+        className="mt-4 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3 shadow-[var(--cz-elev-1)] sm:p-4 max-md:hidden"
       >
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-12">
           <CampoBusca
@@ -758,7 +954,12 @@ function RecorteSituacao({
 
   return (
     <section aria-label="Recorte por situação" className="mt-5">
-      <div className="flex gap-2 overflow-x-auto pb-1" role="group">
+      {/* Celular: a faixa sangra até a borda da tela (a pista de que há mais chips) e
+          esconde a barra de rolagem; o resto é igual. */}
+      <div
+        className="flex gap-2 overflow-x-auto pb-1 max-md:-mx-4 max-md:px-4 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
+        role="group"
+      >
         {SITUACOES.map((opcao) => {
           const selecionada = opcao.chave === valor;
           return (
@@ -837,7 +1038,7 @@ function KpiResponsivo({
         {icone}
       </span>
       <div className="min-w-0 flex-1">
-        <span className="block text-[11px] font-bold uppercase leading-tight tracking-[0.04em] text-[var(--cz-texto-suave)] sm:text-[11px]">
+        <span className="block text-[12px] sm:text-[11px] font-bold uppercase leading-tight tracking-[0.04em] text-[var(--cz-texto-suave)]">
           {rotulo}
         </span>
         <strong
@@ -846,7 +1047,7 @@ function KpiResponsivo({
           {valor}
         </strong>
         {nota && (
-          <span className="mt-1 block text-[11px] leading-snug text-[var(--cz-texto-suave)] sm:text-[11px]">
+          <span className="mt-1 block text-[12px] sm:text-[11px] leading-snug text-[var(--cz-texto-suave)]">
             {nota}
           </span>
         )}
@@ -886,6 +1087,8 @@ function EstadoCarregando() {
 
 function CardEstoque({ linha }: { linha: Linha }) {
   const esgotado = linha.disponivel === 0;
+  const celular = useCelular();
+  const risco = linha.cobertura !== null && linha.cobertura <= DIAS_REPOR;
 
   return (
     <article className={linha.situacao === "repor" ? "bg-rose-50/20" : undefined}>
@@ -896,14 +1099,60 @@ function CardEstoque({ linha }: { linha: Linha }) {
             <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--cz-texto)]">
               {linha.titulo}
             </h3>
-            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-[var(--cz-texto-suave)]">
+            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[11px] max-md:text-[12px] text-[var(--cz-texto-suave)]">
               {linha.sku && <span className="font-mono">SKU: {linha.sku}</span>}
               <span className="font-mono">Cód.: {linha.inventoryId}</span>
             </div>
           </div>
         </div>
 
-        <dl className="mt-4 grid grid-cols-3 gap-2">
+        {/* Celular: o SELO de situação sai da terceira coluna (ali cabia "Estoque …") e
+            vira a primeira coisa sob o título; as métricas passam a 2×2, com "a caminho"
+            e as vendas de 30 dias, que ficavam escondidas em "Mais detalhes". */}
+        {celular && (
+          <>
+            <div className="mt-3">
+              <SeloSituacao situacao={linha.situacao} />
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--cz-raio)] border border-[var(--cz-hairline)] bg-[var(--cz-hairline)]">
+              <div className="bg-[var(--cz-fundo)] px-3 py-2.5">
+                <dt className="text-[12px] font-semibold text-[var(--cz-texto-suave)]">Aptas p/ venda</dt>
+                <dd
+                  className={`mt-0.5 text-[20px] font-extrabold leading-tight tabular-nums ${
+                    esgotado ? "text-rose-700" : "text-emerald-700"
+                  }`}
+                >
+                  {inteiro(linha.disponivel)}
+                </dd>
+              </div>
+              <div className="bg-[var(--cz-fundo)] px-3 py-2.5">
+                <dt className="text-[12px] font-semibold text-[var(--cz-texto-suave)]">Cobertura</dt>
+                <dd
+                  className={`mt-0.5 text-[16px] font-extrabold leading-tight ${
+                    risco ? "text-rose-700" : "text-[var(--cz-texto)]"
+                  }`}
+                >
+                  {linha.rotuloCobertura}
+                </dd>
+              </div>
+              <div className="bg-[var(--cz-fundo)] px-3 py-2.5">
+                <dt className="text-[12px] font-semibold text-[var(--cz-texto-suave)]">A caminho</dt>
+                <dd className="mt-0.5 text-[16px] font-extrabold leading-tight tabular-nums text-[var(--cz-texto)]">
+                  {linha.transferencia > 0 ? `${inteiro(linha.transferencia)} un.` : "—"}
+                </dd>
+              </div>
+              <div className="bg-[var(--cz-fundo)] px-3 py-2.5">
+                <dt className="text-[12px] font-semibold text-[var(--cz-texto-suave)]">Vendas 30d</dt>
+                <dd className="mt-0.5 text-[16px] font-extrabold leading-tight tabular-nums text-[var(--cz-texto)]">
+                  {inteiro(linha.vendas30dUnidades)} un.
+                </dd>
+                <dd className="text-[12px] text-[var(--cz-texto-suave)]">{brl(linha.vendas30dReceita)}</dd>
+              </div>
+            </dl>
+          </>
+        )}
+
+        <dl className="mt-4 grid grid-cols-3 gap-2 max-md:hidden">
           <MetricaCard rotulo="Aptas">
             <strong
               className={`text-base font-extrabold tabular-nums ${
@@ -971,7 +1220,7 @@ function CardEstoque({ linha }: { linha: Linha }) {
 function MetricaCard({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   return (
     <div className="min-w-0 rounded-[var(--cz-raio)] bg-[var(--cz-fundo)] p-2.5">
-      <dt className="text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-fraco)]">
+      <dt className="text-[11px] max-md:text-[12px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-fraco)]">
         {rotulo}
       </dt>
       <dd className="mt-1 min-w-0">{children}</dd>
@@ -992,7 +1241,7 @@ function Detalhe({
 }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-fraco)]">
+      <dt className="text-[11px] max-md:text-[12px] font-bold uppercase tracking-[0.04em] text-[var(--cz-texto-fraco)]">
         {rotulo}
       </dt>
       <dd
@@ -1000,7 +1249,7 @@ function Detalhe({
       >
         {valor}
       </dd>
-      {nota && <dd className="text-[11px] text-[var(--cz-texto-suave)]">{nota}</dd>}
+      {nota && <dd className="text-[11px] max-md:text-[12px] text-[var(--cz-texto-suave)]">{nota}</dd>}
     </div>
   );
 }
@@ -1016,7 +1265,7 @@ function SeloSituacao({
   return (
     <span
       className={`inline-flex max-w-full items-center gap-1.5 rounded-full font-bold ${selo.casca} ${
-        compacto ? "px-2 py-1 text-[11px]" : "px-2.5 py-1 text-[11px]"
+        compacto ? "px-2 py-1 text-[11px] max-md:text-[12px]" : "px-2.5 py-1 text-[11px] max-md:text-[12px]"
       }`}
     >
       <span className={`size-1.5 shrink-0 rounded-full ${selo.bolinha}`} aria-hidden />

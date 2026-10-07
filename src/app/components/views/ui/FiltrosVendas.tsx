@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import DatePicker from "react-datepicker";
+import { useCelular } from "@/hooks/useMediaQuery";
+import FiltrosVendasCelular from "./FiltrosVendasCelular";
 import {
   COLUNAS_PADRAO,
   colunasDaPlataforma,
@@ -355,6 +357,111 @@ export default function FiltrosVendas({
     for (const c of colunasOferecidas) nenhuma[c.id] = false;
     onColunasChange(nenhuma);
   };
+
+  // CELULAR: abas de status e período à vista; conta, envio (e, no Mercado Livre,
+  // ADS/exposição/tipo) na folha "Filtros (n)". Depois de TODOS os hooks desta
+  // função (não há nenhum daqui para baixo) e com os mesmos handlers do desktop.
+  const celular = useCelular();
+  if (celular) {
+    const ehMeli = platform === "Mercado Livre";
+    const grupos = [
+      ...(ehMeli
+        ? [
+            {
+              id: "ads",
+              rotulo: "ADS",
+              opcoes: [
+                { id: "todos", rotulo: "Todos" },
+                { id: "com_ads", rotulo: "Com ADS" },
+                { id: "sem_ads", rotulo: "Sem ADS" },
+              ],
+              atual: filtroADS as string,
+              padrao: "todos",
+              onEscolher: (id: string) => onADSChange?.(id as FiltroADS),
+            },
+            {
+              id: "exposicao",
+              rotulo: "Exposição",
+              opcoes: [
+                { id: "todas", rotulo: "Todas" },
+                { id: "premium", rotulo: "Premium" },
+                { id: "classico", rotulo: "Clássico" },
+              ],
+              atual: filtroExposicao as string,
+              padrao: "todas",
+              onEscolher: (id: string) => onExposicaoChange?.(id as FiltroExposicao),
+            },
+            {
+              id: "anuncio",
+              rotulo: "Tipo de anúncio",
+              opcoes: [
+                { id: "todos", rotulo: "Todos" },
+                { id: "catalogo", rotulo: "Catálogo" },
+                { id: "proprio", rotulo: "Próprio" },
+              ],
+              atual: filtroTipoAnuncio as string,
+              padrao: "todos",
+              onEscolher: (id: string) => onTipoAnuncioChange?.(id as FiltroTipoAnuncio),
+            },
+          ]
+        : []),
+      {
+        id: "envio",
+        rotulo: "Modalidade de envio",
+        opcoes: (["todos", "me", "full", "flex"] as FiltroModalidadeEnvio[]).map((id) => ({
+          id,
+          rotulo: getModalidadeEnvioLabel(id),
+        })),
+        atual: filtroModalidadeEnvio as string,
+        padrao: "todos",
+        onEscolher: (id: string) => onModalidadeEnvioChange?.(id as FiltroModalidadeEnvio),
+      },
+      {
+        id: "conta",
+        rotulo: "Conta",
+        opcoes: [
+          { id: "todas", rotulo: "Todas as contas" },
+          ...contasDisponiveis.map((c) => ({ id: c.id, rotulo: c.nickname })),
+        ],
+        atual: filtroConta,
+        padrao: "todas",
+        onEscolher: (id: string) => onContaChange?.(id),
+      },
+    ];
+
+    return (
+      <FiltrosVendasCelular
+        status={{
+          opcoes: filtros.map((f) => ({
+            id: f.id,
+            rotulo: f.label,
+            contagem: f.count,
+            cor: f.color as "green" | "red" | "gray",
+          })),
+          atual: filtroAtivo,
+          onEscolher: (id) => handleFiltroClick(id as FiltroStatus),
+        }}
+        periodo={{
+          opcoes: (
+            ["todos", "hoje", "ontem", "este_mes", "mes_passado", "personalizado"] as FiltroPeriodo[]
+          ).map((id) => ({
+            id,
+            rotulo: id === "personalizado" ? "Personalizado" : getPeriodoLabel(id),
+          })),
+          atual: periodoAtivo,
+          rotuloAtual: getPeriodoLabel(periodoAtivo),
+          onEscolher: (id) => handlePeriodoClick(id as FiltroPeriodo),
+          onAplicarPersonalizado: (inicio, fim) => {
+            onPeriodoPersonalizadoChange?.(inicio, fim);
+            setDataInicio(inicio);
+            setDataFim(fim);
+            onPeriodoChange?.("personalizado");
+          },
+        }}
+        grupos={grupos}
+      />
+    );
+  }
 
   const getFiltroClasses = (filtro: typeof filtros[0], isActive: boolean) => {
     const baseClasses = "relative flex items-center gap-2 px-3 py-1.5 rounded-md font-medium text-xs transition-all duration-300 ease-in-out cursor-pointer select-none";

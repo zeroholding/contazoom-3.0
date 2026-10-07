@@ -1,5 +1,8 @@
 "use client";
 
+import { useCelular } from "@/hooks/useMediaQuery";
+import { PaginacaoVendasCelular } from "./ListaCartoesVendas";
+
 /**
  * Opções de tamanho de página.
  *
@@ -106,6 +109,23 @@ export default function VendasPagination({
   const formatNumber = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
   const primeiro = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const ultimo = Math.min(currentPage * itemsPerPage, totalItems);
+
+  // Celular: outra disposição (duas linhas, botões de 44px). O hook vem antes do
+  // retorno antecipado e nada depende dele, então a ordem dos hooks não muda.
+  const celular = useCelular();
+  if (celular) {
+    return (
+      <PaginacaoVendasCelular
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        itemsPerPage={itemsPerPage}
+        onPageChange={onPageChange}
+        onItemsPerPageChange={onItemsPerPageChange}
+        opcoesPorPagina={OPCOES_POR_PAGINA}
+      />
+    );
+  }
 
   const botaoSeta =
     "grid h-7 w-7 shrink-0 place-items-center rounded-[var(--cz-raio)] border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] transition-colors hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-[var(--cz-hairline-forte)] disabled:hover:text-[var(--cz-texto-suave)]";

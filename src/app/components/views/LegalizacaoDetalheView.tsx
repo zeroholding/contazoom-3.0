@@ -933,7 +933,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
   if (naoEncontrado) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Cabecalho
           titulo="Processo não encontrado"
           icone="Landmark"
@@ -960,7 +960,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
   if (primeiraCarga && carregando) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Carregando texto="Carregando processo" />
       </div>
     );
@@ -968,7 +968,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
   if (!processo) {
     return (
-      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+      <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
         <Cabecalho
           titulo="Legalização"
           icone="Landmark"
@@ -1045,7 +1045,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
   );
 
   return (
-    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6">
+    <div className="cz-tarefas mx-auto max-w-[1800px] space-y-6 p-6 max-md:space-y-4 max-md:p-4">
       <Cabecalho
         titulo={processo.tipoLabel || TIPO_PROCESSO_LABEL[processo.tipo] || processo.tipo}
         descricao={descricao}
@@ -1066,7 +1066,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
       {/* ------------------------------ Resumo ------------------------------ */}
 
       <Painel>
-        <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 px-5 py-4 max-md:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <SeloStatus status={processo.status} />
             <SeloPrazo
@@ -1192,7 +1192,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
       {/* -------------------------- Grade de dados -------------------------- */}
 
       <Painel titulo="Dados do processo">
-        <dl className="grid gap-5 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+        <dl className="grid gap-5 px-5 py-4 max-md:px-4 sm:grid-cols-2 lg:grid-cols-4">
           <Dado rotulo="Tipo">
             {processo.tipoLabel ||
               TIPO_PROCESSO_LABEL[processo.tipo] ||
@@ -1327,6 +1327,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
               icone="Save"
               disabled={ocupado || !protocoloMudou}
               onClick={salvarProtocolo}
+              className="max-md:w-full"
             >
               Salvar protocolo
             </Botao>
@@ -1564,7 +1565,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
               ajuda="Liberado mesmo com o processo encerrado."
             />
 
-            <Botao icone="Save" disabled={ocupado} onClick={salvarDados}>
+            <Botao icone="Save" disabled={ocupado} onClick={salvarDados} className="max-md:w-full">
               Salvar dados
             </Botao>
           </div>

@@ -81,7 +81,9 @@ function casca({
   comSufixo?: boolean;
 }): string {
   return [
-    "cz-campo w-full appearance-none bg-white",
+    // `scroll-mb-32`: ao focar um campo o navegador o rola para a vista; sem esta
+    // margem ele parava colado na barra fixa de Voltar/Continuar (ou atrás dela).
+    "cz-campo w-full scroll-mb-32 appearance-none bg-white",
     "placeholder:text-[#A6ADBA]",
     // 52px de altura no repouso. O painel usa 40px porque quem usa está com
     // mouse e conhece a tela; aqui o alvo é o dedo.

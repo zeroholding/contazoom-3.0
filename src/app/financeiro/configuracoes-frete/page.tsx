@@ -180,20 +180,23 @@ export default function ConfiguracaoFretePage() {
   };
 
   return (
-    <div ref={containerRef} className="flex h-screen bg-[var(--cz-fundo)] font-sans">
+    // No celular a altura desconta a barra de abas: sem isso o fim da página (botões) ficava atrás dela.
+    <div ref={containerRef} className="flex h-screen max-md:h-[calc(100dvh-var(--cz-bottom-offset,0px))] bg-[var(--cz-fundo)] font-sans">
       <Sidebar
         collapsed={isSidebarCollapsed}
         mobileOpen={isSidebarMobileOpen}
         onMobileClose={() => setIsSidebarMobileOpen(false)}
       />
-      <div className="flex h-screen flex-1 flex-col overflow-hidden transition-all duration-200 lg:ml-[var(--sidebar-w)]">
+      {/* md:ml (antes lg:ml): a Sidebar é fixa a partir de md, então de 768 a 1023px o conteúdo ficava por baixo dela. */}
+      <div className="flex h-screen max-md:h-[calc(100dvh-var(--cz-bottom-offset,0px))] flex-1 flex-col overflow-hidden transition-all duration-200 md:ml-[var(--sidebar-w)]">
         <Topbar
           collapsed={isSidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
           onMobileMenu={() => setIsSidebarMobileOpen(true)}
         />
 
-        <main className="flex-1 overflow-auto pt-[var(--cz-topbar-h)]">
+        {/* Respiro de 1rem sob o cabeçalho fixo no celular; no desktop segue colado, como antes. */}
+        <main className="flex-1 overflow-auto pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)]">
           <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
             <header className="mb-6">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.08em] text-[var(--cz-laranja-forte)]">
@@ -245,21 +248,24 @@ export default function ConfiguracaoFretePage() {
                             <p className="text-xs text-[var(--cz-texto-suave)]">Aplicada automaticamente às vendas Flex</p>
                           </div>
                         </div>
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] max-md:text-xs font-bold text-emerald-700">
                           Ativa
                         </span>
                       </div>
 
-                      <div className="p-5">
+                      {/* Celular: botões da área com 48px de altura e largura total (max-md:[&_button]); o .gap-2 cobre as
+                          linhas de botões para que ocupem a largura toda e empilhem. */}
+                      <div className="p-5 max-md:p-4 max-md:[&_.gap-2]:w-full max-md:[&_button]:h-12 max-md:[&_button]:w-full max-md:[&_button]:justify-center max-md:[&_button]:text-sm">
                         <div className="grid gap-3 sm:grid-cols-3">
                           {[
                             ["Custo por cobrança", formatCurrency(Number(config.custoPorPacote))],
                             ["Unidades cobertas", `${config.unidadesPorCobranca} un`],
                             ["Custo por unidade", formatCurrency(Number(config.custoPorPacote) / config.unidadesPorCobranca)],
                           ].map(([label, value]) => (
-                            <div key={label} className="rounded-xl border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] p-4">
-                              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-fraco)]">{label}</p>
-                              <p className="mt-1 text-xl font-extrabold tabular-nums text-[var(--cz-texto)]">{value}</p>
+                            // Celular: cada indicador vira uma linha (rótulo à esquerda, valor à direita) em vez de 3 caixas altas.
+                            <div key={label} className="rounded-xl border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] p-4 max-md:flex max-md:items-center max-md:justify-between max-md:gap-3 max-md:py-3">
+                              <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--cz-texto-fraco)] max-md:text-xs">{label}</p>
+                              <p className="mt-1 text-xl font-extrabold tabular-nums text-[var(--cz-texto)] max-md:mt-0">{value}</p>
                             </div>
                           ))}
                         </div>
@@ -328,7 +334,7 @@ export default function ConfiguracaoFretePage() {
                         </div>
                       </div>
 
-                      <div className="space-y-5 p-5">
+                      <div className="space-y-5 p-5 max-md:p-4 max-md:[&_.gap-2]:w-full max-md:[&_button]:h-12 max-md:[&_button]:w-full max-md:[&_button]:justify-center">
                         <div className="grid gap-5 sm:grid-cols-2">
                           <label className="block">
                             <span className="text-sm font-bold text-[var(--cz-texto)]">Custo por cobrança</span>
@@ -430,7 +436,7 @@ export default function ConfiguracaoFretePage() {
                         <strong className={exampleNet >= 0 ? "text-emerald-600" : "text-rose-600"}>{formatCurrency(exampleNet)}</strong>
                       </div>
                     </div>
-                    <p className="mt-3 text-[11px] leading-relaxed text-[var(--cz-texto-fraco)]">Exemplo para 1 unidade e receita Flex de R$ 1,10. A receita real varia por venda.</p>
+                    <p className="mt-3 text-[11px] max-md:text-xs leading-relaxed text-[var(--cz-texto-fraco)]">Exemplo para 1 unidade e receita Flex de R$ 1,10. A receita real varia por venda.</p>
                   </section>
 
                   <section className="rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-5">

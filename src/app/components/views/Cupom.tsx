@@ -130,8 +130,8 @@ export default function Cupom() {
             e os cartoes brancos se destacam dele. */}
       </div>
 
-      <main className={`relative z-20 pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
-        <section className="p-3 sm:p-6">
+      <main className={`relative z-20 pt-[calc(var(--cz-topbar-h)+1rem)] md:pt-[var(--cz-topbar-h)] px-4 pb-4 sm:px-6 sm:pb-6 ${mdMlVar}`}>
+        <section className="p-3 max-md:px-0 sm:p-6">
           <HeaderCupom onNew={handleOpenModal} />
 
           <div className="rounded-xl border border-[var(--cz-hairline)] bg-white p-6">
@@ -161,26 +161,26 @@ export default function Cupom() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-1">
               <span className="block text-sm font-medium text-gray-700 mb-1">Tipo de desconto</span>
-              <div className="flex items-center gap-3">
-                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <div className="flex items-center gap-3 max-md:grid max-md:grid-cols-2">
+                <label className="inline-flex items-center gap-2 max-md:flex! text-sm text-gray-700 max-md:min-h-11 max-md:rounded-lg max-md:border max-md:border-gray-300 max-md:px-3">
                   <input
                     type="radio"
                     name="discountType"
                     value="valor"
                     checked={discountType === "valor"}
                     onChange={() => setDiscountType("valor")}
-                    className="text-orange-600 focus:ring-orange-500"
+                    className="text-orange-600 focus:ring-orange-500 max-md:h-5 max-md:w-5"
                   />
                   Valor (R$)
                 </label>
-                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <label className="inline-flex items-center gap-2 max-md:flex! text-sm text-gray-700 max-md:min-h-11 max-md:rounded-lg max-md:border max-md:border-gray-300 max-md:px-3">
                   <input
                     type="radio"
                     name="discountType"
                     value="percentual"
                     checked={discountType === "percentual"}
                     onChange={() => setDiscountType("percentual")}
-                    className="text-orange-600 focus:ring-orange-500"
+                    className="text-orange-600 focus:ring-orange-500 max-md:h-5 max-md:w-5"
                   />
                   Percentual (%)
                 </label>
@@ -195,6 +195,7 @@ export default function Cupom() {
                 )}
                 <input
                   id="value"
+              inputMode="decimal"
                   name="value"
                   type="number"
                   step="0.01"
@@ -203,7 +204,7 @@ export default function Cupom() {
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   placeholder={discountType === "valor" ? "Ex: 10,00" : "Ex: 10"}
-                  className={`w-full ${discountType === "valor" ? "pl-10" : "pl-3"} pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900`}
+                  className={`w-full ${discountType === "valor" ? "pl-10 max-md:pl-10!" : "pl-3"} pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900`}
                   required
                 />
               </div>
@@ -211,13 +212,15 @@ export default function Cupom() {
 
             <div className="md:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">Validade</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 max-md:grid-cols-1">
+                <span className="text-xs font-medium text-gray-500 md:hidden">Início da validade</span>
                 <input
                   type="date"
                   value={validFrom}
                   onChange={(e) => setValidFrom(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900"
                 />
+                <span className="text-xs font-medium text-gray-500 md:hidden">Fim da validade</span>
                 <input
                   type="date"
                   value={validTo}
@@ -229,18 +232,18 @@ export default function Cupom() {
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 max-md:flex-col-reverse">
             <button
               type="button"
               onClick={handleCloseModal}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors max-md:h-12 max-md:flex-none"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white ${saving ? "bg-orange-400 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600"}`}
+              className={`flex-1 px-4 py-2 rounded-lg transition-colors text-white max-md:h-12 max-md:flex-none ${saving ? "bg-orange-400 cursor-not-allowed" : "bg-orange-500 hover:bg-orange-600"}`}
             >
               {saving ? "Salvando..." : "Salvar"}
             </button>

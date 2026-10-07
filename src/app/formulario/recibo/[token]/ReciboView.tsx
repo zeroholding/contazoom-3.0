@@ -73,7 +73,7 @@ export default function ReciboView({ token }: { token: string }) {
   }, [buscar]);
 
   return (
-    <div lang="pt-BR" className="cz-form min-h-screen pb-14">
+    <div lang="pt-BR" className="cz-form min-h-dvh pb-14">
       <header className="border-b border-[#E7EAEF] bg-white">
         <div className="mx-auto max-w-[920px] px-4 py-6 sm:px-8 sm:py-8">
           <Image

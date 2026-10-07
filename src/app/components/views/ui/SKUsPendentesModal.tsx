@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useToast } from "./toaster";
 import Modal from "./Modal";
+import { useCelular } from "@/hooks/useMediaQuery";
 
 interface SKUPendente {
   sku: string;
@@ -41,6 +42,7 @@ export default function SKUsPendentesModal({
   onPickToCreate,
 }: SKUsPendentesModalProps) {
   const { toast } = useToast();
+  const celular = useCelular();
   const [skusPendentes, setSkusPendentes] = useState<SKUPendente[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -252,7 +254,7 @@ export default function SKUsPendentesModal({
       <button
         type="button"
         onClick={() => handleSort(key)}
-        className="inline-flex w-full items-center gap-1 text-left text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-900"
+        className="inline-flex w-full items-center gap-1 text-left text-xs font-medium uppercase tracking-wider max-md:normal-case max-md:tracking-normal text-gray-500 hover:text-gray-900"
       >
         <span>{label}</span>
         <span className="text-[10px] text-gray-400">
@@ -283,25 +285,25 @@ export default function SKUsPendentesModal({
                   SKUs já cadastrados sem custo unitário ou encontrados nas vendas ainda sem cadastro
         </p>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+        <div className="grid grid-cols-3 gap-2 md:grid-cols-3 md:gap-3">
+          <div className="rounded-lg border border-[var(--cz-hairline)] bg-gray-50 px-4 py-3 max-md:px-3 max-md:py-2">
+            <p className="text-xs font-medium uppercase tracking-wide max-md:normal-case max-md:tracking-normal text-gray-500">
               Pendentes
             </p>
             <p className="text-xl font-bold text-gray-900">
               {isLoading ? '-' : totalPendingCount}
             </p>
           </div>
-          <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-orange-700">
+          <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 max-md:px-3 max-md:py-2">
+            <p className="text-xs font-medium uppercase tracking-wide max-md:normal-case max-md:tracking-normal text-orange-700">
               Sem custo
             </p>
             <p className="text-xl font-bold text-orange-800">
               {isLoading ? '-' : semCustoCount}
             </p>
           </div>
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-blue-700">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 max-md:px-3 max-md:py-2">
+            <p className="text-xs font-medium uppercase tracking-wide max-md:normal-case max-md:tracking-normal text-blue-700">
               Sem cadastro
             </p>
             <p className="text-xl font-bold text-blue-800">
@@ -320,7 +322,7 @@ export default function SKUsPendentesModal({
               <button
                 onClick={handleCreateSKUs}
                 disabled={isCreating || selectedCreatableCount === 0}
-                className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors max-md:hidden"
               >
                 {isCreating
                   ? 'Criando...'
@@ -347,6 +349,82 @@ export default function SKUsPendentesModal({
               <p className="text-gray-600">Todos os SKUs estão cadastrados e com custo.</p>
             </div>
           ) : (
+            celular ? (
+              <div className="h-full overflow-auto">
+                <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-[var(--cz-hairline)] bg-gray-50 p-2">
+                  <label className="flex! min-h-11 shrink-0 cursor-pointer items-center gap-2 px-2 text-sm font-medium text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedSKUs.length === sortedSkusPendentes.length && sortedSkusPendentes.length > 0}
+                      onChange={handleSelectAll}
+                      className="h-5 w-5 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                    />
+                    Todos
+                  </label>
+                  <select
+                    aria-label="Ordenar por"
+                    value={sortKey}
+                    onChange={(event) => handleSort(event.target.value as typeof sortKey)}
+                    className="h-11 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-800"
+                  >
+                    <option value="ultimaVenda">Última venda</option>
+                    <option value="primeiraVenda">Primeira venda</option>
+                    <option value="vendas">Vendas</option>
+                    <option value="quantidade">Unidades</option>
+                    <option value="valor">Valor total</option>
+                    <option value="sku">SKU</option>
+                    <option value="produto">Produto</option>
+                    <option value="plataforma">Plataforma</option>
+                    <option value="situacao">Situação</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"))}
+                    aria-label={sortDirection === "asc" ? "Ordem crescente. Toque para inverter" : "Ordem decrescente. Toque para inverter"}
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-gray-300 bg-white text-base font-semibold text-gray-700"
+                  >
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </button>
+                </div>
+                <ul className="divide-y divide-[var(--cz-hairline)]">
+                  {sortedSkusPendentes.map((sku) => {
+                    const marcado = selectedSKUs.includes(sku.sku);
+                    return (
+                      <li key={sku.sku} className={marcado ? "bg-blue-50" : "bg-white"}>
+                        <label className="flex! cursor-pointer items-start gap-2 px-3 py-3">
+                          <span className="-ml-1 grid h-11 w-8 shrink-0 place-items-center">
+                            <input
+                              type="checkbox"
+                              checked={marcado}
+                              onChange={() => handleSelectSKU(sku.sku)}
+                              className="h-5 w-5 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                            />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="break-all font-mono text-sm font-bold text-gray-900">{sku.sku}</span>
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${sku.cadastrado ? "bg-orange-100 text-orange-800" : "bg-blue-100 text-blue-800"}`}>
+                                {sku.cadastrado ? "Sem custo" : "Não cadastrado"}
+                              </span>
+                            </span>
+                            <span className="mt-1 line-clamp-2 block text-sm text-gray-700">{sku.produto}</span>
+                            <span className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
+                              <span><strong className="block text-sm text-gray-900">{sku.estatisticas.totalVendas}</strong>vendas</span>
+                              <span><strong className="block text-sm text-gray-900">{sku.estatisticas.totalQuantidadeVendida}</strong>unidades</span>
+                              <span><strong className="block text-sm text-gray-900">{formatCurrency(sku.estatisticas.totalValorVendido)}</strong>valor total</span>
+                            </span>
+                            <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+                              <span className="rounded-full bg-green-100 px-2 py-0.5 font-semibold text-green-800">{sku.plataforma}</span>
+                              <span>Última venda: {sku.ultimaVenda ? formatDate(sku.ultimaVenda) : "-"}</span>
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : (
             <div className="h-full overflow-auto">
               <table className="w-full table-fixed divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -434,18 +512,19 @@ export default function SKUsPendentesModal({
                 </tbody>
               </table>
             </div>
+            )
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[var(--cz-hairline)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-[var(--cz-hairline)] max-md:flex-col max-md:items-stretch">
           <div className="text-sm text-gray-600">
             {skusPendentes.length} SKU(s) pendente(s)
           </div>
-          <div className="flex space-x-3">
+          <div className="flex space-x-3 max-md:flex-col-reverse max-md:gap-2 max-md:space-x-0">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors max-md:h-12 max-md:text-base"
             >
               Fechar
             </button>
@@ -453,7 +532,7 @@ export default function SKUsPendentesModal({
               <button
                 onClick={handleCreateSKUs}
                 disabled={isCreating || selectedCreatableCount === 0}
-                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors max-md:h-12 max-md:text-base"
               >
                 {isCreating
                   ? 'Criando...'

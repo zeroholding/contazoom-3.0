@@ -525,7 +525,7 @@ export default function TarefasPainelView() {
   const primeiraCarga = carregandoResumo && !resumo && !erro;
 
   return (
-    <div className="cz-tarefas p-6 max-w-[1800px] mx-auto space-y-6">
+    <div className="cz-tarefas p-6 max-md:p-4 max-w-[1800px] mx-auto space-y-6 max-md:space-y-4">
       <Cabecalho
         titulo="Tarefas contábeis"
         icone="ClipboardList"
@@ -591,7 +591,7 @@ export default function TarefasPainelView() {
       )}
 
       {emFoco && (
-        <div className="flex flex-wrap items-end gap-4 rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)]">
+        <div className="flex flex-wrap items-end gap-4 max-md:gap-3 rounded-[14px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)]">
           <Escolha
             rotulo="Mês da competência"
             opcoes={OPCOES_MES}
@@ -599,7 +599,7 @@ export default function TarefasPainelView() {
             onChange={(evento) =>
               trocarCompetencia(emFoco.ano, Number(evento.target.value))
             }
-            wrapperClassName="w-44"
+            wrapperClassName="w-44 max-md:w-auto max-md:min-w-0 max-md:flex-1"
           />
           <Escolha
             rotulo="Ano"
@@ -608,7 +608,7 @@ export default function TarefasPainelView() {
             onChange={(evento) =>
               trocarCompetencia(Number(evento.target.value), emFoco.mes)
             }
-            wrapperClassName="w-32"
+            wrapperClassName="w-32 max-md:w-auto max-md:min-w-0 max-md:flex-1"
           />
           {carregandoResumo && resumo && (
             <span className="pb-2 text-xs font-medium text-gray-500">
@@ -641,7 +641,7 @@ export default function TarefasPainelView() {
               sobra menos que o rótulo "Competências abertas" precisa. Quem usa a
               largura são os painéis de gráfico abaixo, que têm o que mostrar
               nela. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
             <CartaoKpi
               titulo="Competências abertas"
               valor={resumo.competenciasAbertas}

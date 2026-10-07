@@ -378,7 +378,7 @@ export default function FormularioAberturaView() {
     // `lang` aqui porque o root layout declara `<html lang="en">`: sem isso o
     // leitor de tela lê português com fonética inglesa e o autofill erra os
     // campos. Trocar no root afeta o app inteiro e é decisão separada desta.
-    <div lang="pt-BR" className="cz-form min-h-screen pb-28 sm:pb-14">
+    <div lang="pt-BR" className="cz-form min-h-dvh pb-28 sm:pb-14">
       {/* ------------------------------ Topo ---------------------------------- */}
       <header className="border-b border-[#E7EAEF] bg-white">
         <div className="mx-auto max-w-[920px] px-4 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-8">
@@ -506,7 +506,7 @@ export default function FormularioAberturaView() {
               <button
                 type="button"
                 onClick={() => setConfirmandoLimpeza(true)}
-                className="cz-campo-foco inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[0.8125rem] font-semibold text-[#98A2B3] transition-colors hover:bg-[#F2F4F7] hover:text-[#B42318]"
+                className="cz-campo-foco inline-flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[0.8125rem] font-semibold text-[#98A2B3] transition-colors hover:bg-[#F2F4F7] hover:text-[#B42318] max-sm:min-h-11"
               >
                 <Icone nome="Trash2" className="h-4 w-4" />
                 Limpar preenchimento
@@ -524,14 +524,15 @@ export default function FormularioAberturaView() {
           aria-label="Navegação do formulário"
           className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E7EAEF] bg-white/95 backdrop-blur sm:static sm:border-t-0 sm:bg-transparent sm:backdrop-blur-none"
         >
-          <div className="mx-auto flex max-w-[920px] items-center gap-3 px-4 py-3 sm:px-8 sm:pb-0 sm:pt-0">
+          <div className="mx-auto flex max-w-[920px] items-center gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8 sm:pb-0 sm:pt-0">
             <BotaoForm
               variante="secundario"
               icone="ArrowLeft"
+              className="max-sm:px-4"
               onClick={voltar}
               disabled={passo === 0 || enviando}
             >
-              <span className="hidden sm:inline">Voltar</span>
+              <span>Voltar</span>
             </BotaoForm>
             <BotaoForm
               variante="primario"
@@ -548,7 +549,9 @@ export default function FormularioAberturaView() {
               // toques no botão criariam dois protocolos com os mesmos documentos.
               disabled={enviando}
               larguraCheia
-              className={`sm:w-auto! sm:min-w-[13rem] ${enviando ? "[&>svg]:animate-spin" : ""}`}
+              // Celular: Voltar e Continuar dividem a linha. Com `w-full` + `shrink-0` o Continuar ocupava 100%
+              // da largura MAIS o Voltar e estourava a tela (l=88 r=446 a 390px). `grow basis-0` reparte só o que sobra.
+              className={`max-sm:w-auto max-sm:min-w-0 max-sm:grow max-sm:basis-0 sm:w-auto! sm:min-w-[13rem] ${enviando ? "[&>svg]:animate-spin" : ""}`}
             >
               {enviando
                 ? "Enviando…"
@@ -710,7 +713,15 @@ function Trilha({
           const alcancavel = !concluido && i <= liberado;
 
           return (
-            <li key={p.chave} className="min-w-0 flex-1">
+            // Celular: só o passo ATUAL ganha largura (é onde cabe o rótulo); os outros
+            // viram um alvo de 44px com o número. De `sm` para cima todos voltam a
+            // dividir a barra por igual, como antes. Na tela de conclusão todos dividem.
+            <li
+              key={p.chave}
+              className={`min-w-0 sm:flex-1 ${
+                atual || concluido ? "max-sm:flex-1" : "max-sm:w-11 max-sm:flex-none"
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => onIr(i)}
@@ -723,7 +734,7 @@ function Trilha({
                 <span className="flex min-w-0 items-center gap-2">
                   <span
                     aria-hidden="true"
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold transition-colors ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] max-sm:text-xs font-bold transition-colors ${
                       atual
                         ? "bg-[#F26212] text-white"
                         : feito

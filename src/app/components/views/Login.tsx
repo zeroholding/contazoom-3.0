@@ -224,9 +224,12 @@ export default function Login() {
   };
 
   return (
-    <div className="cz-auth min-h-screen bg-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+    <div className="cz-auth min-h-screen max-md:min-h-dvh bg-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       {/* ------------------------------ Formulário ----------------------------- */}
-      <div className="flex min-h-screen flex-col px-6 py-10 sm:px-10 lg:min-h-0 lg:px-16 xl:px-24">
+      {/* Celular: `dvh` acompanha a barra de endereço do navegador (100vh é maior que a tela visível e
+          cria rolagem à toa) e o respiro de baixo soma a área segura do iPhone, para o botão de
+          enviar não ficar colado no indicador de início. */}
+      <div className="flex min-h-screen flex-col px-6 py-10 max-md:min-h-dvh max-md:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-md:pt-6 sm:px-10 lg:min-h-0 lg:px-16 xl:px-24">
         {/* Logo no alto da coluna do formulário: no celular o painel da marca
             não existe, então é aqui que a pessoa reconhece onde está. A imagem
             do logo é usada aqui porque o fundo é branco, que é para o que ela
@@ -248,7 +251,7 @@ export default function Login() {
           />
         </div>
 
-        <div className="flex flex-1 flex-col justify-center py-10">
+        <div className="flex flex-1 flex-col justify-center py-10 max-md:justify-start max-md:py-8">
           <div className="w-full max-w-[25rem]">
             <h1 className="cz-titulo text-[1.75rem] leading-9">
               Entrar na sua conta
@@ -257,7 +260,9 @@ export default function Login() {
               Use o e-mail cadastrado para acessar o painel.
             </p>
 
-            <form onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
+            {/* Campo de 48px no celular. O `!` é necessário: `.cz-auth input` (globals.css) é CSS sem camada e
+              vence utilitária comum, então só `!important` troca os 44px do desktop. */}
+            <form onSubmit={onSubmit} className="mt-8 space-y-4 max-md:[&_input]:h-12! max-md:[&_select]:h-12!" noValidate>
               <div>
                 <label htmlFor={idEmail} className="flex items-baseline gap-1">
                   <span className="text-[13px] font-semibold leading-5 text-[#14161B]">
@@ -347,7 +352,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowPw((s) => !s)}
-                    className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#14161B]"
+                    className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#9AA1AC] transition-colors hover:bg-[#F4F5F7] hover:text-[#14161B] max-md:right-1 max-md:h-10 max-md:w-10"
                     aria-label={showPw ? "Ocultar senha" : "Mostrar senha"}
                     aria-pressed={showPw}
                   >
@@ -378,7 +383,7 @@ export default function Login() {
                 type="submit"
                 disabled={isLoading}
                 aria-busy={isLoading || undefined}
-                className="group mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-transparent bg-[#F26212] text-sm font-semibold text-white transition-colors hover:bg-[#D9500A] active:bg-[#C34706] disabled:cursor-not-allowed disabled:opacity-60"
+                className="group mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-transparent bg-[#F26212] text-sm font-semibold text-white transition-colors hover:bg-[#D9500A] active:bg-[#C34706] disabled:cursor-not-allowed disabled:opacity-60 max-md:h-12 max-md:text-base"
               >
                 {isLoading ? (
                   <>
@@ -405,7 +410,7 @@ export default function Login() {
                 Ainda não tem conta?{" "}
                 <Link
                   href="/register"
-                  className="font-semibold text-[#D9500A] underline-offset-4 transition-colors hover:text-[#F26212] hover:underline"
+                  className="font-semibold text-[#D9500A] underline-offset-4 transition-colors hover:text-[#F26212] hover:underline max-md:-my-2 max-md:inline-block max-md:py-3"
                 >
                   Criar conta
                 </Link>
