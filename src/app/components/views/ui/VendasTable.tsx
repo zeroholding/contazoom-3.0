@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { openVendaDetails } from "./VendaDetailsModal";
 import { classifyFrete, formatCurrency, formatarFreteShopee } from "@/lib/frete";
 import FreteDetailsDropdown from "./FreteDetailsDropdown";
 import TaxaDetailsDropdown from "./TaxaDetailsDropdown";
@@ -508,34 +507,20 @@ export default function VendasTable({
                     {mostrar("vendaConta") && (
                       <td className="px-3 py-2 sm:px-6 sm:py-3 whitespace-nowrap">
                         <div className="text-sm">
-                          {/* O clique que abre os detalhes da venda mora nesta
-                              célula. Com a conta escondida ele migra para o id do
-                              pedido, em vez de desaparecer: é o único acesso ao
-                              detalhamento completo na tabela, e perdê-lo por causa
-                              de um filtro de coluna seria esconder uma ação, não
-                              um dado. */}
+                          {/* O detalhamento em aba Blob está temporariamente
+                              suspenso. Conta e ID voltam a ser leitura pura: não há
+                              cursor de ação, título de clique nem handler oculto. */}
                           {cols.conta && (
-                            <div
-                              className="font-semibold text-gray-800 cursor-pointer hover:text-orange-600 hover:underline transition-colors"
-                              onClick={() => openVendaDetails(venda)}
-                              title="Clique para ver detalhes completos da venda"
-                            >
+                            <div className="font-semibold text-gray-800">
                               {venda.conta ?? "-"}
                             </div>
                           )}
                           {cols.pedido && (
                             <div
                               className={`text-xs font-mono mt-0.5 ${
-                                cols.conta
-                                  ? "text-gray-400"
-                                  : "text-gray-600 cursor-pointer hover:text-orange-600 hover:underline transition-colors"
+                                cols.conta ? "text-gray-400" : "text-gray-600"
                               }`}
-                              onClick={cols.conta ? undefined : () => openVendaDetails(venda)}
-                              title={
-                                cols.conta
-                                  ? "ID do Pedido"
-                                  : "Clique para ver detalhes completos da venda"
-                              }
+                              title="ID do Pedido"
                             >
                               {venda.id}
                             </div>

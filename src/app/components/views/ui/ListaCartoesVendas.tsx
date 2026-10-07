@@ -9,7 +9,6 @@ import {
 } from "lucide-react";
 import { PlataformaBadge } from "@/components/ui/PlataformaBadge";
 import { isStatusCancelado, isStatusPago } from "@/lib/vendasStatus";
-import { openVendaDetails } from "./VendaDetailsModal";
 import type { ProcessedVenda, Venda } from "./VendasTable";
 
 /**
@@ -19,11 +18,8 @@ import type { ProcessedVenda, Venda } from "./VendasTable";
  * ela só existe como rolagem horizontal, e numa tela cujo trabalho é varrer
  * vendas isso esconde justamente o valor e a margem, que ficam nas últimas
  * colunas. O cartão escolhe os dados que respondem "o que foi vendido, onde, por
- * quanto e deu lucro?" e deixa o resto para o detalhe (um toque abre a venda).
- *
- * O cartão inteiro é UM botão: o alvo de toque é a área toda, e por isso nada
- * interativo mora dentro dele (o selo de SKU pendente aqui é só texto; o link
- * para a tela de SKU continua na tabela do desktop).
+ * quanto e deu lucro?". O detalhamento por clique está temporariamente suspenso,
+ * então o cartão é informativo e não abre outra aba.
  */
 
 type SituacaoSku = { cadastrado: boolean; situacao?: string };
@@ -149,11 +145,11 @@ function CartaoVenda({ venda, sku }: { venda: Venda; sku?: SituacaoSku }) {
 
   return (
     <li>
-      <button
-        type="button"
-        onClick={() => openVendaDetails(venda)}
-        aria-label={`Ver detalhes da venda ${venda.id}: ${venda.titulo}`}
-        className="block w-full rounded-[var(--cz-raio-cartao,12px)] border border-[var(--cz-hairline)] bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors active:bg-[#F8F9FB]"
+      {/* Detalhes em aba Blob estão temporariamente desativados. Mantemos o
+          cartão como artigo informativo, sem semântica de botão nem evento de
+          clique, para não dar a entender que abrirá uma tela. */}
+      <article
+        className="block w-full rounded-[var(--cz-raio-cartao,12px)] border border-[var(--cz-hairline)] bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)]"
       >
         <div className="flex items-start gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg border border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[var(--cz-texto-fraco)]">
@@ -232,7 +228,7 @@ function CartaoVenda({ venda, sku }: { venda: Venda; sku?: SituacaoSku }) {
             linha={valorLongo}
           />
         </dl>
-      </button>
+      </article>
     </li>
   );
 }
