@@ -538,11 +538,11 @@ function SyncGlobalCard({ compact }: { compact: boolean }) {
       <button
         type="button"
         onClick={() => void startSync()}
-        disabled={running || statusUnavailable}
+        disabled={running}
         title={
           compact
             ? statusUnavailable
-              ? "Status indisponível; reconectando"
+              ? "Estado anterior indisponível; clique para tentar sincronizar"
               : hasWarning
                 ? diagnosticMessage
                 : state.message
@@ -550,7 +550,7 @@ function SyncGlobalCard({ compact }: { compact: boolean }) {
         }
         aria-label={
           statusUnavailable
-            ? "Status da sincronização indisponível"
+            ? "Tentar sincronizar apesar do estado anterior indisponível"
             : running
               ? `Sincronização em andamento: ${state.progress}%`
               : "Sincronizar vendas"
@@ -596,7 +596,7 @@ function SyncGlobalCard({ compact }: { compact: boolean }) {
               )}
               <span className="min-w-0 flex-1 truncate text-[12px] font-extrabold text-[var(--cz-texto)]">
                 {statusUnavailable
-                  ? "Status indisponível"
+                  ? "Tentar sincronizar"
                   : showRunning
                     ? "Sincronizando vendas"
                     : "Sincronizar vendas"}
@@ -617,7 +617,7 @@ function SyncGlobalCard({ compact }: { compact: boolean }) {
               )}
               <span className="min-w-0 flex-1 truncate text-[10.5px] text-[var(--cz-texto-suave)]">
                 {statusUnavailable
-                  ? "Reconectando ao estado da sincronização…"
+                  ? "Não foi possível confirmar o estado anterior; toque para tentar sincronizar."
                   : running || terminal
                     ? hasWarning
                       ? diagnosticMessage

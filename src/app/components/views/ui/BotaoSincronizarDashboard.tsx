@@ -43,24 +43,24 @@ export default function BotaoSincronizarDashboard(props: {
       <button
         type="button"
         onClick={() => void sincronizar()}
-        disabled={running || statusUnavailable}
+        disabled={running}
         title={
           statusUnavailable
-            ? "Status da sincronização indisponível. Reconectando…"
+            ? "Não foi possível confirmar o estado anterior. Clique para tentar sincronizar."
             : running
               ? "A sincronização continua enquanto você navega pelo sistema."
               : "Sincronizar vendas de todas as contas deste escopo"
         }
         className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[var(--cz-raio)] border px-4 text-[13px] font-semibold transition-colors ${
           statusUnavailable
-            ? "cursor-not-allowed border-amber-300 bg-amber-600 text-white"
+            ? "border-amber-300 bg-amber-600 text-white hover:bg-amber-700"
             : showRunning
               ? "cursor-progress border-[var(--cz-laranja-forte)] bg-[var(--cz-laranja-forte)] text-white"
               : "border-[var(--cz-laranja)] bg-[var(--cz-laranja)] text-white hover:border-[var(--cz-laranja-forte)] hover:bg-[var(--cz-laranja-forte)]"
         }`}
       >
         <IconeAtualizar className={`h-4 w-4 ${showRunning ? "animate-spin" : ""}`} />
-        {statusUnavailable ? "Reconectando…" : running ? "Sincronizando…" : "Sincronizar vendas"}
+        {statusUnavailable ? "Tentar sincronizar" : running ? "Sincronizando…" : "Sincronizar vendas"}
       </button>
 
       {(running || terminal || statusUnavailable) && (
@@ -92,7 +92,7 @@ export default function BotaoSincronizarDashboard(props: {
 
             <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-[var(--cz-texto)]">
               {statusUnavailable
-                ? "Status indisponível; tentando reconectar…"
+                ? "Não foi possível confirmar o estado anterior; você pode tentar sincronizar."
                 : state.status === "partial" || state.status === "failed"
                   ? diagnosticMessage
                   : state.message}

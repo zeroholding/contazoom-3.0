@@ -279,10 +279,10 @@ const HeaderVendasShopee = ({
       <button
         onClick={handleSync}
         className="inline-flex items-center justify-center gap-3 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium transition-all duration-200 shadow-sm hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 w-full sm:w-auto"
-        disabled={running || statusUnavailable}
+        disabled={running}
         title={
           statusUnavailable
-            ? "Status da sincronização indisponível"
+            ? "Estado anterior indisponível. Clique para tentar sincronizar novamente."
             : "Sincronizar vendas da Shopee"
         }
       >

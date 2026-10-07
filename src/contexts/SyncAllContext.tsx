@@ -172,11 +172,12 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
 
   const startSync = useCallback(
     async (options: StartSyncAllOptions = {}): Promise<string | null> => {
-      if (
-        !isAuthenticated ||
-        pollError ||
-        isSyncAllRunning(stateRef.current.status)
-      ) {
+      // Falhar ao CONSULTAR o estado não é motivo para negar um clique explícito
+      // de sincronização. Na primeira pintura (ou depois de uma queda rápida de
+      // rede) ainda não há estado confirmado, mas o POST pode funcionar
+      // normalmente. Antes `pollError` bloqueava o botão e o painel entrava num
+      // ciclo sem saída de "Reconectando…" sem dar à pessoa como tentar de novo.
+      if (!isAuthenticated || isSyncAllRunning(stateRef.current.status)) {
         return stateRef.current.runId;
       }
 
@@ -225,14 +226,19 @@ export function SyncAllProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [isAuthenticated, pollError],
+    [isAuthenticated],
   );
 
   const value = useMemo<SyncAllContextValue>(
     () => ({
       state,
       running: isSyncAllRunning(state.status),
-      statusUnavailable: Boolean(pollError),
+      // Um erro logo na PRIMEIRA consulta é comum em retomada de aba, HMR ou uma
+      // oscilação curta de rede. Ainda não existe estado anterior para chamar de
+      // "indisponível" — a tela mantém o estado ocioso e deixa o clique manual
+      // tentar o POST. Depois de ao menos uma resposta válida, aí sim o aviso de
+      // estado desatualizado aparece até a próxima confirmação.
+      statusUnavailable: Boolean(pollError && lastConfirmedAt !== null),
       lastConfirmedAt,
       startSync,
       refreshState,
