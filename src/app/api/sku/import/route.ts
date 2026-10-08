@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
 import { invalidateSKUCache, invalidateVendasCache } from "@/lib/cache";
-import { applySkuCostRetroactively } from "@/lib/sku-retroactive-cost";
+import { tryApplySkuCostRetroactively } from "@/lib/sku-retroactive-cost";
 import {
   addImportError,
   addImportWarning,
@@ -747,6 +747,10 @@ async function mergeKitChildren(
   });
 }
 
+function avisoCustoRetroativo(sku: string): string {
+  return `SKU "${sku}" salvo, mas o custo não foi aplicado nas vendas antigas. Use "Aplicar custo retroativo" no SKU.`;
+}
+
 async function applySkuImport(
   userId: string,
   rows: InternalPreviewRow[],
@@ -853,16 +857,22 @@ async function applySkuImport(
                 alteradoPor: alteredBy,
               },
             });
-
-            if (parsed.custoUnitario > 0) {
-              await applySkuCostRetroactively(tx, {
-                userId,
-                sku: parsed.sku,
-                custoUnitario: parsed.custoUnitario,
-              });
-            }
           }
         });
+
+        // Custo inicial real: preenche as vendas antigas DEPOIS do commit e fora da
+        // transação (prazo de 5 s do Prisma). Se falhar, o SKU e o custo já estão
+        // salvos e a linha segue como sucesso, com aviso.
+        if (parsed.tipo === "filho" && parsed.custoUnitario > 0) {
+          const retroativo = await tryApplySkuCostRetroactively(prisma, {
+            userId,
+            sku: parsed.sku,
+            custoUnitario: parsed.custoUnitario,
+          });
+          if (!retroativo.ok) {
+            addImportWarning(results, row.rowNumber, avisoCustoRetroativo(parsed.sku));
+          }
+        }
 
         if (parsed.tipo === "pai") {
           relationWork.replacements.set(parsed.sku, row.replacementChildren ?? []);
@@ -879,7 +889,7 @@ async function applySkuImport(
         const parsed = row.parsed;
         const existing = row.existing;
         const updateData = { ...row.updateData };
-        await prisma.$transaction(async (tx) => {
+        const retroativoPendente = await prisma.$transaction(async (tx) => {
           const oldCusto = Number(existing.custoUnitario ?? 0);
           const newCusto =
             updateData.custoUnitario !== undefined ? Number(updateData.custoUnitario) : oldCusto;
@@ -909,14 +919,21 @@ async function applySkuImport(
             });
           }
 
-          if (custoChanged && oldCusto <= 0 && newCusto > 0 && updated.tipo === "filho") {
-            await applySkuCostRetroactively(tx, {
-              userId,
-              sku: updated.sku,
-              custoUnitario: newCusto,
-            });
-          }
+          // Só decide aqui; o recálculo das vendas antigas roda depois do commit.
+          return custoChanged && oldCusto <= 0 && newCusto > 0 && updated.tipo === "filho"
+            ? { sku: updated.sku, custoUnitario: newCusto }
+            : null;
         });
+
+        if (retroativoPendente) {
+          const retroativo = await tryApplySkuCostRetroactively(prisma, {
+            userId,
+            ...retroativoPendente,
+          });
+          if (!retroativo.ok) {
+            addImportWarning(results, row.rowNumber, avisoCustoRetroativo(retroativoPendente.sku));
+          }
+        }
 
         if (existing.tipo === "pai" && row.replacementChildren !== undefined) {
           relationWork.replacements.set(existing.sku, row.replacementChildren);

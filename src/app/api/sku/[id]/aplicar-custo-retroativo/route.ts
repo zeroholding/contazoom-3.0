@@ -32,13 +32,14 @@ export async function POST(
       return NextResponse.json({ error: "Custo do SKU inválido ou zero." }, { status: 400 });
     }
 
-    const retroactiveResult = await prisma.$transaction((tx) =>
-      applySkuCostRetroactively(tx, {
-        userId: session.sub,
-        sku: skuObj.sku,
-        custoUnitario,
-      }),
-    );
+    // Sem transação interativa: o recálculo é um UPDATE por tabela e o prazo de
+    // 5 s do Prisma não vale para comandos soltos. É idempotente, então repetir
+    // (inclusive depois de uma falha no meio) completa o que faltou.
+    const retroactiveResult = await applySkuCostRetroactively(prisma, {
+      userId: session.sub,
+      sku: skuObj.sku,
+      custoUnitario,
+    });
     invalidateVendasCache(session.sub);
 
     return NextResponse.json({

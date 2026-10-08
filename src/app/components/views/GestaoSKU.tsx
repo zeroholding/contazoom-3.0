@@ -242,11 +242,21 @@ export default function GestaoSKU() {
         const error = await response.json().catch(() => null);
         throw new Error(error?.error ?? "Não foi possível criar o SKU");
       }
+      const criado = await response.json().catch(() => null);
       toast({
         variant: "success",
         title: payload.tipo === "pai" ? "Kit criado" : "SKU criado",
         description: `${payload.sku} foi adicionado com sucesso.`,
       });
+      if (criado?.retroativo?.ok === false) {
+        // O SKU e o custo já estão salvos; só o preenchimento das vendas antigas falhou.
+        toast({
+          variant: "warning",
+          title: "Vendas antigas não foram atualizadas",
+          description: `${payload.sku} foi criado, mas o custo não foi aplicado às vendas passadas. Use "Aplicar custo em vendas passadas" neste SKU para completar.`,
+          duration: 9000,
+        });
+      }
       await Promise.all([loadSKUs(), loadSKUStats()]);
     } catch (error) {
       toast({

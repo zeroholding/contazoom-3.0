@@ -622,12 +622,21 @@ export default function TabelaGestaoSKU({
       const erro = await response.json().catch(() => null);
       throw new Error(erro?.error || "Não foi possível atualizar o custo");
     }
+    const atualizado = await response.json().catch(() => null);
     toast({
       variant: "success",
       title: "Custo atualizado",
       description: `${sku.sku} agora custa ${formatCurrency(custo)}.`,
     });
-    const atualizado = await response.json().catch(() => null);
+    if (atualizado?.retroativo?.ok === false) {
+      // O custo já está salvo; só o preenchimento das vendas antigas falhou.
+      toast({
+        variant: "warning",
+        title: "Vendas antigas não foram atualizadas",
+        description: `O custo de ${sku.sku} foi salvo, mas não foi aplicado às vendas passadas. Use "Aplicar custo em vendas passadas" neste SKU para completar.`,
+        duration: 9000,
+      });
+    }
     onEditSKU?.(atualizado ?? sku);
   };
 
@@ -1438,15 +1447,25 @@ export default function TabelaGestaoSKU({
                 throw new Error(error.error || 'Erro ao atualizar SKU');
               }
 
+              const updatedSKU = await response.json().catch(() => null);
+
               toast({
                 variant: "success",
                 title: "SKU atualizado",
                 description: `SKU ${data.sku} foi atualizado com sucesso`,
               });
+              if (updatedSKU?.retroativo?.ok === false) {
+                // O custo já está salvo; só o preenchimento das vendas antigas falhou.
+                toast({
+                  variant: "warning",
+                  title: "Vendas antigas não foram atualizadas",
+                  description: `O custo de ${data.sku} foi salvo, mas não foi aplicado às vendas passadas. Use "Aplicar custo em vendas passadas" neste SKU para completar.`,
+                  duration: 9000,
+                });
+              }
 
               // Recarregar lista
               if (onEditSKU) {
-                const updatedSKU = await response.json();
                 onEditSKU(updatedSKU);
               }
             } catch (error) {

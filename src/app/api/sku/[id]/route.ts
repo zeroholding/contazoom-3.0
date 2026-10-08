@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifySessionToken } from "@/lib/auth";
-import { applySkuCostRetroactively } from "@/lib/sku-retroactive-cost";
+import { tryApplySkuCostRetroactively } from "@/lib/sku-retroactive-cost";
 import { invalidateVendasCache } from "@/lib/cache";
 
 export async function PUT(
@@ -85,20 +85,28 @@ export async function PUT(
         });
       }
 
-      if (custoChanged && oldCusto <= 0 && newCusto > 0 && updated.tipo === "filho") {
-        await applySkuCostRetroactively(tx, {
-          userId: session.sub,
-          sku: updated.sku,
-          custoUnitario: newCusto,
-        });
-      }
-
       return updated;
     });
 
+    // Primeiro custo real de um SKU individual: as vendas antigas sem CMV passam a
+    // usá-lo. Roda DEPOIS do commit e fora da transação interativa, que o Prisma
+    // encerra em 5 s: lá dentro, SKU com milhares de vendas estourava o prazo e o
+    // custo nem chegava a ser gravado. Se isto falhar, o custo já está salvo e a
+    // resposta traz `retroativo.ok = false` para a tela avisar (a operação é
+    // idempotente: o botão "aplicar custo retroativo" completa depois).
+    const aplicarRetroativo =
+      custoChanged && oldCusto <= 0 && newCusto > 0 && updatedSku.tipo === "filho";
+    const retroativo = aplicarRetroativo
+      ? await tryApplySkuCostRetroactively(prisma, {
+          userId: session.sub,
+          sku: updatedSku.sku,
+          custoUnitario: newCusto,
+        })
+      : undefined;
+
     invalidateVendasCache(session.sub);
 
-    return NextResponse.json(updatedSku);
+    return NextResponse.json(retroativo ? { ...updatedSku, retroativo } : updatedSku);
   } catch (error) {
     console.error("Erro ao atualizar SKU:", error);
     return NextResponse.json(
