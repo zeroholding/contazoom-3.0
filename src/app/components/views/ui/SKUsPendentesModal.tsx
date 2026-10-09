@@ -276,13 +276,13 @@ export default function SKUsPendentesModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="SKUs Pendentes"
+      title="SKUs Pendentes — Histórico completo"
       size="full"
     >
       <div className="flex h-full min-h-0 flex-col gap-4">
         {/* Descrição */}
         <p className="text-sm text-gray-600">
-                  SKUs já cadastrados sem custo unitário ou encontrados nas vendas ainda sem cadastro
+          Todos os períodos: SKUs já cadastrados sem custo unitário ou encontrados nas vendas ainda sem cadastro.
         </p>
 
         <div className="grid grid-cols-3 gap-2 md:grid-cols-3 md:gap-3">

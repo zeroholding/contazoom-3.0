@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useEffect, useLayoutEffect, useState, lazy, Suspense } from "react";
+import { useRef, useEffect, useLayoutEffect, useState, useCallback, lazy, Suspense } from "react";
 import gsap from "gsap";
 import Sidebar from "../views/ui/Sidebar";
 import Topbar from "../views/ui/Topbar";
 import HeaderDashboard, { FILTROS_PADRAO } from "../views/ui/HeaderDashboard";
-import DashboardStats from "../views/ui/DashboardStats";
+import DashboardStats, { type DashboardPendingSkuSummary } from "../views/ui/DashboardStats";
 import { FiltroPeriodo } from "../views/ui/FiltrosDashboard";
 
 // Lazy load dos componentes de gráfico para melhor performance
@@ -30,7 +30,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 const FULL_W = "16rem";
 const RAIL_W = "4rem";
 const LS_KEY = "cz_sidebar_collapsed";
-const SKU_ALERT_DISMISS_KEY = "cz_dashboard_sku_alert_dismissed_count";
+const SKU_ALERT_DISMISS_KEY = "cz_dashboard_sku_alert_dismissed_scope_v2";
 
 /**
  * A plataforma da conta escolhida -> o `canal` que as APIs de dashboard esperam.
@@ -79,11 +79,16 @@ export default function Dashboard() {
   const [dataFimPersonalizada, setDataFimPersonalizada] = useState<Date | null>(null);
   const [canalAtivo, setCanalAtivo] = useState<FiltroCanal>(FILTROS_PADRAO.canal);
   
-  // Alerta de custo de SKU
-  const [pendingSkusCount, setPendingSkusCount] = useState<number>(0);
-  const [pendingSkuBreakdown, setPendingSkuBreakdown] = useState({
+  // Alerta de custo de SKU. O valor vem da MESMA resposta filtrada dos cards;
+  // a Gestão de SKU mantém, separadamente, a visão histórica completa.
+  const [pendingSkuDashboard, setPendingSkuDashboard] = useState<
+    DashboardPendingSkuSummary & { requestSignature: string }
+  >({
+    total: 0,
     semCusto: 0,
     naoCadastrados: 0,
+    signature: "",
+    requestSignature: "",
   });
   const [isPendingSkuAlertHidden, setIsPendingSkuAlertHidden] = useState(false);
 
@@ -94,30 +99,62 @@ export default function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedAccount, setSelectedAccount] = useState<{ platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string; label?: string }>({ platform: 'todos' });
 
+  // Identifica exatamente o conjunto mostrado no Dashboard. Enquanto uma nova
+  // combinação carrega, a assinatura anterior deixa de ser considerada atual,
+  // evitando exibir por alguns instantes o alerta do período anterior.
+  const pendingSkuFilterSignature = JSON.stringify({
+    periodo: periodoAtivo,
+    dataInicio: dataInicioPersonalizada?.getTime() ?? null,
+    dataFim: dataFimPersonalizada?.getTime() ?? null,
+    canal: canalAtivo,
+    status: statusAtivo,
+    tipoAnuncio: tipoAnuncioAtivo,
+    modalidade: modalidadeEnvioAtiva,
+    contaPlataforma: selectedAccount.platform,
+    contaId: selectedAccount.id ?? null,
+  });
+  const pendingSkuRequestSignature = `${pendingSkuFilterSignature}|refresh:${refreshKey}`;
+  const pendingSkuIsCurrent =
+    pendingSkuDashboard.requestSignature === pendingSkuRequestSignature;
+  const pendingSkusCount = pendingSkuIsCurrent ? pendingSkuDashboard.total : 0;
+  const pendingSkuBreakdown = pendingSkuIsCurrent
+    ? pendingSkuDashboard
+    : { semCusto: 0, naoCadastrados: 0 };
+
+  const handlePendingSkuSummaryChange = useCallback(
+    (summary: DashboardPendingSkuSummary) => {
+      const next = {
+        total: Math.max(0, Number(summary.total) || 0),
+        semCusto: Math.max(0, Number(summary.semCusto) || 0),
+        naoCadastrados: Math.max(0, Number(summary.naoCadastrados) || 0),
+        signature: String(summary.signature || ""),
+        requestSignature: pendingSkuRequestSignature,
+      };
+      setPendingSkuDashboard(next);
+
+      try {
+        const dismissal = JSON.stringify({
+          filters: pendingSkuFilterSignature,
+          signature: next.signature,
+        });
+        setIsPendingSkuAlertHidden(
+          next.total > 0 && localStorage.getItem(SKU_ALERT_DISMISS_KEY) === dismissal,
+        );
+        if (next.total === 0) {
+          // Se a pendência foi resolvida, uma reincidência idêntica no futuro
+          // precisa voltar a alertar.
+          localStorage.removeItem(SKU_ALERT_DISMISS_KEY);
+        }
+      } catch {
+        setIsPendingSkuAlertHidden(false);
+      }
+    },
+    [pendingSkuFilterSignature, pendingSkuRequestSignature],
+  );
+
   useAoSincronizarVendas(() => {
     setRefreshKey((value) => value + 1);
   });
-
-  useEffect(() => {
-    fetch('/api/sku/stats')
-      .then(res => res.json())
-      .then(data => {
-        const count = Number(data.skusSemCusto || 0);
-        const semCusto = Number(data.semCusto || 0);
-        const naoCadastrados = Number(data.naoCadastrados || 0);
-        setPendingSkusCount(count);
-        setPendingSkuBreakdown({ semCusto, naoCadastrados });
-
-        try {
-          const dismissedCount = Number(localStorage.getItem(SKU_ALERT_DISMISS_KEY) || 0);
-          setIsPendingSkuAlertHidden(count > 0 && dismissedCount >= count);
-          if (count === 0) localStorage.removeItem(SKU_ALERT_DISMISS_KEY);
-        } catch {
-          setIsPendingSkuAlertHidden(false);
-        }
-      })
-      .catch(() => {});
-  }, [refreshKey]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -294,7 +331,13 @@ export default function Dashboard() {
                   onClick={() => {
                     setIsPendingSkuAlertHidden(true);
                     try {
-                      localStorage.setItem(SKU_ALERT_DISMISS_KEY, String(pendingSkusCount));
+                      localStorage.setItem(
+                        SKU_ALERT_DISMISS_KEY,
+                        JSON.stringify({
+                          filters: pendingSkuFilterSignature,
+                          signature: pendingSkuDashboard.signature,
+                        }),
+                      );
                     } catch {}
                   }}
                   className="rounded-lg p-1 text-rose-500 transition-colors hover:bg-rose-100 hover:text-rose-800"
@@ -305,18 +348,19 @@ export default function Dashboard() {
                 </button>
               }
             >
-              <strong className="block text-[13px]">Custos de SKU pendentes</strong>
+              <strong className="block text-[13px]">Custos de SKU pendentes nos filtros atuais</strong>
               <p className="mt-1">
-                <strong>{pendingSkusCount} SKU(s)</strong> sem custo definido:{" "}
+                <strong>{pendingSkusCount} SKU(s)</strong> com vendas neste recorte estão pendentes:{" "}
                 <strong>{pendingSkuBreakdown.semCusto}</strong> cadastrados sem custo e{" "}
                 <strong>{pendingSkuBreakdown.naoCadastrados}</strong> ainda sem cadastro.
-                Enquanto isso, CMV, lucro e margem desta tela saem incompletos.
+                Enquanto isso, CMV, lucro e margem desta tela podem ficar incompletos.
               </p>
               <a
                 href="/sku?pendentes=1"
                 className="mt-3 inline-flex h-9 items-center gap-2 rounded-[var(--cz-raio)] bg-rose-600 px-3.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-rose-700 max-md:flex max-md:h-11 max-md:w-full max-md:justify-center max-md:text-[14px]"
+                title="Abre todos os SKUs pendentes, de todos os períodos"
               >
-                Cadastrar custos
+                Ver histórico completo
                 <IconeSeta className="h-4 w-4" />
               </a>
             </Faixa>
@@ -359,6 +403,7 @@ export default function Dashboard() {
             agrupamentoSKUAtivo={agrupamentoSKUAtivo}
             refreshKey={refreshKey}
             selectedAccount={selectedAccount}
+            onPendingSkuSummaryChange={handlePendingSkuSummaryChange}
           />
           
           {/* Gráfico de Período */}

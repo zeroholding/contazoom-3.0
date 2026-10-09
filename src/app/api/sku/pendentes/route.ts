@@ -6,6 +6,7 @@ import {
   type SkuDiscoveryCandidate,
 } from "@/lib/sku-discovery";
 import { buildPendingSkuSummary } from "@/lib/sku-pending";
+import { invalidateVendasCache } from "@/lib/cache";
 
 /** Os rótulos que `SkuDiscoveryCandidate.plataforma` aceita, por extenso. */
 const MARKETPLACE_VALIDO = ["Mercado Livre", "Shopee", "TikTok Shop"] as const;
@@ -66,6 +67,9 @@ export async function POST(request: NextRequest) {
       .filter(Boolean) as SkuDiscoveryCandidate[];
 
     const result = await registerDiscoveredSkus(session.sub, candidates);
+    // A criação muda "não cadastrado" para "sem custo" e precisa aparecer
+    // imediatamente no histórico e no Dashboard, sem aguardar os TTLs.
+    invalidateVendasCache(session.sub);
 
     return NextResponse.json({
       results: {

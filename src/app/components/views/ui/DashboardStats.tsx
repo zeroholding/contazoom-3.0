@@ -23,6 +23,13 @@ function ValorPorCanal({ canal, valor }: { canal: CanalLogo; valor: string }) {
   );
 }
 
+export type DashboardPendingSkuSummary = {
+  total: number;
+  semCusto: number;
+  naoCadastrados: number;
+  signature: string;
+};
+
 interface DashboardStatsProps {
   periodoAtivo?: FiltroPeriodo;
   dataInicioPersonalizada?: Date | null;
@@ -34,6 +41,8 @@ interface DashboardStatsProps {
   agrupamentoSKUAtivo?: FiltroAgrupamentoSKU;
   refreshKey?: number;
   selectedAccount?: { platform: 'meli' | 'shopee' | 'tiktok' | 'todos'; id?: string };
+  /** Mantém a faixa superior sincronizada com a mesma resposta filtrada dos cards. */
+  onPendingSkuSummaryChange?: (summary: DashboardPendingSkuSummary) => void;
 }
 
 type Stats = {
@@ -47,6 +56,7 @@ type Stats = {
   skusSemCusto: number;
   semCusto: number;
   naoCadastrados: number;
+  pendingSkuSignature: string;
   lucroBruto: number;
   vendasRealizadas: number;
   unidadesVendidas: number;
@@ -63,6 +73,7 @@ const DEFAULT_STATS: Stats = {
   skusSemCusto: 0,
   semCusto: 0,
   naoCadastrados: 0,
+  pendingSkuSignature: "",
   lucroBruto: 0,
   vendasRealizadas: 0,
   unidadesVendidas: 0,
@@ -79,15 +90,18 @@ const DashboardStats = memo(function DashboardStats({
   agrupamentoSKUAtivo = "mlb",
   refreshKey = 0,
   selectedAccount,
+  onPendingSkuSummaryChange,
 }: DashboardStatsProps) {
   const [stats, setStats] = useState<Stats>(DEFAULT_STATS);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     async function load() {
       try {
         setLoading(true);
+        setLoadError(false);
         
         // Construir parâmetros da URL
         const params = new URLSearchParams();
@@ -114,9 +128,19 @@ const DashboardStats = memo(function DashboardStats({
         
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as Stats;
-        if (isMounted) setStats({ ...DEFAULT_STATS, ...data });
+        if (isMounted) {
+          const nextStats = { ...DEFAULT_STATS, ...data };
+          setStats(nextStats);
+          onPendingSkuSummaryChange?.({
+            total: Number(nextStats.skusSemCusto || 0),
+            semCusto: Number(nextStats.semCusto || 0),
+            naoCadastrados: Number(nextStats.naoCadastrados || 0),
+            signature: String(nextStats.pendingSkuSignature || ""),
+          });
+        }
       } catch (err) {
         console.error("Falha ao carregar estatísticas do dashboard:", err);
+        if (isMounted) setLoadError(true);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -125,7 +149,7 @@ const DashboardStats = memo(function DashboardStats({
     return () => {
       isMounted = false;
     };
-  }, [periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada, canalAtivo, statusAtivo, tipoAnuncioAtivo, modalidadeEnvioAtiva, agrupamentoSKUAtivo, refreshKey, selectedAccount]);
+  }, [periodoAtivo, dataInicioPersonalizada, dataFimPersonalizada, canalAtivo, statusAtivo, tipoAnuncioAtivo, modalidadeEnvioAtiva, agrupamentoSKUAtivo, refreshKey, selectedAccount, onPendingSkuSummaryChange]);
 
   const safeDiv = (num: number, den: number) => (den ? num / den : 0);
 
@@ -336,12 +360,12 @@ const DashboardStats = memo(function DashboardStats({
       {/* CMV */}
       <div
         className={`rounded-lg border p-3 shadow-[var(--cz-elev-1)] ${
-          stats.skusSemCusto > 0
+          !loading && !loadError && stats.skusSemCusto > 0
             ? "border-orange-200 bg-orange-50"
             : "border-[var(--cz-hairline)] bg-[var(--cz-fundo)]"
         }`}
         title={
-          stats.skusSemCusto > 0
+          !loading && !loadError && stats.skusSemCusto > 0
             ? "Custo das mercadorias vendidas. Há SKUs pendentes que podem afetar este cálculo."
             : "Custo das mercadorias vendidas"
         }
@@ -367,9 +391,16 @@ const DashboardStats = memo(function DashboardStats({
               `${(safeDiv(stats.cmv, stats.faturamentoTotal) * 100).toFixed(1)}% do faturamento`
             )}
           </div>
-          {!loading && stats.skusSemCusto > 0 && (
-            <a href="/sku?pendentes=1" className="block text-[10px] font-semibold text-orange-700 hover:underline">
-              {stats.skusSemCusto} SKU(s) pendente(s) afetam o CMV
+          {!loading && !loadError && stats.skusSemCusto > 0 && (
+            <a
+              href="/sku?pendentes=1"
+              className="block text-[10px] font-semibold text-orange-700 hover:underline"
+              title="Abre a visão histórica completa de SKUs pendentes"
+            >
+              <span className="block">
+                {stats.skusSemCusto} SKU(s) com venda nos filtros atuais podem afetar o CMV
+              </span>
+              <span className="block font-normal text-orange-600">Ver histórico completo</span>
             </a>
           )}
         </div>
@@ -481,8 +512,13 @@ const DashboardStats = memo(function DashboardStats({
         </div>
       </div>
 
-      {/* SKUs Pendentes */}
-      <a href="/sku" className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)] hover:border-orange-300 hover:bg-orange-50/40 transition-colors" title="SKUs pendentes de cadastro ou custo">
+      {/* SKUs Pendentes no recorte atual. O destino é deliberadamente a visão
+          histórica completa da Gestão de SKU, indicada no próprio cartão. */}
+      <a
+        href="/sku?pendentes=1"
+        className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)] hover:border-orange-300 hover:bg-orange-50/40 transition-colors"
+        title="No Dashboard: vendas dos filtros atuais. Ao abrir: histórico completo de pendências."
+      >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -496,12 +532,28 @@ const DashboardStats = memo(function DashboardStats({
           </div>
         </div>
         <div className="space-y-1">
-          <div className={`text-lg font-bold ${stats.skusSemCusto > 0 ? 'text-orange-700' : 'text-green-700'}`}>
-            {renderValue(stats.skusSemCusto, formatNumber, "w-16", "number")}
+          <div className={`text-lg font-bold ${loadError ? 'text-gray-500' : stats.skusSemCusto > 0 ? 'text-orange-700' : 'text-green-700'}`}>
+            {loadError
+              ? "Indisponível"
+              : renderValue(stats.skusSemCusto, formatNumber, "w-16", "number")}
           </div>
           <p className="text-xs text-gray-600">
-            {stats.semCusto} custo · {stats.naoCadastrados} cadastro
+            {loading
+              ? "Calculando pendências..."
+              : loadError
+                ? "Não foi possível carregar"
+                : `${stats.semCusto} sem custo · ${stats.naoCadastrados} sem cadastro`}
           </p>
+          {!loading && !loadError && (
+            <>
+              <p className="text-[10px] text-gray-500">
+                Com vendas nos filtros atuais
+              </p>
+              <p className="text-[10px] font-semibold text-orange-700">
+                Ver histórico completo
+              </p>
+            </>
+          )}
         </div>
       </a>
     </div>

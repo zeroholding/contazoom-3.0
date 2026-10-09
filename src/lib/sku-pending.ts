@@ -68,6 +68,35 @@ function skuLookupKey(value: unknown): string {
   return (normalizeDiscoveredSku(value) || "").toLocaleLowerCase("pt-BR");
 }
 
+/**
+ * Recorta o resumo histórico para os SKUs que realmente tiveram venda no
+ * conjunto informado. O Dashboard passa aqui as próprias vendas já filtradas
+ * por período, canal, status e conta; a Gestão de SKU continua usando o resumo
+ * original, que contém todos os períodos e também SKUs sem custo ainda sem venda.
+ */
+export function filterPendingSkuSummaryBySoldSkus(
+  summary: PendingSkuSummary,
+  soldSkus: Iterable<unknown>,
+): PendingSkuSummary {
+  const soldKeys = new Set<string>();
+  for (const sku of soldSkus) {
+    const key = skuLookupKey(sku);
+    if (key) soldKeys.add(key);
+  }
+
+  const skusPendentes = summary.skusPendentes.filter((entry) =>
+    soldKeys.has(skuLookupKey(entry.sku)),
+  );
+  const semCusto = skusPendentes.filter((entry) => entry.cadastrado).length;
+
+  return {
+    skusPendentes,
+    total: skusPendentes.length,
+    semCusto,
+    naoCadastrados: skusPendentes.length - semCusto,
+  };
+}
+
 function platformFromTags(tags: unknown): Plataforma {
   if (!Array.isArray(tags)) return "Mercado Livre";
   if (tags.some((tag) => String(tag) === "Shopee")) return "Shopee";
@@ -157,8 +186,9 @@ export async function buildPendingSkuSummary(
     }
   }
 
+  const generation = cache.getGeneration();
   const summary = await computePendingSkuSummary(userId);
-  cache.set(cacheKey, summary);
+  cache.setIfGeneration(cacheKey, summary, generation);
   return summary;
 }
 

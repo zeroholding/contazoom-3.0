@@ -409,9 +409,9 @@ export default function GestaoSKU() {
             <p className="mt-1 text-xs text-[var(--cz-texto-suave)]">SKUs na sua operação</p>
           </div>
           <div className={`rounded-[var(--cz-raio-cartao)] border p-4 shadow-[var(--cz-elev-1)] max-md:p-3 ${skuStats.skusSemCusto > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-            <p className={`text-[11px] max-md:text-xs font-bold uppercase tracking-[0.06em] ${skuStats.skusSemCusto > 0 ? "text-amber-800" : "text-emerald-800"}`}>Pendências</p>
+            <p className={`text-[11px] max-md:text-xs font-bold uppercase tracking-[0.06em] ${skuStats.skusSemCusto > 0 ? "text-amber-800" : "text-emerald-800"}`}>Pendências históricas</p>
             <p className={`mt-2 text-2xl font-bold ${skuStats.skusSemCusto > 0 ? "text-amber-900" : "text-emerald-900"}`}>{skuStats.skusSemCusto}</p>
-            <p className={`mt-1 text-xs ${skuStats.skusSemCusto > 0 ? "text-amber-800" : "text-emerald-800"}`}>{skuStats.skusSemCusto > 0 ? "Requer atenção" : "Tudo em dia"}</p>
+            <p className={`mt-1 text-xs ${skuStats.skusSemCusto > 0 ? "text-amber-800" : "text-emerald-800"}`}>{skuStats.skusSemCusto > 0 ? "Todos os períodos" : "Tudo em dia"}</p>
           </div>
           <div className="col-span-2 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 shadow-[var(--cz-elev-1)] max-md:p-3 sm:col-span-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--cz-texto-fraco)] max-md:text-xs">Detalhamento</p>
