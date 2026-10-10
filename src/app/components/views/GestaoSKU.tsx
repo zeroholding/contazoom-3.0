@@ -25,6 +25,7 @@ const FILTROS_INICIAIS: FiltrosSKU = {
   tipo: "",
   ativo: null,
   temEstoque: null,
+  custoZerado: null,
   hierarquia1: "",
   hierarquia2: "",
   page: 1,
@@ -71,6 +72,7 @@ export default function GestaoSKU() {
       if (filtros.tipo) params.append("tipo", filtros.tipo);
       if (filtros.ativo !== null) params.append("ativo", filtros.ativo);
       if (filtros.temEstoque !== null) params.append("temEstoque", filtros.temEstoque);
+      if (filtros.custoZerado !== null) params.append("custoZerado", filtros.custoZerado);
       if (filtros.hierarquia1) params.append("hierarquia1", filtros.hierarquia1);
       if (filtros.hierarquia2) params.append("hierarquia2", filtros.hierarquia2);
       params.append("page", filtros.page.toString());
@@ -164,6 +166,7 @@ export default function GestaoSKU() {
       if (filtros.tipo) params.append("tipo", filtros.tipo);
       if (filtros.ativo !== null) params.append("ativo", filtros.ativo);
       if (filtros.temEstoque !== null) params.append("temEstoque", filtros.temEstoque);
+      if (filtros.custoZerado !== null) params.append("custoZerado", filtros.custoZerado);
       if (filtros.hierarquia1) params.append("hierarquia1", filtros.hierarquia1);
       if (filtros.hierarquia2) params.append("hierarquia2", filtros.hierarquia2);
 
@@ -386,7 +389,7 @@ export default function GestaoSKU() {
 
   const hasActiveFilters = Boolean(
     filtros.search || filtros.tipo || filtros.ativo !== null || filtros.temEstoque !== null ||
-      filtros.hierarquia1 || filtros.hierarquia2,
+      filtros.custoZerado !== null || filtros.hierarquia1 || filtros.hierarquia2,
   );
 
   return (

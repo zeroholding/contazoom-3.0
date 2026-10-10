@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     const temEstoque = searchParams.get('temEstoque');
     const hierarquia1 = searchParams.get('hierarquia1') || '';
     const hierarquia2 = searchParams.get('hierarquia2') || '';
+    const custoZerado = searchParams.get('custoZerado');
 
     const skip = (page - 1) * limit;
 
@@ -47,6 +48,12 @@ export async function GET(request: NextRequest) {
 
     if (temEstoque !== null) {
       where.temEstoque = temEstoque === 'true';
+    }
+
+    // Custo unitário zerado. O resto do sistema trata custo <= 0 como "sem
+    // custo" (ver sku-pending.ts), então o filtro usa o mesmo critério.
+    if (custoZerado === 'true') {
+      where.custoUnitario = { lte: 0 };
     }
 
     if (hierarquia1) {

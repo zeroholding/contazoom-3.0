@@ -21,6 +21,8 @@ export interface FiltrosSKU {
   tipo: string;
   ativo: string | null;
   temEstoque: string | null;
+  /** "true" mostra só SKUs com custo unitário zerado; null não filtra. */
+  custoZerado: string | null;
   hierarquia1: string;
   hierarquia2: string;
   page: number;
@@ -34,6 +36,7 @@ const FILTROS_INICIAIS: FiltrosSKU = {
   tipo: "",
   ativo: null,
   temEstoque: null,
+  custoZerado: null,
   hierarquia1: "",
   hierarquia2: "",
   page: 1,
@@ -72,9 +75,20 @@ export default function FiltrosGestaoSKU({
         ? "inativos"
         : "todos";
 
+  const custoZeradoAtivo = filtros.custoZerado === "true";
+
   const activeCount = useMemo(() => {
-    return [filtros.search, filtros.tipo, filtros.ativo, filtros.temEstoque].filter((value) => value !== "" && value !== null).length;
+    return [filtros.search, filtros.tipo, filtros.ativo, filtros.temEstoque, filtros.custoZerado].filter((value) => value !== "" && value !== null).length;
   }, [filtros]);
+
+  // Filtro independente de "Situação": dá para ver só os ativos com custo zerado.
+  const changeCustoZerado = (ativo: boolean) => {
+    setFiltros((current) => ({
+      ...current,
+      custoZerado: ativo ? "true" : null,
+      page: 1,
+    }));
+  };
 
   const changeStatus = (status: FiltroStatus) => {
     setFiltros((current) => ({
@@ -101,7 +115,7 @@ export default function FiltrosGestaoSKU({
   // folha com tipo e situação. Antes, título + busca + tipo + modos + pastilhas
   // ocupavam ~310px do topo e a lista só aparecia depois da primeira dobra.
   if (celular) {
-    const naFolha = [filtros.tipo, filtros.ativo, filtros.temEstoque].filter((value) => value !== "" && value !== null).length;
+    const naFolha = [filtros.tipo, filtros.ativo, filtros.temEstoque, filtros.custoZerado].filter((value) => value !== "" && value !== null).length;
     return (
       <section className="rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3 shadow-[var(--cz-elev-1)]" aria-label="Filtros de SKU">
         <div className="flex flex-col gap-3">
@@ -128,6 +142,17 @@ export default function FiltrosGestaoSKU({
                   opcoes={statusOptions.map(({ id, label }) => ({ id, rotulo: label }))}
                   estaAtiva={(id) => statusAtivo === id}
                   onEscolher={(id) => changeStatus(id as FiltroStatus)}
+                />
+              </CampoDaFolha>
+              <CampoDaFolha rotulo="Custo unitário">
+                <GrupoDePilulas
+                  rotulo="Custo unitário"
+                  opcoes={[
+                    { id: "", rotulo: "Todos" },
+                    { id: "zerado", rotulo: "Custo zerado" },
+                  ]}
+                  estaAtiva={(id) => (id === "zerado") === custoZeradoAtivo}
+                  onEscolher={(id) => changeCustoZerado(id === "zerado")}
                 />
               </CampoDaFolha>
             </FiltrosSheet>
@@ -184,15 +209,23 @@ export default function FiltrosGestaoSKU({
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filtrar por status">
-          {statusOptions.map((option) => {
-            const active = statusAtivo === option.id;
-            return (
-              <button key={option.id} type="button" onClick={() => changeStatus(option.id)} aria-pressed={active} disabled={isLoading} className={`inline-flex h-11 shrink-0 items-center justify-center rounded-full border px-4 text-xs font-semibold transition-colors disabled:opacity-50 ${active ? option.activeClass : "border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[var(--cz-texto-suave)] hover:border-[var(--cz-hairline-forte)] hover:text-[var(--cz-texto)]"}`}>
-                {option.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <div className="flex shrink-0 gap-2" role="group" aria-label="Filtrar por status">
+            {statusOptions.map((option) => {
+              const active = statusAtivo === option.id;
+              return (
+                <button key={option.id} type="button" onClick={() => changeStatus(option.id)} aria-pressed={active} disabled={isLoading} className={`inline-flex h-11 shrink-0 items-center justify-center rounded-full border px-4 text-xs font-semibold transition-colors disabled:opacity-50 ${active ? option.activeClass : "border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[var(--cz-texto-suave)] hover:border-[var(--cz-hairline-forte)] hover:text-[var(--cz-texto)]"}`}>
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <span className="h-6 w-px shrink-0 bg-[var(--cz-hairline-forte)]" aria-hidden="true" />
+          <div className="flex shrink-0 gap-2" role="group" aria-label="Filtrar por custo">
+            <button type="button" onClick={() => changeCustoZerado(!custoZeradoAtivo)} aria-pressed={custoZeradoAtivo} disabled={isLoading} title="Mostrar só SKUs com custo unitário zerado" className={`inline-flex h-11 shrink-0 items-center justify-center rounded-full border px-4 text-xs font-semibold transition-colors disabled:opacity-50 ${custoZeradoAtivo ? "border-orange-200 bg-orange-100 text-orange-900" : "border-[var(--cz-hairline)] bg-[var(--cz-fundo)] text-[var(--cz-texto-suave)] hover:border-[var(--cz-hairline-forte)] hover:text-[var(--cz-texto)]"}`}>
+              Custo zerado
+            </button>
+          </div>
         </div>
       </div>
     </section>

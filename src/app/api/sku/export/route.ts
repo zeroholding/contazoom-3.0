@@ -16,11 +16,15 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const tipo = searchParams.get("tipo");
     const ativo = searchParams.get("ativo");
+    const custoZerado = searchParams.get("custoZerado");
 
     const where = {
       userId: session.sub,
       ...(tipo === "pai" || tipo === "filho" ? { tipo } : {}),
       ...(ativo === "true" || ativo === "false" ? { ativo: ativo === "true" } : {}),
+      // Mesmo critério da listagem: quem filtra "custo zerado" na tela e exporta
+      // recebe a planilha só com esses SKUs, pronta para preencher os custos.
+      ...(custoZerado === "true" ? { custoUnitario: { lte: 0 } } : {}),
     };
 
     const skus = await prisma.sKU.findMany({
