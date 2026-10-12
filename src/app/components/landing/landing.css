@@ -1,0 +1,363 @@
+/* -------------------------------------------------------------------------- */
+/* Landing pública (contazoom.com.br)                                         */
+/*                                                                            */
+/* Tudo escopado em `.cz-landing`: nenhuma tela do painel muda. As cores e as */
+/* fontes são os MESMOS tokens do produto (globals.css) — laranja, preto e    */
+/* branco, Plus Jakarta Sans no texto e Geist Mono nos números.               */
+/*                                                                            */
+/* Esta folha é sem camada, então vence as utilitárias do Tailwind. Por isso  */
+/* ela só declara o que utilitária não resolve (máscara, clip-path da lupa,   */
+/* keyframes, estado de revelação) e usa classes próprias `czl-*`, que nenhum */
+/* elemento divide com uma utilitária conflitante.                            */
+/* -------------------------------------------------------------------------- */
+
+.cz-landing {
+    background-color: #FFFFFF;
+    color: var(--cz-texto, #14161B);
+}
+
+.cz-landing ::selection {
+    background-color: rgba(242, 98, 18, 0.18);
+    color: #7C2D12;
+}
+
+.cz-landing .czl-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+/* Papel quadriculado: o caderno do contador, apagando nas bordas. */
+.czl-papel {
+    background-image:
+        linear-gradient(rgba(20, 22, 27, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20, 22, 27, 0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+    -webkit-mask-image: radial-gradient(ellipse 72% 62% at 50% 28%, #000 25%, transparent 78%);
+    mask-image: radial-gradient(ellipse 72% 62% at 50% 28%, #000 25%, transparent 78%);
+}
+
+.czl-brilho {
+    background:
+        radial-gradient(42rem 24rem at 50% -4rem, rgba(242, 98, 18, 0.18), transparent 70%),
+        radial-gradient(28rem 18rem at 88% 22%, rgba(255, 217, 191, 0.55), transparent 70%),
+        radial-gradient(24rem 16rem at 8% 40%, rgba(255, 242, 233, 0.9), transparent 70%);
+}
+
+/* Quadriculado em fundo escuro (seção da contabilidade). */
+.czl-papel-escuro {
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    background-size: 40px 40px;
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+    mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+}
+
+/* Risco à mão embaixo de "lucro", desenhado na entrada. */
+.czl-risco path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: czl-desenha 900ms 420ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+@keyframes czl-desenha {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cabeçalho fixo                                                             */
+/*                                                                            */
+/* `fixed` e não `sticky`: o globals.css põe `overflow-x: hidden` no html E no */
+/* body, o que transforma o body num contêiner de rolagem que nunca rola — e   */
+/* `sticky` dentro dele simplesmente não gruda.                               */
+/* -------------------------------------------------------------------------- */
+
+.czl-topo {
+    border-bottom: 1px solid transparent;
+    transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.czl-topo[data-rolou="true"],
+.czl-topo[data-menu="true"] {
+    background-color: rgba(255, 255, 255, 0.88);
+    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+    backdrop-filter: saturate(1.6) blur(14px);
+    border-bottom-color: var(--cz-hairline, #EDEFF3);
+}
+
+.czl-menu-celular {
+    animation: czl-desce 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes czl-desce {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* A lupa sobre o painel                                                      */
+/*                                                                            */
+/* A marca é uma lupa sobre os números, então a primeira coisa que a página   */
+/* faz é exatamente isso. O painel é desenhado DUAS vezes: a cópia de cima é  */
+/* ampliada em torno do ponto da lupa e recortada num círculo. As duas cópias */
+/* moram em caixas do mesmo tamanho, por isso a mesma coordenada serve ao     */
+/* centro do recorte (`clip-path`) e à origem da ampliação (`transform`).     */
+/* -------------------------------------------------------------------------- */
+
+.czl-lupa {
+    --lx: 84%;
+    --ly: 80%;
+    --lr: 94px;
+    --lz: 2;
+    position: relative;
+    isolation: isolate;
+    touch-action: pan-y;
+}
+
+@media (max-width: 767px) {
+    .czl-lupa {
+        --lr: 64px;
+        --lz: 1.9;
+    }
+}
+
+.czl-lupa-zoom {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    clip-path: circle(var(--lr) at var(--lx) var(--ly));
+}
+
+.czl-lupa-zoom > div {
+    width: 100%;
+    height: 100%;
+    transform-origin: var(--lx) var(--ly);
+    transform: scale(var(--lz));
+}
+
+.czl-lupa-aro {
+    position: absolute;
+    left: var(--lx);
+    top: var(--ly);
+    z-index: 3;
+    width: calc(var(--lr) * 2);
+    height: calc(var(--lr) * 2);
+    translate: -50% -50%;
+    border-radius: 9999px;
+    border: 5px solid #F26212;
+    pointer-events: none;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.9),
+        0 0 0 7px rgba(242, 98, 18, 0.12),
+        0 22px 44px rgba(16, 24, 40, 0.22);
+}
+
+/* Reflexo do vidro, por cima do conteúdo ampliado. */
+.czl-lupa-aro::before {
+    content: "";
+    position: absolute;
+    inset: 7%;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.5), transparent 42%);
+}
+
+/* O cabo, cinza-grafite como o do logo. */
+.czl-lupa-aro::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: calc(50% - 6px);
+    width: calc(var(--lr) * 0.62);
+    height: 12px;
+    border-radius: 9999px;
+    background: linear-gradient(180deg, #5C5F66, #3F4248);
+    transform-origin: 0 50%;
+    transform: rotate(45deg) translateX(calc(var(--lr) + 2px));
+    box-shadow: 0 8px 16px rgba(16, 24, 40, 0.25);
+}
+
+.czl-lupa[data-pronta="true"] .czl-lupa-aro {
+    animation: czl-surge 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes czl-surge {
+    from {
+        opacity: 0;
+        scale: 0.6;
+    }
+    to {
+        opacity: 1;
+        scale: 1;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Revelação na rolagem                                                       */
+/*                                                                            */
+/* O servidor entrega tudo VISÍVEL. Só o script esconde, e só o que está fora */
+/* da tela no momento em que a página monta: sem JavaScript, nada some.       */
+/* Não vestir `data-revelar` em elemento com transição própria de hover: esta */
+/* regra é sem camada e apagaria a `transition-*` do Tailwind.                */
+/* -------------------------------------------------------------------------- */
+
+.cz-landing [data-revelar] {
+    transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+        transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--atraso, 0) * 1ms);
+}
+
+.cz-landing [data-revelar][data-estado="oculto"] {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+/* Cascata da margem: na primeira aparição cada desconto cai em sequência. */
+.czl-barra {
+    transform-origin: var(--origem, left center);
+    transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--i, 0) * 150ms + 150ms);
+}
+
+[data-estado="oculto"] .czl-barra {
+    transform: scaleX(0);
+}
+
+/* Linha nova do registro da sincronização. */
+.czl-linha {
+    animation: czl-linha 280ms ease-out both;
+}
+
+@keyframes czl-linha {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tour do produto                                                            */
+/*                                                                            */
+/* A barra do módulo ativo enche em 7s e, ao terminar (`animationend`), o     */
+/* tour passa para o próximo. Pausar é só `animation-play-state`, feito pelo  */
+/* componente: o tempo já corrido não se perde.                               */
+/* -------------------------------------------------------------------------- */
+
+.czl-tour-progresso {
+    transform-origin: left center;
+    animation: czl-tour 7s linear forwards;
+}
+
+@keyframes czl-tour {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
+}
+
+.czl-tour-palco {
+    animation: czl-palco 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes czl-palco {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Etapa em andamento no fluxo de apuração. Cinco pulsos e para: um ponto
+   piscando para sempre ao lado do texto disputa a leitura. */
+.czl-pulso {
+    animation: czl-pulso 1.8s ease-out 5;
+}
+
+@keyframes czl-pulso {
+    0% {
+        box-shadow: 0 0 0 0 rgba(242, 98, 18, 0.5);
+    }
+    100% {
+        box-shadow: 0 0 0 12px rgba(242, 98, 18, 0);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Perguntas frequentes                                                       */
+/* -------------------------------------------------------------------------- */
+
+.czl-duvida summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.czl-duvida summary::-webkit-details-marker {
+    display: none;
+}
+
+.czl-mais {
+    transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.czl-duvida[open] .czl-mais {
+    transform: rotate(45deg);
+}
+
+.cz-landing a:focus-visible,
+.cz-landing button:focus-visible,
+.cz-landing summary:focus-visible,
+.cz-landing [role="tabpanel"]:focus-visible {
+    outline: 2px solid #F26212;
+    outline-offset: 3px;
+    border-radius: 10px;
+}
+
+/* Sobre o laranja, o anel laranja some. */
+.czl-sobre-laranja a:focus-visible,
+.czl-sobre-laranja button:focus-visible {
+    outline-color: #FFFFFF;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Menos movimento                                                            */
+/* -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .cz-landing *,
+    .cz-landing *::before,
+    .cz-landing *::after {
+        animation: none !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+    }
+
+    .czl-risco path {
+        stroke-dashoffset: 0;
+    }
+
+    .cz-landing [data-revelar][data-estado="oculto"] {
+        opacity: 1;
+        transform: none;
+    }
+
+    [data-estado="oculto"] .czl-barra {
+        transform: none;
+    }
+}
