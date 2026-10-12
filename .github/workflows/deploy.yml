@@ -11,9 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Coolify Migration
+      # O webhook de migração estava sendo chamado em TODO push — até numa
+      # mudança só de CSS — e, quando o recurso migrate-app ficava indisponível,
+      # bloqueava também o deploy da aplicação. A migração só é necessária se o
+      # schema ou uma migration mudou entre os dois commits do push.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Prisma changes
+        id: prisma
+        shell: bash
         run: |
-          curl -f -X POST "${{ secrets.COOLIFY_MIGRATION_WEBHOOK }}"
+          if git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- prisma/schema.prisma prisma/migrations; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+            echo "No Prisma changes; migration is not required."
+          else
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "Prisma changed; migration will run before the app deploy."
+          fi
+
+      - name: Trigger Coolify Migration
+        if: steps.prisma.outputs.required == 'true'
+        run: curl -f -X POST "${{ secrets.COOLIFY_MIGRATION_WEBHOOK }}"
 
   deploy:
     name: Deploy Application
@@ -22,5 +43,4 @@ jobs:
 
     steps:
       - name: Trigger Coolify App Deploy
-        run: |
-          curl -f -X POST "${{ secrets.COOLIFY_APP_WEBHOOK }}"
+        run: curl -f -X POST "${{ secrets.COOLIFY_APP_WEBHOOK }}"
