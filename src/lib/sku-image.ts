@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { refreshMeliAccountToken } from "@/lib/meli";
 import { refreshShopeeToken, getShopeeItemBaseInfo } from "@/lib/shopee";
+import { skuDoItemShopee } from "@/lib/shopee-sku";
 import {
   ensureTiktokAccessToken,
   tiktokApiCall,
@@ -127,7 +128,8 @@ function extractShopeeItem(
   });
 
   for (const item of itemList) {
-    const itemSku = normalizeSku(item?.item_sku ?? item?.model_sku ?? item?.variation_sku);
+    // Primeiro SKU preenchido: com `??`, o item_sku "" escondia o SKU da variação.
+    const itemSku = normalizeSku(skuDoItemShopee(item));
     if (itemSku && itemSku === target && item?.item_id != null) {
       return pick(item);
     }

@@ -18,6 +18,7 @@ import {
   refreshShopeeAccountToken,
   type ShopeeOrderTimeRangeField,
 } from "@/lib/shopee";
+import { repararSkuVazioShopee, skuDoItemShopee } from "@/lib/shopee-sku";
 import {
   collectSkuCandidatesFromShopeeOrders,
   fetchShopeeCatalogSkuCandidates,
@@ -701,11 +702,8 @@ function orderToVenda(
             }),
       };
 
-  const skuRaw =
-    firstItem.item_sku ??
-    firstItem.model_sku ??
-    firstItem.variation_sku ??
-    null;
+  // Primeiro SKU preenchido: anúncio com variação manda item_sku "" e o SKU em model_sku.
+  const skuRaw = skuDoItemShopee(firstItem);
   const parcelWeight =
     toFiniteNumber(packageInfo.parcel_chargeable_weight_gram) ?? 0;
   const shippingCarrier =
@@ -743,7 +741,7 @@ function orderToVenda(
       ? true
       : (existing?.isMargemReal ?? false),
     titulo: truncateString(firstItem.item_name, 500) || "Pedido",
-    sku: skuRaw ? truncateString(String(skuRaw), 255) : null,
+    sku: skuRaw ? truncateString(skuRaw, 255) : null,
     comprador: truncateString(order.buyer_username, 255) || "Comprador",
     shippingId:
       truncateString(packageInfo.tracking_number, 255) || null,
@@ -1115,6 +1113,23 @@ async function syncAccount(
   });
 
   try {
+    // Vendas gravadas sem SKU enquanto o sync lia o SKU com `??` (item_sku vazio
+    // em anúncio com variação). Pedido sem mudança não volta da Shopee, então o
+    // conserto sai do pedido cru já salvo. Falhar aqui não impede o sync.
+    try {
+      const reparadas = await repararSkuVazioShopee(account.id, userId);
+      if (reparadas > 0) {
+        console.log(
+          `[Shopee Sync] ${account.shop_id}: SKU recuperado do pedido em ${reparadas} venda(s)`,
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `[Shopee Sync] ${account.shop_id}: falha ao recuperar SKU das vendas sem SKU`,
+        error,
+      );
+    }
+
     const [saleCount, cursorStart, financialHealOrderIds] =
       await Promise.all([
         prisma.shopeeVenda.count({
