@@ -587,18 +587,24 @@ model SKU {
 }
 
 model SKUCustoHistorico {
-  id            String   @id @default(cuid())
-  skuId         String   @map("sku_id")
-  userId        String   @map("user_id")
-  custoAnterior Decimal? @map("custo_anterior") @db.Decimal(10, 2)
-  custoNovo     Decimal  @map("custo_novo") @db.Decimal(10, 2)
-  quantidade    Int      @default(0)
-  motivo        String?
-  tipoAlteracao String   @map("tipo_alteracao")
-  alteradoPor   String?  @map("alterado_por")
-  createdAt     DateTime @default(now()) @map("created_at")
-  sku           SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  skuId          String    @map("sku_id")
+  userId         String    @map("user_id")
+  custoAnterior  Decimal?  @map("custo_anterior") @db.Decimal(10, 2)
+  custoNovo      Decimal   @map("custo_novo") @db.Decimal(10, 2)
+  quantidade     Int       @default(0)
+  motivo         String?
+  tipoAlteracao  String    @map("tipo_alteracao")
+  alteradoPor    String?   @map("alterado_por")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  /// Custo usado em vendas PASSADAS (Gestão SKU > "Usar custo em vendas
+  /// passadas", tipo "retroativo"): vale para as vendas de [vigenciaInicio,
+  /// vigenciaFim) e nunca depois de createdAt. Nulos = mudança comum de custo,
+  /// que vale de createdAt em diante. Ver src/lib/sku-cost-history.ts.
+  vigenciaInicio DateTime? @map("vigencia_inicio")
+  vigenciaFim    DateTime? @map("vigencia_fim")
+  sku            SKU       @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([skuId])
   @@index([userId])

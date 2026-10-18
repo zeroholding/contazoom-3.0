@@ -543,8 +543,6 @@ type PropsFolhaAcoes = {
   onRetroativo: (sku: SKU) => void;
   onImagem: (sku: SKU) => void;
   onExcluir: (sku: SKU) => void;
-  /** Id do SKU com o custo retroativo em andamento (ou null). */
-  retroativoEmAndamento: string | null;
   /** Id do SKU com a busca de imagem em andamento (ou null). */
   imagemEmAndamento: string | null;
 };
@@ -570,7 +568,6 @@ export function FolhaAcoesSKU({
   onRetroativo,
   onImagem,
   onExcluir,
-  retroativoEmAndamento,
   imagemEmAndamento,
 }: PropsFolhaAcoes) {
   const [ultimo, setUltimo] = useState<SKU | null>(null);
@@ -612,10 +609,9 @@ export function FolhaAcoesSKU({
         },
         {
           chave: "retroativo",
-          rotulo: retroativoEmAndamento === atual.id ? "Aplicando custo…" : "Aplicar custo em vendas passadas",
-          detalhe: "Preenche o custo das vendas antigas sem CMV",
+          rotulo: "Usar custo em vendas passadas",
+          detalhe: "Todas as vendas, um período ou só as sem custo",
           icone: ICONE.retroativo,
-          desabilitado: retroativoEmAndamento === atual.id,
           aoTocar: () => onRetroativo(atual),
         },
         {

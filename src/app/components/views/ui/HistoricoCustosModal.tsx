@@ -67,7 +67,7 @@ export default function HistoricoCustosModal({
       manual: { label: "Manual", className: "bg-blue-100 text-blue-700" },
       importacao: { label: "Importação", className: "bg-purple-100 text-purple-700" },
       importacao_planilha: { label: "Importação", className: "bg-purple-100 text-purple-700" },
-      retroativo: { label: "Retroativo", className: "bg-amber-100 text-amber-700" },
+      retroativo: { label: "Vendas passadas", className: "bg-amber-100 text-amber-700" },
       automatico: { label: "Automático", className: "bg-emerald-100 text-emerald-700" },
     };
     return (
@@ -119,7 +119,10 @@ export default function HistoricoCustosModal({
             <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-orange-50 px-4 py-3 md:hidden">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Custo atual</p>
-                <p className="text-xl font-bold text-gray-900">{formatCurrency(Number(historico[0].custoNovo))}</p>
+                {/* O custo usado só em vendas passadas não é o custo atual: vale a última mudança comum. */}
+                <p className="text-xl font-bold text-gray-900">
+                  {formatCurrency(Number((historico.find((h) => !h.vigenciaInicio) ?? historico[0]).custoNovo))}
+                </p>
               </div>
               <p className="shrink-0 text-right text-sm text-gray-600">
                 {historico.length} {historico.length === 1 ? "alteração" : "alterações"}
@@ -132,16 +135,21 @@ export default function HistoricoCustosModal({
               {historico.map((item) => {
                 const tipo = getTipoBadge(item.tipoAlteracao);
                 const delta = getDelta(item.custoAnterior, Number(item.custoNovo));
+                // Custo usado em vendas passadas: não tem "de → para" (no período o
+                // custo anterior variava); o motivo diz em quais vendas entrou.
+                const noPassado = Boolean(item.vigenciaInicio);
                 return (
                   <li key={item.id} className="relative">
                     {/* Ponto da timeline */}
                     <span
                       className={`absolute -left-6 top-3 flex h-[18px] w-[18px] items-center justify-center rounded-full ring-4 ring-white ${
-                        delta.tipo === "subiu"
-                          ? "bg-red-500"
-                          : delta.tipo === "caiu"
-                            ? "bg-emerald-500"
-                            : "bg-orange-400"
+                        noPassado
+                          ? "bg-amber-500"
+                          : delta.tipo === "subiu"
+                            ? "bg-red-500"
+                            : delta.tipo === "caiu"
+                              ? "bg-emerald-500"
+                              : "bg-orange-400"
                       }`}
                     >
                       <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -162,6 +170,16 @@ export default function HistoricoCustosModal({
                         </span>
                       </div>
 
+                      {noPassado ? (
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <span className="text-base max-md:text-lg font-semibold text-gray-900">
+                            {formatCurrency(Number(item.custoNovo))}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] max-md:text-xs max-md:py-1 font-medium bg-amber-100 text-amber-800">
+                            Usado no CMV de vendas passadas
+                          </span>
+                        </div>
+                      ) : (
                       <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-gray-400 line-through">
                           {formatCurrency(item.custoAnterior)}
@@ -192,6 +210,7 @@ export default function HistoricoCustosModal({
                           </span>
                         ) : null}
                       </div>
+                      )}
 
                       {item.motivo && (
                         <p className="mt-2 text-xs max-md:text-[13px] text-gray-500 flex items-start gap-1.5">

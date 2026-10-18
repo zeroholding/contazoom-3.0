@@ -748,7 +748,7 @@ async function mergeKitChildren(
 }
 
 function avisoCustoRetroativo(sku: string): string {
-  return `SKU "${sku}" salvo, mas o custo não foi aplicado nas vendas antigas. Use "Aplicar custo retroativo" no SKU.`;
+  return `SKU "${sku}" salvo, mas o custo não foi aplicado nas vendas antigas. Use "Usar custo em vendas passadas" no SKU.`;
 }
 
 async function applySkuImport(

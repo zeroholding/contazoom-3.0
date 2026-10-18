@@ -256,7 +256,7 @@ export default function GestaoSKU() {
         toast({
           variant: "warning",
           title: "Vendas antigas não foram atualizadas",
-          description: `${payload.sku} foi criado, mas o custo não foi aplicado às vendas passadas. Use "Aplicar custo em vendas passadas" neste SKU para completar.`,
+          description: `${payload.sku} foi criado, mas o custo não foi aplicado às vendas passadas. Use "Usar custo em vendas passadas" neste SKU para completar.`,
           duration: 9000,
         });
       }

@@ -1,14 +1,113 @@
 import prisma from "@/lib/prisma";
 
+/** `tipoAlteracao` das linhas criadas por "Usar custo em vendas passadas". */
+export const TIPO_CUSTO_RETROATIVO = "retroativo";
+
 /**
- * Builds a historical cost lookup map for a set of SKU codes.
- * 
- * This queries the `sku_custo_historico` table and builds a timeline
- * of cost changes per SKU. The returned object has a `getCostAtDate`
- * method that returns the cost that was active at a given date.
- * 
- * This ensures that past sales use the cost that was valid at the time
- * of the sale, not the current cost.
+ * Uma linha de `sku_custo_historico`, só com o que a resolução do custo usa.
+ *
+ * - Sem `vigenciaInicio`: mudança comum de custo. Vale de `createdAt` em diante.
+ * - Com `vigenciaInicio`: custo usado em vendas PASSADAS. Vale para as vendas de
+ *   `[vigenciaInicio, vigenciaFim)` e nunca depois de `createdAt` (o momento em
+ *   que foi aplicado), então não mexe no custo das vendas futuras.
+ */
+export type LinhaHistoricoCusto = {
+  custoNovo: number | { toString(): string };
+  createdAt: Date | string;
+  vigenciaInicio?: Date | string | null;
+  vigenciaFim?: Date | string | null;
+};
+
+type PontoDaLinhaDoTempo = { desde: number; custo: number };
+type CustoNoPassado = { inicio: number; fim: number; custo: number; decididoEm: number };
+
+const ms = (valor: Date | string) => new Date(valor).getTime();
+
+/**
+ * Monta a função "custo deste SKU na data da venda".
+ *
+ * A linha do tempo das mudanças comuns segue a regra de sempre: vale o último
+ * custo lançado até a data; venda anterior ao primeiro custo usa o primeiro;
+ * custos zerados antes do primeiro custo real são ignorados; sem histórico, o
+ * custo atual vale para qualquer data.
+ *
+ * Por cima dela entram os custos usados no passado. Para cada venda vence a
+ * decisão MAIS RECENTE que cobre a data: um custo aplicado no passado vence a
+ * mudança comum que estava valendo naquela data se foi decidido depois dela; uma
+ * mudança comum feita depois volta a valer daí em diante. Assim corrigir o
+ * primeiro custo errado ("desde o início") troca o CMV de todo o histórico, e um
+ * período só troca o CMV daquele período.
+ */
+export function montarResolvedorDeCusto(
+  custoAtual: number,
+  historico: LinhaHistoricoCusto[],
+): (dataVenda: Date) => number {
+  const comuns: PontoDaLinhaDoTempo[] = historico
+    .filter((linha) => !linha.vigenciaInicio)
+    .map((linha) => ({ desde: ms(linha.createdAt), custo: Number(linha.custoNovo) }))
+    .sort((a, b) => a.desde - b.desde);
+
+  const primeiroCustoReal = comuns.findIndex((ponto) => ponto.custo > 0);
+  let linhaDoTempo = primeiroCustoReal > 0 ? comuns.slice(primeiroCustoReal) : comuns;
+  if (primeiroCustoReal === -1 && custoAtual > 0) linhaDoTempo = [];
+
+  // Sem histórico: o custo atual vale para todas as datas. Não é uma decisão
+  // datada, então qualquer custo aplicado no passado passa por cima dele.
+  const semHistorico = linhaDoTempo.length === 0;
+  if (semHistorico) linhaDoTempo = [{ desde: 0, custo: custoAtual }];
+
+  const noPassado: CustoNoPassado[] = historico
+    .filter((linha) => linha.vigenciaInicio)
+    .map((linha) => {
+      const decididoEm = ms(linha.createdAt);
+      const fimInformado = linha.vigenciaFim ? ms(linha.vigenciaFim) : Infinity;
+      return {
+        inicio: ms(linha.vigenciaInicio as Date | string),
+        fim: Math.min(fimInformado, decididoEm),
+        custo: Number(linha.custoNovo),
+        decididoEm,
+      };
+    })
+    .filter((ajuste) => ajuste.fim > ajuste.inicio && Number.isFinite(ajuste.custo))
+    // Mais recente primeiro: o primeiro que cobre a data é o que vale.
+    .sort((a, b) => b.decididoEm - a.decididoEm);
+
+  return (dataVenda: Date) => {
+    const t = dataVenda.getTime();
+
+    // Último custo comum lançado até a data (busca binária).
+    let lo = 0;
+    let hi = linhaDoTempo.length - 1;
+    let achado = -1;
+    while (lo <= hi) {
+      const meio = (lo + hi) >> 1;
+      if (linhaDoTempo[meio].desde <= t) {
+        achado = meio;
+        lo = meio + 1;
+      } else {
+        hi = meio - 1;
+      }
+    }
+
+    // Venda anterior ao primeiro custo: o primeiro custo vale para trás, mas
+    // sem data de decisão (perde para qualquer custo aplicado no passado).
+    const custoComum = achado >= 0 ? linhaDoTempo[achado].custo : linhaDoTempo[0].custo;
+    const decididoEm = achado >= 0 && !semHistorico ? linhaDoTempo[achado].desde : -Infinity;
+
+    for (const ajuste of noPassado) {
+      if (ajuste.decididoEm <= decididoEm) break;
+      if (t >= ajuste.inicio && t < ajuste.fim) return ajuste.custo;
+    }
+    return custoComum;
+  };
+}
+
+/**
+ * Custo de cada SKU na data de cada venda, para um conjunto de códigos.
+ *
+ * Lê `sku_custo_historico` uma vez e devolve `getCostAtDate`, usado por todas as
+ * telas que calculam CMV (vendas, dashboard, DRE, top produtos) e pelo sync do
+ * TikTok. Vendas passadas usam o custo que valia na data delas, não o atual.
  */
 export async function buildHistoricalCostMap(userId: string, skuCodes: string[]) {
   if (skuCodes.length === 0) {
@@ -18,86 +117,35 @@ export async function buildHistoricalCostMap(userId: string, skuCodes: string[])
     };
   }
 
-    // Get all SKUs with their current cost and full cost history
-    const skus = await prisma.sKU.findMany({
-      where: { userId, sku: { in: skuCodes } },
-      select: {
-        sku: true,
-        custoUnitario: true,
-        custoHistorico: {
-          orderBy: { createdAt: "asc" },
-          select: { custoAnterior: true, custoNovo: true, createdAt: true },
-        },
+  const skus = await prisma.sKU.findMany({
+    where: { userId, sku: { in: skuCodes } },
+    select: {
+      sku: true,
+      custoUnitario: true,
+      custoHistorico: {
+        orderBy: { createdAt: "asc" },
+        select: { custoNovo: true, createdAt: true, vigenciaInicio: true, vigenciaFim: true },
       },
-    });
-  
-    // Build a map: skuCode -> sorted array of { date, cost, custoAnterior }
-    const costTimelines = new Map<string, Array<{ date: Date; cost: number; custoAnterior: number }>>();
-    const currentCosts = new Map<string, number>();
-  
-    for (const sku of skus) {
-      const currentCost = Number(sku.custoUnitario) || 0;
-      currentCosts.set(sku.sku, currentCost);
-  
-      const rawTimeline = sku.custoHistorico.map((h) => ({
-        date: new Date(h.createdAt),
-        cost: Number(h.custoNovo),
-        custoAnterior: Number(h.custoAnterior) || 0,
-      }));
+    },
+  });
 
-      const firstRealCostIndex = rawTimeline.findIndex((entry) => entry.cost > 0);
-      let timeline =
-        firstRealCostIndex > 0
-          ? rawTimeline.slice(firstRealCostIndex)
-          : rawTimeline;
+  const resolvedores = new Map<string, (dataVenda: Date) => number>();
+  const currentCosts = new Map<string, number>();
 
-      if (firstRealCostIndex === -1 && currentCost > 0) {
-        timeline = [];
-      }
-  
-      if (timeline.length === 0) {
-        // No history at all — use current cost for all dates
-        timeline.push({ date: new Date(0), cost: currentCost, custoAnterior: currentCost });
-      }
-  
-      costTimelines.set(sku.sku, timeline);
-    }
-  
-    return {
-    /**
-     * Get the cost that was active for a given SKU at a specific date.
-     * Uses binary search on the sorted timeline.
-     */
+  for (const sku of skus) {
+    const currentCost = Number(sku.custoUnitario) || 0;
+    currentCosts.set(sku.sku, currentCost);
+    resolvedores.set(sku.sku, montarResolvedorDeCusto(currentCost, sku.custoHistorico));
+  }
+
+  return {
+    /** Custo que valia para o SKU na data da venda (0 se o SKU não existe). */
     getCostAtDate(skuCode: string, saleDate: Date): number {
-      const timeline = costTimelines.get(skuCode);
-      if (!timeline || timeline.length === 0) return 0;
-
-      // Binary search: find the last entry where date <= saleDate
-      let lo = 0;
-      let hi = timeline.length - 1;
-      let result = -1;
-
-      while (lo <= hi) {
-        const mid = Math.floor((lo + hi) / 2);
-        if (timeline[mid].date <= saleDate) {
-          result = mid;
-          lo = mid + 1;
-        } else {
-          hi = mid - 1;
-        }
-      }
-
-      if (result >= 0) {
-        return timeline[result].cost;
-      }
-
-      // Sale happened before first recorded cost — apply first known cost retroactively
-      return timeline[0].cost;
+      const resolver = resolvedores.get(skuCode);
+      return resolver ? resolver(saleDate) : 0;
     },
 
-    /**
-     * Get the current (most recent) cost for a SKU.
-     */
+    /** Custo atual do SKU. */
     getCurrentCost(skuCode: string): number {
       return currentCosts.get(skuCode) || 0;
     },
