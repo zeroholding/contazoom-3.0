@@ -220,33 +220,6 @@
     transform: translateY(20px);
 }
 
-/* Cascata da margem: na primeira aparição cada desconto cai em sequência. */
-.czl-barra {
-    transform-origin: var(--origem, left center);
-    transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
-    transition-delay: calc(var(--i, 0) * 150ms + 150ms);
-}
-
-[data-estado="oculto"] .czl-barra {
-    transform: scaleX(0);
-}
-
-/* Linha nova do registro da sincronização. */
-.czl-linha {
-    animation: czl-linha 280ms ease-out both;
-}
-
-@keyframes czl-linha {
-    from {
-        opacity: 0;
-        transform: translateY(5px);
-    }
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-
 /* -------------------------------------------------------------------------- */
 /* Tour do produto                                                            */
 /*                                                                            */
@@ -297,6 +270,45 @@
     100% {
         box-shadow: 0 0 0 12px rgba(242, 98, 18, 0);
     }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Botão flutuante do WhatsApp                                                */
+/*                                                                            */
+/* Escondido com `visibility` (sai do foco e do leitor de tela) e revelado    */
+/* pelo `data-visivel` que o componente liga ao sair da primeira dobra. A     */
+/* transição mora aqui, e não em utilitárias, porque esta folha é sem camada. */
+/* -------------------------------------------------------------------------- */
+
+.czl-whats {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+    box-shadow: 0 18px 36px -16px rgba(7, 94, 84, 0.7), 0 2px 6px rgba(16, 24, 40, 0.12);
+    transition:
+        opacity 250ms ease,
+        transform 350ms cubic-bezier(0.16, 1, 0.3, 1),
+        background-color 200ms ease,
+        box-shadow 300ms ease,
+        visibility 0s linear 350ms;
+}
+
+.czl-whats[data-visivel="true"] {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    transition-delay: 0s;
+}
+
+.czl-whats[data-visivel="true"]:hover {
+    background-color: #3DDC7A;
+    transform: translateY(-2px);
+    box-shadow: 0 22px 40px -16px rgba(7, 94, 84, 0.8), 0 2px 6px rgba(16, 24, 40, 0.12);
+}
+
+.cz-landing .czl-whats:focus-visible {
+    outline-color: #14161B;
+    border-radius: 9999px;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -354,10 +366,6 @@
 
     .cz-landing [data-revelar][data-estado="oculto"] {
         opacity: 1;
-        transform: none;
-    }
-
-    [data-estado="oculto"] .czl-barra {
         transform: none;
     }
 }

@@ -14,11 +14,11 @@ import LandingPage from "./components/landing/LandingPage";
  */
 
 const DESCRICAO =
-  "Vendas do Mercado Livre, Shopee e TikTok Shop num painel só, com a margem real de cada pedido: comissão, frete, imposto e custo do produto já descontados. E contabilidade para o seu CNPJ no mesmo lugar.";
+  "Escritório contábil para empresas do Simples Nacional e do Lucro Presumido: impostos apurados todo mês a partir das notas fiscais, guias no seu painel e abertura de CNPJ. E um sistema que mostra a margem de cada venda no Mercado Livre, na Shopee e no TikTok Shop.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://contazoom.com.br"),
-  title: "ContaZoom | Gestão de vendas e contabilidade para marketplaces",
+  title: "ContaZoom | Contabilidade para quem vende na internet",
   description: DESCRICAO,
   alternates: { canonical: "/" },
   openGraph: {
@@ -26,12 +26,12 @@ export const metadata: Metadata = {
     locale: "pt_BR",
     url: "/",
     siteName: "ContaZoom",
-    title: "ContaZoom | Dê zoom no lucro de cada venda",
+    title: "ContaZoom | Dê zoom na contabilidade da sua empresa",
     description: DESCRICAO,
   },
   twitter: {
     card: "summary",
-    title: "ContaZoom | Dê zoom no lucro de cada venda",
+    title: "ContaZoom | Dê zoom na contabilidade da sua empresa",
     description: DESCRICAO,
   },
 };

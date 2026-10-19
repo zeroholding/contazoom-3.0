@@ -1,19 +1,24 @@
 /**
  * Conteúdo da landing pública.
  *
- * Tudo aqui descreve o que o sistema FAZ hoje, conferido no código (menus,
- * fluxos de etapa, limites de importação, régua do Estoque Full). O que ainda
- * não existe — integração com Bling, cupons, NFS-e, etiqueta da Shopee e do
- * TikTok — fica de fora de propósito: promessa de landing que o painel não
- * cumpre vira chamado de suporte no primeiro dia.
+ * A ÊNFASE É A CONTABILIDADE: o ContaZoom é, antes de tudo, o escritório
+ * contábil (Simples Nacional e Lucro Presumido). O sistema de vendas dos
+ * marketplaces aparece como adicional, numa seção só, depois dos serviços.
+ *
+ * Tudo aqui descreve o que existe hoje, conferido no código: as etapas da
+ * apuração e da abertura de CNPJ vêm de src/lib/tarefa-etapas.ts, a apuração
+ * pelo XML de docs/APURACAO_FISCAL_XML_COMO_FUNCIONA.md, os módulos do sistema
+ * do menu lateral. O que não existe — preço, NFS-e lida do arquivo, integração
+ * com Bling, cupons, etiqueta da Shopee e do TikTok — fica de fora de propósito:
+ * promessa de landing que não se cumpre vira chamado de suporte no primeiro dia.
  */
 
 import {
+  Building2,
   CircleHelp,
   Landmark,
-  LayoutGrid,
-  Percent,
-  RefreshCw,
+  LayoutDashboard,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,10 +30,10 @@ export const LINKS_SECOES: Array<{
   descricao: string;
   Icone: LucideIcon;
 }> = [
-  { href: "#canais", id: "canais", rotulo: "Canais", descricao: "Mercado Livre, Shopee e TikTok Shop", Icone: RefreshCw },
-  { href: "#margem", id: "margem", rotulo: "Margem", descricao: "Quanto sobra de cada venda", Icone: Percent },
-  { href: "#produto", id: "produto", rotulo: "Produto", descricao: "Os módulos do painel", Icone: LayoutGrid },
-  { href: "#contabilidade", id: "contabilidade", rotulo: "Contabilidade", descricao: "Impostos e CNPJ em dia", Icone: Landmark },
+  { href: "#contabilidade", id: "contabilidade", rotulo: "Contabilidade", descricao: "Impostos apurados todo mês", Icone: Landmark },
+  { href: "#abertura", id: "abertura", rotulo: "Abertura de CNPJ", descricao: "Do formulário aos documentos oficiais", Icone: Building2 },
+  { href: "#como-funciona", id: "como-funciona", rotulo: "Como funciona", descricao: "Do primeiro contato à rotina do mês", Icone: ListChecks },
+  { href: "#sistema", id: "sistema", rotulo: "Sistema", descricao: "Vendas e margem dos marketplaces", Icone: LayoutDashboard },
   { href: "#duvidas", id: "duvidas", rotulo: "Dúvidas", descricao: "Perguntas frequentes", Icone: CircleHelp },
 ];
 

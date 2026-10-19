@@ -15,9 +15,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, LayoutDashboard, Lock, LogIn, Menu, X } from "lucide-react";
+import { ChevronRight, LayoutDashboard, LogIn, Menu, X } from "lucide-react";
 import { travarRolagem } from "@/lib/trava-rolagem";
-import { BotaoContorno, BotaoMarca } from "./comum";
+import { BotaoContorno, BotaoMarca, BotaoWhatsapp } from "./comum";
+import { WHATSAPP_EXIBICAO } from "./contato";
 import { LINKS_SECOES } from "./dados";
 
 export default function Cabecalho({ logado }: { logado: boolean }) {
@@ -102,8 +103,10 @@ export default function Cabecalho({ logado }: { logado: boolean }) {
                         atual ? "bg-[#FFF2E9] text-[#C2410C]" : "text-[#6B7280] hover:bg-[#F4F5F7] hover:text-[#14161B]"
                       }`}
                     >
+                      {/* Ícone só a partir de 1280 px: com ele, os cinco rótulos e os
+                          dois botões não cabem na largura de 1024. */}
                       <Icone
-                        className={`h-[15px] w-[15px] transition-colors ${atual ? "text-[#F26212]" : "text-[#9AA1AC] group-hover:text-[#F26212]"}`}
+                        className={`hidden h-[15px] w-[15px] transition-colors xl:block ${atual ? "text-[#F26212]" : "text-[#9AA1AC] group-hover:text-[#F26212]"}`}
                         strokeWidth={2.2}
                         aria-hidden="true"
                       />
@@ -121,15 +124,15 @@ export default function Cabecalho({ logado }: { logado: boolean }) {
                 Ir para o painel
               </BotaoMarca>
             ) : (
-              <>
-                <BotaoContorno href="/login" Icone={LogIn} tamanho="sm" className="max-sm:hidden">
-                  Entrar
-                </BotaoContorno>
-                <BotaoMarca href="/register" tamanho="sm" className="max-[360px]:hidden">
-                  Criar conta
-                </BotaoMarca>
-              </>
+              <BotaoContorno href="/login" Icone={LogIn} tamanho="sm" className="max-sm:hidden">
+                Entrar
+              </BotaoContorno>
             )}
+            {/* A ação principal da página: contabilidade se contrata conversando.
+                Abaixo de 380 px fica só o ícone (o nome continua para o leitor de tela). */}
+            <BotaoWhatsapp mensagem="contabilidade" tamanho="sm">
+              <span className="max-[380px]:sr-only">WhatsApp</span>
+            </BotaoWhatsapp>
             <button
               type="button"
               onClick={() => setAberto((v) => !v)}
@@ -180,23 +183,20 @@ export default function Cabecalho({ logado }: { logado: boolean }) {
           </nav>
 
           <div className="mt-auto grid gap-2.5 pt-6">
+            <BotaoWhatsapp mensagem="contabilidade" onClick={fechar}>
+              Falar no WhatsApp
+            </BotaoWhatsapp>
             {logado ? (
               <BotaoMarca href="/dashboard" Icone={LayoutDashboard} onClick={fechar}>
                 Ir para o painel
               </BotaoMarca>
             ) : (
-              <>
-                <BotaoMarca href="/register" onClick={fechar}>
-                  Criar minha conta
-                </BotaoMarca>
-                <BotaoContorno href="/login" Icone={LogIn} onClick={fechar}>
-                  Já sou cliente, entrar
-                </BotaoContorno>
-              </>
+              <BotaoContorno href="/login" Icone={LogIn} onClick={fechar}>
+                Já sou cliente, entrar
+              </BotaoContorno>
             )}
-            <p className="mt-1 flex items-center justify-center gap-1.5 text-[12px] text-[#9AA1AC]">
-              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-              Sua senha do marketplace não passa por aqui.
+            <p className="czl-num mt-1 text-center text-[12.5px] text-[#6B7280]">
+              Atendimento pelo WhatsApp: <span className="font-semibold text-[#14161B]">{WHATSAPP_EXIBICAO}</span>
             </p>
           </div>
         </div>

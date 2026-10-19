@@ -1,56 +1,62 @@
-import { KeyRound, ShieldCheck, Smartphone, Timer } from "lucide-react";
-import { Rotulo, Texto, Titulo, atraso } from "./comum";
+import { CalendarClock, History, Landmark } from "lucide-react";
+import { IconeWhatsapp, Rotulo, Texto, Titulo, atraso } from "./comum";
+import { WHATSAPP_EXIBICAO } from "./contato";
 
-/** 05 · Como começar — três passos e o que protege a conta. */
+/**
+ * 03 · Como funciona — do primeiro contato à rotina mensal do escritório.
+ *
+ * O começo é uma conversa (contabilidade não se contrata criando conta sozinho),
+ * a entrada de documentos é a etapa 1 de todo fluxo de apuração, e quem vai
+ * abrir empresa entra pelo formulário de abertura.
+ */
 
 const PASSOS = [
   {
-    titulo: "Crie sua conta",
-    texto: "Nome, e-mail e senha. Leva um minuto.",
+    titulo: "Fale com a gente",
+    texto: "Chame no WhatsApp e conte como é a sua empresa: o regime, as atividades e onde você vende.",
   },
   {
-    titulo: "Conecte seus canais",
-    texto:
-      "Autorize o Mercado Livre, a Shopee e o TikTok Shop no site de cada um. Dá para conectar mais de uma conta por canal.",
+    titulo: "Envie os documentos",
+    texto: "Quem já tem CNPJ envia os documentos da empresa. Quem vai abrir preenche o formulário online de abertura.",
   },
   {
-    titulo: "Sincronize e veja a margem",
+    titulo: "Receba as guias todo mês",
     texto:
-      "Um clique traz as vendas. Informe o custo dos SKUs, ou suba uma planilha, e a margem aparece em cada pedido, inclusive nos antigos.",
+      "Você manda as notas e os documentos do mês, o escritório apura os impostos e a guia chega no seu e-mail e no seu painel.",
   },
 ];
 
 const GARANTIAS = [
   {
-    Icone: KeyRound,
-    titulo: "Sem senha de marketplace",
-    texto: "A conexão é autorizada no próprio canal. Dá para reconectar ou remover a conta quando quiser.",
+    Icone: Landmark,
+    titulo: "Um fluxo por regime",
+    texto: "10 etapas no Simples Nacional e 14 no Lucro Presumido, sempre na mesma ordem.",
   },
   {
-    Icone: ShieldCheck,
-    titulo: "Cada um vê o que é seu",
-    texto: "Vendas, custos e documentos ficam separados por usuário.",
+    Icone: CalendarClock,
+    titulo: "Prazo e responsável",
+    texto: "Cada competência tem prazo de entrega e alguém do escritório responsável por ela.",
   },
   {
-    Icone: Timer,
-    titulo: "Sessão que expira sozinha",
-    texto: "Ficou parado, o painel pede para entrar de novo.",
+    Icone: History,
+    titulo: "Tudo registrado",
+    texto: "Toda alteração na apuração fica registrada no escritório, com autor e horário.",
   },
   {
-    Icone: Smartphone,
-    titulo: "No celular também",
-    texto: "Menu inferior, vendas em cartões e filtros que cabem na palma da mão.",
+    Icone: null,
+    titulo: "Atendimento no WhatsApp",
+    texto: `Fale direto com a equipe da ContaZoom pelo ${WHATSAPP_EXIBICAO}.`,
   },
 ];
 
 export default function ComoFunciona() {
   return (
-    <section id="como-funciona" className="scroll-mt-16 py-24 sm:py-32">
+    <section id="como-funciona" className="scroll-mt-16 border-y border-[#EDEFF3] bg-[#F8F9FB] py-24 sm:py-32">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
         <div data-revelar="" className="max-w-[44rem]">
-          <Rotulo numero="05" texto="Como começar" />
-          <Titulo>Do cadastro à primeira margem em três passos.</Titulo>
-          <Texto>Sem implantação, sem planilha para montar antes. Você conecta e o painel se preenche.</Texto>
+          <Rotulo numero="03" texto="Como funciona" />
+          <Titulo>Do primeiro contato à rotina do mês.</Titulo>
+          <Texto>Você fala com a gente, envia os documentos e o escritório assume a rotina fiscal da sua empresa.</Texto>
         </div>
 
         <ol className="relative mt-14 grid gap-4 md:grid-cols-3 md:gap-5">
@@ -77,8 +83,12 @@ export default function ComoFunciona() {
 
         <ul className="mt-6 grid gap-px overflow-hidden rounded-[22px] border border-[#EDEFF3] bg-[#EDEFF3] sm:grid-cols-2 lg:grid-cols-4">
           {GARANTIAS.map(({ Icone, titulo, texto }, i) => (
-            <li key={titulo} data-revelar="" style={atraso(i * 70)} className="bg-[#F8F9FB] p-5 sm:p-6">
-              <Icone className="h-5 w-5 text-[#F26212]" aria-hidden="true" />
+            <li key={titulo} data-revelar="" style={atraso(i * 70)} className="bg-white p-5 sm:p-6">
+              {Icone ? (
+                <Icone className="h-5 w-5 text-[#F26212]" aria-hidden="true" />
+              ) : (
+                <IconeWhatsapp className="h-5 w-5 text-[#128C7E]" />
+              )}
               <h3 className="mt-3 text-[15px] font-bold tracking-[-0.02em] text-[#14161B]">{titulo}</h3>
               <p className="mt-1 text-[14px] leading-[1.6] text-[#6B7280]">{texto}</p>
             </li>
