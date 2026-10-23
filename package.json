@@ -22,6 +22,7 @@
     "test:fiscal": "npm run test:fiscal:parser && npm run test:fiscal:zip && npm run test:fiscal:declaracao",
     "test:fiscal:amostras": "tsx scripts/teste-assinatura-xml.ts && tsx scripts/diagnostico-amostras-xml.ts \"XML/XML GRUPO NEXUS 202608/_AMOSTRAS_2_POR_ZIP\"",
     "test:fiscal:aceitacao": "tsx scripts/teste-cingapura-producao.ts",
+    "test:notificacoes": "tsx scripts/teste-notificacoes.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy"
   },

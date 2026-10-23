@@ -23,7 +23,10 @@ export default function ProtectedRoute({
     const timer = setTimeout(() => {
       if (!isLoading && !isAuthenticated && !hasRedirected) {
         setHasRedirected(true);
-        router.push("/login");
+        // Leva junto a tela pedida: quem chega pelo link do e-mail (um documento
+        // novo, por exemplo) volta para ela depois de entrar.
+        const destino = `${window.location.pathname}${window.location.search}`;
+        router.push(destino && destino !== "/" ? `/login?redirect=${encodeURIComponent(destino)}` : "/login");
       }
     }, 100); // 100ms de delay
 

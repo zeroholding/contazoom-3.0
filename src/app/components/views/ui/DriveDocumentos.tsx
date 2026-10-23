@@ -6,6 +6,7 @@ import {
   Download,
   File,
   FileText,
+  FileX2,
   Folder,
   FolderOpen,
   Home,
@@ -19,7 +20,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { useAuthContext } from "@/contexts/AuthContext";
+import { marcarDocumentosComoVistos, useNotificacoes } from "@/hooks/useNotificacoes";
 import { DOCUMENT_MONTHS as MONTHS } from "@/lib/document-categories";
+import { EVENTO_ABRIR_DOCUMENTO } from "./notificacoes/navegacao";
+
+/** Quantos arquivos a tela inicial lista em "Adicionados recentemente". */
+const RECENTES_NA_INICIO = 6;
 
 type Document = {
   id: string;
@@ -44,6 +51,22 @@ type DocumentFolder = {
 
 type UserOption = { id: string; name?: string | null; email?: string | null };
 type FileFilter = "all" | "pdf" | "image" | "other";
+
+/**
+ * Documento pedido por uma notificação (link do e-mail, cartão do Dashboard ou
+ * sino). Só é resolvido depois de `aposCarga` cargas da lista, para não decidir
+ * "não encontrado" olhando uma lista velha.
+ */
+type PedidoDocumento = { id: string; aposCarga: number; recarregou: boolean };
+
+/** Selo dos documentos com aviso ainda não lido. */
+function SeloNovo() {
+  return (
+    <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-[var(--cz-laranja)] px-2 text-[10px] font-extrabold uppercase leading-none tracking-[0.06em] text-white">
+      Novo
+    </span>
+  );
+}
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -124,6 +147,13 @@ export default function DriveDocumentos() {
   const drawerRef = useRef<HTMLElement | null>(null);
   const drawerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const contentRootRef = useRef<HTMLDivElement | null>(null);
+  const [cargasConcluidas, setCargasConcluidas] = useState(0);
+  const [pedidoDocumento, setPedidoDocumento] = useState<PedidoDocumento | null>(null);
+  const [destaque, setDestaque] = useState<{ id: string; vez: number } | null>(null);
+  const [documentoIndisponivel, setDocumentoIndisponivel] = useState(false);
+
+  const { user: usuarioLogado } = useAuthContext();
+  const { itens: notificacoes } = useNotificacoes(usuarioLogado?.id);
 
   const loadDocuments = useCallback(async (userId: string, signal?: AbortSignal) => {
     setLoading(true);
@@ -142,7 +172,10 @@ export default function DriveDocumentos() {
       if (loadError instanceof DOMException && loadError.name === "AbortError") return;
       setError(loadError instanceof Error ? loadError.message : "Erro ao buscar documentos");
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+        setCargasConcluidas((total) => total + 1);
+      }
     }
   }, []);
 
@@ -325,7 +358,7 @@ export default function DriveDocumentos() {
 
   const homeDocuments = useMemo(() => {
     const filtered = sortedDocuments.filter(matchesActiveFilters);
-    return normalizedSearch || fileFilter !== "all" ? filtered : filtered.slice(0, 6);
+    return normalizedSearch || fileFilter !== "all" ? filtered : filtered.slice(0, RECENTES_NA_INICIO);
   }, [fileFilter, matchesActiveFilters, normalizedSearch, sortedDocuments]);
 
   const visibleFiles = useMemo(() => {
@@ -345,6 +378,133 @@ export default function DriveDocumentos() {
     : "Minha conta";
   const hasActiveSearchFilters = Boolean(normalizedSearch) || fileFilter !== "all";
   const descendantFileCount = currentFolderId ? folderCounts.get(currentFolderId) ?? 0 : 0;
+
+  // Selo "Novo": documentos com aviso ainda não lido. Só na conta do próprio
+  // usuário; o administrador olhando um cliente não vê os avisos do cliente.
+  const idsNovos = useMemo(() => {
+    const ids = new Set<string>();
+    if (selectedUserId) return ids;
+    for (const item of notificacoes) if (!item.lida && item.documentoId) ids.add(item.documentoId);
+    return ids;
+  }, [notificacoes, selectedUserId]);
+
+  // Pedido de abrir um documento: `/documentos?documento=<id>` (e-mail, Dashboard,
+  // outra tela) ou o evento do sino quando o drive já está aberto.
+  useEffect(() => {
+    const doLink = new URLSearchParams(window.location.search).get("documento");
+    if (doLink) setPedidoDocumento({ id: doLink, aposCarga: 1, recarregou: false });
+
+    const aoPedirDocumento = (evento: Event) => {
+      const id = (evento as CustomEvent<unknown>).detail;
+      if (typeof id !== "string" || !id) return;
+      setDocumentoIndisponivel(false);
+      setPedidoDocumento({ id, aposCarga: 0, recarregou: false });
+    };
+    window.addEventListener(EVENTO_ABRIR_DOCUMENTO, aoPedirDocumento);
+    return () => window.removeEventListener(EVENTO_ABRIR_DOCUMENTO, aoPedirDocumento);
+  }, []);
+
+  // Resolve o pedido quando a lista está pronta: abre a pasta do documento,
+  // limpa busca e filtro que o esconderiam e destaca o arquivo.
+  useEffect(() => {
+    if (!pedidoDocumento || loading || cargasConcluidas < pedidoDocumento.aposCarga) return;
+
+    const tirarPedidoDaUrl = () => {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("documento")) return;
+      url.searchParams.delete("documento");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    };
+
+    if (error) {
+      setPedidoDocumento(null);
+      return;
+    }
+
+    const encontrado = documents.find((item) => item.id === pedidoDocumento.id);
+    if (encontrado) {
+      const pastaId = encontrado.folderId ?? encontrado.folder?.id ?? null;
+      const pasta = pastaId ? foldersById.get(pastaId) : undefined;
+      const ehImpostos = pasta?.name.toUpperCase().includes("IMPOSTO") ?? false;
+      const [ano, mes] = ehImpostos ? encontrado.subFolder?.split("/") ?? [] : [];
+      // Sem pasta ele só aparece na tela inicial; se não estiver entre os
+      // recentes, a busca pelo nome é o que o traz para a lista.
+      const foraDosRecentes = !sortedDocuments
+        .slice(0, RECENTES_NA_INICIO)
+        .some((item) => item.id === encontrado.id);
+
+      setPedidoDocumento(null);
+      setFileFilter("all");
+      setSearchTerm(!pasta && foraDosRecentes ? encontrado.originalName : "");
+      setCurrentFolderId(pasta?.id ?? null);
+      setCurrentYear(pasta ? ano ?? null : null);
+      setCurrentMonth(pasta ? mes ?? null : null);
+      setIsFolderDrawerOpen(false);
+      setDocumentoIndisponivel(false);
+      setDestaque({ id: encontrado.id, vez: Date.now() });
+      if (!selectedUserId) void marcarDocumentosComoVistos([encontrado.id]);
+      tirarPedidoDaUrl();
+      return;
+    }
+
+    if (pedidoDocumento.recarregou) {
+      setPedidoDocumento(null);
+      setDocumentoIndisponivel(true);
+      tirarPedidoDaUrl();
+      return;
+    }
+
+    // Fora da lista: o administrador pode estar vendo outro cliente, ou o
+    // documento chegou depois da última carga. Busca de novo, uma vez só, na
+    // conta do próprio usuário.
+    setPedidoDocumento({ ...pedidoDocumento, aposCarga: cargasConcluidas + 1, recarregou: true });
+    if (selectedUserId) {
+      setSelectedUserId("");
+      setCurrentFolderId(null);
+      setCurrentYear(null);
+      setCurrentMonth(null);
+    } else {
+      void loadDocuments("");
+    }
+  }, [
+    cargasConcluidas,
+    documents,
+    error,
+    foldersById,
+    loadDocuments,
+    loading,
+    pedidoDocumento,
+    selectedUserId,
+    sortedDocuments,
+  ]);
+
+  // O documento pedido entra na tela, pulsa e fica marcado por alguns segundos.
+  // Só rola quando ele está fora da área visível (descontados o cabeçalho e a
+  // barra de abas do celular): rolar o que já aparece escondia o título da pasta.
+  useEffect(() => {
+    if (!destaque) return;
+    const quadro = requestAnimationFrame(() => {
+      const alvo = window.document.getElementById(`documento-${destaque.id}`);
+      if (!alvo) return;
+      const caixa = alvo.getBoundingClientRect();
+      const folga = 80;
+      if (caixa.top >= folga && caixa.bottom <= window.innerHeight - folga) return;
+      const reduzirMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      alvo.scrollIntoView({ block: "center", behavior: reduzirMovimento ? "auto" : "smooth" });
+    });
+    const fim = setTimeout(() => setDestaque(null), 4500);
+    return () => {
+      cancelAnimationFrame(quadro);
+      clearTimeout(fim);
+    };
+  }, [destaque]);
+
+  // Abrir ou baixar conta como "visto": o aviso do documento sai do sino na hora
+  // (o servidor também marca quando o dono abre o arquivo).
+  const abrirArquivo = (arquivo: Document, acao: "view" | "download") => {
+    if (!selectedUserId) void marcarDocumentosComoVistos([arquivo.id]);
+    window.open(`${arquivo.fileUrl}?action=${acao}`, acao === "view" ? "_blank" : "_self");
+  };
 
   const clearSearchFilters = () => {
     setSearchTerm("");
@@ -598,6 +758,30 @@ export default function DriveDocumentos() {
         </header>
 
         <div className="p-4 sm:p-6">
+          {documentoIndisponivel && !loading && (
+            <div
+              role="status"
+              className="cz-aviso-entra mb-5 flex items-start gap-3 rounded-[var(--cz-raio-cartao)] border border-[var(--cz-laranja-borda)] bg-[var(--cz-laranja-suave)] p-3 sm:p-4"
+            >
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--cz-superficie)] text-[var(--cz-laranja-forte)]">
+                <FileX2 className="size-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-sm font-bold text-[var(--cz-texto)]">Este documento não está mais disponível</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-[var(--cz-texto-suave)]">
+                  Ele pode ter sido substituído ou removido pela equipe ContaZoom. Os demais documentos continuam aqui.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDocumentoIndisponivel(false)}
+                className="-m-1 grid size-10 shrink-0 place-items-center rounded-lg text-[var(--cz-texto-fraco)] hover:bg-[var(--cz-superficie)] hover:text-[var(--cz-texto)]"
+                aria-label="Fechar aviso"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
           {loading ? (
             <DocumentsSkeleton />
           ) : error ? (
@@ -679,22 +863,27 @@ export default function DriveDocumentos() {
                     {homeDocuments.map((document, index) => (
                       <div
                         key={document.id}
-                        className={`relative flex items-start gap-3 p-3 sm:items-center sm:p-4 ${
+                        id={`documento-${document.id}`}
+                        className={`relative flex items-start gap-3 p-3 transition-colors duration-700 sm:items-center sm:p-4 ${
                           index > 0 ? "border-t border-[var(--cz-hairline)]" : ""
-                        }`}
+                        } ${destaque?.id === document.id ? "bg-[var(--cz-laranja-suave)]" : ""}`}
                       >
+                        {destaque?.id === document.id && (
+                          <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-[var(--cz-laranja)]" />
+                        )}
                         <div className="relative z-[1] grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--cz-fundo)]">
                           {fileIcon(document.mimeType, "size-5")}
                         </div>
                         <div className="min-w-0 flex-1">
                           <button
                             type="button"
-                            onClick={() => window.open(`${document.fileUrl}?action=view`, "_blank")}
-                            className="flex min-h-11 max-w-full items-center truncate text-left text-sm font-bold text-[var(--cz-texto)] hover:text-[var(--cz-laranja-forte)]"
+                            onClick={() => abrirArquivo(document, "view")}
+                            className="flex min-h-11 max-w-full items-center gap-2 truncate text-left text-sm font-bold text-[var(--cz-texto)] hover:text-[var(--cz-laranja-forte)]"
                             title={document.originalName}
                           >
                             {/* Celular: nome em até 2 linhas (antes virava 1 linha cortada em "Guia DAS Simples Nacional - C…"). */}
                             <span className="truncate max-md:line-clamp-2 max-md:whitespace-normal max-md:break-words">{document.originalName}</span>
+                            {idsNovos.has(document.id) && <SeloNovo />}
                           </button>
                           <button
                             type="button"
@@ -717,7 +906,7 @@ export default function DriveDocumentos() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => window.open(`${document.fileUrl}?action=download`, "_self")}
+                          onClick={() => abrirArquivo(document, "download")}
                           className="grid size-11 shrink-0 place-items-center rounded-lg text-[var(--cz-texto-fraco)] hover:bg-[var(--cz-laranja-suave)] hover:text-[var(--cz-laranja-forte)]"
                           title="Baixar arquivo"
                           aria-label={`Baixar ${document.originalName}`}
@@ -880,7 +1069,12 @@ export default function DriveDocumentos() {
                   {visibleFiles.map((document) => (
                     <article
                       key={document.id}
-                      className="group flex min-w-0 flex-col rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-4 transition-all hover:border-[var(--cz-laranja-borda)] hover:shadow-[var(--cz-elev-1)]"
+                      id={`documento-${document.id}`}
+                      className={`group flex min-w-0 flex-col rounded-[var(--cz-raio-cartao)] border bg-[var(--cz-superficie)] p-4 transition-all hover:border-[var(--cz-laranja-borda)] hover:shadow-[var(--cz-elev-1)] ${
+                        destaque?.id === document.id
+                          ? "cz-destaque-documento border-[var(--cz-laranja)] bg-[#FFFAF6]"
+                          : "border-[var(--cz-hairline)]"
+                      }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="relative grid size-11 shrink-0 place-items-center rounded-xl bg-[var(--cz-fundo)]">
@@ -897,18 +1091,19 @@ export default function DriveDocumentos() {
                             {formatSize(document.sizeBytes)} · {new Date(document.createdAt).toLocaleDateString("pt-BR")}
                           </p>
                         </div>
+                        {idsNovos.has(document.id) && <SeloNovo />}
                       </div>
                       <div className="mt-4 flex gap-2 border-t border-[var(--cz-hairline)] pt-3">
                         <button
                           type="button"
-                          onClick={() => window.open(`${document.fileUrl}?action=view`, "_blank")}
+                          onClick={() => abrirArquivo(document, "view")}
                           className="min-h-11 flex-1 rounded-lg bg-[var(--cz-laranja-suave)] text-xs font-bold text-[var(--cz-laranja-forte)] hover:bg-[var(--cz-laranja)] hover:text-white"
                         >
                           Visualizar
                         </button>
                         <button
                           type="button"
-                          onClick={() => window.open(`${document.fileUrl}?action=download`, "_self")}
+                          onClick={() => abrirArquivo(document, "download")}
                           className="grid size-11 place-items-center rounded-lg border border-[var(--cz-hairline-forte)] text-[var(--cz-texto-suave)] hover:border-[var(--cz-laranja-borda)] hover:text-[var(--cz-laranja-forte)]"
                           title="Baixar arquivo"
                           aria-label={`Baixar ${document.originalName}`}

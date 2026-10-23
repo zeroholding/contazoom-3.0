@@ -38,6 +38,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
       console.error("Erro ao registrar log de acesso:", e);
     }
 
+    // O dono abriu o documento: o aviso dele cumpriu o papel e sai do sino,
+    // venha a pessoa pelo link do e-mail, pelo sino ou direto pelo drive. O
+    // administrador abrindo o arquivo do cliente NÃO conta como lido.
+    if (document.userId === session.sub) {
+      try {
+        await prisma.notificacao.updateMany({
+          where: { userId: session.sub, documentoId: document.id, lidaEm: null },
+          data: { lidaEm: new Date() },
+        });
+      } catch (e) {
+        console.error("Erro ao marcar notificação do documento como lida:", e);
+      }
+    }
+
     const filePath = join(UPLOAD_DIR, document.fileName);
     const fileBuffer = await readFile(filePath);
 

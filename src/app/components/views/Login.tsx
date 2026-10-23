@@ -44,6 +44,18 @@ import PainelMarca from "./ui/auth/PainelMarca";
 
 type Erros = { email?: string; senha?: string };
 
+/**
+ * Destino depois do login: só telas do próprio painel. `?redirect=` vem da URL,
+ * e um endereço de fora (`https://...`, `//site`) viraria redirecionamento
+ * aberto para outro domínio.
+ */
+function destinoDepoisDoLogin(valor: string | null): string {
+  if (!valor || !valor.startsWith("/") || valor.startsWith("//") || valor.startsWith("/\\")) {
+    return "/dashboard";
+  }
+  return valor;
+}
+
 export default function Login() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,7 +74,7 @@ export default function Login() {
   // Redirecionar se já estiver autenticado
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      const redirect = searchParams.get("redirect") || "/dashboard";
+      const redirect = destinoDepoisDoLogin(searchParams.get("redirect"));
       router.replace(redirect);
     }
   }, [authLoading, isAuthenticated, router, searchParams]);
@@ -201,7 +213,7 @@ export default function Login() {
         // Atualizar estado de autenticação
         await checkAuth();
 
-        const redirectUrl = searchParams.get("redirect") || "/dashboard";
+        const redirectUrl = destinoDepoisDoLogin(searchParams.get("redirect"));
         console.log("[Login] Destino:", redirectUrl);
 
         // `window.location` de propósito: força recarga completa para o

@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import UserAvatar from "./UserAvatar";
 import BottomNav from "./BottomNav";
+import SinoNotificacoes from "./notificacoes/SinoNotificacoes";
 
 type TopbarProps = {
   collapsed: boolean;
@@ -223,8 +224,11 @@ export default function Topbar({
                 })}
             </nav>
 
-            {/* Avatar do usuário */}
-            <div className="flex items-center">
+            {/* Sino de notificações e avatar do usuário. O sino mora aqui porque
+                todo quadro de tela inclui o Topbar: aparece em todas as telas do
+                painel sem tocar em nenhuma delas. */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <SinoNotificacoes />
               <UserAvatar />
             </div>
           </div>

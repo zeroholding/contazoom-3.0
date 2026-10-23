@@ -652,6 +652,67 @@ select.error {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Sino de notificações                                                       */
+/*                                                                            */
+/* O sino balança UMA vez quando chega aviso novo, e o aviso flutuante entra   */
+/* deslizando. Movimento que se repete vira ruído e deixa de avisar; um só     */
+/* chama o olho para o canto certo da tela.                                   */
+/* -------------------------------------------------------------------------- */
+
+@keyframes cz-sino-balanca {
+    0%, 100% { transform: rotate(0deg); }
+    15%      { transform: rotate(14deg); }
+    30%      { transform: rotate(-12deg); }
+    45%      { transform: rotate(9deg); }
+    60%      { transform: rotate(-6deg); }
+    75%      { transform: rotate(3deg); }
+}
+
+.cz-sino-balanca {
+    animation: cz-sino-balanca 0.9s ease-in-out;
+    transform-origin: 50% 3px;
+}
+
+@keyframes cz-selo-entra {
+    from { transform: scale(0.4); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+}
+
+.cz-selo-entra {
+    animation: cz-selo-entra 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes cz-aviso-entra {
+    from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.cz-aviso-entra {
+    animation: cz-aviso-entra 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Destaque do documento aberto pelo link da notificação: um pulso laranja que
+   some sozinho, para achar o arquivo sem precisar ler a lista inteira. */
+@keyframes cz-destaque-documento {
+    0%   { box-shadow: 0 0 0 0 rgba(242, 98, 18, 0.45); }
+    70%  { box-shadow: 0 0 0 10px rgba(242, 98, 18, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(242, 98, 18, 0); }
+}
+
+.cz-destaque-documento {
+    animation: cz-destaque-documento 1.4s ease-out 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cz-sino-balanca,
+    .cz-selo-entra,
+    .cz-aviso-entra,
+    .cz-destaque-documento {
+        animation: none;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Barra de rolagem do conteudo                                               */
 /*                                                                            */
 /* A barra padrao do Windows e larga e cinza-escura, e num painel claro ela    */

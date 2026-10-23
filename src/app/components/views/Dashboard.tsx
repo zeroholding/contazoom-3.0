@@ -21,6 +21,7 @@ const FaturamentoPorModalidade = lazy(() => import("../views/ui/FaturamentoPorMo
 import type { FiltroCanal, FiltroStatus, FiltroTipoAnuncio, FiltroModalidadeEnvio } from "../views/ui/FiltrosDashboardExtra";
 import type { FiltroAgrupamentoSKU } from "../views/ui/FiltroSKU";
 import { UserGuidanceNotification } from "@/components/ui/user-guidance-notification";
+import AvisoDocumentosNovos from "../views/ui/notificacoes/AvisoDocumentosNovos";
 import { Faixa } from "./comum/shell";
 import { IconeAlerta, IconeFechar, IconeSeta } from "./comum/icones";
 import { useUserGuidance } from "@/hooks/useUserGuidance";
@@ -268,6 +269,11 @@ export default function Dashboard() {
               por isso o `!`), com menos espaço entre a barra e a legenda;
             - mapa: siglas dos estados maiores (o SVG é reduzido a ~64%, as de 9px ficavam ilegíveis). */}
         <section className="w-full max-md:[&_.h-96]:h-60 max-md:[&_.flex-wrap.justify-center.gap-4]:grid max-md:[&_.flex-wrap.justify-center.gap-4]:grid-cols-2 max-md:[&_.flex-wrap.justify-center.gap-4]:justify-items-start max-md:[&_.flex-wrap.justify-center.gap-4]:gap-x-3 max-md:[&_.flex-wrap.justify-center.gap-4]:gap-y-2 max-md:[&_.text-sm.text-gray-600]:hidden max-md:[&_.gap-6.items-start]:gap-3 max-md:[&_[style*='420px']]:h-[240px]! max-md:[&_svg.h-auto_text]:text-[14px] max-md:[&_.rounded-xl.py-3]:py-2 max-md:[&_.bg-gray-100.rounded-lg_button]:min-h-10 max-md:[&_[class*='text-[10px]']]:text-xs">
+          {/* Documentos que a equipe enviou e o cliente ainda não viu. Primeiro
+              da tela: guia de imposto tem vencimento, gráfico não. Some sozinho
+              quando não há nada novo. */}
+          <AvisoDocumentosNovos />
+
           {/* Sistema de orientação do usuário.
               O wrapper existe só para compactar os avisos no celular:
               `UserGuidanceNotification` é compartilhado (p-4, botão de ação do

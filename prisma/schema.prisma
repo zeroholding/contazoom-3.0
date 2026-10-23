@@ -34,6 +34,8 @@ model User {
   skus                SKU[]
   skuCustoHistorico   SKUCustoHistorico[]
   notifications       SyncNotification[]
+  /// Avisos do sino do painel (e do e-mail). Ver `Notificacao`.
+  notificacoesPainel  Notificacao[]
   settings            UserSettings?
   aliquotasImposto    AliquotaImposto[]
   documents           Document[]
@@ -752,8 +754,9 @@ model Document {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  logs DocumentLog[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs         DocumentLog[]
+  notificacoes Notificacao[]
 
   @@index([userId])
   @@index([category])
@@ -794,6 +797,62 @@ model DocumentLog {
   @@index([documentId])
   @@index([userId])
   @@map("document_log")
+}
+
+/// Aviso para o usuário: aparece no sino do painel e, quando o tipo pede, vai
+/// também por e-mail (Brevo).
+///
+/// UMA LINHA POR EVENTO: cada documento novo é uma notificação, com o próprio
+/// link e o próprio "lida". O e-mail é que junta: as notificações pendentes do
+/// mesmo cliente que chegam em sequência (o contador sobe as guias do mês uma
+/// atrás da outra) saem num e-mail só. Ver `src/lib/notificacoes/despacho.ts`.
+///
+/// `sync_notification` NÃO foi reaproveitada: ela é do aviso de vendas novas do
+/// sync, tem `new_orders_count` e as telas de vendas marcam TODAS como lidas ao
+/// sincronizar — um documento novo sumiria do sino ao clicar em "Sincronizar".
+model Notificacao {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  /// Ver `TIPOS_NOTIFICACAO` em `src/lib/notificacoes/tipos.ts`. String e não
+  /// enum, como `usuario.role`: tipo novo não deve exigir migração.
+  tipo     String
+  titulo   String
+  mensagem String
+  /// Caminho interno aberto ao clicar (ex.: `/documentos?documento=…`).
+  link     String?
+
+  /// Documento que gerou o aviso. Excluir o documento apaga o aviso: avisar de
+  /// um arquivo que não existe mais só levaria a um "arquivo não encontrado".
+  documentoId String? @map("documento_id")
+  /// Detalhes para a tela e o e-mail (nome do arquivo, pasta, competência).
+  dados       Json?
+
+  lidaEm   DateTime? @map("lida_em")
+  criadaEm DateTime  @default(now()) @map("criada_em")
+
+  /// PENDENTE → ENVIANDO → ENVIADO | FALHOU. NAO_SE_APLICA para tipo sem
+  /// e-mail; NAO_CONFIGURADO quando o Brevo não estava configurado na hora.
+  emailStatus     String    @default("PENDENTE") @map("email_status")
+  /// Quando o e-mail pode sair. Cada notificação nova do mesmo cliente empurra
+  /// este horário de TODAS as pendentes dele, para saírem juntas.
+  emailEnviarApos DateTime  @default(now()) @map("email_enviar_apos")
+  /// Marca as linhas reservadas por um envio: só quem reservou envia.
+  emailLote       String?   @map("email_lote")
+  emailTentativas Int       @default(0) @map("email_tentativas")
+  emailEnviadoEm  DateTime? @map("email_enviado_em")
+  emailMessageId  String?   @map("email_message_id")
+  emailErro       String?   @map("email_erro")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documento Document? @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lidaEm])
+  @@index([userId, criadaEm(sort: Desc)])
+  @@index([emailStatus, emailEnviarApos])
+  @@index([emailLote])
+  @@index([documentoId])
+  @@map("notificacao")
 }
 
 model FlexShippingConfig {

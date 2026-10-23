@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tryVerifySessionToken, checkIsAdmin } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { notificarDocumentoNovo } from "@/lib/notificacoes/criar";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 
@@ -123,6 +124,14 @@ export async function POST(req: NextRequest) {
       });
     } catch (e) {
       console.error("Erro ao registrar log de criação:", e);
+    }
+
+    // Avisa o cliente (sino na hora, e-mail agrupado logo depois). O arquivo
+    // já está salvo: falha no aviso fica no log e não desfaz o envio.
+    try {
+      await notificarDocumentoNovo({ documentoId: document.id, autorId: session.sub });
+    } catch (e) {
+      console.error("Erro ao criar notificação do documento:", e);
     }
 
     return NextResponse.json(document, { status: 201 });

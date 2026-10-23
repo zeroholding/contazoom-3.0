@@ -55,7 +55,15 @@ export function useSmartDropdown<T extends HTMLElement = HTMLElement>({
     if (!triggerRef.current || !dropdownRef.current) return;
 
     const trigger = triggerRef.current.getBoundingClientRect();
-    const dropdown = dropdownRef.current.getBoundingClientRect();
+    // Tamanho de layout (`offset*`), não o da caixa na tela: a medida sai 10 ms
+    // depois de abrir, no meio da animação `dropdown-enter`, que começa em
+    // scale(0.95). Com a caixa encolhida, o painel alinhado à direita passava
+    // 5% da borda do botão e, no celular, saía da tela.
+    const caixa = dropdownRef.current.getBoundingClientRect();
+    const dropdown = {
+      width: dropdownRef.current.offsetWidth || caixa.width,
+      height: dropdownRef.current.offsetHeight || caixa.height,
+    };
     const viewport = {
       width: window.innerWidth,
       height: window.innerHeight
