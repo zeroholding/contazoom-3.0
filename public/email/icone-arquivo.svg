@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone dos arquivos que não são PDF (planilha, imagem, XML...), no mesmo desenho
+     do icone-pdf.svg. O e-mail usa o PNG gerado deste arquivo (icone-arquivo.png). -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<polygon style="fill:#6B7280;" points="475.435,117.825 475.435,512 47.791,512 47.791,0.002 357.613,0.002 412.491,54.881"/>
+	<polygon style="opacity:0.08;fill:#040000;" points="475.435,117.825 475.435,512 47.791,512 47.791,419.581 412.491,54.881"/>
+	<polygon style="fill:#4B5563;" points="475.435,117.836 357.599,117.836 357.599,0"/>
+	<rect x="126" y="236" width="260" height="30" rx="15" style="fill:#F2F2F2;"/>
+	<rect x="126" y="306" width="260" height="30" rx="15" style="fill:#F2F2F2;"/>
+	<rect x="126" y="376" width="172" height="30" rx="15" style="fill:#F2F2F2;"/>
+</svg>

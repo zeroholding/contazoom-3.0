@@ -275,6 +275,7 @@ export function montarEmailParaLote(nomeCliente: string, linhas: LinhaDoLote[]) 
     urlDocumentos: `${base}/documentos`,
     urlPainel: base,
     urlLogo: `${base}/email/contazoom-logo.png`,
+    urlIcones: { pdf: `${base}/email/icone-pdf.png`, arquivo: `${base}/email/icone-arquivo.png` },
     whatsapp: whatsappDoCliente(),
   });
 }

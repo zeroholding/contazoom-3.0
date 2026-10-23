@@ -185,36 +185,49 @@ async function main() {
     urlDocumentos: "https://app.contazoom.com.br/documentos",
     urlPainel: "https://app.contazoom.com.br",
     urlLogo: "https://app.contazoom.com.br/email/contazoom-logo.png",
+    urlIcones: {
+      pdf: "https://app.contazoom.com.br/email/icone-pdf.png",
+      arquivo: "https://app.contazoom.com.br/email/icone-arquivo.png",
+    },
     whatsapp: { exibicao: "(11) 92740-5138", link: "https://wa.me/5511927405138?text=Ol%C3%A1" },
   };
   const um = email.montarEmailDocumentos({ ...base, itens: [item("Guia <DAS> & \"setembro\".pdf")] });
-  check("saudação pelo primeiro nome", um.html.includes("Olá, Maria!") && um.texto.startsWith("Olá, Maria!"));
-  check("título no singular", um.html.includes("Chegou um documento novo para você"));
+  check("saudação pelo primeiro nome", um.html.includes(">Olá, Maria,</p>") && um.texto.startsWith("Olá, Maria,\n"));
+  check("frase no singular", um.html.includes("Enviamos um documento novo para o seu painel."));
   check("nome do arquivo escapado", um.html.includes("Guia &lt;DAS&gt; &amp; &quot;setembro&quot;.pdf") && !um.html.includes("<DAS>"));
-  check("botão abre o documento", um.html.includes(">Abrir o documento&nbsp;&rarr;</a>") && um.html.includes('href="https://app.contazoom.com.br/documentos?documento=d1"'));
-  check("competência no cartão", um.html.includes("Competência setembro de 2026 · PDF · 245,1 KB"));
+  check("botão abre o documento", um.html.includes(">Abrir documento</a>") && um.html.includes('href="https://app.contazoom.com.br/documentos?documento=d1"'));
+  check("detalhe com tipo e competência", um.html.includes(">Impostos e obrigações · competência setembro de 2026 · 245,1 KB</span>"));
+  check("ícone do PDF em PNG", um.html.includes('src="https://app.contazoom.com.br/email/icone-pdf.png"') && um.html.includes('alt="PDF"'));
+  check("nada de SVG no e-mail", !/<svg|\.svg/i.test(um.html));
+  check("fonte do site primeiro, Montserrat depois", um.html.includes("'Plus Jakarta Sans',Montserrat,") && um.html.includes("family=Plus+Jakarta+Sans"));
   check("logotipo com texto alternativo", um.html.includes('src="https://app.contazoom.com.br/email/contazoom-logo.png"') && um.html.includes('alt="ContaZoom"'));
-  check("rodapé com WhatsApp", um.html.includes("(11) 92740-5138") && um.texto.includes("https://wa.me/5511927405138"));
+  check("ajuda pelo WhatsApp", um.html.includes("(11) 92740-5138") && um.texto.includes("https://wa.me/5511927405138"));
+  check("assinatura da equipe", um.html.includes("Equipe ContaZoom") && um.texto.includes("Um abraço,\nEquipe ContaZoom"));
   check("aviso de segurança sem anexo", um.html.includes("não vão anexados") && um.texto.includes("não vão anexados"));
-  check("pré-cabeçalho no singular", um.preheader.endsWith("já está disponível no seu painel ContaZoom."), um.preheader);
+  check("sem selo nem faixa de modelo pronto", !um.html.includes("Documento novo<") && !um.html.includes("&rarr;"));
+  check("pré-cabeçalho no singular", um.preheader.endsWith("já está no seu painel."), um.preheader);
   check("texto puro sem HTML", !/<[a-z]/i.test(um.texto.replace("<DAS>", "")), um.texto.slice(0, 120));
   check("HTML com idioma e charset", um.html.includes('<html lang="pt-BR"') && um.html.includes('<meta charset="utf-8">'));
 
   console.log("\nE-mail: vários documentos");
   const dez = Array.from({ length: 10 }, (_, i) => item(`Documento ${i + 1}.pdf`, i % 2 ? T.DOCUMENTO_FOLHA : T.DOCUMENTO_IMPOSTOS, i + 1));
-  const varios = email.montarEmailDocumentos({ ...base, nomeCliente: "", itens: dez, whatsapp: null, urlLogo: null });
-  check("saudação sem nome", varios.html.includes("Olá!") && varios.texto.startsWith("Olá!"));
-  check("título no plural", varios.html.includes("Chegaram 10 documentos novos para você"));
-  check("botão vai para a central", varios.html.includes('href="https://app.contazoom.com.br/documentos"') && varios.html.includes("Abrir meus documentos"));
+  const varios = email.montarEmailDocumentos({ ...base, nomeCliente: "", itens: dez, whatsapp: null, urlLogo: null, urlIcones: null });
+  check("saudação sem nome", varios.html.includes(">Olá,</p>") && varios.texto.startsWith("Olá,\n"));
+  check("frase no plural", varios.html.includes("Enviamos 10 documentos novos para o seu painel."));
+  check("botão vai para a central", varios.html.includes('href="https://app.contazoom.com.br/documentos"') && varios.html.includes(">Ver documentos</a>"));
   check(`lista no máximo ${email.MAXIMO_ITENS_NO_EMAIL}`, varios.html.includes("Documento 8.pdf") && !varios.html.includes("Documento 9.pdf"));
-  check("resto vira 'e mais'", varios.html.includes("E mais 2 documentos no seu painel.") && varios.texto.includes("E mais 2 documentos no seu painel."));
-  check("sem logotipo usa o nome em texto", !varios.html.includes("<img") && varios.html.includes(">ContaZoom</span>"));
+  check("resto vira 'e mais'", varios.html.includes("E mais 2 documentos no painel.") && varios.texto.includes("E mais 2 documentos no painel."));
+  check("sem imagens: nome em texto e lista sem ícone", !varios.html.includes("<img") && varios.html.includes(">ContaZoom</span>"));
   check("sem WhatsApp não cita WhatsApp", !varios.html.includes("WhatsApp") && !varios.texto.includes("WhatsApp"));
   check("pré-cabeçalho no plural", varios.preheader === "Documento 1.pdf e mais 9 documentos já estão no seu painel.", varios.preheader);
   const dois = email.montarEmailDocumentos({ ...base, itens: [item("a.pdf"), item("b.pdf", T.DOCUMENTO_FOLHA, 2)] });
   check("pré-cabeçalho com 'mais 1 documento'", dois.preheader.includes("e mais 1 documento já estão"), dois.preheader);
-  check("cor do tipo folha no selo", dois.html.includes("#0369A1"));
-  check("link do cartão também no celular", um.html.includes('class="cz-so-celular"') && um.html.includes('class="cz-so-computador"'));
+  const planilha = email.montarEmailDocumentos({
+    ...base,
+    itens: [{ ...item("Faturamento.xlsx", T.DOCUMENTO_FATURAMENTO, 5), pasta: "Faturamento e relatórios", formato: "XLSX" }],
+  });
+  check("arquivo que não é PDF usa o ícone genérico", planilha.html.includes("icone-arquivo.png") && planilha.html.includes('alt="XLSX"'));
+  check("formato aparece quando não é PDF", planilha.html.includes(">Faturamento e relatórios · XLSX · 245,1 KB</span>"));
   check("pasta igual ao tipo não se repete", email.localSemRepetirTipo("Folha e funcionários", "Folha e funcionários") === null);
   check(
     "subpasta sem repetir o tipo",
@@ -227,8 +240,8 @@ async function main() {
     itens: [{ ...item("Holerite.pdf", T.DOCUMENTO_FOLHA, 4), pasta: "Folha e funcionários" }],
   });
   check(
-    "pasta igual ao tipo some do cartão",
-    daFolha.html.includes(">PDF · 245,1 KB</p>") && !daFolha.html.includes("Folha e funcionários ·"),
+    "pasta igual ao tipo some do detalhe",
+    daFolha.html.includes(">Folha e funcionários · 245,1 KB</span>") && !daFolha.html.includes("Folha e funcionários · Folha"),
   );
   check("sem documentos é erro", (() => {
     try {
@@ -346,12 +359,17 @@ async function main() {
   check("link interno vira absoluto", doLote.html.includes('href="https://painel.exemplo.com/documentos?documento=d1"'));
   check("link de fora não entra no e-mail", !doLote.html.includes("golpe.com") && !doLote.texto.includes("golpe.com"));
   check("logotipo do próprio painel", doLote.html.includes('src="https://painel.exemplo.com/email/contazoom-logo.png"'));
+  check(
+    "ícones do próprio painel",
+    doLote.html.includes('src="https://painel.exemplo.com/email/icone-pdf.png"') &&
+      doLote.html.includes('src="https://painel.exemplo.com/email/icone-arquivo.png"'),
+  );
   check("WhatsApp com mensagem de cliente", doLote.texto.includes("https://wa.me/5511927405138?text=") && doLote.texto.includes("Sou%20cliente"));
   check("dado faltando vira 'Documento'", doLote.html.includes(">Documento</a>"));
   check("tamanho legível no cartão", doLote.html.includes("244,1 KB"), "esperava 244,1 KB");
   check(
-    "subpasta no cartão sem repetir o tipo",
-    doLote.html.includes(">Férias · PDF · 1000 B</p>") && !doLote.html.includes("Folha e funcionários › Férias"),
+    "subpasta no detalhe sem repetir o tipo",
+    doLote.html.includes(">Folha e funcionários · Férias · 1000 B</span>") && !doLote.html.includes("Folha e funcionários › Férias"),
   );
   check("texto puro sem repetir o tipo", doLote.texto.includes("Folha e funcionários · Férias") && !doLote.texto.includes("› Férias"));
   if (appUrlAntes === undefined) delete process.env.APP_URL;
@@ -371,6 +389,7 @@ async function main() {
         { ...item("Guia DAS - Setembro 2026.pdf"), tamanho: "245,1 KB" },
         { ...item("Folha de pagamento - Setembro.pdf", T.DOCUMENTO_FOLHA, 2), pasta: "Folha e funcionários", tamanho: "1,2 MB" },
         { ...item("Contrato social consolidado.pdf", T.DOCUMENTO_INSTITUCIONAL, 3), pasta: "Documentos institucionais", tamanho: "820,4 KB" },
+        { ...item("Relatório de vendas - Setembro.xlsx", T.DOCUMENTO_FATURAMENTO, 4), pasta: "Faturamento e relatórios", formato: "XLSX", tamanho: "96,0 KB" },
       ],
     });
     writeFileSync("tmp-email-notificacao.html", exemplo.html, "utf8");

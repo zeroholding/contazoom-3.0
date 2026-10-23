@@ -1,11 +1,18 @@
 /**
  * E-mail de "documentos novos" — HTML e texto, sem dependência nenhuma.
  *
+ * Escrito como a mensagem de um escritório para o cliente, não como peça de
+ * marketing: fundo branco, logotipo, saudação, a lista dos arquivos com o ícone
+ * do formato, um botão e a assinatura da equipe. Sem selo, faixa colorida nem
+ * cartões, que davam cara de modelo pronto.
+ *
  * Feito para cliente de e-mail, não para navegador: layout em tabela, estilo
- * inline, largura de 600px e nenhum recurso que o Outlook ou o Gmail descartem
- * (SVG, flex, variável CSS). O que não for suportado degrada para algo legível:
- * sem imagem, o logotipo vira o texto "ContaZoom" em laranja; sem CSS de mídia,
- * o cartão só fica mais apertado no celular.
+ * inline, 560px de largura e nada que o Gmail ou o Outlook descartem.
+ * - Fonte: a do site (Plus Jakarta Sans) onde o cliente carrega fonte da web
+ *   (Apple Mail, iPhone, Outlook para Mac). O Gmail não carrega nenhuma; lá
+ *   aparece a fonte do sistema da pilha abaixo.
+ * - Ícones: PNG gerado dos SVGs em `public/email/`, porque Gmail e Outlook não
+ *   exibem SVG. Sem imagem, aparece o texto alternativo ("PDF").
  *
  * Os arquivos NÃO vão anexados: guia de imposto e folha têm dado sensível, e o
  * painel exige login. O e-mail só avisa e leva até lá.
@@ -33,6 +40,8 @@ export type EntradaEmailDocumentos = {
   urlPainel: string;
   /** URL absoluta do logotipo em PNG. Sem ela, o cabeçalho usa o nome em texto. */
   urlLogo?: string | null;
+  /** URLs absolutas dos ícones em PNG. Sem elas, a lista sai só com o texto. */
+  urlIcones?: { pdf: string; arquivo: string } | null;
   whatsapp?: { exibicao: string; link: string } | null;
 };
 
@@ -48,28 +57,20 @@ export const MAXIMO_ITENS_NO_EMAIL = 8;
 
 const COR = {
   marca: "#F26212",
-  marcaForte: "#D9500A",
-  marcaSuave: "#FFF2E9",
   texto: "#14161B",
-  textoMedio: "#4B5563",
-  textoSuave: "#6B7280",
-  textoFraco: "#9AA1AC",
-  fio: "#EDEFF3",
-  fundo: "#F4F5F7",
-  fundoCartao: "#F8F9FB",
+  corpo: "#3B414B",
+  suave: "#6B7280",
+  fraco: "#9AA1AC",
+  fio: "#E9ECF1",
 };
 
-/** Cor do selo de cada tipo: a mesma família de cor do sino no painel. */
-const COR_TIPO: Record<string, { fundo: string; tinta: string }> = {
-  [TIPO_NOTIFICACAO.DOCUMENTO_IMPOSTOS]: { fundo: "#FEF3C7", tinta: "#B45309" },
-  [TIPO_NOTIFICACAO.DOCUMENTO_FOLHA]: { fundo: "#E0F2FE", tinta: "#0369A1" },
-  [TIPO_NOTIFICACAO.DOCUMENTO_FATURAMENTO]: { fundo: "#D1FAE5", tinta: "#047857" },
-  [TIPO_NOTIFICACAO.DOCUMENTO_INSTITUCIONAL]: { fundo: "#EDE9FE", tinta: "#6D28D9" },
-};
-const COR_TIPO_PADRAO = { fundo: COR.marcaSuave, tinta: COR.marcaForte };
-
+/**
+ * A do site primeiro; Montserrat se a pessoa a tiver instalada; depois as do
+ * sistema mais parecidas com ela (Segoe UI no Windows, Roboto no Android,
+ * Helvetica no Mac).
+ */
 const FONTE =
-  "'Plus Jakarta Sans','Segoe UI',Roboto,'Helvetica Neue',Helvetica,Arial,sans-serif";
+  "'Plus Jakarta Sans',Montserrat,'Segoe UI',Roboto,'Helvetica Neue',Helvetica,Arial,sans-serif";
 
 export function escaparHtml(texto: string): string {
   return texto
@@ -89,7 +90,7 @@ function encurtar(texto: string, maximo: number): string {
 /**
  * Primeiro nome para a saudação: "GIANLUCCA FLORENCE" → "Gianlucca".
  *
- * Nome cadastrado todo em caixa alta vira "Olá, GIANLUCCA!", que no e-mail soa
+ * Nome cadastrado todo em caixa alta vira "Olá, GIANLUCCA", que no e-mail soa
  * como grito, e todo em minúscula ("maria") parece descuido; os dois saem com a
  * inicial maiúscula. Caixa mista ("McArthur") é escolha de quem cadastrou e
  * fica como está. Nome de empresa ("Loja X Ltda") sai "Loja", o que ainda lê
@@ -118,8 +119,8 @@ export function assuntoDoEmail(itens: ItemEmailDocumento[]): string {
 }
 
 /**
- * Onde o documento está, sem repetir o selo do tipo logo acima: sob "Folha e
- * funcionários", a pasta "Folha e funcionários" não diz nada e
+ * Onde o documento está, sem repetir o tipo que abre a mesma linha: depois de
+ * "Folha e funcionários", a pasta "Folha e funcionários" não diz nada e
  * "Folha e funcionários › Férias" vira só "Férias".
  */
 export function localSemRepetirTipo(pasta: string | null, rotuloTipo: string): string | null {
@@ -130,43 +131,40 @@ export function localSemRepetirTipo(pasta: string | null, rotuloTipo: string): s
   return normalizar(pasta).startsWith(normalizar(prefixo)) ? pasta.trim().slice(prefixo.length) : pasta;
 }
 
-function metaDoItem(item: ItemEmailDocumento): string {
-  const partes: string[] = [];
-  if (item.competencia) partes.push(`Competência ${item.competencia}`);
-  else {
-    const local = localSemRepetirTipo(item.pasta, infoTipoNotificacao(item.tipo).rotulo);
-    if (local) partes.push(local);
-  }
-  partes.push(item.formato);
+/**
+ * "Impostos e obrigações · competência setembro de 2026 · 245,1 KB".
+ * O formato só entra quando não é PDF: o ícone do PDF já diz o que é.
+ */
+export function detalheDoArquivo(item: ItemEmailDocumento): string {
+  const rotulo = infoTipoNotificacao(item.tipo).rotulo;
+  const partes = [rotulo];
+  const onde = item.competencia ? `competência ${item.competencia}` : localSemRepetirTipo(item.pasta, rotulo);
+  if (onde) partes.push(onde);
+  if (item.formato && item.formato !== "PDF") partes.push(item.formato);
   if (item.tamanho) partes.push(item.tamanho);
   return partes.join(" · ");
 }
 
-function htmlDoItem(item: ItemEmailDocumento): string {
-  const cor = COR_TIPO[item.tipo] ?? COR_TIPO_PADRAO;
-  const rotuloTipo = infoTipoNotificacao(item.tipo).rotulo;
+function htmlDoItem(item: ItemEmailDocumento, icones: EntradaEmailDocumentos["urlIcones"], ultimo: boolean): string {
   const link = escaparHtml(item.link);
-  // No celular a coluna "Abrir ›" da direita espremia o nome do arquivo; lá ela
-  // some e o mesmo link aparece embaixo do cartão (ver o @media do <head>).
+  const fio = `border-top:1px solid ${COR.fio};${ultimo ? `border-bottom:1px solid ${COR.fio};` : ""}`;
+  const icone = icones
+    ? `<td width="48" valign="top" style="${fio}padding:14px 0 14px 0;">
+        <a href="${link}" style="text-decoration:none;"><img src="${escaparHtml(item.formato === "PDF" ? icones.pdf : icones.arquivo)}" width="32" height="32" alt="${escaparHtml(item.formato || "Arquivo")}" style="display:block;width:32px;height:32px;border:0;outline:none;font-family:${FONTE};font-size:10px;font-weight:700;color:${COR.suave};"></a>
+      </td>`
+    : "";
   return `
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border:1px solid ${COR.fio};border-radius:12px;margin:0 0 12px;">
-  <tr>
-    <td width="60" valign="top" class="cz-cartao-icone" style="padding:16px 0 16px 16px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td width="44" height="44" align="center" valign="middle" bgcolor="${cor.fundo}" style="width:44px;height:44px;border-radius:10px;background:${cor.fundo};color:${cor.tinta};font-family:${FONTE};font-size:11px;font-weight:800;letter-spacing:0.02em;">${escaparHtml(item.formato)}</td>
-      </tr></table>
-    </td>
-    <td valign="top" class="cz-cartao-texto" style="padding:15px 16px 15px 14px;font-family:${FONTE};">
-      <p style="margin:0 0 4px;font-size:11px;line-height:16px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${cor.tinta};">${escaparHtml(rotuloTipo)}</p>
-      <p style="margin:0 0 4px;font-size:15px;line-height:22px;font-weight:700;color:${COR.texto};word-break:break-word;"><a href="${link}" style="color:${COR.texto};text-decoration:none;">${escaparHtml(item.nomeArquivo)}</a></p>
-      <p style="margin:0;font-size:13px;line-height:20px;color:${COR.textoSuave};">${escaparHtml(metaDoItem(item))}</p>
-      <!--[if !mso]><!--><p class="cz-so-celular" style="display:none;max-height:0;overflow:hidden;margin:0;font-size:13px;line-height:20px;font-weight:700;"><a href="${link}" style="color:${COR.marcaForte};text-decoration:none;">Abrir documento&nbsp;&rsaquo;</a></p><!--<![endif]-->
-    </td>
-    <td width="72" align="right" valign="middle" class="cz-so-computador" style="padding:0 16px 0 0;font-family:${FONTE};">
-      <a href="${link}" style="font-size:13px;font-weight:700;color:${COR.marcaForte};text-decoration:none;white-space:nowrap;">Abrir&nbsp;&rsaquo;</a>
-    </td>
-  </tr>
-</table>`;
+    <tr>
+      ${icone}
+      <td valign="top" style="${fio}padding:14px 0;font-family:${FONTE};">
+        <a href="${link}" style="display:block;font-size:15px;line-height:22px;font-weight:600;color:${COR.texto};text-decoration:none;word-break:break-word;">${escaparHtml(item.nomeArquivo)}</a>
+        <span style="display:block;margin-top:2px;font-size:13px;line-height:20px;color:${COR.suave};">${escaparHtml(detalheDoArquivo(item))}</span>
+      </td>
+    </tr>`;
+}
+
+function plural(total: number, singular: string, varios: string) {
+  return total === 1 ? singular : varios;
 }
 
 export function montarEmailDocumentos(entrada: EntradaEmailDocumentos): EmailMontado {
@@ -175,36 +173,40 @@ export function montarEmailDocumentos(entrada: EntradaEmailDocumentos): EmailMon
   if (total === 0) throw new Error("E-mail de documentos sem nenhum documento.");
 
   const nome = primeiroNome(entrada.nomeCliente);
-  const saudacao = nome ? `Olá, ${nome}!` : "Olá!";
-  const titulo =
-    total === 1 ? "Chegou um documento novo para você" : `Chegaram ${total} documentos novos para você`;
-  const introducao =
+  const saudacao = nome ? `Olá, ${nome},` : "Olá,";
+  const chamada =
     total === 1
-      ? "A equipe ContaZoom adicionou o arquivo abaixo à sua central de documentos. Ele já está disponível no seu painel."
-      : "A equipe ContaZoom adicionou os arquivos abaixo à sua central de documentos. Eles já estão disponíveis no seu painel, organizados por pasta.";
+      ? "Enviamos um documento novo para o seu painel."
+      : `Enviamos ${total} documentos novos para o seu painel.`;
+  const complemento =
+    total === 1
+      ? "Ele já está disponível para consultar e baixar."
+      : "Eles já estão disponíveis para consultar e baixar, cada um na sua pasta.";
+  const seguranca =
+    "Por segurança, os arquivos não vão anexados a este e-mail. Eles ficam guardados no painel e abrem com o seu login.";
 
   const assunto = assuntoDoEmail(itens);
   const restantes = total - 1;
   const preheader =
     total === 1
-      ? `${encurtar(itens[0].nomeArquivo, 70)} já está disponível no seu painel ContaZoom.`
-      : `${encurtar(itens[0].nomeArquivo, 50)} e mais ${restantes} ${restantes === 1 ? "documento" : "documentos"} já estão no seu painel.`;
+      ? `${encurtar(itens[0].nomeArquivo, 70)} já está no seu painel.`
+      : `${encurtar(itens[0].nomeArquivo, 50)} e mais ${restantes} ${plural(restantes, "documento", "documentos")} já estão no seu painel.`;
 
   const visiveis = itens.slice(0, MAXIMO_ITENS_NO_EMAIL);
   const ocultos = total - visiveis.length;
   const urlBotao = total === 1 ? itens[0].link : entrada.urlDocumentos;
-  const textoBotao = total === 1 ? "Abrir o documento" : "Abrir meus documentos";
+  const textoBotao = total === 1 ? "Abrir documento" : "Ver documentos";
 
   const logo = entrada.urlLogo
-    ? `<img src="${escaparHtml(entrada.urlLogo)}" width="152" alt="ContaZoom" style="display:block;width:152px;max-width:152px;height:auto;border:0;outline:none;text-decoration:none;font-family:${FONTE};font-size:24px;font-weight:800;color:${COR.marca};">`
-    : `<span style="font-family:${FONTE};font-size:24px;font-weight:800;letter-spacing:-0.02em;color:${COR.marca};">ContaZoom</span>`;
+    ? `<img src="${escaparHtml(entrada.urlLogo)}" width="136" alt="ContaZoom" style="display:block;width:136px;max-width:136px;height:auto;border:0;outline:none;text-decoration:none;font-family:${FONTE};font-size:22px;font-weight:800;color:${COR.marca};">`
+    : `<span style="font-family:${FONTE};font-size:22px;font-weight:800;letter-spacing:-0.02em;color:${COR.marca};">ContaZoom</span>`;
 
   const ajuda = entrada.whatsapp
-    ? `Precisa de ajuda? Fale com a gente no WhatsApp <a href="${escaparHtml(entrada.whatsapp.link)}" style="color:${COR.textoSuave};font-weight:700;text-decoration:none;white-space:nowrap;">${escaparHtml(entrada.whatsapp.exibicao)}</a>.<br>`
+    ? `<p style="margin:0 0 20px;font-size:15px;line-height:24px;color:${COR.corpo};">Qualquer dúvida, fale com a gente pelo WhatsApp <a href="${escaparHtml(entrada.whatsapp.link)}" style="color:${COR.texto};font-weight:600;text-decoration:underline;white-space:nowrap;">${escaparHtml(entrada.whatsapp.exibicao)}</a>.</p>`
     : "";
 
   // Caracteres invisíveis depois do pré-cabeçalho: sem eles o Gmail completa a
-  // prévia com o começo do corpo ("Olá, Maria! Chegou...") e repete o assunto.
+  // prévia com o começo do corpo e repete a saudação.
   const preenchimento = "&#8199;&#65279;&#847;".repeat(40);
 
   const html = `<!DOCTYPE html>
@@ -217,88 +219,64 @@ export function montarEmailDocumentos(entrada: EntradaEmailDocumentos): EmailMon
 <meta name="supported-color-schemes" content="light">
 <title>${escaparHtml(assunto)}</title>
 <!--[if !mso]><!-->
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <!--<![endif]-->
 <style>
   body { margin:0; padding:0; -webkit-text-size-adjust:100%; }
   table, td { mso-table-lspace:0pt; mso-table-rspace:0pt; }
   img { -ms-interpolation-mode:bicubic; }
-  @media only screen and (max-width: 620px) {
+  @media only screen and (max-width: 600px) {
     .cz-largura { width:100% !important; }
-    .cz-margem { padding-left:22px !important; padding-right:22px !important; }
-    .cz-titulo { font-size:22px !important; line-height:30px !important; }
+    .cz-margem { padding-left:20px !important; padding-right:20px !important; }
     .cz-botao { width:100% !important; }
     .cz-botao a { display:block !important; text-align:center !important; }
-    .cz-cartao-icone { padding:14px 0 14px 14px !important; }
-    .cz-cartao-texto { padding:13px 14px 14px 12px !important; }
-    .cz-so-computador { display:none !important; }
-    .cz-so-celular { display:block !important; max-height:none !important; overflow:visible !important; margin-top:8px !important; }
   }
 </style>
 </head>
-<body style="margin:0;padding:0;background:${COR.fundo};">
+<body style="margin:0;padding:0;background:#FFFFFF;">
 <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${escaparHtml(preheader)}${preenchimento}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${COR.fundo}" style="background:${COR.fundo};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="background:#FFFFFF;">
   <tr>
-    <td align="center" style="padding:32px 12px 40px;">
-      <table role="presentation" class="cz-largura" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+    <td align="center" style="padding:0;">
+      <table role="presentation" class="cz-largura" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;">
         <tr>
-          <td style="padding:0 6px 20px;" align="left">${logo}</td>
+          <td class="cz-margem" align="left" style="padding:36px 32px 32px;">${logo}</td>
         </tr>
         <tr>
-          <td bgcolor="#FFFFFF" style="background:#FFFFFF;border:1px solid ${COR.fio};border-radius:16px;overflow:hidden;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <td class="cz-margem" style="padding:0 32px;font-family:${FONTE};">
+            <p style="margin:0 0 16px;font-size:16px;line-height:24px;font-weight:600;color:${COR.texto};">${escaparHtml(saudacao)}</p>
+            <p style="margin:0 0 24px;font-size:16px;line-height:26px;color:${COR.corpo};">${escaparHtml(chamada)} ${escaparHtml(complemento)}</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${visiveis
+              .map((item, indice) => htmlDoItem(item, entrada.urlIcones, indice === visiveis.length - 1))
+              .join("")}
+            </table>
+            ${
+              ocultos > 0
+                ? `<p style="margin:12px 0 0;font-size:13px;line-height:20px;color:${COR.suave};">E mais ${ocultos} ${plural(ocultos, "documento", "documentos")} no painel.</p>`
+                : ""
+            }
+            <table role="presentation" class="cz-botao" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 24px;">
               <tr>
-                <td height="5" bgcolor="${COR.marca}" style="height:5px;background:${COR.marca};font-size:0;line-height:0;border-radius:16px 16px 0 0;">&nbsp;</td>
-              </tr>
-              <tr>
-                <td class="cz-margem" style="padding:34px 40px 6px;font-family:${FONTE};">
-                  <p style="margin:0 0 14px;"><span style="display:inline-block;padding:5px 11px;border-radius:999px;background:${COR.marcaSuave};color:${COR.marcaForte};font-size:11px;line-height:14px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;">${total === 1 ? "Documento novo" : "Documentos novos"}</span></p>
-                  <p style="margin:0 0 6px;font-size:15px;line-height:22px;font-weight:600;color:${COR.textoSuave};">${escaparHtml(saudacao)}</p>
-                  <h1 class="cz-titulo" style="margin:0 0 12px;font-size:26px;line-height:34px;font-weight:800;letter-spacing:-0.02em;color:${COR.texto};">${escaparHtml(titulo)}</h1>
-                  <p style="margin:0;font-size:15px;line-height:24px;color:${COR.textoMedio};">${escaparHtml(introducao)}</p>
-                </td>
-              </tr>
-              <tr>
-                <td class="cz-margem" style="padding:24px 40px 4px;">
-                  ${visiveis.map(htmlDoItem).join("")}
-                  ${
-                    ocultos > 0
-                      ? `<p style="margin:4px 0 0;font-family:${FONTE};font-size:13px;line-height:20px;color:${COR.textoSuave};">E mais ${ocultos} ${ocultos === 1 ? "documento" : "documentos"} no seu painel.</p>`
-                      : ""
-                  }
-                </td>
-              </tr>
-              <tr>
-                <td class="cz-margem" style="padding:20px 40px 6px;">
-                  <table role="presentation" class="cz-botao" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td align="center" bgcolor="${COR.marca}" style="border-radius:10px;background:${COR.marca};">
-                        <a href="${escaparHtml(urlBotao)}" style="display:inline-block;padding:14px 28px;font-family:${FONTE};font-size:15px;line-height:20px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:10px;">${escaparHtml(textoBotao)}&nbsp;&rarr;</a>
-                      </td>
-                    </tr>
-                  </table>
-                  <p style="margin:14px 0 0;font-family:${FONTE};font-size:12.5px;line-height:19px;color:${COR.textoFraco};">Se o botão não abrir, copie este endereço no navegador:<br><a href="${escaparHtml(urlBotao)}" style="color:${COR.marcaForte};text-decoration:none;word-break:break-all;">${escaparHtml(urlBotao)}</a></p>
-                </td>
-              </tr>
-              <tr>
-                <td class="cz-margem" style="padding:22px 40px 34px;">
-                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${COR.fundoCartao}" style="background:${COR.fundoCartao};border-radius:12px;">
-                    <tr>
-                      <td style="padding:14px 16px;font-family:${FONTE};font-size:13px;line-height:20px;color:${COR.textoMedio};">
-                        <strong style="color:${COR.texto};">Seus arquivos ficam protegidos.</strong> Por segurança, eles não vão anexados neste e-mail: ficam guardados no seu painel e abrem com o seu login.
-                      </td>
-                    </tr>
-                  </table>
+                <td align="center" bgcolor="${COR.marca}" style="border-radius:8px;background:${COR.marca};">
+                  <a href="${escaparHtml(urlBotao)}" style="display:inline-block;padding:13px 26px;font-family:${FONTE};font-size:15px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:8px;">${escaparHtml(textoBotao)}</a>
                 </td>
               </tr>
             </table>
+            <p style="margin:0 0 20px;font-size:13.5px;line-height:21px;color:${COR.suave};">${escaparHtml(seguranca)}</p>
+            ${ajuda}
+            <p style="margin:0;font-size:15px;line-height:24px;color:${COR.corpo};">Um abraço,<br><span style="font-weight:600;color:${COR.texto};">Equipe ContaZoom</span></p>
           </td>
         </tr>
         <tr>
-          <td style="padding:24px 10px 0;font-family:${FONTE};font-size:12px;line-height:19px;color:${COR.textoFraco};text-align:center;">
-            ${ajuda}<a href="${escaparHtml(entrada.urlPainel)}" style="color:${COR.textoSuave};font-weight:700;text-decoration:none;">ContaZoom</a> · Contabilidade para quem vende na internet<br>
-            Você recebe este aviso porque a ContaZoom cuida da contabilidade da sua empresa.
+          <td class="cz-margem" style="padding:36px 32px 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-top:1px solid ${COR.fio};padding-top:20px;font-family:${FONTE};font-size:12px;line-height:19px;color:${COR.fraco};">
+                  <a href="${escaparHtml(entrada.urlPainel)}" style="color:${COR.suave};font-weight:600;text-decoration:none;">ContaZoom</a> · Contabilidade para quem vende na internet<br>
+                  Você recebe este aviso porque a ContaZoom cuida da contabilidade da sua empresa.
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
       </table>
@@ -308,27 +286,25 @@ export function montarEmailDocumentos(entrada: EntradaEmailDocumentos): EmailMon
 </body>
 </html>`;
 
-  const linhasItens = visiveis.map((item) => {
-    const rotulo = infoTipoNotificacao(item.tipo).rotulo;
-    const contexto = item.competencia
-      ? `competência ${item.competencia}`
-      : localSemRepetirTipo(item.pasta, rotulo) ?? "";
-    return `• ${item.nomeArquivo}\n  ${[rotulo, contexto].filter(Boolean).join(" · ")}\n  ${item.link}`;
-  });
+  const linhasItens = visiveis.map((item) => `- ${item.nomeArquivo}\n  ${detalheDoArquivo(item)}\n  ${item.link}`);
   const texto = [
     saudacao,
     "",
-    `${titulo}.`,
-    introducao,
+    `${chamada} ${complemento}`,
     "",
     ...linhasItens,
-    ...(ocultos > 0 ? [`E mais ${ocultos} ${ocultos === 1 ? "documento" : "documentos"} no seu painel.`] : []),
+    ...(ocultos > 0 ? [`E mais ${ocultos} ${plural(ocultos, "documento", "documentos")} no painel.`] : []),
     "",
     `${textoBotao}: ${urlBotao}`,
     "",
-    "Por segurança, os arquivos não vão anexados neste e-mail: ficam guardados no seu painel e abrem com o seu login.",
+    seguranca,
     "",
-    ...(entrada.whatsapp ? [`Precisa de ajuda? WhatsApp ${entrada.whatsapp.exibicao}: ${entrada.whatsapp.link}`] : []),
+    ...(entrada.whatsapp
+      ? [`Qualquer dúvida, fale com a gente pelo WhatsApp ${entrada.whatsapp.exibicao}: ${entrada.whatsapp.link}`, ""]
+      : []),
+    "Um abraço,",
+    "Equipe ContaZoom",
+    "",
     `ContaZoom · Contabilidade para quem vende na internet · ${entrada.urlPainel}`,
   ].join("\n");
 
