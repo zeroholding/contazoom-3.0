@@ -12,8 +12,9 @@
  * Fluxo que muda retroativamente falsifica o histórico.
  *
  * Os textos de apuração são transcrição literal de `NOVIDADES/Tarefas SN e
- * LP.pdf`. Os de legalização são PROPOSTA a validar com o escritório — não há
- * documento de origem para eles.
+ * LP.pdf`. Na legalização, abertura, baixa e desenquadramento vieram do
+ * escritório, com os títulos literais; regularização e alteração seguem como
+ * PROPOSTA até o escritório mandar as etapas.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -569,13 +570,13 @@ export const ETAPAS_LUCRO_PRESUMIDO: DefinicaoEtapa[] = [
 /* -------------------------------------------------------------------------- */
 /*                      Legalização — cinco fluxos                            */
 /*                                                                            */
-/* ABERTURA DE EMPRESA: as 20 etapas abaixo são as REAIS, passadas pelo        */
-/* escritório, com os títulos transcritos literalmente. Substituíram as 12     */
-/* etapas genéricas que existiam aqui como proposta.                           */
+/* ABERTURA (20 etapas), BAIXA (18) e DESENQUADRAMENTO (7) são os fluxos REAIS, */
+/* passados pelo escritório, com os títulos transcritos literalmente.          */
+/* Substituíram as propostas genéricas que existiam aqui.                      */
 /*                                                                            */
-/* Os outros quatro fluxos SEGUEM SENDO PROPOSTA: o escritório disse que vai   */
-/* trazer os nomes e as etapas exatas depois. Não existe documento de origem   */
-/* para eles — trate como rascunho, ver seção 11 da especificação.             */
+/* REGULARIZAÇÃO e ALTERAÇÃO SEGUEM SENDO PROPOSTA: o escritório vai trazer as */
+/* etapas exatas depois. Não existe documento de origem para elas — trate como */
+/* rascunho, ver seção 11 da especificação.                                    */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -709,15 +710,48 @@ export const ETAPAS_ALTERACAO_CADASTRAL: DefinicaoEtapa[] = [
   { numero: 9, chave: "ENCERRAMENTO_PROCESSO", titulo: "Encerramento do processo", descricao: "Conclusão do processo e atualização dos dados da empresa no sistema.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
 ];
 
+/**
+ * DESENQUADRAMENTO — 7 etapas.
+ *
+ * Fluxo informado pelo escritório na planilha "C.Z - Fluxos JUCESP" ("Total de
+ * etapas: 7"), com os títulos transcritos literalmente. Substituiu uma proposta
+ * de 8 etapas genéricas escrita quando não havia documento de origem.
+ *
+ * AS ETAPAS 3 E 4 TÊM O MESMO TEXTO NA PLANILHA ("Solicitação das informações
+ * para desenquadramento", as duas do Comercial C.Z). Ficou como veio: inventar
+ * outro nome seria reescrever o fluxo do escritório. A CHAVE é que difere
+ * (`SOLICITACAO_INFORMACOES_DESENQUADRAMENTO` e `..._2`), porque é a identidade da etapa: duas
+ * chaves iguais no mesmo fluxo tornariam ambíguo o tempo gasto em cada uma. Se o
+ * escritório corrigir o nome da 4, muda só o título.
+ *
+ * AS ETAPAS 6 E 7 VIERAM SEM RESPONSÁVEL, e o sistema exige um: é ele que decide
+ * quem pode concluir a etapa (`podeConcluirEtapa`). As duas ficaram com o
+ * ESCRITÓRIO. "Desenquadramento Efetuado" confirma o resultado do agendamento,
+ * que já é do escritório (etapa 5), e "PROCESSO FINALIZADO" é do escritório na
+ * abertura e na baixa. A 7 ser do escritório também preserva quem pode aplicar a
+ * mudança de regime ao fechar o processo (ADMIN, CONTABIL e CONTABIL_ASSISTENTE),
+ * como na proposta antiga.
+ *
+ * `statusDerivado`: 1, 3 e 4 esperam o cliente (pedido e informações:
+ * AGUARDANDO_DOCUMENTACAO), 2 e 5 são execução do escritório (EM_ELABORACAO), 6 é
+ * o acompanhamento até o desenquadramento valer (EM_REVISAO) e 7 fecha
+ * (CONCLUIDO). Sem `orgao`: a planilha não diz em que órgão cada passo acontece, e
+ * o campo é só informativo.
+ *
+ * Processo aberto ANTES desta mudança continua com as 8 etapas antigas, porque o
+ * título é copiado para `processo_legalizacao_etapa` na criação. Isso é o desenho,
+ * não efeito colateral: fluxo que muda retroativamente falsifica o histórico do
+ * que foi realmente executado. O status desses processos é derivado das etapas
+ * DELES, não deste fluxo (ver `statusLegalizacao`).
+ */
 export const ETAPAS_DESENQUADRAMENTO: DefinicaoEtapa[] = [
-  { numero: 1, chave: "IDENTIFICACAO_MOTIVO", titulo: "Identificação do motivo", descricao: "Apuração do que motiva o desenquadramento: limite de faturamento, atividade impeditiva ou opção da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 2, chave: "ESTUDO_IMPACTO", titulo: "Estudo do impacto tributário", descricao: "Comparação da carga tributária entre o regime atual e o novo.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 3, chave: "APRESENTACAO_CENARIO", titulo: "Apresentação do cenário ao cliente", descricao: "Comunicação do estudo e das consequências práticas da mudança.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 4, chave: "APROVACAO_CLIENTE", titulo: "Aprovação do cliente", descricao: "Confirmação do cliente para efetivar a mudança de regime.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 5, chave: "COMUNICACAO_DESENQUADRAMENTO", titulo: "Comunicação do desenquadramento", descricao: "Formalização do desenquadramento junto ao órgão competente.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 6, chave: "AJUSTE_REGIME_SISTEMAS", titulo: "Ajuste do regime nos sistemas", descricao: "Atualização do regime nos sistemas internos e no cadastro da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
-  { numero: 7, chave: "COMUNICACAO_ROTINA", titulo: "Comunicação da mudança de rotina ao cliente", descricao: "Orientação sobre as novas obrigações e o novo fluxo mensal.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
-  { numero: 8, chave: "ENCERRAMENTO_PROCESSO", titulo: "Encerramento do processo", descricao: "Conclusão do processo, com registro do novo regime no histórico da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
+  { numero: 1, chave: "SOLICITACAO_DESENQUADRAMENTO", titulo: "Solicitação de Desenquadramento", descricao: "Pedido de desenquadramento registrado pelo comercial junto ao cliente.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 2, chave: "CONFIRMACAO_DATA_DESENQUADRAMENTO", titulo: "Confirmação da data do desenquadramento", descricao: "Confirmação, pelo escritório, da data a partir da qual o desenquadramento vale.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 3, chave: "SOLICITACAO_INFORMACOES_DESENQUADRAMENTO", titulo: "Solicitação das informações para desenquadramento", descricao: "Pedido ao cliente das informações necessárias para o desenquadramento.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 4, chave: "SOLICITACAO_INFORMACOES_DESENQUADRAMENTO_2", titulo: "Solicitação das informações para desenquadramento", descricao: "Segunda solicitação de informações ao cliente; o texto repete o da etapa 3 na planilha do escritório.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 5, chave: "AGENDAMENTO_DESENQUADRAMENTO", titulo: "Agendamento do Desenquadramento", descricao: "Agendamento do desenquadramento para a data confirmada.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 6, chave: "DESENQUADRAMENTO_EFETUADO", titulo: "Desenquadramento Efetuado", descricao: "Confirmação de que o desenquadramento foi efetuado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
+  { numero: 7, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo, com o novo enquadramento registrado no histórico da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
 ];
 
 /* -------------------------------------------------------------------------- */

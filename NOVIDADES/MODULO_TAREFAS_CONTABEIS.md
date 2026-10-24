@@ -70,8 +70,9 @@ tem começo e fim. Cinco tipos:
 4. **Alteração** (contratual, endereço, sócios, atividade, capital)
 5. **Desenquadramento** (sair do Simples, mudar de regime, sair do MEI)
 
-Cada um tem etapas próprias. **As etapas de legalização ainda não estão documentadas** —
-a seção 11 traz uma proposta minha para vocês corrigirem.
+Cada um tem etapas próprias. Abertura, baixa e desenquadramento já usam as etapas
+informadas pelo escritório; **regularização e alteração seguem como proposta** até o
+escritório mandar as etapas — ver seção 11.
 
 ### 3.3 A diferença que muda o software
 
@@ -1002,16 +1003,29 @@ voltam como etapa própria.
 
 ### 11.5 Desenquadramento
 
-| Nº | Etapa proposta | Responsável |
+Estas 7 etapas são o fluxo INFORMADO PELO ESCRITÓRIO (planilha "C.Z - Fluxos
+JUCESP"), não proposta: substituíram uma proposta de 8 etapas genéricas. A fonte da
+verdade é `src/lib/tarefa-etapas.ts` (`ETAPAS_DESENQUADRAMENTO`).
+
+| Nº | Etapa | Responsável |
 |---|---|---|
-| 1 | Identificação do motivo (limite, atividade, opção) | Escritório |
-| 2 | Estudo do impacto tributário | Escritório |
-| 3 | Apresentação do cenário ao cliente | Comercial C.Z |
-| 4 | Aprovação do cliente | Comercial C.Z |
-| 5 | Comunicação do desenquadramento | Escritório |
-| 6 | Ajuste do regime nos sistemas | Escritório |
-| 7 | Comunicação da mudança de rotina ao cliente | Comercial C.Z |
-| 8 | Encerramento do processo | Escritório |
+| 1 | Solicitação de Desenquadramento | Comercial C.Z |
+| 2 | Confirmação da data do desenquadramento | Escritório |
+| 3 | Solicitação das informações para desenquadramento | Comercial C.Z |
+| 4 | Solicitação das informações para desenquadramento | Comercial C.Z |
+| 5 | Agendamento do Desenquadramento | Escritório |
+| 6 | Desenquadramento Efetuado | Escritório ¹ |
+| 7 | PROCESSO FINALIZADO | Escritório ¹ |
+
+¹ A planilha não traz responsável para as etapas 6 e 7, e o sistema exige um (é ele
+que decide quem pode concluir). Ficaram com o Escritório, como o "PROCESSO
+FINALIZADO" da abertura e da baixa. **A confirmar com o escritório.**
+
+As etapas 3 e 4 têm o mesmo texto na planilha e foram mantidas assim. **A confirmar
+com o escritório** se a 4 tem outro nome; se tiver, muda só o título.
+
+Processo aberto antes desta mudança continua com as 8 etapas da proposta antiga, e o
+status dele é calculado pelas etapas dele, não pelas do fluxo novo.
 
 ### 11.6 O que a legalização exige do software, e a apuração não
 

@@ -145,6 +145,17 @@ export type EntradaDerivacao = {
   etapaAtual: number;
   bloqueada?: boolean | null;
   bloqueioResponsavel?: string | null;
+  /**
+   * Etapas do PRÓPRIO processo (as linhas copiadas na criação). Quando vêm, são
+   * elas que dizem onde o processo termina.
+   *
+   * Processo aberto antes de um fluxo mudar continua com as etapas antigas. Medir
+   * o fim pelo fluxo ATUAL errava nos dois sentidos: o desenquadramento antigo de
+   * 8 etapas, parado na 7, virava "Concluído" porque o fluxo novo tem 7; e a
+   * abertura antiga de 12 já concluída voltava para "Em elaboração" porque o fluxo
+   * novo tem 20.
+   */
+  etapas?: ReadonlyArray<{ numero: number; chave: string }> | null;
 };
 
 /**
@@ -162,7 +173,7 @@ function statusDeBloqueio(bloqueioResponsavel?: string | null): string {
 }
 
 function derivar(
-  fluxo: { numero: number; statusDerivado: string }[],
+  fluxo: { numero: number; chave: string; statusDerivado: string }[],
   entrada: EntradaDerivacao
 ): string {
   if (entrada.bloqueada) return statusDeBloqueio(entrada.bloqueioResponsavel);
@@ -172,9 +183,23 @@ function derivar(
     return STATUS.AGUARDANDO_DOCUMENTACAO;
   }
 
-  // Etapa além do fluxo só acontece quando a última foi concluída.
-  const ultima = fluxo[fluxo.length - 1];
-  if (entrada.etapaAtual >= ultima.numero) return STATUS.CONCLUIDO;
+  const proprias = entrada.etapas && entrada.etapas.length > 0 ? entrada.etapas : null;
+
+  // Etapa além do fluxo só acontece quando a última foi concluída. A última é a
+  // do processo, quando ele traz as próprias etapas.
+  const ultimaNumero = proprias
+    ? Math.max(...proprias.map((e) => e.numero))
+    : fluxo[fluxo.length - 1].numero;
+  if (entrada.etapaAtual >= ultimaNumero) return STATUS.CONCLUIDO;
+
+  if (proprias) {
+    // Pela CHAVE, não pelo número: a etapa 5 de um fluxo antigo não é a etapa 5
+    // do fluxo atual. Chave que o fluxo atual não tem mais é etapa de execução de
+    // um fluxo antigo, e "Em elaboração" é o status neutro de trabalho em curso.
+    const atual = proprias.find((e) => e.numero === entrada.etapaAtual);
+    const definicao = atual ? fluxo.find((e) => e.chave === atual.chave) : undefined;
+    return definicao?.statusDerivado ?? STATUS.EM_ELABORACAO;
+  }
 
   const etapa = fluxo.find((e) => e.numero === entrada.etapaAtual);
   return etapa?.statusDerivado ?? STATUS.EM_ELABORACAO;

@@ -220,6 +220,9 @@ export async function recalcularStatusProcesso(
       etapaAtual: true,
       bloqueada: true,
       bloqueioResponsavel: true,
+      // As etapas DO PROCESSO decidem onde ele termina: processo aberto antes de
+      // o fluxo mudar continua com as etapas antigas.
+      etapas: { select: { numero: true, chave: true } },
     },
   });
   if (!processo) throw new Error(`Processo não encontrado: ${processoId}`);
@@ -228,6 +231,7 @@ export async function recalcularStatusProcesso(
     etapaAtual: processo.etapaAtual,
     bloqueada: processo.bloqueada,
     bloqueioResponsavel: processo.bloqueioResponsavel,
+    etapas: processo.etapas,
   });
 
   const mudou = novo !== processo.status;
