@@ -1055,8 +1055,8 @@ verdade é `src/lib/tarefa-etapas.ts` (`ETAPAS_DESENQUADRAMENTO`).
 |---|---|---|
 | 1 | Solicitação de Desenquadramento | Comercial C.Z |
 | 2 | Confirmação da data do desenquadramento | Escritório |
-| 3 | Solicitação das informações para desenquadramento | Comercial C.Z |
-| 4 | Solicitação das informações para desenquadramento | Comercial C.Z |
+| 3 | Solicitação das informações para desenquadramento - CERT. DIGITAL OU GOV | Comercial C.Z |
+| 4 | Solicitação das informações para desenquadramento - XMLs NFs SAÍDA 12m | Comercial C.Z |
 | 5 | Agendamento do Desenquadramento | Escritório |
 | 6 | Desenquadramento Efetuado | Escritório ¹ |
 | 7 | PROCESSO FINALIZADO | Escritório ¹ |
@@ -1065,8 +1065,9 @@ verdade é `src/lib/tarefa-etapas.ts` (`ETAPAS_DESENQUADRAMENTO`).
 que decide quem pode concluir). Ficaram com o Escritório, como o "PROCESSO
 FINALIZADO" da abertura e da baixa. **A confirmar com o escritório.**
 
-As etapas 3 e 4 têm o mesmo texto na planilha e foram mantidas assim. **A confirmar
-com o escritório** se a 4 tem outro nome; se tiver, muda só o título.
+As etapas 3 e 4 foram detalhadas pelo escritório: a 3 solicita certificado
+digital ou GOV; a 4 solicita os XMLs de notas fiscais de saída dos últimos 12
+meses.
 
 Processo aberto antes desta mudança continua com as 8 etapas da proposta antiga, e o
 status dele é calculado pelas etapas dele, não pelas do fluxo novo.

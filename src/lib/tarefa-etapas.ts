@@ -723,12 +723,10 @@ export const ETAPAS_ALTERACAO_CADASTRAL: DefinicaoEtapa[] = [
  * etapas: 7"), com os títulos transcritos literalmente. Substituiu uma proposta
  * de 8 etapas genéricas escrita quando não havia documento de origem.
  *
- * AS ETAPAS 3 E 4 TÊM O MESMO TEXTO NA PLANILHA ("Solicitação das informações
- * para desenquadramento", as duas do Comercial C.Z). Ficou como veio: inventar
- * outro nome seria reescrever o fluxo do escritório. A CHAVE é que difere
- * (`SOLICITACAO_INFORMACOES_DESENQUADRAMENTO` e `..._2`), porque é a identidade da etapa: duas
- * chaves iguais no mesmo fluxo tornariam ambíguo o tempo gasto em cada uma. Se o
- * escritório corrigir o nome da 4, muda só o título.
+ * AS ETAPAS 3 E 4 foram detalhadas pelo escritório depois da primeira imagem:
+ * a 3 solicita certificado digital ou GOV, e a 4 solicita os XMLs de notas de
+ * saída dos últimos 12 meses. As chaves permanecem distintas e estáveis para
+ * não alterar a identidade dos processos já criados.
  *
  * AS ETAPAS 6 E 7 VIERAM SEM RESPONSÁVEL, e o sistema exige um: é ele que decide
  * quem pode concluir a etapa (`podeConcluirEtapa`). As duas ficaram com o
@@ -753,8 +751,8 @@ export const ETAPAS_ALTERACAO_CADASTRAL: DefinicaoEtapa[] = [
 export const ETAPAS_DESENQUADRAMENTO: DefinicaoEtapa[] = [
   { numero: 1, chave: "SOLICITACAO_DESENQUADRAMENTO", titulo: "Solicitação de Desenquadramento", descricao: "Pedido de desenquadramento registrado pelo comercial junto ao cliente.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
   { numero: 2, chave: "CONFIRMACAO_DATA_DESENQUADRAMENTO", titulo: "Confirmação da data do desenquadramento", descricao: "Confirmação, pelo escritório, da data a partir da qual o desenquadramento vale.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 3, chave: "SOLICITACAO_INFORMACOES_DESENQUADRAMENTO", titulo: "Solicitação das informações para desenquadramento", descricao: "Pedido ao cliente das informações necessárias para o desenquadramento.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 4, chave: "SOLICITACAO_INFORMACOES_DESENQUADRAMENTO_2", titulo: "Solicitação das informações para desenquadramento", descricao: "Segunda solicitação de informações ao cliente; o texto repete o da etapa 3 na planilha do escritório.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 3, chave: "SOLICITACAO_INFORMACOES_DESENQUADRAMENTO", titulo: "Solicitação das informações para desenquadramento - CERT. DIGITAL OU GOV", descricao: "Solicitação do certificado digital ou acesso GOV necessário para o desenquadramento.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 4, chave: "SOLICITACAO_INFORMACOES_DESENQUADRAMENTO_2", titulo: "Solicitação das informações para desenquadramento - XMLs NFs SAÍDA 12m", descricao: "Solicitação dos XMLs das notas fiscais de saída dos últimos 12 meses.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
   { numero: 5, chave: "AGENDAMENTO_DESENQUADRAMENTO", titulo: "Agendamento do Desenquadramento", descricao: "Agendamento do desenquadramento para a data confirmada.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
   { numero: 6, chave: "DESENQUADRAMENTO_EFETUADO", titulo: "Desenquadramento Efetuado", descricao: "Confirmação de que o desenquadramento foi efetuado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
   { numero: 7, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo, com o novo enquadramento registrado no histórico da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
