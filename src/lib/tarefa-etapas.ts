@@ -12,9 +12,9 @@
  * Fluxo que muda retroativamente falsifica o histórico.
  *
  * Os textos de apuração são transcrição literal de `NOVIDADES/Tarefas SN e
- * LP.pdf`. Na legalização, abertura, baixa e desenquadramento vieram do
- * escritório, com os títulos literais; regularização e alteração seguem como
- * PROPOSTA até o escritório mandar as etapas.
+ * LP.pdf`. Na legalização, abertura, alteração, baixa e desenquadramento vieram
+ * da planilha "C.Z - Fluxos JUCESP", com os títulos literais. Apenas
+ * regularização continua como proposta até o escritório enviar o fluxo.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -570,120 +570,96 @@ export const ETAPAS_LUCRO_PRESUMIDO: DefinicaoEtapa[] = [
 /* -------------------------------------------------------------------------- */
 /*                      Legalização — cinco fluxos                            */
 /*                                                                            */
-/* ABERTURA (20 etapas), BAIXA (18) e DESENQUADRAMENTO (7) são os fluxos REAIS, */
-/* passados pelo escritório, com os títulos transcritos literalmente.          */
-/* Substituíram as propostas genéricas que existiam aqui.                      */
+/* ABERTURA (28), ALTERAÇÃO (27), BAIXA (26) e DESENQUADRAMENTO (7) são os    */
+/* fluxos REAIS da planilha "C.Z - Fluxos JUCESP", com títulos e responsáveis */
+/* transcritos literalmente. A planilha deixa o responsável da última etapa   */
+/* em branco; ela fica com ESCRITÓRIO porque o sistema exige quem conclui.     */
 /*                                                                            */
-/* REGULARIZAÇÃO e ALTERAÇÃO SEGUEM SENDO PROPOSTA: o escritório vai trazer as */
-/* etapas exatas depois. Não existe documento de origem para elas — trate como */
-/* rascunho, ver seção 11 da especificação.                                    */
+/* REGULARIZAÇÃO SEGUE COMO PROPOSTA: o escritório ainda não enviou as etapas. */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Abertura de empresa — 20 etapas.
+ * ABERTURA DE CNPJ — 28 etapas da planilha "C.Z - Fluxos JUCESP".
  *
- * Sobre as duas colunas que o escritório NÃO especificou, e que o sistema exige:
+ * Títulos e responsáveis foram transcritos literalmente. A etapa 28 veio sem
+ * responsável; ficou com ESCRITÓRIO porque o sistema precisa definir quem pode
+ * concluir. A etapa 24 é opcional porque a própria planilha diz "se aplicável";
+ * a 20 também é opcional porque só existe "se houver" exigência da JUCESP.
  *
- * `responsavel` decide QUEM PODE CONCLUIR a etapa (`podeConcluirEtapa` em
- * `src/lib/api-guard.ts`), e é a coluna com mais chance de precisar de correção.
- * O critério aplicado: etapa que fala com o cliente (formulário, pagamento de
- * taxa, assinatura, entrega) é COMERCIAL_CZ; etapa executada em portal de órgão
- * (viabilidade, DBE, JUCESP, emissão de documento) é ESCRITORIO; conferência de
- * atividade e envio para assinatura são AMBOS, porque na prática os dois lados
- * tocam. ADMIN passa por cima de todas.
- *
- * `statusDerivado` é o status macro que a etapa produz no Kanban. Aqui o mapa
- * segue o desenho do fluxo: 1 é coleta (AGUARDANDO_DOCUMENTACAO), 2 a 13 é
- * execução (EM_ELABORACAO), 14 a 18 é acompanhamento e emissão no órgão
- * (EM_REVISAO), 19 é entrega (ENTREGUE) e 20 fecha (CONCLUIDO).
- *
- * As etapas 9 e 12 dependem de terceiro (cliente pagar a taxa, sócio assinar no
- * Autentique) e são justamente onde o processo trava. Elas não são opcionais: o
- * jeito de registrar a espera é a PENDÊNCIA, que sobrepõe o status sem mexer na
- * etapa — foi para isso que o bloqueio existe.
- *
- * Nenhuma etapa é opcional neste fluxo. O escritório listou vinte passos como
- * sequência obrigatória, e etapa opcional que ninguém pediu só serviria para
- * alguém pular conferência.
- *
- * Processo aberto ANTES desta mudança continua com as 12 etapas antigas, porque
- * o título é copiado para `processo_legalizacao_etapa` na criação. Isso é o
- * desenho, não um efeito colateral: fluxo que muda retroativamente falsifica o
- * histórico do que foi realmente executado.
+ * Status macro: 1 aguarda documentação; 2–17 ficam em elaboração; 18–26 em
+ * revisão; 27 entregue; 28 concluído. Processo já aberto conserva as etapas que
+ * recebeu na criação, mesmo quando o fluxo é atualizado.
  */
 export const ETAPAS_ABERTURA_CNPJ: DefinicaoEtapa[] = [
-  { numero: 1, chave: "FORMULARIO_ABERTURA_DRIVE", titulo: "Formulário de Abertura CNPJ - Drive", descricao: "Envio e preenchimento do formulário de abertura no Drive, com os dados e documentos dos sócios.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 2, chave: "CONFERENCIA_ATIVIDADES_PLANNER", titulo: "Conferência das Atividades do CNPJ - Planner", descricao: "Conferência das atividades (CNAE) pretendidas e registro do resultado no Planner.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 3, chave: "PROCESSO_VIABILIDADE", titulo: "Processo de Viabilidade", descricao: "Abertura do processo de viabilidade de nome empresarial e de endereço.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 4, chave: "CONFERENCIA_VIABILIDADE", titulo: "Conferência do Processo de Viabilidade", descricao: "Conferência do retorno da viabilidade antes de seguir para o DBE.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 5, chave: "DBE_ABERTURA", titulo: "DBE - Abertura CNPJ", descricao: "Preenchimento e transmissão do Documento Básico de Entrada para abertura do CNPJ.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 6, chave: "CONFERENCIA_DBE", titulo: "Conferência do DBE - Abertura", descricao: "Conferência dos dados do DBE gerado antes do registro digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 7, chave: "ABERTURA_REGISTRO_DIGITAL_JUCESP", titulo: "Abertura Registro Digital JUCESP", descricao: "Abertura do Registro Digital no sistema da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 8, chave: "EMISSAO_TAXA_JUCESP", titulo: "Emissão da Taxa - JUCESP", descricao: "Emissão da guia da taxa de registro na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 9, chave: "PAGAMENTO_TAXA_JUCESP", titulo: "Confirmação de Pagamento da Taxa JUCESP", descricao: "Confirmação do pagamento da guia da JUCESP junto ao cliente.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 10, chave: "PREENCHIMENTO_REGISTRO_DIGITAL_JUCESP", titulo: "Preenchimento do Registro Digital JUCESP", descricao: "Preenchimento completo do Registro Digital na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 11, chave: "EMISSAO_CONTRATO_SOCIAL", titulo: "Emissão do Contrato Social - Junta Comercial", descricao: "Geração do contrato social pelo sistema da Junta Comercial.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 12, chave: "ENVIO_CONTRATO_AUTENTIQUE", titulo: "Envio do Contrato Social via Autentique", descricao: "Envio do contrato social para assinatura eletrônica dos sócios pelo Autentique.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 13, chave: "FINALIZACAO_REGISTRO_DIGITAL_JUCESP", titulo: "Finalização do Registro Digital JUCESP", descricao: "Finalização do Registro Digital com o contrato social assinado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 14, chave: "PROTOCOLO_REGISTRO_DIGITAL_ENVIADO", titulo: "Protocolo de Registro Digital JUCESP enviado", descricao: "Envio do protocolo do Registro Digital à JUCESP e registro do número do protocolo.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 15, chave: "ACOMPANHAMENTO_REGISTRO_DIGITAL", titulo: "Acompanhamento do Registro Digital JUCESP", descricao: "Acompanhamento da análise do Registro Digital até a decisão da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 16, chave: "REGISTRO_DIGITAL_DEFERIDO", titulo: "Registro Digital JUCESP - DEFERIDO", descricao: "Deferimento do Registro Digital pela JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 17, chave: "EMISSAO_DOCUMENTOS_APROVADA", titulo: "Emissão dos Documentos - Aprovada (Aguardar até 24h)", descricao: "Aprovação da emissão dos documentos oficiais. A liberação pela JUCESP pode levar até 24 horas.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 18, chave: "EMISSAO_DOCUMENTOS_OFICIAIS", titulo: "Emissão dos Documentos Oficiais", descricao: "Emissão do contrato social registrado, do CNPJ e dos demais documentos oficiais.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
-  { numero: 19, chave: "ENVIO_DOCUMENTOS_CLIENTE", titulo: "Envio dos Documentos Oficiais ao Cliente", descricao: "Envio ao cliente de todos os documentos oficiais e acessos gerados no processo.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
-  { numero: 20, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo, com arquivamento e o CNPJ registrado no cadastro da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
+  { numero: 1, chave: "FORMULARIO_ABERTURA_DRIVE", titulo: "Formulário de Abertura CNPJ - Drive", descricao: "Preenchimento do formulário de abertura com os dados do novo CNPJ.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 2, chave: "CONFERENCIA_ATIVIDADES_PLANNER", titulo: "Conferência das Atividades do CNPJ - Planner", descricao: "Conferência das atividades e dos CNAEs pretendidos no Planner.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 3, chave: "CONFERENCIA_DOCUMENTOS_SOCIOS", titulo: "Conferência de Documentos dos Sócios (RG/CNH, CPF, comprovante de endereço, estado civil)", descricao: "Conferência dos documentos pessoais e cadastrais de todos os sócios.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 4, chave: "CONSULTA_NOME_EMPRESARIAL", titulo: "Consulta de Nome Empresarial / Pesquisa de Nome", descricao: "Pesquisa da disponibilidade do nome empresarial pretendido.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 5, chave: "PROCESSO_VIABILIDADE", titulo: "Processo de Viabilidade", descricao: "Abertura do processo de viabilidade do nome, endereço e atividades.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 6, chave: "CONFERENCIA_VIABILIDADE", titulo: "Conferência do Processo de Viabilidade", descricao: "Conferência do retorno do processo de viabilidade.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 7, chave: "CONFIRMACAO_ENDERECO", titulo: "Confirmação de Endereço (Zoneamento / IPTU / Uso do Solo)", descricao: "Confirmação da viabilidade do endereço, zoneamento, IPTU e uso do solo.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.PREFEITURA },
+  { numero: 8, chave: "DBE_ABERTURA", titulo: "DBE - Abertura CNPJ", descricao: "Preenchimento e transmissão do DBE de abertura.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 9, chave: "CONFERENCIA_DBE", titulo: "Conferência do DBE - Abertura", descricao: "Conferência dos dados do DBE de abertura.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 10, chave: "ABERTURA_REGISTRO_DIGITAL_JUCESP", titulo: "Abertura Registro Digital JUCESP", descricao: "Abertura do Registro Digital no sistema da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 11, chave: "EMISSAO_TAXA_JUCESP", titulo: "Emissão da Taxa - JUCESP", descricao: "Emissão da guia da taxa de registro na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 12, chave: "PAGAMENTO_TAXA_JUCESP", titulo: "Confirmação de Pagamento da Taxa JUCESP", descricao: "Confirmação do pagamento da taxa da JUCESP.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 13, chave: "PREENCHIMENTO_REGISTRO_DIGITAL_JUCESP", titulo: "Preenchimento do Registro Digital JUCESP", descricao: "Preenchimento completo do Registro Digital na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 14, chave: "EMISSAO_CONTRATO_SOCIAL", titulo: "Emissão do Contrato Social - Junta Comercial", descricao: "Emissão do contrato social para registro.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 15, chave: "ENVIO_CONTRATO_AUTENTIQUE", titulo: "Envio do Contrato Social via Autentique", descricao: "Envio do contrato social para assinatura eletrônica dos sócios.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 16, chave: "CONFERENCIA_ASSINATURAS", titulo: "Conferência das Assinaturas (todos os sócios)", descricao: "Conferência das assinaturas de todos os sócios.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 17, chave: "FINALIZACAO_REGISTRO_DIGITAL_JUCESP", titulo: "Finalização do Registro Digital JUCESP", descricao: "Finalização do Registro Digital com o contrato assinado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 18, chave: "PROTOCOLO_REGISTRO_DIGITAL_ENVIADO", titulo: "Protocolo de Registro Digital JUCESP enviado", descricao: "Envio e registro do protocolo digital da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 19, chave: "ACOMPANHAMENTO_REGISTRO_DIGITAL", titulo: "Acompanhamento do Registro Digital JUCESP", descricao: "Acompanhamento da análise do Registro Digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 20, chave: "TRATAMENTO_EXIGENCIA_JUCESP", titulo: "Tratamento de Exigência JUCESP (se houver)", descricao: "Tratamento de eventual exigência apresentada pela JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: true, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 21, chave: "REGISTRO_DIGITAL_DEFERIDO", titulo: "Registro Digital JUCESP - DEFERIDO", descricao: "Confirmação do deferimento do Registro Digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 22, chave: "EMISSAO_DOCUMENTOS_APROVADA", titulo: "Emissão dos Documentos - Aprovada (Aguardar até 24h)", descricao: "Aguardar a liberação dos documentos oficiais após o deferimento.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 23, chave: "EMISSAO_DOCUMENTOS_OFICIAIS", titulo: "Emissão dos Documentos Oficiais (CNPJ, NIRE)", descricao: "Emissão do CNPJ, NIRE e demais documentos oficiais.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
+  { numero: 24, chave: "INSCRICAO_ESTADUAL", titulo: "Inscrição Estadual (se aplicável)", descricao: "Obtenção da inscrição estadual quando aplicável à atividade.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: true, orgao: ORGAO_EXTERNO.SEFAZ },
+  { numero: 25, chave: "INSCRICAO_MUNICIPAL", titulo: "Inscrição Municipal", descricao: "Obtenção da inscrição municipal.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.PREFEITURA },
+  { numero: 26, chave: "ENQUADRAMENTO_TRIBUTARIO", titulo: "Enquadramento Tributário (Simples Nacional / Regime)", descricao: "Formalização do enquadramento tributário da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 27, chave: "ENVIO_DOCUMENTOS_CLIENTE", titulo: "Envio dos Documentos Oficiais ao Cliente", descricao: "Envio dos documentos oficiais ao cliente.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
+  { numero: 28, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo de abertura.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
 ];
 
 /**
- * BAIXA / ENCERRAMENTO DE CNPJ — 18 etapas.
+ * BAIXA / ENCERRAMENTO DE CNPJ — 26 etapas da planilha
+ * "C.Z - Fluxos JUCESP".
  *
- * Fluxo informado pelo escritório (demanda "BAIXA | ENCERRAMENTO CNPJ - 18
- * status"). Substituiu uma proposta de 9 etapas genéricas, escrita quando não
- * havia documento de origem para este tipo de processo.
+ * Títulos e responsáveis foram transcritos literalmente. A etapa 26 veio sem
+ * responsável e fica com ESCRITÓRIO porque o sistema exige quem pode concluir.
+ * A etapa 18 é opcional porque só existe "se houver" exigência da JUCESP.
  *
- * AS CHAVES DAS ETAPAS EQUIVALENTES SÃO AS MESMAS DA ABERTURA, de propósito: a
- * baixa percorre os mesmos portais na mesma ordem (DBE na Receita, Registro
- * Digital na JUCESP, assinatura no Autentique, emissão de documento no fim), e
- * chave igual é o que permite comparar prazo de etapa entre os dois fluxos.
- * Chave repetida entre fluxos já é o normal aqui — `ENCERRAMENTO_PROCESSO`
- * aparecia em quatro. O que muda de nome é o ato: DISTRATO, não contrato social.
- *
- * DUAS ETAPAS DO FLUXO ANTIGO SAÍRAM SEM SUBSTITUTO: "Entrega das declarações
- * finais" e "Baixa estadual e municipal". Não estão na lista do escritório. A
- * leitura adotada é que a primeira acontece dentro das etapas 2 a 4 (levantamento,
- * envio e confirmação de pendências) e a segunda dentro do DBE, que já é o pedido
- * de baixa. Se na prática o escritório executa as duas como passo separado, elas
- * voltam como etapa própria — não como observação em etapa alheia, que é o que faz
- * trabalho virar invisível.
- *
- * As etapas 3, 4 e 10 dependem de terceiro (cliente resolver pendência, sócio
- * assinar o distrato) e são onde o processo trava. Não são opcionais: espera se
- * registra como PENDÊNCIA, que sobrepõe o status sem mexer na etapa.
- *
- * Processo aberto ANTES desta mudança continua com as 9 etapas antigas, porque o
- * título é copiado para `processo_legalizacao_etapa` na criação. Isso é o desenho,
- * não efeito colateral: fluxo que muda retroativamente falsifica o histórico do
- * que foi realmente executado.
+ * Status macro: 1, 2 e 5 aguardam documentação; 3–4 e 6–16 ficam em
+ * elaboração; 17–24 em revisão; 25 entregue; 26 concluído. Processo já aberto
+ * conserva as etapas que recebeu na criação.
  */
 export const ETAPAS_ENCERRAMENTO_CNPJ: DefinicaoEtapa[] = [
-  { numero: 1, chave: "CONFIRMACAO_BAIXA_COMERCIAL", titulo: "Confirmação de Baixa - Comercial", descricao: "Confirmação formal, pelo comercial, de que o cliente decidiu encerrar o CNPJ.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 2, chave: "LEVANTAMENTO_PREVIO_PENDENCIAS", titulo: "Levantamento Prévio das Pendências", descricao: "Diagnóstico de débitos, declarações em atraso e obrigações que impedem a baixa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 3, chave: "ENVIO_PENDENCIAS", titulo: "Envio das Pendências", descricao: "Envio ao cliente da lista de pendências levantadas, com o que precisa ser resolvido antes da baixa.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 4, chave: "CONFIRMACAO_PENDENCIAS", titulo: "Confirmação sobre Pendências", descricao: "Retorno do cliente sobre as pendências enviadas e confirmação de que estão resolvidas.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 5, chave: "DBE_BAIXA", titulo: "DBE - Baixa CNPJ", descricao: "Preenchimento e transmissão do Documento Básico de Entrada para baixa do CNPJ.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 6, chave: "CONFERENCIA_DBE_BAIXA", titulo: "Conferência - DBE Baixa CNPJ", descricao: "Conferência dos dados do DBE de baixa antes do registro digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 7, chave: "ABERTURA_REGISTRO_DIGITAL_JUCESP", titulo: "Abertura do Registro Digital JUCESP", descricao: "Abertura do Registro Digital da baixa no sistema da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 8, chave: "PREENCHIMENTO_REGISTRO_DIGITAL_JUCESP", titulo: "Preenchimento do Registro Digital JUCESP", descricao: "Preenchimento completo do Registro Digital da baixa na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 9, chave: "EMISSAO_DISTRATO_SOCIAL", titulo: "Emissão do Distrato Social", descricao: "Geração do distrato social, o ato que dissolve a sociedade.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 10, chave: "ENVIO_DISTRATO_AUTENTIQUE", titulo: "Envio do Distrato Social via Autentique", descricao: "Envio do distrato social para assinatura eletrônica dos sócios pelo Autentique.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 11, chave: "FINALIZACAO_REGISTRO_DIGITAL_JUCESP", titulo: "Finalização do Registro Digital JUCESP", descricao: "Finalização do Registro Digital com o distrato social assinado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 12, chave: "PROTOCOLO_REGISTRO_DIGITAL_ENVIADO", titulo: "Protocolo de Registro Digital JUCESP enviado", descricao: "Envio do protocolo do Registro Digital à JUCESP e registro do número do protocolo.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 13, chave: "ACOMPANHAMENTO_REGISTRO_DIGITAL", titulo: "Acompanhamento do Registro Digital JUCESP", descricao: "Acompanhamento da análise do Registro Digital até a decisão da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 14, chave: "REGISTRO_DIGITAL_DEFERIDO", titulo: "Registro Digital JUCESP - DEFERIDO", descricao: "Deferimento do Registro Digital da baixa pela JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 15, chave: "EMISSAO_DOCUMENTOS_APROVADA", titulo: "Emissão dos Documentos - Aprovada (Aguardar até 24h)", descricao: "Aprovação da emissão dos documentos oficiais. A liberação pela JUCESP pode levar até 24 horas.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 16, chave: "EMISSAO_DOCUMENTOS_OFICIAIS", titulo: "Emissão dos Documentos Oficiais", descricao: "Emissão do distrato social registrado e dos comprovantes da baixa do CNPJ.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
-  { numero: 17, chave: "ENVIO_DOCUMENTOS_CLIENTE", titulo: "Envio dos Documentos Oficiais ao Cliente", descricao: "Envio ao cliente do distrato registrado e de todos os comprovantes de baixa.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
-  { numero: 18, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo, com arquivamento dos documentos da baixa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
+  { numero: 1, chave: "FORMULARIO_BAIXA_SISTEMA", titulo: "Formulário de Baixa CNPJ - Sistema", descricao: "Preenchimento do formulário interno de baixa do CNPJ.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 2, chave: "CONFIRMACAO_BAIXA_COMERCIAL", titulo: "Confirmação de Baixa - Comercial", descricao: "Confirmação comercial da decisão de encerrar o CNPJ.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 3, chave: "LEVANTAMENTO_PREVIO_PENDENCIAS", titulo: "Levantamento Prévio das Pendências (débitos federais, estaduais e municipais, obrigações acessórias)", descricao: "Levantamento de débitos e obrigações que precisam ser tratados antes da baixa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 4, chave: "ENVIO_PENDENCIAS", titulo: "Envio das Pendências ao Cliente", descricao: "Envio ao cliente das pendências encontradas.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 5, chave: "CONFIRMACAO_PENDENCIAS", titulo: "Confirmação sobre Pendências", descricao: "Confirmação do tratamento das pendências levantadas.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 6, chave: "REGULARIZACAO_PENDENCIAS", titulo: "Regularização das Pendências", descricao: "Regularização das pendências necessárias para permitir a baixa.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 7, chave: "CONFERENCIA_DOCUMENTOS_SOCIOS", titulo: "Conferência de Documentos dos Sócios (RG/CNH, CPF, comprovante de endereço, estado civil)", descricao: "Conferência dos documentos pessoais e cadastrais de todos os sócios.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 8, chave: "DBE_BAIXA", titulo: "DBE - Baixa CNPJ", descricao: "Preenchimento e transmissão do DBE de baixa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 9, chave: "CONFERENCIA_DBE_BAIXA", titulo: "Conferência do DBE - Baixa CNPJ", descricao: "Conferência dos dados do DBE de baixa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 10, chave: "ABERTURA_REGISTRO_DIGITAL_JUCESP", titulo: "Abertura do Registro Digital JUCESP", descricao: "Abertura do Registro Digital da baixa na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 11, chave: "PREENCHIMENTO_REGISTRO_DIGITAL_JUCESP", titulo: "Preenchimento do Registro Digital JUCESP", descricao: "Preenchimento do Registro Digital da baixa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 12, chave: "EMISSAO_DISTRATO_SOCIAL", titulo: "Emissão do Distrato Social", descricao: "Emissão do distrato social para registro.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 13, chave: "ENVIO_DISTRATO_AUTENTIQUE", titulo: "Envio do Distrato Social via Autentique", descricao: "Envio do distrato para assinatura eletrônica dos sócios.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 14, chave: "CONFERENCIA_ASSINATURAS", titulo: "Conferência das Assinaturas (todos os sócios)", descricao: "Conferência das assinaturas de todos os sócios.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 15, chave: "FINALIZACAO_REGISTRO_DIGITAL_JUCESP", titulo: "Finalização do Registro Digital JUCESP", descricao: "Finalização do Registro Digital com o distrato assinado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 16, chave: "PROTOCOLO_REGISTRO_DIGITAL_ENVIADO", titulo: "Protocolo de Registro Digital JUCESP enviado", descricao: "Envio e registro do protocolo digital da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 17, chave: "ACOMPANHAMENTO_REGISTRO_DIGITAL", titulo: "Acompanhamento do Registro Digital JUCESP", descricao: "Acompanhamento da análise do Registro Digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 18, chave: "TRATAMENTO_EXIGENCIA_JUCESP", titulo: "Tratamento de Exigência JUCESP (se houver)", descricao: "Tratamento de eventual exigência apresentada pela JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: true, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 19, chave: "REGISTRO_DIGITAL_DEFERIDO", titulo: "Registro Digital JUCESP - DEFERIDO", descricao: "Confirmação do deferimento do Registro Digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 20, chave: "EMISSAO_DOCUMENTOS_APROVADA", titulo: "Emissão dos Documentos - Aprovada (Aguardar até 24h)", descricao: "Aguardar a liberação dos documentos oficiais após o deferimento.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 21, chave: "EMISSAO_DOCUMENTOS_OFICIAIS", titulo: "Emissão dos Documentos Oficiais (Distrato registrado, comprovante de baixa do CNPJ)", descricao: "Emissão do distrato registrado e do comprovante de baixa do CNPJ.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
+  { numero: 22, chave: "BAIXA_INSCRICAO_ESTADUAL", titulo: "Baixa da Inscrição Estadual", descricao: "Baixa da inscrição estadual da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.SEFAZ },
+  { numero: 23, chave: "BAIXA_INSCRICAO_MUNICIPAL", titulo: "Baixa da Inscrição Municipal", descricao: "Baixa da inscrição municipal da empresa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.PREFEITURA },
+  { numero: 24, chave: "VERIFICACAO_SITUACAO_RECEITA", titulo: "Verificação da Situação Cadastral na Receita (confirmar CNPJ \"Baixado\")", descricao: "Confirmação de que a situação cadastral do CNPJ consta como baixada.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 25, chave: "ENVIO_DOCUMENTOS_CLIENTE", titulo: "Envio dos Documentos Oficiais ao Cliente", descricao: "Envio ao cliente dos documentos e comprovantes da baixa.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
+  { numero: 26, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo de baixa.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
 ];
 
 export const ETAPAS_REGULARIZACAO_CNPJ: DefinicaoEtapa[] = [
@@ -698,16 +674,46 @@ export const ETAPAS_REGULARIZACAO_CNPJ: DefinicaoEtapa[] = [
   { numero: 9, chave: "ENCERRAMENTO_PROCESSO", titulo: "Encerramento do processo", descricao: "Entrega da certidão ao cliente e conclusão do processo.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
 ];
 
+/**
+ * ALTERAÇÃO CADASTRAL — 27 etapas da planilha "C.Z - Fluxos JUCESP".
+ *
+ * Títulos e responsáveis foram transcritos literalmente. A etapa 27 veio sem
+ * responsável e fica com ESCRITÓRIO porque o sistema exige quem pode concluir.
+ * As etapas 4, 5, 6 e 19 podem ser marcadas como não aplicáveis: atividades e
+ * viabilidade dependem do tipo de alteração; exigência só existe "se houver".
+ *
+ * Status macro: 1–2 aguardam documentação; 3–16 ficam em elaboração; 17–25 em
+ * revisão; 26 entregue; 27 concluído. Processo já aberto conserva as etapas que
+ * recebeu na criação.
+ */
 export const ETAPAS_ALTERACAO_CADASTRAL: DefinicaoEtapa[] = [
-  { numero: 1, chave: "DEFINICAO_ALTERACAO", titulo: "Definição do que será alterado", descricao: "Identificação da alteração pretendida: endereço, sócios, atividade, capital ou razão social.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 2, chave: "COLETA_DOCUMENTOS", titulo: "Coleta de documentos da alteração", descricao: "Recebimento dos documentos que embasam a alteração.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
-  { numero: 3, chave: "ELABORACAO_ATO", titulo: "Elaboração do ato de alteração", descricao: "Redação do instrumento de alteração contratual.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 4, chave: "ASSINATURA_SOCIOS", titulo: "Assinatura pelos sócios", descricao: "Coleta das assinaturas necessárias no ato de alteração.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "EM_ELABORACAO", opcional: false },
-  { numero: 5, chave: "REGISTRO_JUNTA", titulo: "Registro na Junta Comercial", descricao: "Protocolo e registro da alteração no órgão de registro empresarial.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
-  { numero: 6, chave: "ATUALIZACAO_RECEITA", titulo: "Atualização na Receita Federal", descricao: "Atualização dos dados cadastrais no CNPJ.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
-  { numero: 7, chave: "ATUALIZACAO_ESTADUAL_MUNICIPAL", titulo: "Atualização estadual e municipal", descricao: "Atualização das inscrições estadual e municipal, quando aplicável.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: true },
-  { numero: 8, chave: "ENTREGA_DOCUMENTOS", titulo: "Entrega dos documentos atualizados", descricao: "Envio ao cliente do contrato e cadastros atualizados.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
-  { numero: 9, chave: "ENCERRAMENTO_PROCESSO", titulo: "Encerramento do processo", descricao: "Conclusão do processo e atualização dos dados da empresa no sistema.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
+  { numero: 1, chave: "BASE_ALTERACAO_SISTEMA", titulo: "Base para Alteração - Sistema (tipo de alteração)", descricao: "Registro no sistema do tipo de alteração solicitado.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 2, chave: "CONFIRMACAO_ALTERACAO_COMERCIAL", titulo: "Confirmação da Alteração - Comercial", descricao: "Confirmação comercial do escopo da alteração.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "AGUARDANDO_DOCUMENTACAO", opcional: false },
+  { numero: 3, chave: "CONFERENCIA_DOCUMENTOS_ALTERACAO", titulo: "Conferência de Documentos (sócios novos / endereço / atividades)", descricao: "Conferência dos documentos necessários para a alteração solicitada.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 4, chave: "CONFERENCIA_ATIVIDADES_PLANNER", titulo: "Conferência das Atividades do CNPJ - Planner (se houver mudança de CNAE)", descricao: "Conferência das atividades quando a alteração envolver CNAE.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: true },
+  { numero: 5, chave: "PROCESSO_VIABILIDADE", titulo: "Processo de Viabilidade (se houver mudança de endereço ou atividade)", descricao: "Abertura da viabilidade quando houver mudança de endereço ou atividade.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: true, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 6, chave: "CONFERENCIA_VIABILIDADE", titulo: "Conferência do Processo de Viabilidade", descricao: "Conferência do retorno da viabilidade, quando aplicável.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: true, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 7, chave: "DBE_ALTERACAO", titulo: "DBE - Alteração CNPJ", descricao: "Preenchimento e transmissão do DBE de alteração.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 8, chave: "CONFERENCIA_DBE_ALTERACAO", titulo: "Conferência do DBE - Alteração", descricao: "Conferência dos dados do DBE de alteração.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 9, chave: "ABERTURA_REGISTRO_DIGITAL_JUCESP", titulo: "Abertura do Registro Digital JUCESP", descricao: "Abertura do Registro Digital da alteração na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 10, chave: "EMISSAO_TAXA_JUCESP", titulo: "Emissão da Taxa - JUCESP", descricao: "Emissão da guia da taxa de alteração na JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 11, chave: "PAGAMENTO_TAXA_JUCESP", titulo: "Confirmação de Pagamento da Taxa JUCESP", descricao: "Confirmação do pagamento da taxa da JUCESP.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 12, chave: "PREENCHIMENTO_REGISTRO_DIGITAL_JUCESP", titulo: "Preenchimento do Registro Digital JUCESP", descricao: "Preenchimento do Registro Digital da alteração.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 13, chave: "EMISSAO_ALTERACAO_CONTRATUAL", titulo: "Emissão da Alteração Contratual", descricao: "Emissão do instrumento de alteração contratual.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 14, chave: "ENVIO_ALTERACAO_AUTENTIQUE", titulo: "Envio da Alteração Contratual via Autentique", descricao: "Envio da alteração contratual para assinatura eletrônica.", responsavel: RESPONSAVEL.AMBOS, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 15, chave: "CONFERENCIA_ASSINATURAS", titulo: "Conferência das Assinaturas", descricao: "Conferência das assinaturas da alteração contratual.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false },
+  { numero: 16, chave: "FINALIZACAO_REGISTRO_DIGITAL_JUCESP", titulo: "Finalização do Registro Digital JUCESP", descricao: "Finalização do Registro Digital com a alteração assinada.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_ELABORACAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 17, chave: "PROTOCOLO_REGISTRO_DIGITAL_ENVIADO", titulo: "Protocolo de Registro Digital JUCESP enviado", descricao: "Envio e registro do protocolo digital da JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 18, chave: "ACOMPANHAMENTO_REGISTRO_DIGITAL", titulo: "Acompanhamento do Registro Digital JUCESP", descricao: "Acompanhamento da análise do Registro Digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 19, chave: "TRATAMENTO_EXIGENCIA_JUCESP", titulo: "Tratamento de Exigência JUCESP (se houver)", descricao: "Tratamento de eventual exigência apresentada pela JUCESP.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: true, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 20, chave: "REGISTRO_DIGITAL_DEFERIDO", titulo: "Registro Digital JUCESP - DEFERIDO", descricao: "Confirmação do deferimento do Registro Digital.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 21, chave: "EMISSAO_DOCUMENTOS_APROVADA", titulo: "Emissão dos Documentos - Aprovada (Aguardar até 24h)", descricao: "Aguardar a liberação dos documentos oficiais após o deferimento.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.JUNTA_COMERCIAL },
+  { numero: 22, chave: "EMISSAO_DOCUMENTOS_OFICIAIS", titulo: "Emissão dos Documentos Oficiais (Contrato Consolidado, CNPJ atualizado)", descricao: "Emissão do contrato consolidado e do CNPJ atualizado.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false },
+  { numero: 23, chave: "ATUALIZACAO_INSCRICAO_ESTADUAL", titulo: "Atualização da Inscrição Estadual", descricao: "Atualização da inscrição estadual após o registro da alteração.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.SEFAZ },
+  { numero: 24, chave: "ATUALIZACAO_INSCRICAO_MUNICIPAL", titulo: "Atualização da Inscrição Municipal", descricao: "Atualização da inscrição municipal após o registro da alteração.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.PREFEITURA },
+  { numero: 25, chave: "ATUALIZACAO_REGIME_TRIBUTARIO", titulo: "Atualização de Regime Tributário", descricao: "Atualização do regime tributário quando exigida pela alteração.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "EM_REVISAO", opcional: false, orgao: ORGAO_EXTERNO.RECEITA_FEDERAL },
+  { numero: 26, chave: "ENVIO_DOCUMENTOS_CLIENTE", titulo: "Envio dos Documentos Oficiais ao Cliente", descricao: "Envio dos documentos atualizados ao cliente.", responsavel: RESPONSAVEL.COMERCIAL_CZ, statusDerivado: "ENTREGUE", opcional: false },
+  { numero: 27, chave: "PROCESSO_FINALIZADO", titulo: "PROCESSO FINALIZADO", descricao: "Encerramento do processo de alteração cadastral.", responsavel: RESPONSAVEL.ESCRITORIO, statusDerivado: "CONCLUIDO", opcional: false },
 ];
 
 /**

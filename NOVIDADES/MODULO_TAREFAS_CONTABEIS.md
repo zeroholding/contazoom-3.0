@@ -70,9 +70,9 @@ tem começo e fim. Cinco tipos:
 4. **Alteração** (contratual, endereço, sócios, atividade, capital)
 5. **Desenquadramento** (sair do Simples, mudar de regime, sair do MEI)
 
-Cada um tem etapas próprias. Abertura, baixa e desenquadramento já usam as etapas
-informadas pelo escritório; **regularização e alteração seguem como proposta** até o
-escritório mandar as etapas — ver seção 11.
+Cada um tem etapas próprias. Abertura, alteração, baixa e desenquadramento usam as
+etapas informadas pelo escritório na planilha "C.Z - Fluxos JUCESP";
+**regularização segue como proposta** até o escritório mandar as etapas — ver seção 11.
 
 ### 3.3 A diferença que muda o software
 
@@ -916,62 +916,83 @@ Três perguntas que preciso que o escritório responda:
 
 ## 11. Legalização — os cinco processos
 
-**Atenção: esta seção é a mais frágil do documento.** Não existe nada sobre legalização nos
-dois PDFs; tudo aqui vem da sua descrição verbal mais conhecimento geral de mercado. Trate
-como rascunho para o escritório corrigir, não como especificação.
+Abertura, alteração, baixa e desenquadramento abaixo são transcrição da planilha
+**"C.Z - Fluxos JUCESP"**, enviada pelo escritório. Regularização é o único fluxo
+que ainda permanece como proposta.
 
 ### 11.1 Abertura de CNPJ
 
-| Nº | Etapa proposta | Responsável | Órgão |
-|---|---|---|---|
-| 1 | Coleta de documentos e dados dos sócios | Comercial C.Z | — |
-| 2 | Definição de atividade (CNAE), regime e capital social | Ambos | — |
-| 3 | Consulta de viabilidade (nome e endereço) | Escritório | Junta / Prefeitura |
-| 4 | Registro do ato constitutivo | Escritório | Junta Comercial |
-| 5 | Obtenção do CNPJ | Escritório | Receita Federal |
-| 6 | Inscrição estadual, quando aplicável | Escritório | SEFAZ |
-| 7 | Inscrição municipal e alvará | Escritório | Prefeitura |
-| 8 | Enquadramento tributário | Escritório | Receita Federal |
-| 9 | Emissão de certificado digital | Escritório | Certificadora |
-| 10 | Habilitação para emissão de nota fiscal | Escritório | SEFAZ / Prefeitura |
-| 11 | Entrega da documentação ao cliente | Comercial C.Z | — |
-| 12 | Encerramento do processo | Escritório | — |
+**28 etapas**, conforme a planilha do escritório.
+
+| Nº | Etapa | Responsável |
+|---|---|---|
+| 1 | Formulário de Abertura CNPJ - Drive | Comercial C.Z |
+| 2 | Conferência das Atividades do CNPJ - Planner | Ambos |
+| 3 | Conferência de Documentos dos Sócios (RG/CNH, CPF, comprovante de endereço, estado civil) | Escritório |
+| 4 | Consulta de Nome Empresarial / Pesquisa de Nome | Escritório |
+| 5 | Processo de Viabilidade | Escritório |
+| 6 | Conferência do Processo de Viabilidade | Escritório |
+| 7 | Confirmação de Endereço (Zoneamento / IPTU / Uso do Solo) | Escritório |
+| 8 | DBE - Abertura CNPJ | Escritório |
+| 9 | Conferência do DBE - Abertura | Escritório |
+| 10 | Abertura Registro Digital JUCESP | Escritório |
+| 11 | Emissão da Taxa - JUCESP | Escritório |
+| 12 | Confirmação de Pagamento da Taxa JUCESP | Comercial C.Z |
+| 13 | Preenchimento do Registro Digital JUCESP | Escritório |
+| 14 | Emissão do Contrato Social - Junta Comercial | Escritório |
+| 15 | Envio do Contrato Social via Autentique | Ambos |
+| 16 | Conferência das Assinaturas (todos os sócios) | Escritório |
+| 17 | Finalização do Registro Digital JUCESP | Escritório |
+| 18 | Protocolo de Registro Digital JUCESP enviado | Escritório |
+| 19 | Acompanhamento do Registro Digital JUCESP | Escritório |
+| 20 | Tratamento de Exigência JUCESP (se houver) | Escritório |
+| 21 | Registro Digital JUCESP - DEFERIDO | Escritório |
+| 22 | Emissão dos Documentos - Aprovada (Aguardar até 24h) | Escritório |
+| 23 | Emissão dos Documentos Oficiais (CNPJ, NIRE) | Escritório |
+| 24 | Inscrição Estadual (se aplicável) | Escritório |
+| 25 | Inscrição Municipal | Escritório |
+| 26 | Enquadramento Tributário (Simples Nacional / Regime) | Escritório |
+| 27 | Envio dos Documentos Oficiais ao Cliente | Comercial C.Z |
+| 28 | PROCESSO FINALIZADO | Escritório ¹ |
+
+As etapas 20 e 24 podem ser marcadas como não aplicáveis. ¹ A planilha deixa o
+responsável final em branco; o sistema usa Escritório para permitir a conclusão.
 
 ### 11.2 Encerramento / baixa de CNPJ
 
-Estas 18 etapas são o fluxo INFORMADO PELO ESCRITÓRIO, não proposta: substituíram
-uma proposta de 9 etapas genéricas escrita quando não havia documento de origem.
+**26 etapas**, conforme a planilha do escritório.
 
-A fonte da verdade é `src/lib/tarefa-etapas.ts` (`ETAPAS_ENCERRAMENTO_CNPJ`). Esta
-tabela é registro do que foi pedido; divergindo as duas, vale o código, que é o que
-gera as etapas do processo.
+| Nº | Etapa | Responsável |
+|---|---|---|
+| 1 | Formulário de Baixa CNPJ - Sistema | Comercial C.Z |
+| 2 | Confirmação de Baixa - Comercial | Comercial C.Z |
+| 3 | Levantamento Prévio das Pendências (débitos federais, estaduais e municipais, obrigações acessórias) | Escritório |
+| 4 | Envio das Pendências ao Cliente | Comercial C.Z |
+| 5 | Confirmação sobre Pendências | Ambos |
+| 6 | Regularização das Pendências | Ambos |
+| 7 | Conferência de Documentos dos Sócios (RG/CNH, CPF, comprovante de endereço, estado civil) | Escritório |
+| 8 | DBE - Baixa CNPJ | Escritório |
+| 9 | Conferência do DBE - Baixa CNPJ | Escritório |
+| 10 | Abertura do Registro Digital JUCESP | Escritório |
+| 11 | Preenchimento do Registro Digital JUCESP | Escritório |
+| 12 | Emissão do Distrato Social | Escritório |
+| 13 | Envio do Distrato Social via Autentique | Ambos |
+| 14 | Conferência das Assinaturas (todos os sócios) | Escritório |
+| 15 | Finalização do Registro Digital JUCESP | Escritório |
+| 16 | Protocolo de Registro Digital JUCESP enviado | Escritório |
+| 17 | Acompanhamento do Registro Digital JUCESP | Escritório |
+| 18 | Tratamento de Exigência JUCESP (se houver) | Escritório |
+| 19 | Registro Digital JUCESP - DEFERIDO | Escritório |
+| 20 | Emissão dos Documentos - Aprovada (Aguardar até 24h) | Escritório |
+| 21 | Emissão dos Documentos Oficiais (Distrato registrado, comprovante de baixa do CNPJ) | Escritório |
+| 22 | Baixa da Inscrição Estadual | Escritório |
+| 23 | Baixa da Inscrição Municipal | Escritório |
+| 24 | Verificação da Situação Cadastral na Receita (confirmar CNPJ "Baixado") | Escritório |
+| 25 | Envio dos Documentos Oficiais ao Cliente | Comercial C.Z |
+| 26 | PROCESSO FINALIZADO | Escritório ¹ |
 
-| Nº | Etapa | Responsável | Órgão |
-|---|---|---|---|
-| 1 | Confirmação de Baixa - Comercial | Comercial C.Z | — |
-| 2 | Levantamento Prévio das Pendências | Escritório | — |
-| 3 | Envio das Pendências | Ambos | — |
-| 4 | Confirmação sobre Pendências | Comercial C.Z | — |
-| 5 | DBE - Baixa CNPJ | Escritório | Receita Federal |
-| 6 | Conferência - DBE Baixa CNPJ | Escritório | Receita Federal |
-| 7 | Abertura do Registro Digital JUCESP | Escritório | Junta Comercial |
-| 8 | Preenchimento do Registro Digital JUCESP | Escritório | Junta Comercial |
-| 9 | Emissão do Distrato Social | Escritório | Junta Comercial |
-| 10 | Envio do Distrato Social via Autentique | Ambos | — |
-| 11 | Finalização do Registro Digital JUCESP | Escritório | Junta Comercial |
-| 12 | Protocolo de Registro Digital JUCESP enviado | Escritório | Junta Comercial |
-| 13 | Acompanhamento do Registro Digital JUCESP | Escritório | Junta Comercial |
-| 14 | Registro Digital JUCESP - DEFERIDO | Escritório | Junta Comercial |
-| 15 | Emissão dos Documentos - Aprovada (Aguardar até 24h) | Escritório | Junta Comercial |
-| 16 | Emissão dos Documentos Oficiais | Escritório | — |
-| 17 | Envio dos Documentos Oficiais ao Cliente | Comercial C.Z | — |
-| 18 | PROCESSO FINALIZADO | Escritório | — |
-
-Duas etapas do fluxo antigo saíram sem substituto, por não estarem na lista do
-escritório: "Entrega das declarações finais" e "Baixa estadual e municipal". A
-leitura adotada é que a primeira acontece dentro das etapas 2 a 4 e a segunda dentro
-do DBE. **A confirmar com o escritório** — se as duas são passo separado na prática,
-voltam como etapa própria.
+A etapa 18 pode ser marcada como não aplicável. ¹ A planilha deixa o responsável
+final em branco; o sistema usa Escritório para permitir a conclusão.
 
 ### 11.3 Regularização de CNPJ
 
@@ -989,17 +1010,40 @@ voltam como etapa própria.
 
 ### 11.4 Alteração cadastral
 
-| Nº | Etapa proposta | Responsável |
+**27 etapas**, conforme a planilha do escritório.
+
+| Nº | Etapa | Responsável |
 |---|---|---|
-| 1 | Definição do que será alterado | Comercial C.Z |
-| 2 | Coleta de documentos da alteração | Comercial C.Z |
-| 3 | Elaboração do ato de alteração | Escritório |
-| 4 | Assinatura pelos sócios | Comercial C.Z |
-| 5 | Registro na Junta Comercial | Escritório |
-| 6 | Atualização na Receita Federal | Escritório |
-| 7 | Atualização estadual e municipal | Escritório |
-| 8 | Entrega dos documentos atualizados | Comercial C.Z |
-| 9 | Encerramento do processo | Escritório |
+| 1 | Base para Alteração - Sistema (tipo de alteração) | Comercial C.Z |
+| 2 | Confirmação da Alteração - Comercial | Comercial C.Z |
+| 3 | Conferência de Documentos (sócios novos / endereço / atividades) | Escritório |
+| 4 | Conferência das Atividades do CNPJ - Planner (se houver mudança de CNAE) | Ambos |
+| 5 | Processo de Viabilidade (se houver mudança de endereço ou atividade) | Escritório |
+| 6 | Conferência do Processo de Viabilidade | Escritório |
+| 7 | DBE - Alteração CNPJ | Escritório |
+| 8 | Conferência do DBE - Alteração | Escritório |
+| 9 | Abertura do Registro Digital JUCESP | Escritório |
+| 10 | Emissão da Taxa - JUCESP | Escritório |
+| 11 | Confirmação de Pagamento da Taxa JUCESP | Comercial C.Z |
+| 12 | Preenchimento do Registro Digital JUCESP | Escritório |
+| 13 | Emissão da Alteração Contratual | Escritório |
+| 14 | Envio da Alteração Contratual via Autentique | Ambos |
+| 15 | Conferência das Assinaturas | Escritório |
+| 16 | Finalização do Registro Digital JUCESP | Escritório |
+| 17 | Protocolo de Registro Digital JUCESP enviado | Escritório |
+| 18 | Acompanhamento do Registro Digital JUCESP | Escritório |
+| 19 | Tratamento de Exigência JUCESP (se houver) | Escritório |
+| 20 | Registro Digital JUCESP - DEFERIDO | Escritório |
+| 21 | Emissão dos Documentos - Aprovada (Aguardar até 24h) | Escritório |
+| 22 | Emissão dos Documentos Oficiais (Contrato Consolidado, CNPJ atualizado) | Escritório |
+| 23 | Atualização da Inscrição Estadual | Escritório |
+| 24 | Atualização da Inscrição Municipal | Escritório |
+| 25 | Atualização de Regime Tributário | Escritório |
+| 26 | Envio dos Documentos Oficiais ao Cliente | Comercial C.Z |
+| 27 | PROCESSO FINALIZADO | Escritório ¹ |
+
+As etapas 4, 5, 6 e 19 podem ser marcadas como não aplicáveis. ¹ A planilha deixa
+o responsável final em branco; o sistema usa Escritório para permitir a conclusão.
 
 ### 11.5 Desenquadramento
 
