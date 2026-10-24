@@ -49,6 +49,7 @@ import {
   type VinculoEmpresa,
 } from "./faturamento-regras";
 import { normalizarSerie } from "./faturamento-canais";
+import { totaisDaCompetencia } from "./faturamento-consulta";
 
 export const MAX_ARQUIVOS_POR_LOTE = 300;
 
@@ -1364,20 +1365,10 @@ export async function apurarCompetencia(
   await prisma.$transaction(async (tx) => {
     await travarCompetencia(tx, empresaId, ano, mes);
 
-    const agregado = await tx.documentoFiscal.aggregate({
-      where: {
-        empresaId,
-        ano,
-        mes,
-        contaFaturamento: true,
-        assinaturaValida: true,
-      },
-      _sum: { valorTotal: true },
-      _count: { _all: true },
-    });
-
-    const apurado = agregado._sum.valorTotal ?? new Prisma.Decimal(0);
-    const documentos = agregado._count._all;
+    // Vendas menos devoluções de venda do mês. Mesma conta do resumo da tela.
+    const totais = await totaisDaCompetencia(tx, empresaId, ano, mes);
+    const apurado = totais.liquido;
+    const documentos = totais.documentos;
     const agora = new Date();
 
     const existente = await tx.faturamentoMensal.findUnique({

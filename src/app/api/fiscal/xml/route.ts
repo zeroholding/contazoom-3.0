@@ -17,9 +17,12 @@ import { SEM_SERIE_MAPEADA, ehCanalValido, normalizarSerie } from "@/lib/faturam
 import {
   MOTIVO_EXCLUSAO,
   MOTIVO_EXCLUSAO_LABEL,
+  MOTIVO_QUE_ABATE,
+  motivoAbateFaturamento,
   type MotivoExclusao,
 } from "@/lib/faturamento-regras";
 import { parseCompetencia } from "@/lib/tarefa-status";
+import { garantirRegraFaturamentoAtual } from "@/lib/faturamento-regra-atual";
 
 export const runtime = "nodejs";
 
@@ -63,6 +66,9 @@ export async function GET(req: NextRequest) {
   }
 
   const contaParam = texto(searchParams.get("conta"));
+  if (contaParam && !["sim", "nao", "devolucao"].includes(contaParam)) {
+    return erro("Filtro de faturamento inválido.", 400, "CONTA_INVALIDA");
+  }
   const motivoExclusao = texto(searchParams.get("motivoExclusao"));
   if (
     motivoExclusao &&
@@ -84,6 +90,10 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(LIMITE_MAXIMO, limitRaw);
   const skip = (page - 1) * limit;
 
+  // Mesma garantia do resumo: a lista não pode mostrar "Entrada" numa devolução
+  // que o total do mês já está abatendo.
+  await garantirRegraFaturamentoAtual();
+
   const mapa = await carregarMapaSerieCanal(empresaId);
 
   const where: Prisma.DocumentoFiscalWhereInput = { empresaId };
@@ -93,9 +103,18 @@ export async function GET(req: NextRequest) {
     where.mes = competencia.mes;
   }
   if (situacao) where.situacao = situacao;
-  if (contaParam === "sim") where.contaFaturamento = true;
-  if (contaParam === "nao") where.contaFaturamento = false;
-  if (motivoExclusao) where.motivoExclusao = motivoExclusao;
+  // Condições em AND, e não atribuídas em `where.motivoExclusao`: "não somam" e o
+  // motivo escolhido no painel valem juntos, um não sobrescreve o outro.
+  const condicoes: Prisma.DocumentoFiscalWhereInput[] = [];
+  if (contaParam === "sim") condicoes.push({ contaFaturamento: true });
+  // "Não somam" é o que ficou fora da conta. Devolução de venda não fica fora: ela
+  // subtrai, e tem filtro próprio.
+  if (contaParam === "nao") {
+    condicoes.push({ contaFaturamento: false, motivoExclusao: { not: MOTIVO_QUE_ABATE } });
+  }
+  if (contaParam === "devolucao") condicoes.push({ motivoExclusao: MOTIVO_QUE_ABATE });
+  if (motivoExclusao) condicoes.push({ motivoExclusao });
+  if (condicoes.length > 0) where.AND = condicoes;
   if (texto(searchParams.get("conferencia")) === "sim") where.precisaConferencia = true;
 
   /*
@@ -188,6 +207,8 @@ export async function GET(req: NextRequest) {
     motivoExclusaoLabel: linha.motivoExclusao
       ? MOTIVO_EXCLUSAO_LABEL[linha.motivoExclusao as MotivoExclusao] ?? linha.motivoExclusao
       : null,
+    /** Devolução de venda: a tela mostra o valor negativo e o selo "Devolução". */
+    abateFaturamento: motivoAbateFaturamento(linha.motivoExclusao),
   }));
 
   return NextResponse.json({

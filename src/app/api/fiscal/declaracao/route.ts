@@ -11,6 +11,7 @@ import {
   emitirDeclaracao,
   serializarDeclaracao,
 } from "@/lib/declaracao-faturamento";
+import { garantirRegraFaturamentoAtual } from "@/lib/faturamento-regra-atual";
 
 export const runtime = "nodejs";
 
@@ -70,6 +71,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // A declaração congela os meses: antes, eles precisam estar na regra atual
+    // (devolução de venda abatida). Depois da primeira vez é promessa resolvida.
+    await garantirRegraFaturamentoAtual();
     const resultado = await emitirDeclaracao({
       empresaId,
       fim,

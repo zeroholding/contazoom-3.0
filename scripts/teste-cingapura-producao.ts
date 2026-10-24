@@ -52,6 +52,8 @@ for (const caminho of caminhos) {
 
 let notasQueSomam = 0;
 let totalCentavos = 0;
+let devolucoesQueAbatem = 0;
+let devolucoesCentavos = 0;
 for (const nota of notas) {
   const resultado = classificarFaturamento({
     modelo: nota.modelo,
@@ -67,6 +69,10 @@ for (const nota of notas) {
     notasQueSomam += 1;
     totalCentavos += Math.round(nota.valorTotal * 100);
   }
+  if (resultado.abateFaturamento) {
+    devolucoesQueAbatem += 1;
+    devolucoesCentavos += Math.round(nota.valorTotal * 100);
+  }
 }
 
 const resultado = {
@@ -79,9 +85,14 @@ const resultado = {
   canceladas: canceladas.size,
   notasQueSomam,
   total: totalCentavos / 100,
+  devolucoesQueAbatem,
+  devolucoes: devolucoesCentavos / 100,
+  liquido: (totalCentavos - devolucoesCentavos) / 100,
 };
 console.log(resultado);
 
+// As vendas continuam batendo AO CENTAVO com a pasta "NF-e de venda" do Mercado
+// Livre; as 5 notas da pasta "devolução" (1202/2202, R$ 2.182,00) abatem o mês.
 const esperado =
   resultado.arquivos === 822 &&
   resultado.notas === 458 &&
@@ -90,7 +101,10 @@ const esperado =
   resultado.erros === 0 &&
   resultado.canceladas === 3 &&
   resultado.notasQueSomam === 366 &&
-  resultado.total === 62514.16;
+  resultado.total === 62514.16 &&
+  resultado.devolucoesQueAbatem === 5 &&
+  resultado.devolucoes === 2182 &&
+  resultado.liquido === 60332.16;
 
 console.log(esperado ? "TUDO OK — aceitação real fechou ao centavo" : "FALHA — resultado divergiu da linha de base");
 process.exitCode = esperado ? 0 : 1;

@@ -7,9 +7,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { PAPEL, requirePapel } from "@/lib/api-guard";
 import prisma from "@/lib/prisma";
+import { totaisDaCompetencia } from "@/lib/faturamento-consulta";
+import { garantirRegraFaturamentoAtual } from "@/lib/faturamento-regra-atual";
 import { parseCompetencia } from "@/lib/tarefa-status";
 
 export const runtime = "nodejs";
@@ -43,6 +44,9 @@ export async function POST(req: NextRequest) {
   const { ano, mes } = referencia;
 
   try {
+    // O valor liberado sai dos documentos: eles precisam estar na regra atual.
+    await garantirRegraFaturamentoAtual();
+
     const resultado = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`faturamento:${empresaId}:${ano}:${mes}`}))::text AS "locked"`;
 
@@ -52,18 +56,10 @@ export async function POST(req: NextRequest) {
       if (!mensal) return { tipo: "NAO_ENCONTRADO" as const, mensal: null };
       if (!mensal.congeladoEm) return { tipo: "JA_LIBERADO" as const, mensal };
 
-      const agregado = await tx.documentoFiscal.aggregate({
-        where: {
-          empresaId,
-          ano,
-          mes,
-          contaFaturamento: true,
-          assinaturaValida: true,
-        },
-        _sum: { valorTotal: true },
-        _count: { _all: true },
-      });
-      const apurado = agregado._sum.valorTotal ?? new Prisma.Decimal(0);
+      // Mesma conta da apuração mensal: vendas menos devoluções de venda. Somar só
+      // as vendas aqui desfazia o abatimento justamente no mês que foi revisado.
+      const totais = await totaisDaCompetencia(tx, empresaId, ano, mes);
+      const apurado = totais.liquido;
       const detalhe = `Revisão após declaração emitida: ${motivo}`;
 
       const atualizado = await tx.faturamentoMensal.update({
@@ -72,7 +68,7 @@ export async function POST(req: NextRequest) {
           origem: "XML",
           valor: apurado,
           valorApurado: apurado,
-          documentos: agregado._count._all,
+          documentos: totais.documentos,
           apuradoEm: new Date(),
           observacao: detalhe,
           congeladoEm: null,

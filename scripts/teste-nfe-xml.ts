@@ -26,6 +26,7 @@ import {
 import {
   MOTIVO_EXCLUSAO,
   classificarFaturamento,
+  ehCfopDeDevolucaoDeVenda,
   ehCfopDeVenda,
   type EntradaClassificacao,
 } from "../src/lib/faturamento-regras";
@@ -441,7 +442,7 @@ const casos: Array<[string, Partial<EntradaClassificacao>, string]> = [
   ["nota de compra não soma", { vinculo: "DESTINATARIO" }, MOTIVO_EXCLUSAO.TERCEIRO],
   ["emitente fora da carteira não soma", { vinculo: "NENHUM" }, MOTIVO_EXCLUSAO.EMPRESA_NAO_VINCULADA],
   ["entrada não soma", { tipoOperacao: "0" }, MOTIVO_EXCLUSAO.ENTRADA],
-  ["devolução não soma", { finalidade: "4" }, MOTIVO_EXCLUSAO.DEVOLUCAO],
+  ["devolução de compra (saída) não soma", { finalidade: "4" }, MOTIVO_EXCLUSAO.DEVOLUCAO],
   ["ajuste não soma", { finalidade: "3" }, MOTIVO_EXCLUSAO.AJUSTE],
   ["sem CFOP não soma", { cfops: [] }, MOTIVO_EXCLUSAO.SEM_CFOP],
   ["remessa para o FULL não soma", { cfops: ["6949"] }, MOTIVO_EXCLUSAO.FORA_DA_FAIXA_DE_VENDA],
@@ -489,6 +490,85 @@ check(
   "vínculo tem precedência sobre CFOP de entrada",
   classificarFaturamento(comoVenda({ vinculo: "DESTINATARIO", cfops: ["1202"] })).motivoExclusao ===
     MOTIVO_EXCLUSAO.TERCEIRO,
+);
+
+console.log("\n10) Devolução de venda abate o mês");
+
+check("1202 é devolução de venda", ehCfopDeDevolucaoDeVenda("1202"));
+check("2202 é devolução de venda", ehCfopDeDevolucaoDeVenda("2202"));
+check("1201 é devolução de venda (produção própria)", ehCfopDeDevolucaoDeVenda("1201"));
+check("1208 NÃO é (devolução de transferência)", !ehCfopDeDevolucaoDeVenda("1208"));
+check("1411 NÃO é (devolve venda com ST, que não soma)", !ehCfopDeDevolucaoDeVenda("1411"));
+check("1949 NÃO é (retorno do FULL)", !ehCfopDeDevolucaoDeVenda("1949"));
+check("5202 NÃO é (devolução de compra, saída)", !ehCfopDeDevolucaoDeVenda("5202"));
+
+/** Como as cinco devoluções reais da CINGAPURA: entrada, finalidade 4, CFOP 1202/2202. */
+const comoDevolucao = (mudancas: Partial<EntradaClassificacao>) =>
+  classificarFaturamento(comoVenda({ tipoOperacao: "0", finalidade: "4", cfops: ["1202"], ...mudancas }));
+
+const devolucaoReal = comoDevolucao({});
+check(
+  "devolução de venda (1202) ABATE e não soma",
+  devolucaoReal.abateFaturamento === true &&
+    devolucaoReal.contaFaturamento === false &&
+    devolucaoReal.motivoExclusao === MOTIVO_EXCLUSAO.DEVOLUCAO_VENDA &&
+    devolucaoReal.precisaConferencia === false,
+  JSON.stringify(devolucaoReal),
+);
+check(
+  "devolução interestadual (2202) ABATE",
+  comoDevolucao({ cfops: ["2202"] }).abateFaturamento === true,
+);
+const mista = comoDevolucao({ cfops: ["1202", "1949"] });
+check(
+  "devolução com item de outra operação NÃO abate e pede conferência",
+  mista.abateFaturamento === false &&
+    mista.motivoExclusao === MOTIVO_EXCLUSAO.DEVOLUCAO_MISTA &&
+    mista.precisaConferencia === true,
+  JSON.stringify(mista),
+);
+check(
+  "entrada com finalidade 4 só de retorno (1949) é ENTRADA e não abate",
+  comoDevolucao({ cfops: ["1949"] }).motivoExclusao === MOTIVO_EXCLUSAO.ENTRADA &&
+    comoDevolucao({ cfops: ["1949"] }).abateFaturamento === false,
+);
+check(
+  "devolução de venda com ST (1411) não abate: a venda 5.4xx nunca somou",
+  comoDevolucao({ cfops: ["1411"] }).abateFaturamento === false,
+);
+check(
+  "retorno do FULL (entrada, finalidade 1, 1949) segue ENTRADA",
+  classificarFaturamento(comoVenda({ tipoOperacao: "0", finalidade: "1", cfops: ["1949"] }))
+    .motivoExclusao === MOTIVO_EXCLUSAO.ENTRADA,
+);
+check(
+  "entrada normal com CFOP de devolução (finalidade 1) não abate",
+  classificarFaturamento(comoVenda({ tipoOperacao: "0", finalidade: "1", cfops: ["1202"] }))
+    .abateFaturamento === false,
+);
+check(
+  "devolução cancelada não abate",
+  comoDevolucao({ cancelada: true }).motivoExclusao === MOTIVO_EXCLUSAO.CANCELADA &&
+    comoDevolucao({ cancelada: true }).abateFaturamento === false,
+);
+check(
+  "devolução não autorizada não abate",
+  comoDevolucao({ statusSefaz: "301" }).abateFaturamento === false,
+);
+check(
+  "devolução recebida de terceiro não abate (fica TERCEIRO)",
+  comoDevolucao({ vinculo: "DESTINATARIO" }).motivoExclusao === MOTIVO_EXCLUSAO.TERCEIRO,
+);
+check(
+  "devolução de COMPRA (saída, finalidade 4, 5202) não abate",
+  classificarFaturamento(comoVenda({ finalidade: "4", cfops: ["5202"] })).motivoExclusao ===
+    MOTIVO_EXCLUSAO.DEVOLUCAO &&
+    classificarFaturamento(comoVenda({ finalidade: "4", cfops: ["5202"] })).abateFaturamento === false,
+);
+check(
+  "só a devolução de venda abate: nenhum outro motivo da tabela abate",
+  casos.every(([, mudancas]) => classificarFaturamento(comoVenda(mudancas)).abateFaturamento === false) &&
+    classificarFaturamento(VENDA_OK).abateFaturamento === false,
 );
 
 console.log(`\n${falhas === 0 ? "TUDO OK" : `${falhas} FALHA(S)`}`);

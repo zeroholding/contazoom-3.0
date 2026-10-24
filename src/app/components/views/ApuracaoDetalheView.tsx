@@ -149,10 +149,13 @@ type RespostaUsuarios = { usuarios: UsuarioInterno[]; total: number };
 
 type EvidenciaFaturamento = {
   kpis: {
+    /** Líquido: vendas menos devoluções de venda do mês. */
     apurado: number;
     arquivosLidos: number;
     notasValidas: number;
     notasCanceladas: number;
+    notasDevolucao?: number;
+    devolucoes?: number;
   };
   faturamento: { valor: number; origem: string } | null;
 };
@@ -998,6 +1001,19 @@ export default function ApuracaoDetalheView({ id }: { id: string }) {
                   </div>
                 ))}
               </dl>
+
+              {(evidenciaXml.faturamento.kpis.notasDevolucao ?? 0) > 0 && (
+                <p className="flex items-start gap-2 rounded-[10px] border border-sky-200 bg-sky-50/70 px-3 py-2.5 text-[12px] leading-snug text-sky-950">
+                  <Icone nome="Info" className="mt-px h-4 w-4 shrink-0" />
+                  <span>
+                    O apurado já desconta {evidenciaXml.faturamento.kpis.notasDevolucao}{" "}
+                    {evidenciaXml.faturamento.kpis.notasDevolucao === 1
+                      ? "devolução de venda"
+                      : "devoluções de venda"}{" "}
+                    deste mês (−{real(evidenciaXml.faturamento.kpis.devolucoes ?? 0)}).
+                  </span>
+                </p>
+              )}
 
               {evidenciaXml.series.naoMapeadas.length > 0 && (
                 <p className="flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50/70 px-3 py-2.5 text-[12px] leading-snug text-amber-900">

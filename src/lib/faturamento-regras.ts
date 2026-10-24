@@ -58,20 +58,50 @@ export const STATUS_AUTORIZADA = "100";
  */
 export const PREFIXOS_CFOP_VENDA = ["51", "61"] as const;
 
+/**
+ * CFOPs de devolução de VENDA: o cliente devolveu a mercadoria e a própria
+ * empresa emitiu a nota de entrada.
+ *
+ * São as devoluções das vendas que a apuração soma (grupos 5.1 e 6.1): 1.201 e
+ * 2.201 (produção própria), 1.202 e 2.202 (mercadoria de terceiros), e as de Zona
+ * Franca/ALC, 1.203, 1.204, 2.203 e 2.204. Nos XMLs reais (Mercado Livre, ago/2026)
+ * só aparecem 1.202 e 2.202, tanto em "Devolução de mercadorias" quanto em "Retorno
+ * de mercadoria não entregue" — nos dois casos a venda foi desfeita.
+ *
+ * LISTA FECHADA, de propósito. 1.208/1.209 devolvem TRANSFERÊNCIA, não venda. E
+ * 1.410/1.411 devolvem venda com substituição tributária (5.4xx), que a apuração
+ * não soma: abater a devolução de algo que nunca entrou no total tiraria o valor
+ * de outra venda.
+ */
+export const CFOPS_DEVOLUCAO_VENDA = [
+  "1201",
+  "1202",
+  "1203",
+  "1204",
+  "2201",
+  "2202",
+  "2203",
+  "2204",
+] as const;
+
 /** Modelos que a apuração soma. CT-e (57) e NFS-e (13) ficam fora por ora. */
 export const MODELOS_APURADOS = ["55", "65"] as const;
 
 /**
  * Versão da regra.
  *
- * Gravada em cada documento classificado. Quando a regra mudar — e vai mudar na
- * primeira revisão do escritório — o conjunto a reprocessar é `versaoRegra <
- * VERSAO_REGRA_FATURAMENTO`, em lote por número de linhas. Sem isso, mudar a
- * regra exigiria reimportar XML que ninguém tem mais.
+ * Gravada em cada documento classificado. Quando a regra mudar, o conjunto a
+ * reprocessar é `versaoRegra < VERSAO_REGRA_FATURAMENTO`. Sem isso, mudar a regra
+ * exigiria reimportar XML que ninguém tem mais.
  *
  * Mesmo mecanismo do `PRAZO_ORIGEM_AUSENTE` versionado da Expedição.
+ *
+ * v2 (out/2026, pedido do escritório): devolução de venda passa a ABATER o
+ * faturamento do mês. Na v1 ela caía em ENTRADA e só ficava fora da soma. É a
+ * única diferença entre as versões; os documentos já importados são levados para
+ * a v2 por `src/lib/faturamento-regra-atual.ts`.
  */
-export const VERSAO_REGRA_FATURAMENTO = 1;
+export const VERSAO_REGRA_FATURAMENTO = 2;
 
 /* --------------------------------- Motivos -------------------------------- */
 
@@ -81,6 +111,11 @@ export const MOTIVO_EXCLUSAO = {
   NAO_AUTORIZADA: "NAO_AUTORIZADA",
   CANCELADA: "CANCELADA",
   ENTRADA: "ENTRADA",
+  /** Devolução de VENDA: abate o faturamento do mês (ver `abateFaturamento`). */
+  DEVOLUCAO_VENDA: "DEVOLUCAO_VENDA",
+  /** Devolução de venda junto de item de outra operação: não abate, pede conferência. */
+  DEVOLUCAO_MISTA: "DEVOLUCAO_MISTA",
+  /** Devolução de COMPRA: a empresa devolve ao fornecedor. Saída que não é venda. */
   DEVOLUCAO: "DEVOLUCAO",
   AJUSTE: "AJUSTE",
   EMPRESA_NAO_VINCULADA: "EMPRESA_NAO_VINCULADA",
@@ -106,7 +141,9 @@ export const MOTIVO_EXCLUSAO_LABEL: Record<MotivoExclusao, string> = {
   NAO_AUTORIZADA: "Não autorizada pela SEFAZ: fiscalmente não existe",
   CANCELADA: "Cancelada por evento posterior",
   ENTRADA: "Nota de entrada: é compra ou retorno, não faturamento",
-  DEVOLUCAO: "Devolução de mercadoria",
+  DEVOLUCAO_VENDA: "Devolução de venda: abatida do faturamento do mês",
+  DEVOLUCAO_MISTA: "Devolução com itens de venda e de outra operação: precisa de conferência",
+  DEVOLUCAO: "Devolução de compra ao fornecedor: saída que não é venda",
   AJUSTE: "Nota de ajuste, sem receita nova",
   EMPRESA_NAO_VINCULADA: "O CNPJ emitente não está cadastrado na carteira",
   TERCEIRO: "Nota recebida de outra empresa: é compra",
@@ -120,6 +157,19 @@ export const MOTIVO_EXCLUSAO_LABEL: Record<MotivoExclusao, string> = {
 export const MOTIVOS_QUE_RECUSAM_IMPORTACAO: readonly MotivoExclusao[] = [
   MOTIVO_EXCLUSAO.HOMOLOGACAO,
 ];
+
+/**
+ * O único motivo que SUBTRAI do total. Toda soma do mês é "vendas que contam
+ * menos documentos com este motivo" — ver `totaisDaCompetencia`.
+ *
+ * Cancelamento posterior troca o motivo para CANCELADA, e assim a devolução
+ * cancelada deixa de abater sem regra extra.
+ */
+export const MOTIVO_QUE_ABATE: MotivoExclusao = MOTIVO_EXCLUSAO.DEVOLUCAO_VENDA;
+
+export function motivoAbateFaturamento(motivo: string | null | undefined): boolean {
+  return motivo === MOTIVO_QUE_ABATE;
+}
 
 /* ------------------------------ Classificação ----------------------------- */
 
@@ -159,11 +209,21 @@ export type ResultadoClassificacao = {
   precisaConferencia: boolean;
   /** Quando true, a importação deve recusar o arquivo em vez de gravá-lo. */
   recusarImportacao: boolean;
+  /**
+   * Devolução de venda: não soma e ainda SUBTRAI do mês. `contaFaturamento`
+   * continua false (o banco exige motivo quando a nota não conta).
+   */
+  abateFaturamento: boolean;
 };
 
 /** true quando o CFOP pertence ao grupo de venda. */
 export function ehCfopDeVenda(cfop: string): boolean {
   return PREFIXOS_CFOP_VENDA.some((prefixo) => cfop.startsWith(prefixo));
+}
+
+/** true quando o CFOP é devolução de uma venda que a apuração soma. */
+export function ehCfopDeDevolucaoDeVenda(cfop: string): boolean {
+  return (CFOPS_DEVOLUCAO_VENDA as readonly string[]).includes(cfop);
 }
 
 /**
@@ -186,6 +246,7 @@ export function classificarFaturamento(
     motivoExclusao: motivo,
     precisaConferencia: extras?.precisaConferencia ?? false,
     recusarImportacao: MOTIVOS_QUE_RECUSAM_IMPORTACAO.includes(motivo),
+    abateFaturamento: motivoAbateFaturamento(motivo),
   });
 
   // 1. Nota de teste. Vem primeiro porque é a única que não deve nem ser gravada:
@@ -227,14 +288,42 @@ export function classificarFaturamento(
     return excluir(MOTIVO_EXCLUSAO.EMPRESA_NAO_VINCULADA);
   }
 
-  // 6. Entrada emitida pela própria empresa: devolução a fornecedor, remessa.
+  /*
+   * 6. Devolução de VENDA: o cliente devolveu e a própria empresa emitiu a nota
+   * de entrada (tpNF 0, finNFe 4, CFOP 1.202/2.202...). Abate o mês da devolução.
+   *
+   * Vem ANTES da regra de entrada, que a engolia: na v1 as cinco devoluções reais
+   * da base (R$ 2.182,00 em ago/2026) caíam em ENTRADA, ao lado do retorno do FULL
+   * (tpNF 0, finNFe 1, CFOP 1.949), e o mês ficava maior do que a receita.
+   *
+   * O par tpNF + finNFe não basta: entrada com finalidade de devolução também
+   * aparece em retorno de remessa. Quem decide é o CFOP, pela lista fechada.
+   * Devolução de venda junto de item de outra operação não abate e pede
+   * conferência, pelo mesmo motivo do CFOP misto: ratear o vNF por item seria
+   * estimativa apresentada como fato.
+   */
+  if (
+    entrada.tipoOperacao === OPERACAO_ENTRADA &&
+    entrada.finalidade === FINALIDADE_DEVOLUCAO
+  ) {
+    const deDevolucaoDeVenda = entrada.cfops.filter(ehCfopDeDevolucaoDeVenda);
+    if (deDevolucaoDeVenda.length > 0 && deDevolucaoDeVenda.length === entrada.cfops.length) {
+      return excluir(MOTIVO_EXCLUSAO.DEVOLUCAO_VENDA);
+    }
+    if (deDevolucaoDeVenda.length > 0) {
+      return excluir(MOTIVO_EXCLUSAO.DEVOLUCAO_MISTA, { precisaConferencia: true });
+    }
+  }
+
+  // 7. Entrada emitida pela própria empresa que não é devolução de venda: compra,
+  // retorno de remessa (FULL), devolução de venda com ST.
   if (entrada.tipoOperacao === OPERACAO_ENTRADA) {
     return excluir(MOTIVO_EXCLUSAO.ENTRADA);
   }
 
-  // 7. Finalidade. Complementar SOMA (é complemento de valor de nota anterior);
-  // devolução e ajuste não. Devolução aqui não ABATE o mês — é decisão pendente do
-  // escritório (seção 10, item 2 do plano), e abater sem aval mudaria o número.
+  // 8. Finalidade. Complementar SOMA (é complemento de valor de nota anterior);
+  // ajuste não. Devolução numa nota de SAÍDA é a empresa devolvendo ao fornecedor:
+  // não é venda, mas também não desfaz venda nenhuma, então não abate.
   if (entrada.finalidade === FINALIDADE_DEVOLUCAO) {
     return excluir(MOTIVO_EXCLUSAO.DEVOLUCAO);
   }
@@ -242,7 +331,7 @@ export function classificarFaturamento(
     return excluir(MOTIVO_EXCLUSAO.AJUSTE);
   }
 
-  // 8. CFOP: o discriminador que a Fase 0 provou necessário.
+  // 9. CFOP: o discriminador que a Fase 0 provou necessário.
   if (entrada.cfops.length === 0) {
     return excluir(MOTIVO_EXCLUSAO.SEM_CFOP);
   }
@@ -271,5 +360,6 @@ export function classificarFaturamento(
     motivoExclusao: null,
     precisaConferencia: false,
     recusarImportacao: false,
+    abateFaturamento: false,
   };
 }

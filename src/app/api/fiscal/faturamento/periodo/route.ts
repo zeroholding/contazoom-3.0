@@ -6,6 +6,7 @@ import {
   ErroDeclaracaoFaturamento,
   carregarPeriodo,
 } from "@/lib/declaracao-faturamento";
+import { garantirRegraFaturamentoAtual } from "@/lib/faturamento-regra-atual";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,8 @@ export async function GET(req: NextRequest) {
   if (!fim) return erro("Informe o mês final.", 400, "PERIODO_OBRIGATORIO");
 
   try {
+    // Os meses da declaração precisam estar na regra atual (devolução abatida).
+    await garantirRegraFaturamentoAtual();
     return NextResponse.json(await carregarPeriodo(empresaId, fim));
   } catch (falha) {
     if (falha instanceof ErroDeclaracaoFaturamento) {

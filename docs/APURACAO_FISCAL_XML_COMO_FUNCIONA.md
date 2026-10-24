@@ -331,8 +331,10 @@ disponível de que a regra agora está certa.
 | Cancelada por evento | Não | `CANCELADA` |
 | Nota recebida de terceiro (empresa é destinatária) | Não | `TERCEIRO` |
 | CNPJ do emitente fora da carteira | Não | `EMPRESA_NAO_VINCULADA` |
-| Entrada (`tpNF = 0`) | Não | `ENTRADA` |
-| Devolução (`finNFe = 4`) | Não | `DEVOLUCAO` |
+| **Devolução de venda** (`tpNF = 0`, `finNFe = 4`, todo CFOP em 1.201–1.204 / 2.201–2.204) | **Subtrai** do mês em que foi emitida | `DEVOLUCAO_VENDA` |
+| Devolução de venda junto de item de outra operação | Não, pede conferência | `DEVOLUCAO_MISTA` |
+| Outra entrada (`tpNF = 0`): compra, retorno do FULL, devolução com ST | Não | `ENTRADA` |
+| Devolução de compra (saída com `finNFe = 4`) | Não | `DEVOLUCAO` |
 | Ajuste (`finNFe = 3`) | Não | `AJUSTE` |
 | Sem CFOP nos itens | Não | `SEM_CFOP` |
 | **CFOP fora de 51xx / 61xx** | Não | `FORA_DA_FAIXA_DE_VENDA` |
@@ -344,6 +346,30 @@ disponível de que a regra agora está certa.
 mesmo tempo, e o motivo gravado é o primeiro que casa. A ordem vai do fato mais
 grave e mais acionável para o mais rotineiro: quem vê "nota de teste" sabe que
 subiu a pasta errada, enquanto "fora da faixa de venda" é esperado todo mês.
+
+**Devolução de venda (regra v2, out/2026).** O apurado do mês é **vendas que somam
+menos devoluções de venda emitidas no mês** (`totaisDaCompetencia`, em
+`src/lib/faturamento-consulta.ts`; a apuração, o resumo, o valor manual com origem
+XML e a liberação para revisão usam a mesma função).
+
+- Abate no mês **da devolução**, não no da venda original: é quando a receita foi
+  desfeita, e o mês da venda pode já estar numa declaração.
+- Se as devoluções passarem das vendas, o mês fica em **R$ 0,00** e a tela mostra
+  o excedente. Não há transporte automático para o mês seguinte.
+- A lista mostra a devolução com o selo "Devolução" e o valor negativo, e tem o
+  filtro "Devoluções (abatem)".
+- Lista fechada de CFOP: 1.208/1.209 devolvem transferência e 1.410/1.411 devolvem
+  venda com ST (5.4xx), que a apuração não soma.
+- **Devolução emitida pelo cliente** (nota do próprio cliente, CFOP 5.202/6.202)
+  **não entra**: é nota de terceiro e continua ignorada como `TERCEIRO`. Na base
+  real não há nenhuma.
+- **Documentos já importados** são levados para a v2 sozinhos, ao subir o servidor
+  (`src/lib/faturamento-regra-atual.ts`): reclassifica as devoluções gravadas como
+  `ENTRADA` e reapura os meses. Mês **congelado** por declaração mantém o valor
+  declarado e passa a mostrar a divergência; para atualizar, liberar para revisão.
+
+Na CINGAPURA, agosto/2026: R$ 62.514,16 em 366 vendas − R$ 2.182,00 em 5
+devoluções (1.202/2.202) = **R$ 60.332,16** apurados.
 
 ### 6.3 Por que CFOP, e por que whitelist
 
@@ -685,6 +711,7 @@ cancelamentos 135/155 — já fechou:
 ```
 822 arquivos · 458 NF-e · 361 CT-e · 3 eventos
 3 cancelamentos · 366 notas somando · R$ 62.514,16 · 0 erros
+5 devoluções de venda · R$ 2.182,00 abatidos · R$ 60.332,16 apurados (regra v2)
 ```
 
 Esse resultado bate ao centavo com o diagnóstico independente e com a
@@ -731,12 +758,13 @@ prova e não é.
 
 Nenhuma é técnica, e todas mudam o número.
 
-0. **Os R$ 62.514,16 de agosto/2026 da CINGAPURA batem com o PGDAS-D?** É o teste
-   que valida o módulo inteiro.
+0. **Os R$ 60.332,16 de agosto/2026 da CINGAPURA batem com o PGDAS-D?** São
+   R$ 62.514,16 de vendas menos R$ 2.182,00 de devoluções. É o teste que valida o
+   módulo inteiro.
 1. **A faixa de CFOP 51xx/61xx é a definição de venda** para o resto da carteira,
    ou só para o Mercado Livre?
-2. **Devolução abate o faturamento do mês?** Hoje não abate — há escritório que
-   abate e há que não.
+2. ~~**Devolução abate o faturamento do mês?**~~ **Respondida (out/2026): abate, no
+   mês em que a devolução foi emitida.** Ver 6.2.
 3. **NFC-e entra no mesmo total da NF-e**, ou separado?
 4. **Faturamento é por emissão ou por competência de escrituração?** Hoje usa
    `dhEmi`. Nota emitida em 31/01 e escriturada em fevereiro é o caso de borda.

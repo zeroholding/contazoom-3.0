@@ -21,8 +21,10 @@ import {
   competenciasComDocumento,
   resumirForaDoFaturamento,
   resumirPorCanal,
+  totaisDaCompetencia,
 } from "@/lib/faturamento-consulta";
 import { MOTIVO_EXCLUSAO_LABEL, type MotivoExclusao } from "@/lib/faturamento-regras";
+import { garantirRegraFaturamentoAtual } from "@/lib/faturamento-regra-atual";
 import { competenciaChave, competenciaLabel, parseCompetencia } from "@/lib/tarefa-status";
 
 export const runtime = "nodejs";
@@ -56,6 +58,10 @@ export async function GET(req: NextRequest) {
     return erro("Empresa não encontrada.", 404, "EMPRESA_NAO_ENCONTRADA");
   }
 
+  // Documentos importados com regra antiga são atualizados uma vez por processo,
+  // antes da primeira leitura. Depois disso é só uma promessa já resolvida.
+  await garantirRegraFaturamentoAtual();
+
   const disponiveis = await competenciasComDocumento(empresaId);
 
   /*
@@ -78,7 +84,17 @@ export async function GET(req: NextRequest) {
       empresa,
       competencia: null,
       competenciasDisponiveis: [],
-      kpis: { apurado: 0, arquivosLidos: 0, notasValidas: 0, notasCanceladas: 0, precisamConferencia: 0 },
+      kpis: {
+        apurado: 0,
+        vendas: 0,
+        devolucoes: 0,
+        notasDevolucao: 0,
+        excedenteDevolucao: 0,
+        arquivosLidos: 0,
+        notasValidas: 0,
+        notasCanceladas: 0,
+        precisamConferencia: 0,
+      },
       faturamento: null,
       canais: [],
       foraDoFaturamento: [],
@@ -92,7 +108,7 @@ export async function GET(req: NextRequest) {
   const mapa = await carregarMapaSerieCanal(empresaId);
 
   const [
-    somaValida,
+    totais,
     totalDocumentos,
     totalIgnorados,
     totalEventos,
@@ -103,17 +119,7 @@ export async function GET(req: NextRequest) {
     fora,
     importacoes,
   ] = await Promise.all([
-      prisma.documentoFiscal.aggregate({
-        where: {
-          empresaId,
-          ano,
-          mes,
-          contaFaturamento: true,
-          assinaturaValida: true,
-        },
-        _sum: { valorTotal: true },
-        _count: { _all: true },
-      }),
+      totaisDaCompetencia(prisma, empresaId, ano, mes),
       prisma.documentoFiscal.count({ where: { empresaId, ano, mes } }),
       prisma.arquivoFiscalIgnorado.count({ where: { empresaId, ano, mes } }),
       prisma.eventoFiscal.count({ where: { empresaId, ano, mes } }),
@@ -150,11 +156,16 @@ export async function GET(req: NextRequest) {
       texto: competenciaLabel(c.ano, c.mes),
     })),
     kpis: {
-      apurado: Number(somaValida._sum.valorTotal ?? 0),
+      // Líquido: vendas que somam menos as devoluções de venda do mês.
+      apurado: Number(totais.liquido),
+      vendas: Number(totais.vendas),
+      devolucoes: Number(totais.devolucoes),
+      notasDevolucao: totais.notasDevolucao,
+      excedenteDevolucao: Number(totais.excedenteDevolucao),
       // "Arquivos lidos" conta TODO documento da competência, não só os que somam.
       // É o número que dá sentido ao painel "fora do faturamento".
       arquivosLidos: totalDocumentos + totalIgnorados + totalEventos,
-      notasValidas: somaValida._count._all,
+      notasValidas: totais.notasVenda,
       notasCanceladas: canceladas,
       precisamConferencia: conferencia,
     },
@@ -267,6 +278,9 @@ export async function PUT(req: NextRequest) {
   const { ano, mes } = referencia;
 
   try {
+    // O apurado gravado junto sai dos documentos: eles precisam estar na regra atual.
+    await garantirRegraFaturamentoAtual();
+
     const desfecho = await prisma.$transaction(async (tx) => {
       // Mesmo lock de `apurarCompetencia`: valor manual e reapuração não podem
       // se ultrapassar. Sem isto, um import em andamento podia sobrescrever o
@@ -285,18 +299,9 @@ export async function PUT(req: NextRequest) {
       });
       if (existente?.congeladoEm) return { congelada: true as const, salvo: null };
 
-      const apurado = await tx.documentoFiscal.aggregate({
-        where: {
-          empresaId: empresa,
-          ano,
-          mes,
-          contaFaturamento: true,
-          assinaturaValida: true,
-        },
-        _sum: { valorTotal: true },
-        _count: { _all: true },
-      });
-      const valorApurado = apurado._sum.valorTotal ?? new Prisma.Decimal(0);
+      // Mesma conta da apuração mensal: vendas menos devoluções de venda.
+      const totais = await totaisDaCompetencia(tx, empresa, ano, mes);
+      const valorApurado = totais.liquido;
 
       // Origem XML nunca aceita valor arbitrário do cliente: o número vem apenas
       // da agregação feita sob o mesmo lock.
@@ -305,7 +310,7 @@ export async function PUT(req: NextRequest) {
         origem: origemFinal,
         valor: valorFinal,
         valorApurado,
-        documentos: apurado._count._all,
+        documentos: totais.documentos,
         apuradoEm: new Date(),
         observacao: origemFinal === "XML" ? null : justificativa,
         definidoPorId: sessao.userId,

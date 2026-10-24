@@ -8,7 +8,9 @@
  * o tipo de defeito que ninguém consegue reproduzir.
  */
 
+import { Prisma } from "@prisma/client";
 import prisma from "./prisma";
+import { MOTIVO_QUE_ABATE } from "./faturamento-regras";
 import {
   CANAL_COR,
   CANAL_LABEL,
@@ -20,6 +22,76 @@ import {
   normalizarSerie,
   type Canal,
 } from "./faturamento-canais";
+
+/* -------------------------------------------------------------------------- */
+/*                         Total da competência                               */
+/* -------------------------------------------------------------------------- */
+
+export type TotaisCompetencia = {
+  /** Soma das notas de venda que contam: o bruto do mês. */
+  vendas: Prisma.Decimal;
+  notasVenda: number;
+  /** Soma das devoluções de venda emitidas no mês, que abatem o bruto. */
+  devolucoes: Prisma.Decimal;
+  notasDevolucao: number;
+  /** vendas − devoluções, nunca abaixo de zero. É o valor apurado. */
+  liquido: Prisma.Decimal;
+  /** Quanto as devoluções passaram das vendas. Zero no caso normal. */
+  excedenteDevolucao: Prisma.Decimal;
+  /** Documentos que compõem o líquido: vendas e devoluções. */
+  documentos: number;
+};
+
+/** Cliente do Prisma ou transação: a apuração calcula sob o lock da competência. */
+type LeitorDocumentos = Pick<Prisma.TransactionClient, "documentoFiscal">;
+
+/**
+ * O total apurado de uma competência. ÚNICA fonte da conta: a apuração mensal, o
+ * resumo da tela e o valor manual com origem XML chamam esta função, para os três
+ * números nunca divergirem.
+ *
+ * Devolução abate no mês EM QUE FOI EMITIDA, não no mês da venda original: é o mês
+ * em que a receita foi desfeita, e o mês da venda pode já estar numa declaração
+ * emitida. Se as devoluções passam das vendas, o mês fica em zero — o banco não
+ * aceita faturamento negativo — e o excedente volta à parte, para a tela avisar.
+ *
+ * As duas consultas são sequenciais de propósito: dentro de transação interativa
+ * o Prisma não paraleliza, e `Promise.all` só esconderia a ordem.
+ */
+export async function totaisDaCompetencia(
+  db: LeitorDocumentos,
+  empresaId: string,
+  ano: number,
+  mes: number,
+): Promise<TotaisCompetencia> {
+  const base = { empresaId, ano, mes, assinaturaValida: true };
+
+  const vendas = await db.documentoFiscal.aggregate({
+    where: { ...base, contaFaturamento: true },
+    _sum: { valorTotal: true },
+    _count: { _all: true },
+  });
+  const devolucoes = await db.documentoFiscal.aggregate({
+    where: { ...base, motivoExclusao: MOTIVO_QUE_ABATE },
+    _sum: { valorTotal: true },
+    _count: { _all: true },
+  });
+
+  const totalVendas = vendas._sum.valorTotal ?? new Prisma.Decimal(0);
+  const totalDevolucoes = devolucoes._sum.valorTotal ?? new Prisma.Decimal(0);
+  const diferenca = totalVendas.minus(totalDevolucoes);
+  const zero = new Prisma.Decimal(0);
+
+  return {
+    vendas: totalVendas,
+    notasVenda: vendas._count._all,
+    devolucoes: totalDevolucoes,
+    notasDevolucao: devolucoes._count._all,
+    liquido: diferenca.isNegative() ? zero : diferenca,
+    excedenteDevolucao: diferenca.isNegative() ? diferenca.negated() : zero,
+    documentos: vendas._count._all + devolucoes._count._all,
+  };
+}
 
 /** Série normalizada -> canal declarado pelo escritório. */
 export type MapaSerieCanal = Map<string, Canal>;
@@ -53,8 +125,13 @@ export type ResumoCanal = {
   rotulo: string;
   logo: "ML" | "SP" | "TT" | null;
   cor: string;
+  /** Notas de venda que somam. */
   notas: number;
+  /** Líquido do canal: vendas menos devoluções da mesma série. */
   valor: number;
+  /** Devoluções de venda do canal, já descontadas de `valor`. */
+  notasDevolucao: number;
+  devolucoes: number;
   series: string[];
 };
 
@@ -72,31 +149,60 @@ export async function resumirPorCanal(
   mes: number,
   mapa: MapaSerieCanal,
 ): Promise<ResumoCanal[]> {
-  const porSerie = await prisma.documentoFiscal.groupBy({
-    by: ["serie"],
-    where: {
-      empresaId,
-      ano,
-      mes,
-      contaFaturamento: true,
-      assinaturaValida: true,
-    },
-    _sum: { valorTotal: true },
-    _count: { _all: true },
-  });
+  // Devolução sai da mesma série da venda (no Mercado Livre, série 2 nas duas),
+  // então o canal da devolução é o canal da venda que ela desfaz, e a soma dos
+  // canais continua batendo com o apurado do mês.
+  const base = { empresaId, ano, mes, assinaturaValida: true };
+  const [porSerie, devolucoesPorSerie] = await Promise.all([
+    prisma.documentoFiscal.groupBy({
+      by: ["serie"],
+      where: { ...base, contaFaturamento: true },
+      _sum: { valorTotal: true },
+      _count: { _all: true },
+    }),
+    prisma.documentoFiscal.groupBy({
+      by: ["serie"],
+      where: { ...base, motivoExclusao: MOTIVO_QUE_ABATE },
+      _sum: { valorTotal: true },
+      _count: { _all: true },
+    }),
+  ]);
 
-  const acumulado = new Map<
-    Canal | typeof SEM_SERIE_MAPEADA,
-    { notas: number; valor: number; series: Set<string> }
-  >();
+  type Acumulado = {
+    notas: number;
+    vendasCentavos: number;
+    notasDevolucao: number;
+    devolucoesCentavos: number;
+    series: Set<string>;
+  };
+  const acumulado = new Map<Canal | typeof SEM_SERIE_MAPEADA, Acumulado>();
+  const doCanal = (serie: string) => {
+    const canal = resolverCanal(serie, mapa);
+    const atual = acumulado.get(canal) ?? {
+      notas: 0,
+      vendasCentavos: 0,
+      notasDevolucao: 0,
+      devolucoesCentavos: 0,
+      series: new Set<string>(),
+    };
+    atual.series.add(normalizarSerie(serie));
+    acumulado.set(canal, atual);
+    return atual;
+  };
+  // Em centavos inteiros: somar reais em ponto flutuante e depois subtrair deixava
+  // resto de 0,0000001 que aparecia como "-R$ 0,00".
+  const centavos = (valor: Prisma.Decimal | null) =>
+    Math.round(Number(valor ?? 0) * 100);
 
   for (const linha of porSerie) {
-    const canal = resolverCanal(linha.serie, mapa);
-    const atual = acumulado.get(canal) ?? { notas: 0, valor: 0, series: new Set<string>() };
+    const atual = doCanal(linha.serie);
     atual.notas += linha._count._all;
-    atual.valor += Number(linha._sum.valorTotal ?? 0);
-    atual.series.add(normalizarSerie(linha.serie));
-    acumulado.set(canal, atual);
+    atual.vendasCentavos += centavos(linha._sum.valorTotal);
+  }
+  for (const linha of devolucoesPorSerie) {
+    const atual = doCanal(linha.serie);
+    atual.notasDevolucao += linha._count._all;
+    atual.devolucoesCentavos += centavos(linha._sum.valorTotal);
   }
 
   /*
@@ -126,7 +232,9 @@ export async function resumirPorCanal(
       logo: CANAL_LOGO[canal],
       cor: CANAL_COR[canal],
       notas: dados?.notas ?? 0,
-      valor: dados?.valor ?? 0,
+      valor: dados ? (dados.vendasCentavos - dados.devolucoesCentavos) / 100 : 0,
+      notasDevolucao: dados?.notasDevolucao ?? 0,
+      devolucoes: dados ? dados.devolucoesCentavos / 100 : 0,
       series: seriesDoCanal,
     });
   }
@@ -139,7 +247,9 @@ export async function resumirPorCanal(
       logo: null,
       cor: SEM_SERIE_MAPEADA_COR,
       notas: semSerie.notas,
-      valor: semSerie.valor,
+      valor: (semSerie.vendasCentavos - semSerie.devolucoesCentavos) / 100,
+      notasDevolucao: semSerie.notasDevolucao,
+      devolucoes: semSerie.devolucoesCentavos / 100,
       series: [...semSerie.series].sort((a, b) => Number(a) - Number(b)),
     });
   }
@@ -159,6 +269,9 @@ export type LinhaForaDoFaturamento = {
  * Este é o painel mais importante da tela, e não é enfeite: 822 arquivos
  * importados com 366 somando parece arquivo perdido. Sem o agrupamento por motivo,
  * a diferença não tem explicação e o operador conclui que o sistema comeu nota.
+ *
+ * Devolução de venda NÃO entra aqui: ela não fica fora da conta, ela subtrai. Tem
+ * painel próprio, com o valor abatido.
  */
 export async function resumirForaDoFaturamento(
   empresaId: string,
@@ -168,7 +281,13 @@ export async function resumirForaDoFaturamento(
   const [documentos, ignorados, eventos] = await Promise.all([
     prisma.documentoFiscal.groupBy({
       by: ["motivoExclusao"],
-      where: { empresaId, ano, mes, contaFaturamento: false },
+      where: {
+        empresaId,
+        ano,
+        mes,
+        contaFaturamento: false,
+        motivoExclusao: { not: MOTIVO_QUE_ABATE },
+      },
       _sum: { valorTotal: true },
       _count: { _all: true },
     }),

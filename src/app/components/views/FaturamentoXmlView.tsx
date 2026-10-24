@@ -90,16 +90,7 @@ import FiltrosSheet from "@/components/ui/FiltrosSheet";
  * de 28px da tabela é pequeno demais para o dedo.
  */
 function CartaoNota({ nota, canais }: { nota: Documento; canais: CanalResumo[] }) {
-  const cancelada = nota.situacao === "CANCELADA";
-  const naoSoma = !nota.contaFaturamento;
-  const tom = cancelada ? "critico" : nota.precisaConferencia ? "alerta" : naoSoma ? "neutro" : "bom";
-  const rotulo = cancelada
-    ? "Cancelada"
-    : nota.precisaConferencia
-      ? "Conferir"
-      : naoSoma
-        ? "Não soma"
-        : "Autorizada";
+  const { devolucao, naoSoma, tom, rotulo } = situacaoDaNota(nota);
 
   return (
     <li className="min-w-0 rounded-[12px] border border-[var(--cz-hairline)] bg-[var(--cz-superficie)] p-3.5">
@@ -120,8 +111,8 @@ function CartaoNota({ nota, canais }: { nota: Documento; canais: CanalResumo[] }
         </span>
       </div>
 
-      {/* O motivo em prosa vem do servidor e explica por que "não soma". */}
-      {naoSoma && nota.motivoExclusaoLabel && (
+      {/* O motivo em prosa vem do servidor e explica por que "não soma" ou por que abate. */}
+      {(naoSoma || devolucao) && nota.motivoExclusaoLabel && (
         <p className="mt-1.5 text-[12.5px] leading-snug text-[var(--cz-texto-suave)]">
           {nota.motivoExclusaoLabel}
         </p>
@@ -139,12 +130,8 @@ function CartaoNota({ nota, canais }: { nota: Documento; canais: CanalResumo[] }
         <div className="min-w-0 flex-1 text-[13px] text-[var(--cz-texto)]">
           <CelulaCanal canal={nota.canal} canais={canais} />
         </div>
-        <span
-          className={`cz-num shrink-0 text-[16px] font-bold ${
-            naoSoma ? "text-[var(--cz-texto-fraco)] line-through" : "text-[var(--cz-texto)]"
-          }`}
-        >
-          {real(nota.valorTotal)}
+        <span className={`cz-num shrink-0 text-[16px] font-bold ${classeDoValor(devolucao, naoSoma)}`}>
+          {valorDaNota(nota.valorTotal, devolucao)}
         </span>
         <a
           href={`/api/fiscal/xml/${nota.id}`}
@@ -157,6 +144,48 @@ function CartaoNota({ nota, canais }: { nota: Documento; canais: CanalResumo[] }
       </div>
     </li>
   );
+}
+
+/**
+ * Selo, cor e valor de uma nota, iguais na tabela e no cartão do celular.
+ *
+ * Devolução de venda tem tratamento próprio: não é "não soma" (riscado, cinza),
+ * ela SUBTRAI. Por isso selo "Devolução" e valor negativo em vermelho, que é o
+ * que o escritório pediu para enxergar sem abrir o painel.
+ */
+function situacaoDaNota(nota: Documento) {
+  const cancelada = nota.situacao === "CANCELADA";
+  const devolucao = !cancelada && Boolean(nota.abateFaturamento);
+  const naoSoma = !nota.contaFaturamento && !devolucao;
+  const tom: "critico" | "alerta" | "neutro" | "bom" | "info" = cancelada
+    ? "critico"
+    : nota.precisaConferencia
+      ? "alerta"
+      : devolucao
+        ? "info"
+        : naoSoma
+          ? "neutro"
+          : "bom";
+  const rotulo = cancelada
+    ? "Cancelada"
+    : nota.precisaConferencia
+      ? "Conferir"
+      : devolucao
+        ? "Devolução"
+        : naoSoma
+          ? "Não soma"
+          : "Autorizada";
+  return { cancelada, devolucao, naoSoma, tom, rotulo };
+}
+
+function classeDoValor(devolucao: boolean, naoSoma: boolean): string {
+  if (devolucao) return "text-rose-700";
+  return naoSoma ? "text-[var(--cz-texto-fraco)] line-through" : "text-[var(--cz-texto)]";
+}
+
+/** "−R$ 660,00" na devolução: o sinal é o que diz que o valor sai do total. */
+function valorDaNota(valor: number, devolucao: boolean): string {
+  return devolucao ? `−${real(valor)}` : real(valor);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -178,7 +207,10 @@ type CanalResumo = {
   logo: CanalLogo | null;
   cor: string;
   notas: number;
+  /** Líquido do canal: vendas menos devoluções. */
   valor: number;
+  notasDevolucao?: number;
+  devolucoes?: number;
   series: string[];
 };
 
@@ -213,7 +245,14 @@ type Resumo = {
   competencia: { ano: number; mes: number; chave: string; label: string } | null;
   competenciasDisponiveis: Array<{ valor: string; texto: string }>;
   kpis: {
+    /** Líquido: vendas que somam menos devoluções de venda do mês. */
     apurado: number;
+    /** Bruto das vendas, antes de abater as devoluções. */
+    vendas?: number;
+    devolucoes?: number;
+    notasDevolucao?: number;
+    /** Quanto as devoluções passaram das vendas (o apurado fica em zero). */
+    excedenteDevolucao?: number;
     arquivosLidos: number;
     notasValidas: number;
     notasCanceladas: number;
@@ -244,6 +283,8 @@ type Documento = {
   contaFaturamento: boolean;
   motivoExclusao: string | null;
   motivoExclusaoLabel: string | null;
+  /** Devolução de venda: subtrai do total do mês. */
+  abateFaturamento?: boolean;
   precisaConferencia: boolean;
   pedidoMarketplace: string | null;
   canceladoEm: string | null;
@@ -320,6 +361,10 @@ const real = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const inteiro = (v: number) => v.toLocaleString("pt-BR");
+
+/** "1 venda", "3 vendas": o número já formatado e a palavra concordando com ele. */
+const contagem = (v: number, singular: string, varios: string) =>
+  `${inteiro(v)} ${v === 1 ? singular : varios}`;
 
 const dataCurta = (iso: string) =>
   new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -1305,6 +1350,12 @@ export default function FaturamentoXmlView() {
   );
 
   const apurado = resumo?.kpis.apurado ?? 0;
+  // Devolução de venda do mês: abatida do apurado. Opcional na resposta para a
+  // tela não quebrar contra um servidor ainda na versão anterior.
+  const notasDevolucao = resumo?.kpis.notasDevolucao ?? 0;
+  const valorDevolucoes = resumo?.kpis.devolucoes ?? 0;
+  const valorVendas = resumo?.kpis.vendas ?? apurado;
+  const excedenteDevolucao = resumo?.kpis.excedenteDevolucao ?? 0;
   const congelada = Boolean(resumo?.faturamento?.congeladoEm);
   const valorManualDigitado = paraNumero(declarado);
   // Em competência congelada, o valor que vale é o snapshot persistido. Usar o
@@ -1785,7 +1836,15 @@ export default function FaturamentoXmlView() {
           valor={real(apurado)}
           icone="FileSpreadsheet"
           tom="verde"
-          detalhe={`${inteiro(resumo?.kpis.notasValidas ?? 0)} notas de venda`}
+          detalhe={
+            notasDevolucao > 0
+              ? `${contagem(resumo?.kpis.notasValidas ?? 0, "venda", "vendas")} · ${contagem(
+                  notasDevolucao,
+                  "devolução abatida",
+                  "devoluções abatidas",
+                )}`
+              : contagem(resumo?.kpis.notasValidas ?? 0, "nota de venda", "notas de venda")
+          }
           carregando={carregandoResumo}
         />
         <CartaoKpi
@@ -1801,7 +1860,9 @@ export default function FaturamentoXmlView() {
           valor={inteiro(resumo?.kpis.arquivosLidos ?? 0)}
           icone="Files"
           tom="laranja"
-          detalhe={`${inteiro(resumo?.kpis.notasValidas ?? 0)} somam · ${inteiro(resumo?.kpis.notasCanceladas ?? 0)} canceladas`}
+          detalhe={`${contagem(resumo?.kpis.notasValidas ?? 0, "soma", "somam")} · ${
+            notasDevolucao > 0 ? `${contagem(notasDevolucao, "abate", "abatem")} · ` : ""
+          }${contagem(resumo?.kpis.notasCanceladas ?? 0, "cancelada", "canceladas")}`}
           carregando={carregandoResumo}
         />
         <CartaoKpi
@@ -2357,7 +2418,11 @@ export default function FaturamentoXmlView() {
               titulo="Notas fiscais da competência"
               descricao={
                 resumo
-                  ? `${inteiro(resumo.kpis.notasValidas)} somam no faturamento. Canceladas e movimentações aparecem na lista e não entram na soma.`
+                  ? `${contagem(resumo.kpis.notasValidas, "soma", "somam")} no faturamento${
+                      notasDevolucao > 0
+                        ? ` e ${contagem(notasDevolucao, "devolução abate", "devoluções abatem")} o total (em vermelho)`
+                        : ""
+                    }. Canceladas e movimentações aparecem na lista e não entram na soma.`
                   : undefined
               }
             >
@@ -2405,6 +2470,7 @@ export default function FaturamentoXmlView() {
                   vazio="Todas"
                   opcoes={[
                     { valor: "sim", texto: "Somam" },
+                    { valor: "devolucao", texto: "Devoluções (abatem)" },
                     { valor: "nao", texto: "Não somam" },
                   ]}
                   value={contaFiltro}
@@ -2498,8 +2564,7 @@ export default function FaturamentoXmlView() {
                     </thead>
                     <tbody className="divide-y divide-[var(--cz-hairline)]">
                       {documentos.map((nota) => {
-                        const cancelada = nota.situacao === "CANCELADA";
-                        const naoSoma = !nota.contaFaturamento;
+                        const { devolucao, naoSoma, tom, rotulo } = situacaoDaNota(nota);
                         return (
                           <tr key={nota.id} className="transition-colors hover:bg-[#FCFCFD]">
                             {/* Número, série, data e CFOP na MESMA célula. Eram
@@ -2539,29 +2604,12 @@ export default function FaturamentoXmlView() {
                             </td>
 
                             <td className="px-3 py-2.5 align-top">
-                              <Selo
-                                tom={
-                                  cancelada
-                                    ? "critico"
-                                    : nota.precisaConferencia
-                                      ? "alerta"
-                                      : naoSoma
-                                        ? "neutro"
-                                        : "bom"
-                                }
-                              >
-                                {cancelada
-                                  ? "Cancelada"
-                                  : nota.precisaConferencia
-                                    ? "Conferir"
-                                    : naoSoma
-                                      ? "Não soma"
-                                      : "Autorizada"}
-                              </Selo>
+                              <Selo tom={tom}>{rotulo}</Selo>
                               {/* O motivo em prosa vem do servidor: sem ele,
                                   "não soma" obriga a abrir o painel lateral para
-                                  descobrir qual das oito razões é. */}
-                              {naoSoma && nota.motivoExclusaoLabel && (
+                                  descobrir qual das oito razões é. Na devolução,
+                                  diz que o valor foi abatido do mês. */}
+                              {(naoSoma || devolucao) && nota.motivoExclusaoLabel && (
                                 <span className="mt-0.5 block max-w-[13rem] text-[11px] leading-snug text-[var(--cz-texto-fraco)]">
                                   {nota.motivoExclusaoLabel}
                                 </span>
@@ -2569,13 +2617,12 @@ export default function FaturamentoXmlView() {
                             </td>
 
                             <td
-                              className={`cz-num whitespace-nowrap px-3 py-2.5 text-right align-top font-bold ${
-                                naoSoma
-                                  ? "text-[var(--cz-texto-fraco)] line-through"
-                                  : "text-[var(--cz-texto)]"
-                              }`}
+                              className={`cz-num whitespace-nowrap px-3 py-2.5 text-right align-top font-bold ${classeDoValor(
+                                devolucao,
+                                naoSoma,
+                              )}`}
                             >
-                              {real(nota.valorTotal)}
+                              {valorDaNota(nota.valorTotal, devolucao)}
                             </td>
 
                             <td className="whitespace-nowrap px-3 py-2.5 text-right align-top">
@@ -2649,8 +2696,13 @@ export default function FaturamentoXmlView() {
                             <CelulaCanal canal={canal.chave} canais={canais} />
                             <span className="cz-num mt-0.5 block pl-8 text-[11px] text-[var(--cz-texto-fraco)]">
                               {canal.series.length > 0
-                                ? `série ${canal.series.join(", ")} · ${inteiro(canal.notas)} notas`
+                                ? `série ${canal.series.join(", ")} · ${contagem(canal.notas, "nota", "notas")}`
                                 : "sem série mapeada"}
+                              {(canal.notasDevolucao ?? 0) > 0
+                                ? ` · ${contagem(canal.notasDevolucao ?? 0, "devolução", "devoluções")} (−${real(
+                                    canal.devolucoes ?? 0,
+                                  )})`
+                                : ""}
                             </span>
                           </div>
                           <span className="cz-num shrink-0 text-[12.5px] font-bold text-[var(--cz-texto)]">
@@ -2669,19 +2721,83 @@ export default function FaturamentoXmlView() {
               </div>
             </Painel>
 
+            {/* Devolução de venda abate o mês: a conta aparece inteira, do bruto ao
+                líquido, para o número do cartão "Apurado" nunca parecer menor sem
+                explicação. Só existe quando o mês tem devolução. */}
+            {(notasDevolucao > 0 || excedenteDevolucao > 0) && (
+              <Painel
+                titulo="Devoluções de venda"
+                descricao="Notas de entrada que a empresa emitiu quando o cliente devolveu. Saem do faturamento do mês em que a devolução foi emitida."
+                denso
+              >
+                <div className="space-y-2.5 p-4">
+                  <dl className="space-y-1.5 text-[12.5px]">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-[var(--cz-texto-suave)]">
+                        Vendas que somam ({inteiro(resumo?.kpis.notasValidas ?? 0)})
+                      </dt>
+                      <dd className="cz-num font-semibold text-[var(--cz-texto)]">{real(valorVendas)}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <dt className="text-[var(--cz-texto-suave)]">
+                        Devoluções abatidas ({inteiro(notasDevolucao)})
+                      </dt>
+                      <dd className="cz-num font-semibold text-rose-700">−{real(valorDevolucoes)}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3 border-t border-[var(--cz-hairline-forte)] pt-1.5 font-bold">
+                      <dt>Apurado do mês</dt>
+                      <dd className="cz-num">{real(apurado)}</dd>
+                    </div>
+                  </dl>
+
+                  {excedenteDevolucao > 0 && (
+                    <p className="flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50/70 px-3 py-2 text-[12px] leading-snug text-amber-900">
+                      <Icone nome="AlertTriangle" className="mt-px h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        As devoluções passaram as vendas do mês em {real(excedenteDevolucao)}. O
+                        apurado fica em zero e o excedente não vai sozinho para outro mês: se o
+                        escritório abater depois, informe o valor daquele mês manualmente.
+                      </span>
+                    </p>
+                  )}
+
+                  {notasDevolucao > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContaFiltro("devolucao");
+                        setMotivoFiltro("");
+                        setSomenteConferencia(false);
+                        setAba("geral");
+                      }}
+                      className="text-[11.5px] font-medium text-[var(--cz-laranja-forte)] underline-offset-2 hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center max-md:text-[13px]"
+                    >
+                      ver as devoluções na lista
+                    </button>
+                  )}
+                </div>
+              </Painel>
+            )}
+
             {/* O painel que impede "366 de 822" de parecer arquivo perdido. */}
             <Painel
               titulo="Fora do faturamento"
               descricao={
                 resumo
-                  ? `${inteiro(resumo.kpis.arquivosLidos)} documentos na competência, ${inteiro(resumo.kpis.notasValidas)} somam.`
+                  ? `${contagem(resumo.kpis.arquivosLidos, "documento", "documentos")} na competência, ${contagem(
+                      resumo.kpis.notasValidas,
+                      "soma",
+                      "somam",
+                    )}${notasDevolucao > 0 ? `, ${contagem(notasDevolucao, "abate", "abatem")}` : ""}.`
                   : undefined
               }
               denso
             >
               {(resumo?.foraDoFaturamento.length ?? 0) === 0 ? (
                 <p className="px-4 py-3 text-[12.5px] text-[var(--cz-texto-suave)]">
-                  Todos os documentos desta competência somam no faturamento.
+                  {notasDevolucao > 0
+                    ? "Nenhum documento ficou fora da conta: as vendas somam e as devoluções abatem."
+                    : "Todos os documentos desta competência somam no faturamento."}
                 </p>
               ) : (
                 <ul className="divide-y divide-[var(--cz-hairline)]">
@@ -2723,9 +2839,10 @@ export default function FaturamentoXmlView() {
               <Painel titulo="Precisa de conferência" denso>
                 <div className="space-y-2 p-4">
                   <p className="text-[12px] leading-snug text-[var(--cz-texto-suave)]">
-                    {inteiro(resumo?.kpis.precisamConferencia ?? 0)} nota(s) têm itens de
-                    venda e de movimentação no mesmo documento. Não somam, porque ratear
-                    o valor por item seria estimativa apresentada como fato.
+                    {inteiro(resumo?.kpis.precisamConferencia ?? 0)} nota(s) misturam itens
+                    de venda (ou de devolução de venda) com outra operação no mesmo
+                    documento. Não entram na conta, porque ratear o valor por item seria
+                    estimativa apresentada como fato.
                   </p>
                   <Botao
                     variante="secundario"

@@ -814,8 +814,9 @@ Nenhuma delas é técnica, e todas mudam o número:
 1. **A faixa de CFOP 51xx/61xx é a definição de venda?** É a regra que fecha ao
    centavo com a classificação do Mercado Livre, mas vale para o resto da carteira?
    E complementar soma, ajuste não soma, devolução não soma (em vez de subtrair)?
-2. **Devolução abate o faturamento do mês?** Há escritório que abate e há que não.
-   A tabela atual não abate.
+2. ~~**Devolução abate o faturamento do mês?**~~ **Respondida (out/2026): abate, no
+   mês em que a devolução foi emitida** (regra v2; ver
+   `docs/APURACAO_FISCAL_XML_COMO_FUNCIONA.md`, seção 6.2).
 3. **NFC-e entra junto com NF-e** no mesmo total, ou separado?
 4. **Faturamento é por emissão ou por competência de escrituração?** A proposta usa
    `dhEmi`. Nota emitida em 31/01 e escriturada em fevereiro é o caso de borda.
