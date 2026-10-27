@@ -39,7 +39,9 @@ const HTTP_TIMEOUT_MS = 20_000;
 const TOKEN_REFRESH_MARGIN_MS = 30 * 60 * 1000;
 
 /**
- * Cookies que carregam o OAuth entre `/api/tiktok/auth` e o callback.
+ * Cookies que provam que o callback voltou ao mesmo navegador. O hash do state
+ * também fica no banco (`tiktok-oauth-state.ts`) para retransmitir a callback ao
+ * host que possui estes cookies quando raiz e `app.` divergem.
  *
  * Moram aqui, e não no `route.ts`, porque um route handler só deve exportar os
  * verbos HTTP e a config de rota — export extra briga com a checagem de tipos

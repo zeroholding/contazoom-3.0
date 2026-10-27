@@ -31,6 +31,7 @@ model User {
   shopeeVendas        ShopeeVenda[]
   tiktokAccounts      TiktokAccount[]
   tiktokVendas        TiktokVenda[]
+  tiktokOauthStates   TiktokOauthState[]
   skus                SKU[]
   skuCustoHistorico   SKUCustoHistorico[]
   notifications       SyncNotification[]
@@ -117,6 +118,29 @@ model ShopeeOauthState {
   @@map("shopee_oauth_state")
 }
 
+/// O state TikTok também vive no servidor, ligado ao usuário e à origem.
+///
+/// O cookie HttpOnly continua obrigatório, mas não é mais a única memória do
+/// fluxo. `contazoom.com.br` e `app.contazoom.com.br` servem o mesmo sistema e
+/// cookies são host-only; quando o Partner Center devolve no outro host, o
+/// callback consulta esta linha e redireciona para a origem que iniciou o OAuth.
+/// Só então confere cookie + sessão e consome a linha atomicamente.
+model TiktokOauthState {
+  id         String    @id @default(cuid())
+  stateHash  String    @unique @map("state_hash") @db.Char(64)
+  userId     String    @map("user_id")
+  mode       String    @db.VarChar(10)
+  origin     String    @db.VarChar(255)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId, createdAt])
+  @@map("tiktok_oauth_state")
+}
+
 /// Loja do TikTok Shop conectada por um usuário.
 ///
 /// Segue a forma de `ShopeeAccount`, com duas colunas que não existem em nenhuma
@@ -127,11 +151,6 @@ model ShopeeOauthState {
 ///   busca um pedido. Vem de `/authorization/202309/shops`, não do OAuth.
 /// - `refresh_expires_at`: a API informa o prazo do refresh token (observado em
 ///   ~100 anos). Guardamos o que ela diz em vez de assumir que é eterno.
-///
-/// Não existe `TiktokOauthState` de propósito: as tabelas `meli_oauth_state` e
-/// `shopee_oauth_state` existem no schema e estão órfãs — nenhuma rota de OAuth
-/// as usa, porque o `state` viaja em cookie HttpOnly. Criar a terceira só
-/// acrescentaria tabela morta.
 model TiktokAccount {
   id                          String        @id @default(cuid())
   userId                      String        @map("user_id")

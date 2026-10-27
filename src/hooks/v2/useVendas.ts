@@ -385,8 +385,11 @@ export function useVendasV2(
     const rotaAuth = ROTA_AUTH[platform as Marketplace];
 
     if (rotaAuth) {
-      // Redirecionar para autenticacao do marketplace
-      window.location.assign(`${authOrigin}${rotaAuth}`);
+      // TikTok precisa começar no MESMO host da tela: o Partner Center usa uma
+      // callback fixa e os cookies de state/sessão são host-only. Reutilizar a
+      // origem do backend ou do Mercado Livre criava app. → raiz e perdia state.
+      const destino = platform === "TikTok Shop" ? rotaAuth : `${authOrigin}${rotaAuth}`;
+      window.location.assign(destino);
     } else if (platform === "Geral") {
       // Para vendas gerais, nao ha conexao direta - usar as paginas individuais
       console.log(

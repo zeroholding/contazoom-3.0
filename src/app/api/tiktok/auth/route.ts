@@ -10,8 +10,10 @@
  * apontar para `<origem>/api/tiktok/callback`. Por isso aqui não se monta
  * `redirect=`, e a origem só é usada para decidir o `secure` do cookie.
  *
- * O `state` é gerado aqui, guardado num cookie HttpOnly e conferido no callback:
- * sem isso, qualquer um poderia disparar o callback com um code arbitrário.
+ * O `state` é gerado aqui, guardado em cookie HttpOnly E, pelo hash, no banco.
+ * O banco preserva a origem caso o Partner Center devolva a callback entre
+ * `contazoom.com.br` e `app.contazoom.com.br`; cookie + sessão continuam sendo
+ * conferidos no host original, sem enfraquecer a proteção contra CSRF.
  *
  * Requer: TIKTOK_APP_KEY, TIKTOK_APP_SECRET, TIKTOK_SERVICE_ID.
  */
@@ -25,6 +27,11 @@ import {
   TIKTOK_MODE_COOKIE,
   TIKTOK_STATE_COOKIE,
 } from "@/lib/tiktok";
+import {
+  criarEstadoOauthTiktok,
+  origemOauthTiktok,
+  VALIDADE_STATE_TIKTOK_MS,
+} from "@/lib/tiktok-oauth-state";
 
 export const runtime = "nodejs";
 
@@ -47,18 +54,21 @@ export async function GET(req: NextRequest) {
     }
 
     const { serviceId } = getTiktokCredentials();
-    const redirectOrigin =
-      process.env.TIKTOK_REDIRECT_ORIGIN ||
-      (req.headers.get("x-forwarded-proto") || "http") + "://" + req.headers.get("host");
-
+    const origin = origemOauthTiktok(req);
     const isPopupFlow = req.nextUrl.searchParams.get("popup") === "1";
+    const mode = isPopupFlow ? "popup" : "redirect";
     const state = crypto.randomUUID();
+
+    // O banco guarda só o hash e a origem. Se o Partner Center devolver a
+    // callback em contazoom.com.br após o OAuth começar em app.contazoom.com.br,
+    // o callback consegue voltar ao host que possui estes cookies.
+    await criarEstadoOauthTiktok({ state, userId: session.sub, mode, origin });
 
     const res = NextResponse.redirect(getTiktokSellerAuthUrl(serviceId, state), {
       status: 302,
     });
 
-    const secure = redirectOrigin.startsWith("https");
+    const secure = origin.startsWith("https");
 
     // 15 minutos: a tela de consentimento do TikTok tem mais passos que a da
     // Shopee (escolha de loja e revisão de escopos), e os 10 minutos usados lá
@@ -70,7 +80,7 @@ export async function GET(req: NextRequest) {
       sameSite: "lax",
       secure,
       path: "/",
-      maxAge: 900,
+      maxAge: VALIDADE_STATE_TIKTOK_MS / 1000,
     });
     res.cookies.set({
       name: TIKTOK_MODE_COOKIE,
@@ -79,7 +89,7 @@ export async function GET(req: NextRequest) {
       sameSite: "lax",
       secure,
       path: "/",
-      maxAge: 900,
+      maxAge: VALIDADE_STATE_TIKTOK_MS / 1000,
     });
 
     return res;
