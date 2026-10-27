@@ -45,9 +45,18 @@ interface DashboardStatsProps {
   onPendingSkuSummaryChange?: (summary: DashboardPendingSkuSummary) => void;
 }
 
+type PeriodoComparativo = {
+  /** Datas civis AAAA-MM-DD: formatadas sem `Date`, para o fuso não trocar o dia. */
+  dataInicio: string;
+  dataFim: string;
+};
+
 type Stats = {
   faturamentoTotal: number;
   faturamentoTendencia: number;
+  faturamentoAnterior: number | null;
+  faturamentoTendenciaDisponivel: boolean;
+  periodoComparativo: PeriodoComparativo | null;
   impostos: number;
   taxasPlataformas: { total: number; mercadoLivre: number; shopee: number };
   custoFrete: { total: number; mercadoLivre: number; shopee: number };
@@ -65,6 +74,9 @@ type Stats = {
 const DEFAULT_STATS: Stats = {
   faturamentoTotal: 0,
   faturamentoTendencia: 0,
+  faturamentoAnterior: null,
+  faturamentoTendenciaDisponivel: false,
+  periodoComparativo: null,
   impostos: 0,
   taxasPlataformas: { total: 0, mercadoLivre: 0, shopee: 0 },
   custoFrete: { total: 0, mercadoLivre: 0, shopee: 0 },
@@ -161,25 +173,41 @@ const DashboardStats = memo(function DashboardStats({
       value || 0,
     );
 
-  const formatPercentage = (value: number) => `${value > 0 ? "+" : ""}${(value || 0).toFixed(1)}%`;
+  const formatPercentage = (value: number) => {
+    const formatada = new Intl.NumberFormat("pt-BR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(value || 0);
+    return `${value > 0 ? "+" : ""}${formatada}%`;
+  };
   const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(value || 0);
+
+  /** AAAA-MM-DD → DD/MM/AA, sem construir Date (UTC−3 mudaria o dia). */
+  const formatarDataCivil = (valor: string) => {
+    const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+    return partes ? `${partes[3]}/${partes[2]}/${partes[1].slice(-2)}` : valor;
+  };
+  const rotuloComparativo = stats.periodoComparativo
+    ? stats.periodoComparativo.dataInicio === stats.periodoComparativo.dataFim
+      ? formatarDataCivil(stats.periodoComparativo.dataInicio)
+      : `${formatarDataCivil(stats.periodoComparativo.dataInicio)} a ${formatarDataCivil(stats.periodoComparativo.dataFim)}`
+    : null;
+
+  // Aumento de cancelados é ruim; nos demais filtros, aumento do faturamento é bom.
+  const tendenciaCor = !stats.faturamentoTendenciaDisponivel || stats.faturamentoTendencia === 0
+    ? "text-gray-500"
+    : statusAtivo === "cancelados"
+      ? stats.faturamentoTendencia < 0 ? "text-green-600" : "text-red-600"
+      : stats.faturamentoTendencia > 0 ? "text-green-600" : "text-red-600";
 
   // Função para renderizar valores com loader
   const renderValue = (
     value: number,
     formatter: (val: number) => string,
     width = "w-24",
-    variant: "currency" | "number" | "percentage" = "currency"
+    variant: "currency" | "number" = "currency"
   ) => {
     if (loading) {
-      if (variant === "percentage") {
-        return (
-          <span
-            className={`inline-block ${width} h-3 bg-gradient-to-r from-gray-100 to-gray-200 rounded animate-pulse mt-1`}
-            aria-hidden
-          />
-        );
-      }
       return <NumberLoader width={width} height="h-6" className="mt-1" variant={variant} />;
     }
     return formatter(value);
@@ -198,7 +226,7 @@ const DashboardStats = memo(function DashboardStats({
           - os textos de 10px (valor por canal, SKUs pendentes) sobem para 12px e os valores
             por canal podem quebrar linha. */}
       {/* Faturamento Total */}
-      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor total das vendas">
+      <div className="bg-[var(--cz-superficie)] rounded-[var(--cz-raio-cartao)] border border-[var(--cz-hairline)] p-3 shadow-[var(--cz-elev-1)]" title="Valor total das vendas e variação contra o mesmo período do mês anterior">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-gray-100 rounded-lg flex items-center justify-center mr-2">
@@ -213,11 +241,34 @@ const DashboardStats = memo(function DashboardStats({
         </div>
         <div className="space-y-1">
           <div className="text-lg font-bold text-gray-900">{renderValue(stats.faturamentoTotal, formatCurrency, "w-28", "currency")}</div>
-          <div className="flex items-center">
-            <span className={`text-xs font-medium ${stats.faturamentoTendencia > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {renderValue(stats.faturamentoTendencia, formatPercentage, "w-16", "percentage")}
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            {loading ? (
+              <span className="inline-block h-3 w-16 animate-pulse rounded bg-gradient-to-r from-gray-100 to-gray-200" aria-hidden />
+            ) : stats.faturamentoTendenciaDisponivel ? (
+              <span className={`text-xs font-medium ${tendenciaCor}`}>
+                {formatPercentage(stats.faturamentoTendencia)}
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-gray-500">—</span>
+            )}
+            <span className="text-xs text-gray-500">
+              {loading
+                ? "calculando comparação"
+                : stats.faturamentoTendenciaDisponivel
+                  ? "vs. período anterior"
+                  : rotuloComparativo
+                    ? "sem base no período anterior"
+                    : "sem período para comparar"}
             </span>
-            <span className="text-xs text-gray-500 ml-2">vs mês anterior</span>
+          </div>
+          <div className="min-h-4 text-[10px] leading-4 text-gray-400">
+            {loading ? (
+              <span className="mt-0.5 inline-block h-2.5 w-36 animate-pulse rounded bg-gray-100" aria-hidden />
+            ) : rotuloComparativo ? (
+              `Comparado com ${rotuloComparativo}`
+            ) : (
+              "Escolha um período para ver a comparação"
+            )}
           </div>
         </div>
       </div>

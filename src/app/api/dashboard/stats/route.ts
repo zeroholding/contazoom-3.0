@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { assertSessionToken } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { canalIncluiPlataforma, getDashboardFiltersWhere, getStatusWhere } from "@/lib/dashboard-filters";
+import { canalIncluiPlataforma, getDashboardFiltersWhere } from "@/lib/dashboard-filters";
+import { periodoDoMesAnterior, variacaoPercentual } from "@/lib/dashboard-periodo-comparativo";
 import {
   buildPendingSkuSummary,
   filterPendingSkuSummaryBySoldSkus,
@@ -168,11 +169,12 @@ export async function GET(req: NextRequest) {
           break;
         }
         case "este_mes": {
-          // 🌍 Usar data do Brasil
+          // Mês ATÉ HOJE. Usar o último dia futuro não muda o total (não há
+          // venda futura), mas comparava um mês incompleto com o mês anterior
+          // inteiro e derrubava artificialmente o percentual.
           const brazilToday = getNowInBrazil();
-          const lastDayOfMonth = new Date(brazilToday.year, brazilToday.month, 0).getDate();
           start = new Date(Date.UTC(brazilToday.year, brazilToday.month - 1, 1, 3, 0, 0, 0));
-          end = new Date(Date.UTC(brazilToday.year, brazilToday.month - 1, lastDayOfMonth + 1, 2, 59, 59, 999));
+          end = new Date(Date.UTC(brazilToday.year, brazilToday.month - 1, brazilToday.day + 1, 2, 59, 59, 999));
           useRange = true;
           break;
         }
@@ -197,13 +199,16 @@ export async function GET(req: NextRequest) {
       useRange = false;
     }
 
-    // Previous month period for trend calculation (always last month vs penultimate)
-    const lastMonthRef = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevStart = startOfMonth(lastMonthRef);
-    const prevEnd = endOfMonth(lastMonthRef);
-    const penultimateRef = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-    const penultStart = startOfMonth(penultimateRef);
-    const penultEnd = endOfMonth(penultimateRef);
+    if (useRange && (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end)) {
+      return NextResponse.json(
+        { error: "Período inválido. Confira as datas inicial e final." },
+        { status: 400 },
+      );
+    }
+
+    // O mesmo recorte, um mês civil antes: 01–16/out compara com 01–16/set.
+    // Sem intervalo finito ("todos"), não existe base temporal equivalente.
+    const periodoComparativo = useRange ? periodoDoMesAnterior(start, end) : null;
 
     // Aplicar filtros usando helpers centralizados
     const dashboardWhereMeli = getDashboardFiltersWhere({
@@ -236,8 +241,24 @@ export async function GET(req: NextRequest) {
     const shouldLoadTiktok =
       canalIncluiPlataforma(canalParam, "tiktok") && (!accountScope || accountScope === "tiktok");
 
-    // Helper for trend calculations (apenas vendas pagas/completas)
-    const paidOnly = getStatusWhere('pagos');
+    // Escopo compartilhado pelo valor atual E pelo comparativo. Ter uma única
+    // base impede que um filtro novo seja aplicado de um lado e esquecido do
+    // outro no futuro.
+    const filtroBaseMeli = {
+      userId: session.sub,
+      ...(accountScope === "meli" && accountIdParam ? { meliAccountId: accountIdParam } : {}),
+      ...dashboardWhereMeli,
+    };
+    const filtroBaseShopee = {
+      userId: session.sub,
+      ...(accountScope === "shopee" && accountIdParam ? { shopeeAccountId: accountIdParam } : {}),
+      ...dashboardWhereShopee,
+    };
+    const filtroBaseTiktok = {
+      userId: session.sub,
+      ...(accountScope === "tiktok" && accountIdParam ? { tiktokAccountId: accountIdParam } : {}),
+      ...dashboardWhereTiktok,
+    };
 
     const aliquotasPromise = (async (): Promise<any[]> => {
       try {
@@ -268,8 +289,8 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       shouldLoadMeli ? prisma.meliVenda.findMany({
         where: useRange
-          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli }
-          : { userId: session.sub, ...(accountPlatformParam === 'meli' && accountIdParam ? { meliAccountId: accountIdParam } : {}), ...dashboardWhereMeli },
+          ? { ...filtroBaseMeli, dataVenda: { gte: start, lte: end } }
+          : filtroBaseMeli,
         select: {
           meliAccountId: true,
           valorTotal: true,
@@ -286,8 +307,8 @@ export async function GET(req: NextRequest) {
       }) : [],
       shouldLoadShopee ? prisma.shopeeVenda.findMany({
         where: useRange
-          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee }
-          : { userId: session.sub, ...(accountPlatformParam === 'shopee' && accountIdParam ? { shopeeAccountId: accountIdParam } : {}), ...dashboardWhereShopee },
+          ? { ...filtroBaseShopee, dataVenda: { gte: start, lte: end } }
+          : filtroBaseShopee,
         select: {
           shopeeAccountId: true,
           valorTotal: true,
@@ -303,8 +324,8 @@ export async function GET(req: NextRequest) {
       }) : [],
       shouldLoadTiktok ? prisma.tiktokVenda.findMany({
         where: useRange
-          ? { userId: session.sub, dataVenda: { gte: start, lte: end }, ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}), ...dashboardWhereTiktok }
-          : { userId: session.sub, ...(accountPlatformParam === 'tiktok' && accountIdParam ? { tiktokAccountId: accountIdParam } : {}), ...dashboardWhereTiktok },
+          ? { ...filtroBaseTiktok, dataVenda: { gte: start, lte: end } }
+          : filtroBaseTiktok,
         select: {
           tiktokAccountId: true,
           valorTotal: true,
@@ -505,53 +526,59 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Trend: faturamento do último mês vs penúltimo mês.
-    // Só a soma é consumida, então o banco agrega sem materializar vendas.
-    const [
-      vendasMeliUltimoMes,
-      vendasShopeeUltimoMes,
-      vendasTiktokUltimoMes,
-      vendasMeliPenultimoMes,
-      vendasShopeePenultimoMes,
-      vendasTiktokPenultimoMes,
-    ] = await Promise.all([
-      prisma.meliVenda.aggregate({
-        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
-        _sum: { valorTotal: true },
-      }),
-      prisma.shopeeVenda.aggregate({
-        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
-        _sum: { valorTotal: true },
-      }),
-      prisma.tiktokVenda.aggregate({
-        where: { userId: session.sub, dataVenda: { gte: prevStart, lte: prevEnd }, ...paidOnly },
-        _sum: { valorTotal: true },
-      }),
-      prisma.meliVenda.aggregate({
-        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
-        _sum: { valorTotal: true },
-      }),
-      prisma.shopeeVenda.aggregate({
-        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
-        _sum: { valorTotal: true },
-      }),
-      prisma.tiktokVenda.aggregate({
-        where: { userId: session.sub, dataVenda: { gte: penultStart, lte: penultEnd }, ...paidOnly },
-        _sum: { valorTotal: true },
-      }),
-    ]);
+    /*
+     * Comparação dinâmica: o faturamento filtrado acima contra o MESMO recorte
+     * do mês anterior. Reaproveita exatamente o mesmo escopo de canal, status,
+     * modalidade, tipo de anúncio e conta — trocar qualquer filtro muda os dois
+     * lados da conta. Antes, seis agregações ignoravam todos esses filtros e
+     * comparavam sempre o último mês fechado com o penúltimo; por isso todos os
+     * períodos exibiam o mesmo percentual.
+     *
+     * Só consultamos o período anterior: o atual já é `faturamentoTotal`.
+     */
+    const [vendasMeliAnterior, vendasShopeeAnterior, vendasTiktokAnterior] =
+      periodoComparativo
+        ? await Promise.all([
+            shouldLoadMeli
+              ? prisma.meliVenda.aggregate({
+                  where: {
+                    ...filtroBaseMeli,
+                    dataVenda: { gte: periodoComparativo.inicio, lte: periodoComparativo.fim },
+                  },
+                  _sum: { valorTotal: true },
+                })
+              : null,
+            shouldLoadShopee
+              ? prisma.shopeeVenda.aggregate({
+                  where: {
+                    ...filtroBaseShopee,
+                    dataVenda: { gte: periodoComparativo.inicio, lte: periodoComparativo.fim },
+                  },
+                  _sum: { valorTotal: true },
+                })
+              : null,
+            shouldLoadTiktok
+              ? prisma.tiktokVenda.aggregate({
+                  where: {
+                    ...filtroBaseTiktok,
+                    dataVenda: { gte: periodoComparativo.inicio, lte: periodoComparativo.fim },
+                  },
+                  _sum: { valorTotal: true },
+                })
+              : null,
+          ])
+        : [null, null, null];
 
-    const faturamentoPrev =
-      toNumber(vendasMeliPenultimoMes._sum.valorTotal) +
-      toNumber(vendasShopeePenultimoMes._sum.valorTotal) +
-      toNumber(vendasTiktokPenultimoMes._sum.valorTotal);
-    const faturamentoUltimo =
-      toNumber(vendasMeliUltimoMes._sum.valorTotal) +
-      toNumber(vendasShopeeUltimoMes._sum.valorTotal) +
-      toNumber(vendasTiktokUltimoMes._sum.valorTotal);
-    const faturamentoTendencia = faturamentoPrev > 0
-      ? ((faturamentoUltimo - faturamentoPrev) / Math.abs(faturamentoPrev)) * 100
-      : 0;
+    const faturamentoAnterior = periodoComparativo
+      ? toNumber(vendasMeliAnterior?._sum.valorTotal) +
+        toNumber(vendasShopeeAnterior?._sum.valorTotal) +
+        toNumber(vendasTiktokAnterior?._sum.valorTotal)
+      : null;
+    // Zero não significa estabilidade: sem faturamento anterior não existe base
+    // para dividir. A tela mostra "sem base" junto do intervalo, nunca 0,0%.
+    const variacao = variacaoPercentual(faturamentoTotal, faturamentoAnterior);
+    const faturamentoTendenciaDisponivel = variacao !== null;
+    const faturamentoTendencia = variacao ?? 0;
 
     // Separar taxas e frete por plataforma
     const mercadoLivreTaxa = taxasPorPlataforma.get("Mercado Livre") || 0;
@@ -570,6 +597,15 @@ export async function GET(req: NextRequest) {
     const response = {
       faturamentoTotal: safeNumber(faturamentoTotal),
       faturamentoTendencia: safeNumber(faturamentoTendencia),
+      faturamentoAnterior:
+        faturamentoAnterior === null ? null : safeNumber(faturamentoAnterior),
+      faturamentoTendenciaDisponivel,
+      periodoComparativo: periodoComparativo
+        ? {
+            dataInicio: periodoComparativo.dataInicio,
+            dataFim: periodoComparativo.dataFim,
+          }
+        : null,
       impostos: safeNumber(impostosTotal),
       taxasPlataformas: {
         total: safeNumber(taxasTotalAbs),
