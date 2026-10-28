@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import DatePicker from "react-datepicker";
 import { useCelular } from "@/hooks/useMediaQuery";
 import FiltrosVendasCelular from "./FiltrosVendasCelular";
+import FiltroSkuVendas from "./FiltroSkuVendas";
+import type { OpcaoSelecao } from "@/app/components/views/comum/filtros";
+import { useOpcoesSkuVendas } from "@/hooks/useOpcoesSkuVendas";
+import { MAX_SKUS_FILTRO_VENDAS } from "@/lib/vendas-sku";
 import {
   COLUNAS_PADRAO,
   colunasDaPlataforma,
@@ -28,6 +32,8 @@ export type FiltroModalidadeEnvio = "todos" | "me" | "full" | "flex";
  */
 export type { ColunasVisiveis } from "./colunasVendas";
 
+const SEM_SKUS: string[] = [];
+
 interface FiltrosVendasProps {
   filtroAtivo: FiltroStatus;
   onFiltroChange: (filtro: FiltroStatus) => void;
@@ -49,6 +55,8 @@ interface FiltrosVendasProps {
   filtroConta?: string;
   onContaChange?: (contaId: string) => void;
   contasDisponiveis?: Array<{ id: string; nickname: string }>;
+  skusSelecionados?: string[];
+  onSkusChange?: (skus: string[]) => void;
   // Colunas visíveis
   colunasVisiveis?: ColunasVisiveisTipo;
   onColunasChange?: (colunas: ColunasVisiveisTipo) => void;
@@ -78,6 +86,8 @@ export default function FiltrosVendas({
   filtroConta = "todas",
   onContaChange,
   contasDisponiveis = [],
+  skusSelecionados = SEM_SKUS,
+  onSkusChange,
   colunasVisiveis = COLUNAS_PADRAO,
   onColunasChange,
   platform = "Mercado Livre",
@@ -97,6 +107,23 @@ export default function FiltrosVendas({
   const [showModalidadeEnvioDropdown, setShowModalidadeEnvioDropdown] = useState(false);
   const [showContaDropdown, setShowContaDropdown] = useState(false);
   const [showColunasDropdown, setShowColunasDropdown] = useState(false);
+
+  const {
+    opcoes: opcoesSkuDaApi,
+    carregando: carregandoSkus,
+    erro: erroSkus,
+  } = useOpcoesSkuVendas(platform, Boolean(onSkusChange));
+  const opcoesSku = useMemo<OpcaoSelecao[]>(() => {
+    const mapa = new Map<string, OpcaoSelecao>(
+      opcoesSkuDaApi.map((item) => [item.sku, { valor: item.sku, rotulo: item.sku, contagem: item.count }]),
+    );
+    for (const sku of skusSelecionados) {
+      if (!mapa.has(sku)) mapa.set(sku, { valor: sku, rotulo: sku });
+    }
+    return [...mapa.values()].sort((a, b) =>
+      a.rotulo.localeCompare(b.rotulo, "pt-BR", { numeric: true, sensitivity: "base" }),
+    );
+  }, [opcoesSkuDaApi, skusSelecionados]);
 
   // Hook para dropdown de período
   const periodoDropdown = useSmartDropdown<HTMLButtonElement>({
@@ -459,6 +486,14 @@ export default function FiltrosVendas({
           },
         }}
         grupos={grupos}
+        sku={onSkusChange ? {
+          opcoes: opcoesSku,
+          selecionados: skusSelecionados,
+          onMudar: onSkusChange,
+          carregando: carregandoSkus,
+          erro: erroSkus,
+          maxSelecionados: MAX_SKUS_FILTRO_VENDAS,
+        } : undefined}
       />
     );
   }
@@ -529,6 +564,15 @@ export default function FiltrosVendas({
         {/* Botões de Ação */}
         <div className="overflow-x-auto flex-nowrap hide-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
           <div className="flex items-center gap-2 pb-1 min-w-max">
+          {onSkusChange && (
+            <FiltroSkuVendas
+              opcoes={opcoesSku}
+              selecionados={skusSelecionados}
+              onMudar={onSkusChange}
+              carregando={carregandoSkus}
+              erro={erroSkus}
+            />
+          )}
           {/* Botão de Filtro ADS - Apenas para Mercado Livre */}
           {temFiltrosDeAnuncio && <div className="relative">
             <button

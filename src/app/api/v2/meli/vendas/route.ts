@@ -13,6 +13,7 @@ import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
 import { buildPaginationMeta } from "@/validation/validation.interface";
 import { Prisma } from "@prisma/client";
+import { normalizarSkusFiltro } from "@/lib/vendas-sku";
 
 export const runtime = "nodejs";
 
@@ -46,7 +47,10 @@ async function dtoValidatorInterceptor(req: NextRequest): Promise<{
       }[]
     | null;
 }> {
-  let queryParams = Object.fromEntries(new URL(req.url).searchParams);
+  const url = new URL(req.url);
+  const skus = normalizarSkusFiltro(url.searchParams.getAll("sku"));
+  let queryParams = Object.fromEntries(url.searchParams);
+  delete queryParams.sku;
   let dataVendaField;
   if (queryParams["dataVenda[min]"] || queryParams["dataVenda[max]"]) {
     const {
@@ -63,6 +67,7 @@ async function dtoValidatorInterceptor(req: NextRequest): Promise<{
 
   const parsedQuery = {
     ...queryParams,
+    skus: skus.length > 0 ? skus : undefined,
     dataVenda: dataVendaField ?? undefined,
   };
 
@@ -451,6 +456,9 @@ export async function GET(req: NextRequest) {
             equals: dto.status.trim().toLowerCase(),
             mode: "insensitive",
           },
+        }),
+        ...(dto?.skus?.length && {
+          sku: { in: dto.skus },
         }),
         ...(dto?.logisticType && {
           logisticType: {

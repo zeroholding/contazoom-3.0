@@ -77,6 +77,8 @@ interface TabelaVendasProps {
   syncAccountIds?: string[];
   dataInicioPersonalizada?: Date | null;
   dataFimPersonalizada?: Date | null;
+  /** Mudar qualquer filtro feito fora desta tabela volta a paginação para 1. */
+  paginationResetKey?: string;
 }
 
 function toNumber(value: unknown): number | null {
@@ -188,6 +190,7 @@ export default function TabelaVendas({
   syncAccountIds,
   dataInicioPersonalizada = null,
   dataFimPersonalizada = null,
+  paginationResetKey = "",
   syncProgress = null,
   vendas: propVendas, // Recebe vendas via prop (renomeado para evitar conflito)
 }: TabelaVendasProps) {
@@ -745,7 +748,7 @@ export default function TabelaVendas({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [platform, filtroAtivo, periodoAtivo]);
+  }, [platform, filtroAtivo, periodoAtivo, paginationResetKey]);
 
   useEffect(() => {
     if (currentPage > totalPages) {

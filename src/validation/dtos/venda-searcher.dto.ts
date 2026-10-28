@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsDate,
   IsEnum,
@@ -6,10 +9,12 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from "class-validator";
 import { Transform, Type } from "class-transformer";
+import { MAX_SKUS_FILTRO_VENDAS } from "@/lib/vendas-sku";
 
 export class DataVendaDTO {
   @IsOptional()
@@ -52,6 +57,7 @@ class vendaSearcherValidationDTO {
     min?: Date;
     max?: Date;
   };
+  skus?: string[];
   logisticType?: LogisticTypeOptions;
   ads?: boolean;
   anuncio?: AnuncioOptions;
@@ -67,6 +73,14 @@ export class VendaSearcherValidationDTO implements vendaSearcherValidationDTO {
   @ValidateNested()
   @Type(() => DataVendaDTO)
   dataVenda?: DataVendaDTO;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_SKUS_FILTRO_VENDAS)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(255, { each: true })
+  skus?: string[];
 
   @IsOptional()
   @IsEnum(StatusOptions)

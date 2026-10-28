@@ -117,18 +117,22 @@ export function ListaOpcoes({
   onMudar,
   buscaPlaceholder = "Filtrar…",
   vazio = "Nada disponível",
+  maxSelecionados,
 }: {
   opcoes: OpcaoSelecao[];
   selecionados: string[];
   onMudar: (valores: string[]) => void;
   buscaPlaceholder?: string;
   vazio?: string;
+  /** Limite da seleção; itens desmarcados ficam bloqueados quando atingido. */
+  maxSelecionados?: number;
 }) {
   const [busca, setBusca] = useState("");
   const celular = useCelular();
   const marcados = new Set(selecionados);
 
   const alternar = (valor: string) => {
+    if (!marcados.has(valor) && maxSelecionados && selecionados.length >= maxSelecionados) return;
     onMudar(
       marcados.has(valor)
         ? selecionados.filter((v) => v !== valor)
@@ -170,20 +174,25 @@ export function ListaOpcoes({
         ) : (
           filtradas.map((o) => {
             const ativo = marcados.has(o.valor);
+            const bloqueado = !ativo && Boolean(maxSelecionados && selecionados.length >= maxSelecionados);
             return (
               <label
                 key={o.valor}
-                className={`flex cursor-pointer items-center gap-2 rounded-[var(--cz-raio)] px-2 py-2 max-md:gap-3 max-md:py-3 max-md:text-[14px] text-[13px] transition-colors ${
-                  ativo
-                    ? "bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
-                    : "text-[var(--cz-texto)] hover:bg-[var(--cz-fundo)]"
+                aria-disabled={bloqueado}
+                className={`flex items-center gap-2 rounded-[var(--cz-raio)] px-2 py-2 max-md:gap-3 max-md:py-3 max-md:text-[14px] text-[13px] transition-colors ${
+                  bloqueado
+                    ? "cursor-not-allowed text-[var(--cz-texto-fraco)] opacity-55"
+                    : ativo
+                      ? "cursor-pointer bg-[var(--cz-laranja-suave)] font-semibold text-[var(--cz-laranja-forte)]"
+                      : "cursor-pointer text-[var(--cz-texto)] hover:bg-[var(--cz-fundo)]"
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={ativo}
+                  disabled={bloqueado}
                   onChange={() => alternar(o.valor)}
-                className="size-3.5 max-md:size-5 shrink-0 accent-[var(--cz-laranja)]"
+                  className="size-3.5 max-md:size-5 shrink-0 accent-[var(--cz-laranja)]"
                 />
                 {o.icone}
                 <span className="min-w-0 flex-1 truncate" title={o.rotulo}>
@@ -199,6 +208,12 @@ export function ListaOpcoes({
           })
         )}
       </div>
+
+      {maxSelecionados && selecionados.length >= maxSelecionados && (
+        <p className="border-t border-[var(--cz-hairline)] px-3 py-2 text-[11px] text-[var(--cz-texto-suave)]">
+          Limite de {maxSelecionados} itens atingido.
+        </p>
+      )}
 
       {/* "Limpar" só aparece com algo escolhido: um botão permanentemente
           desabilitado ocuparia a mesma linha sem nunca servir. */}
@@ -316,6 +331,7 @@ export function FiltroRapido({
   icone,
   /** Largura do painel. Listas de SKU precisam de mais que a pastilha tem. */
   larguraPainel = "w-[19rem]",
+  maxSelecionados,
 }: {
   rotulo: string;
   opcoes: OpcaoSelecao[];
@@ -326,6 +342,7 @@ export function FiltroRapido({
   vazio?: string;
   icone?: ReactNode;
   larguraPainel?: string;
+  maxSelecionados?: number;
 }) {
   const { aberto, setAberto, caixa } = usePainelAncorado();
   const celular = useCelular();
@@ -375,6 +392,7 @@ export function FiltroRapido({
             onMudar={onMudar}
             buscaPlaceholder={buscaPlaceholder}
             vazio={vazio}
+            maxSelecionados={maxSelecionados}
           />
         </div>
       )}

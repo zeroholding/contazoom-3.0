@@ -6,6 +6,7 @@ import FiltrosSheet, {
   CampoDaFolha,
   GrupoDePilulas,
 } from "@/components/ui/FiltrosSheet";
+import { ListaOpcoes, type OpcaoSelecao } from "@/app/components/views/comum/filtros";
 
 /**
  * Barra de filtros das vendas no CELULAR, compartilhada pelas quatro telas.
@@ -51,6 +52,14 @@ type Props = {
     onAplicarPersonalizado: (inicio: Date, fim: Date) => void;
   };
   grupos: GrupoFiltro[];
+  sku?: {
+    opcoes: OpcaoSelecao[];
+    selecionados: string[];
+    onMudar: (valores: string[]) => void;
+    carregando?: boolean;
+    erro?: string | null;
+    maxSelecionados?: number;
+  };
 };
 
 const COR_ATIVA: Record<OpcaoStatus["cor"], { aba: string; selo: string }> = {
@@ -66,7 +75,7 @@ const paraInput = (d: Date) =>
 // 21h do dia anterior no Brasil, e o filtro começaria um dia antes do escolhido.
 const doInput = (valor: string) => new Date(`${valor}T00:00:00`);
 
-export default function FiltrosVendasCelular({ status, periodo, grupos }: Props) {
+export default function FiltrosVendasCelular({ status, periodo, grupos, sku }: Props) {
   const [abrirPersonalizado, setAbrirPersonalizado] = useState(false);
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
@@ -92,9 +101,12 @@ export default function FiltrosVendasCelular({ status, periodo, grupos }: Props)
           ? `${intervalo[1]} – ${intervalo[3]}/${intervalo[4]}`
           : rotuloSeletor;
 
-  const ativos = grupos.filter((g) => g.atual !== g.padrao).length;
+  const ativos =
+    grupos.filter((g) => g.atual !== g.padrao).length +
+    (sku && sku.selecionados.length > 0 ? 1 : 0);
   const limpar = () => {
     for (const g of grupos) if (g.atual !== g.padrao) g.onEscolher(g.padrao);
+    if (sku?.selecionados.length) sku.onMudar([]);
   };
 
   const aplicar = () => {
@@ -205,6 +217,24 @@ export default function FiltrosVendasCelular({ status, periodo, grupos }: Props)
                 />
               </CampoDaFolha>
             ))}
+            {sku && (
+              <CampoDaFolha
+                rotulo={sku.selecionados.length > 0 ? `SKUs (${sku.selecionados.length})` : "SKUs"}
+              >
+                <ListaOpcoes
+                  opcoes={sku.opcoes}
+                  selecionados={sku.selecionados}
+                  onMudar={sku.onMudar}
+                  buscaPlaceholder="Buscar SKU…"
+                  vazio={
+                    sku.carregando
+                      ? "Carregando SKUs…"
+                      : sku.erro || "Nenhum SKU encontrado nas vendas"
+                  }
+                  maxSelecionados={sku.maxSelecionados}
+                />
+              </CampoDaFolha>
+            )}
           </FiltrosSheet>
         )}
       </div>

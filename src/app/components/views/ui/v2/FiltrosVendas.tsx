@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 import DatePicker from "react-datepicker";
 import { useCelular } from "@/hooks/useMediaQuery";
 import FiltrosVendasCelular from "../FiltrosVendasCelular";
 import { DataVendaFilter, VendaFilters } from "@/hooks/useVendasFilter";
+import { useOpcoesSkuVendas } from "@/hooks/useOpcoesSkuVendas";
+import { MAX_SKUS_FILTRO_VENDAS } from "@/lib/vendas-sku";
+import FiltroSkuVendas from "../FiltroSkuVendas";
+import type { OpcaoSelecao } from "@/app/components/views/comum/filtros";
 import {
   COLUNAS_PADRAO,
   colunasDaPlataforma,
@@ -31,6 +35,8 @@ export type FiltroModalidadeEnvio =
 
 /** Ver o re-export equivalente em `ui/FiltrosVendas.tsx`. */
 export type { ColunasVisiveis } from "../colunasVendas";
+
+const SEM_SKUS: string[] = [];
 
 interface FiltrosVendasProps {
   totalVendas?: number;
@@ -74,6 +80,28 @@ export default function FiltrosVendasV2({
     useState(false);
   const [showContaDropdown, setShowContaDropdown] = useState(false);
   const [showColunasDropdown, setShowColunasDropdown] = useState(false);
+
+  const skusSelecionados = filters.skus ?? SEM_SKUS;
+  const {
+    opcoes: opcoesSkuDaApi,
+    carregando: carregandoSkus,
+    erro: erroSkus,
+  } = useOpcoesSkuVendas(platform);
+  // A opção selecionada continua visível mesmo se uma sincronização/conta nova
+  // mudar a faceta enquanto o filtro está aberto.
+  const opcoesSku = useMemo<OpcaoSelecao[]>(() => {
+    const mapa = new Map<string, OpcaoSelecao>(
+      opcoesSkuDaApi.map((item) => [item.sku, { valor: item.sku, rotulo: item.sku, contagem: item.count }]),
+    );
+    for (const sku of skusSelecionados) {
+      if (!mapa.has(sku)) mapa.set(sku, { valor: sku, rotulo: sku });
+    }
+    return [...mapa.values()].sort((a, b) =>
+      a.rotulo.localeCompare(b.rotulo, "pt-BR", { numeric: true, sensitivity: "base" }),
+    );
+  }, [opcoesSkuDaApi, skusSelecionados]);
+  const mudarSkus = (valores: string[]) =>
+    updateFilters({ skus: valores.length > 0 ? valores : undefined });
 
   // Hook para dropdown de período
   const periodoDropdown = useSmartDropdown<HTMLButtonElement>({
@@ -148,7 +176,6 @@ export default function FiltrosVendasV2({
 
   const [currentStatusOption, setCurrentStatusOption] =
     useState<FiltroStatus>("todos");
-  currentStatusOption;
 
   const handleStatusFilterOnClick = (filtro: FiltroStatus) => {
     if (filtro === filters.status || isAnimating) return;
@@ -564,6 +591,14 @@ export default function FiltrosVendasV2({
           },
         }}
         grupos={grupos}
+        sku={{
+          opcoes: opcoesSku,
+          selecionados: skusSelecionados,
+          onMudar: mudarSkus,
+          carregando: carregandoSkus,
+          erro: erroSkus,
+          maxSelecionados: MAX_SKUS_FILTRO_VENDAS,
+        }}
       />
     );
   }
@@ -642,6 +677,13 @@ export default function FiltrosVendasV2({
         {/* Botões de Ação */}
         <div className="overflow-x-auto flex-nowrap hide-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
           <div className="flex items-center gap-2 pb-1 min-w-max">
+          <FiltroSkuVendas
+            opcoes={opcoesSku}
+            selecionados={skusSelecionados}
+            onMudar={mudarSkus}
+            carregando={carregandoSkus}
+            erro={erroSkus}
+          />
           {/* Botão de Filtro Exposição - Apenas para Mercado Livre */}
           {platform !== "Shopee" && (
             <div className="relative">

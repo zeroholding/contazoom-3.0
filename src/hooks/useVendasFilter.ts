@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normalizarSkusFiltro } from "@/lib/vendas-sku";
 
 export type DataVendaFilter = {
   min?: Date;
@@ -9,6 +10,8 @@ export type VendaFilters = {
   accountId?: string;
   status?: string;
   dataVenda?: DataVendaFilter;
+  /** OR entre os códigos; combinado por AND com os outros filtros. */
+  skus?: string[];
   logisticType?: "fulfillment" | "flex" | "agencia" | "drop_off";
   ads?: boolean;
   anuncio?: "catalogo" | "proprio";
@@ -23,9 +26,17 @@ export function serializeVendaFilters(filters: VendaFilters) {
   Object.entries(filters).forEach(([key, value]) => {
     if (value === undefined || value === null) return;
 
-    if (key === "dataVenda" && typeof value === "object") {
-      if (value.min) params.append("dataVenda[min]", value.min.toISOString());
-      if (value.max) params.append("dataVenda[max]", value.max.toISOString());
+    // Uma chave por SKU. CSV não serve: SKU pode conter vírgula, `&`, `=` e
+    // Unicode. Ordem canônica evita duas requisições/cache keys para a mesma seleção.
+    if (key === "skus" && Array.isArray(value)) {
+      for (const sku of normalizarSkusFiltro(value)) params.append("sku", sku);
+      return;
+    }
+
+    if (key === "dataVenda" && typeof value === "object" && !Array.isArray(value)) {
+      const data = value as DataVendaFilter;
+      if (data.min) params.append("dataVenda[min]", data.min.toISOString());
+      if (data.max) params.append("dataVenda[max]", data.max.toISOString());
       return;
     }
 
@@ -50,13 +61,22 @@ export function useVendaFilters({ initialFilters }: PropsType = {}) {
   );
 
   function updateFilters(partial: Partial<VendaFilters>) {
+    const normalizado = Object.prototype.hasOwnProperty.call(partial, "skus")
+      ? {
+          ...partial,
+          skus: partial.skus && partial.skus.length > 0
+            ? normalizarSkusFiltro(partial.skus)
+            : undefined,
+        }
+      : partial;
+
     setFilters((prev) => ({
       ...prev,
-      ...partial,
-      page: partial.page ?? 1, // reset page se não for paginação
+      ...normalizado,
+      page: normalizado.page ?? 1, // reset page se não for paginação
     }));
 
-    console.log(`[useVendaFilters] updateFilters to ${partial}`)
+    console.log(`[useVendaFilters] updateFilters to ${JSON.stringify(normalizado)}`)
   }
 
   function setPage(page: number) {

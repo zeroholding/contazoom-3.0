@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import "@/lib/metadata";
 import { assertSessionToken } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
+import { validarSkusFiltro } from "@/lib/vendas-sku";
 import { calculateShopeeFinancials } from "@/lib/shopee-finance";
 import { calculateMeliFlexShipping } from "@/lib/flex-shipping";
 import { loadActiveFlexShippingConfig } from "@/lib/flex-shipping-config";
@@ -55,6 +56,19 @@ export async function GET(req: NextRequest) {
   const dataVendaMax = searchParams.get("dataVenda[max]");
   const statusFilter = searchParams.get("status");
   const contaFilter = searchParams.get("conta");
+  let skus: string[];
+  try {
+    skus = validarSkusFiltro(searchParams.getAll("sku"));
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Filtro de SKU inválido." },
+      { status: 400 },
+    );
+  }
+
+  const skuCondition = skus.length > 0
+    ? Prisma.sql`AND "sku" IN (${Prisma.join(skus)})`
+    : Prisma.empty;
   
   const statusCondition = statusFilter 
     ? Prisma.sql`AND "status" = ${statusFilter}`
@@ -113,7 +127,7 @@ export async function GET(req: NextRequest) {
       WHERE "user_id" = ${session.sub} 
       ${dateCondition} 
       ${statusCondition}
-      ${contaMeliCondition}
+      ${contaMeliCondition} ${skuCondition}
       
       UNION ALL
       
@@ -150,7 +164,7 @@ export async function GET(req: NextRequest) {
       WHERE "user_id" = ${session.sub}
       ${dateCondition}
       ${statusCondition}
-      ${contaShopeeCondition}
+      ${contaShopeeCondition} ${skuCondition}
 
       UNION ALL
 
@@ -187,7 +201,7 @@ export async function GET(req: NextRequest) {
       WHERE "user_id" = ${session.sub}
       ${dateCondition}
       ${statusCondition}
-      ${contaTiktokCondition}
+      ${contaTiktokCondition} ${skuCondition}
 
       ORDER BY "dataVenda" DESC
       LIMIT ${limit} OFFSET ${offset}
@@ -203,13 +217,13 @@ export async function GET(req: NextRequest) {
         SUM(CASE WHEN status IN ('cancelled', 'cancelado') THEN 1 ELSE 0 END) as cancelled
       FROM (
         SELECT "status" FROM meli_venda
-        WHERE "user_id" = ${session.sub} ${dateCondition} ${contaMeliCondition}
+        WHERE "user_id" = ${session.sub} ${dateCondition} ${contaMeliCondition} ${skuCondition}
         UNION ALL
         SELECT "status" FROM shopee_venda
-        WHERE "user_id" = ${session.sub} ${dateCondition} ${contaShopeeCondition}
+        WHERE "user_id" = ${session.sub} ${dateCondition} ${contaShopeeCondition} ${skuCondition}
         UNION ALL
         SELECT "status" FROM tiktok_venda
-        WHERE "user_id" = ${session.sub} ${dateCondition} ${contaTiktokCondition}
+        WHERE "user_id" = ${session.sub} ${dateCondition} ${contaTiktokCondition} ${skuCondition}
       ) AS t
     `;
 
@@ -220,13 +234,13 @@ export async function GET(req: NextRequest) {
           SELECT COUNT(*) as total
           FROM (
             SELECT 1 FROM meli_venda
-            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaMeliCondition}
+            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaMeliCondition} ${skuCondition}
             UNION ALL
             SELECT 1 FROM shopee_venda
-            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaShopeeCondition}
+            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaShopeeCondition} ${skuCondition}
             UNION ALL
             SELECT 1 FROM tiktok_venda
-            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaTiktokCondition}
+            WHERE "user_id" = ${session.sub} ${dateCondition} ${statusCondition} ${contaTiktokCondition} ${skuCondition}
           ) AS t
         `
       : null;

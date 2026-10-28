@@ -363,6 +363,7 @@ export default function VendasShopee() {
     useState<Date | null>(null);
 
   const [filtroConta, setFiltroConta] = useState<string>("todas");
+  const [skusSelecionados, setSkusSelecionados] = useState<string[]>([]);
 
   const [filtroModalidadeEnvio, setFiltroModalidadeEnvio] = useState<FiltroModalidadeEnvio>("todos");
   // Padrão único, de `colunasVendas.ts`. ADS, exposição e tipo continuam no objeto
@@ -433,17 +434,21 @@ export default function VendasShopee() {
   const vendasFiltradasPorPeriodo = vendas.filter((venda) =>
     filtrarPorPeriodo(venda, periodoAtivo)
   );
+  const skuSet = new Set(skusSelecionados);
+  const vendasFiltradasPorSku = vendasFiltradasPorPeriodo.filter(
+    (venda) => skuSet.size === 0 || skuSet.has(String(venda.sku ?? "")),
+  );
   const contagensVendas = {
-    total: vendasFiltradasPorPeriodo.length,
-    pagas: vendasFiltradasPorPeriodo.filter((v) =>
+    total: vendasFiltradasPorSku.length,
+    pagas: vendasFiltradasPorSku.filter((v) =>
       isStatusPago(v.status, "Shopee")
     ).length,
-    canceladas: vendasFiltradasPorPeriodo.filter((v) =>
+    canceladas: vendasFiltradasPorSku.filter((v) =>
       isStatusCancelado(v.status, "Shopee")
     ).length,
   };
 
-  const vendasFiltradas = vendasFiltradasPorPeriodo.filter((venda) => {
+  const vendasFiltradas = vendasFiltradasPorSku.filter((venda) => {
     const matchStatus =
       filtroAtivo === "todos" ||
       (filtroAtivo === "pagos" && isStatusPago(venda.status, "Shopee")) ||
@@ -472,16 +477,6 @@ export default function VendasShopee() {
 
     return matchStatus && matchConta && matchModalidade;
   });
-
-  const contagensVendasGeral = {
-    total: vendasFiltradasPorPeriodo.length,
-    pagas: vendasFiltradasPorPeriodo.filter((v) =>
-      isStatusPago(v.status, "Shopee"),
-    ).length,
-    canceladas: vendasFiltradasPorPeriodo.filter((v) =>
-      isStatusCancelado(v.status, "Shopee"),
-    ).length,
-  };
 
   const hasInitialSet = useRef(false);
   useIsoLayout(() => {
@@ -564,6 +559,8 @@ export default function VendasShopee() {
               id: conta.id,
               nickname: conta.nickname || conta.shop_id || conta.merchant_id || conta.id,
             }))}
+            skusSelecionados={skusSelecionados}
+            onSkusChange={setSkusSelecionados}
             platform="Shopee"
             filtroModalidadeEnvio={filtroModalidadeEnvio}
             onModalidadeEnvioChange={setFiltroModalidadeEnvio}
@@ -576,6 +573,7 @@ export default function VendasShopee() {
             platform="Shopee"
             syncAccountIds={filtroConta !== "todas" ? [filtroConta] : undefined}
             colunasVisiveis={colunasVisiveis}
+            paginationResetKey={skusSelecionados.join("\u0000")}
           />
         </section>
       </main>
