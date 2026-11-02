@@ -294,6 +294,23 @@ export type ApuracaoDetalhe = {
 
 /* ------------------------------ Legalização ------------------------------- */
 
+/**
+ * Uma pendência (bloqueio) de processo de legalização.
+ *
+ * Várias coexistem e são independentes — cada uma com motivo, responsável e
+ * contagem de dias próprios. Só as abertas vêm na lista e no detalhe.
+ */
+export type PendenciaLegalizacao = {
+  id: string;
+  motivo: string;
+  /** CLIENTE, ESCRITORIO, COMERCIAL_CZ, TERCEIRO */
+  responsavel: string;
+  responsavelLabel: string;
+  desde: string;
+  /** Dias desde `desde`. Calculado no servidor, como os demais números. */
+  diasBloqueio: number | null;
+};
+
 export type ProcessoLista = {
   id: string;
   tipo: string;
@@ -317,9 +334,8 @@ export type ProcessoLista = {
   protocoloExterno: string | null;
   orgaoExterno: string | null;
   bloqueada: boolean;
-  bloqueioMotivo: string | null;
-  bloqueioResponsavel: string | null;
-  bloqueioDesde: string | null;
+  /** Só pendências abertas, mais antiga primeiro. */
+  pendenciasAbertas: PendenciaLegalizacao[];
   prazoEstimado: string | null;
   situacaoPrazo: string;
   diasPrazo: number | null;
@@ -343,9 +359,6 @@ export type ProcessoDetalhe = {
   etapaAtual: number;
   status: string;
   bloqueada: boolean;
-  bloqueioMotivo: string | null;
-  bloqueioDesde: string | null;
-  bloqueioResponsavel: string | null;
   protocoloExterno: string | null;
   orgaoExterno: string | null;
   prazoEstimado: string | null;
@@ -373,7 +386,8 @@ export type ProcessoDetalhe = {
   logs: LogItem[];
   tipoLabel: string;
   orgaoExternoLabel: string | null;
-  bloqueioResponsavelLabel: string | null;
+  /** Só pendências abertas, mais antiga primeira. */
+  pendenciasAbertas: PendenciaLegalizacao[];
   etapaAtualTitulo: string | null;
   etapasTotal: number;
   etapasResolvidas: number;
@@ -382,6 +396,7 @@ export type ProcessoDetalhe = {
   situacaoPrazo: string;
   diasPrazo: number | null;
   diasEmAberto: number | null;
+  /** Dias da pendência MAIS ANTIGA aberta. `null` sem pendência. */
   diasEmBloqueio: number | null;
   logsTruncados: boolean;
 };

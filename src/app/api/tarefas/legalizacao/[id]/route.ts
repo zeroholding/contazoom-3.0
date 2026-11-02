@@ -83,6 +83,12 @@ export async function GET(
         },
         responsavel: { select: { id: true, name: true, email: true } },
         etapas: { orderBy: { numero: "asc" } },
+        // Só as abertas: pendência resolvida tem história própria (linha na
+        // tabela + log) e não entra na lista de ação da tela.
+        pendencias: {
+          where: { resolvidaEm: null },
+          orderBy: { desde: "asc" },
+        },
         logs: {
           orderBy: { createdAt: "desc" },
           take: LIMITE_LOGS,
@@ -111,16 +117,25 @@ export async function GET(
     const pendentes = etapasNaoResolvidas(processo.etapas);
     const prazo = situacaoPrazo(processo.prazoEstimado, concluido, agora);
 
+    // Ordem de `desde` asc: a primeira é a mais antiga, a que há mais tempo
+    // trava o processo — e cuja duração cabe no selo do cabeçalho.
+    const maisAntiga = processo.pendencias[0] ?? null;
+    const { pendencias, ...processoCampos } = processo;
+
     return NextResponse.json({
-      ...processo,
+      ...processoCampos,
       tipoLabel: TIPO_PROCESSO_LABEL[processo.tipo] ?? processo.tipo,
       orgaoExternoLabel: processo.orgaoExterno
         ? ORGAO_EXTERNO_LABEL[processo.orgaoExterno] ?? processo.orgaoExterno
         : null,
-      bloqueioResponsavelLabel: processo.bloqueioResponsavel
-        ? BLOQUEIO_RESPONSAVEL_LABEL[processo.bloqueioResponsavel] ??
-          processo.bloqueioResponsavel
-        : null,
+      pendenciasAbertas: pendencias.map((p) => ({
+        id: p.id,
+        motivo: p.motivo,
+        responsavel: p.responsavel,
+        responsavelLabel: BLOQUEIO_RESPONSAVEL_LABEL[p.responsavel] ?? p.responsavel,
+        desde: p.desde,
+        diasBloqueio: diasEmBloqueio(p.desde, agora),
+      })),
       etapaAtualTitulo: etapaAtual?.titulo ?? null,
       etapasTotal: processo.etapas.length,
       etapasResolvidas: processo.etapas.length - pendentes.length,
@@ -128,9 +143,7 @@ export async function GET(
       situacaoPrazo: prazo.situacao,
       diasPrazo: prazo.dias,
       diasEmAberto: diasEmAberto(processo.abertoEm, processo.concluidoEm, agora),
-      diasEmBloqueio: processo.bloqueada
-        ? diasEmBloqueio(processo.bloqueioDesde, agora)
-        : null,
+      diasEmBloqueio: maisAntiga ? diasEmBloqueio(maisAntiga.desde, agora) : null,
       // O log é sempre parcial na tela de detalhe; a auditoria completa vive em
       // /api/tarefas/log. A flag evita a tela dar a impressão de log truncado
       // sem avisar.

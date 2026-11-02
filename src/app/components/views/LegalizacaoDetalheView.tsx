@@ -44,6 +44,7 @@ import type {
   EmpresaLista,
   Etapa,
   Pagination,
+  PendenciaLegalizacao,
   ProcessoDetalhe,
   UsuarioInterno,
 } from "@/app/components/views/ui/tarefas/tipos";
@@ -116,7 +117,12 @@ type RespostaDispensar = {
   status: string;
 };
 
-type RespostaResolverBloqueio = { status: string; diasBloqueado: number | null };
+type RespostaResolverBloqueio = {
+  status: string;
+  diasBloqueado: number | null;
+  /** Quantas pendências continuam abertas depois desta resolução. */
+  pendenciasAbertas: number;
+};
 
 /**
  * ARMADILHA do protocolo: com `alterado:false` o `processo` devolvido tem só
@@ -496,7 +502,9 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
   const [responsavelPendencia, setResponsavelPendencia] = useState("CLIENTE");
   const [erroPendencia, setErroPendencia] = useState("");
 
-  const [modalResolver, setModalResolver] = useState(false);
+  /** Pendência alvo da resolução. `null` = modal fechado. */
+  const [pendenciaResolver, setPendenciaResolver] =
+    useState<PendenciaLegalizacao | null>(null);
   const [erroResolver, setErroResolver] = useState("");
 
   const abrirPendencia = useCallback(() => {
@@ -520,7 +528,9 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
         responsavel: responsavelPendencia,
       });
       setModalPendencia(false);
-      setMensagemOk("Pendência registrada. O processo fica travado até ser resolvida.");
+      setMensagemOk(
+        "Pendência registrada. Ela é independente das demais: o processo só destrava quando todas forem resolvidas."
+      );
       recarregar();
     } catch (falha) {
       setErroPendencia(mensagemDeErro(falha) || "Não foi possível registrar.");
@@ -530,7 +540,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
   }
 
   async function resolverPendencia(detalhe: string) {
-    if (!processo) return;
+    if (!processo || !pendenciaResolver) return;
 
     setOcupado(true);
     setErroResolver("");
@@ -538,18 +548,25 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
       // ATENÇÃO: aqui o campo é `detalhe`. A apuração usa `observacao`.
       const resposta = await apiDelete<RespostaResolverBloqueio>(
         `/api/tarefas/legalizacao/${processo.id}/bloqueio`,
-        { detalhe: detalhe || undefined }
+        { pendenciaId: pendenciaResolver.id, detalhe: detalhe || undefined }
       );
-      setModalResolver(false);
-      setMensagemOk(
+      const duracao =
         resposta.diasBloqueado === null || resposta.diasBloqueado === undefined
           ? "Pendência resolvida."
           : `Pendência resolvida após ${plural(
               resposta.diasBloqueado,
               "dia",
               "dias"
-            )}.`
+            )}.`;
+      const restam = resposta.pendenciasAbertas ?? 0;
+      setMensagemOk(
+        restam > 0
+          ? `${duracao} Ainda ${
+              restam === 1 ? "fica 1 pendência aberta" : `ficam ${restam} pendências abertas`
+            }.`
+          : `${duracao} O processo voltou a andar.`
       );
+      setPendenciaResolver(null);
       recarregar();
     } catch (falha) {
       setErroResolver(mensagemDeErro(falha) || "Não foi possível resolver.");
@@ -1006,19 +1023,12 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
     <>
       {permissoes.gerenciarBloqueio && !encerrado && (
         <Botao
-          variante={processo.bloqueada ? "secundario" : "escuro"}
-          icone={processo.bloqueada ? "Unlock" : "AlertTriangle"}
+          variante="escuro"
+          icone="AlertTriangle"
           disabled={ocupado}
-          onClick={
-            processo.bloqueada
-              ? () => {
-                  setErroResolver("");
-                  setModalResolver(true);
-                }
-              : abrirPendencia
-          }
+          onClick={abrirPendencia}
         >
-          {processo.bloqueada ? "Resolver pendência" : "Registrar pendência"}
+          Registrar pendência
         </Botao>
       )}
 
@@ -1073,10 +1083,11 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
               situacao={processo.situacaoPrazo}
               dias={processo.diasPrazo}
             />
-            {processo.bloqueada && (
+            {processo.pendenciasAbertas.length > 0 && (
               <SeloBloqueio
-                responsavel={processo.bloqueioResponsavel}
+                responsavel={processo.pendenciasAbertas[0].responsavel}
                 dias={processo.diasEmBloqueio}
+                quantidade={processo.pendenciasAbertas.length}
               />
             )}
             {processo.empresa && (
@@ -1112,21 +1123,34 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
         </div>
       </Painel>
 
-      {processo.bloqueada && (
+      {processo.pendenciasAbertas.length > 0 && (
         <Aviso
           tom="atencao"
-          mensagem={`Pendência aberta${
-            processo.bloqueioResponsavelLabel
-              ? ` com ${processo.bloqueioResponsavelLabel}`
-              : ""
-          }${
-            processo.diasEmBloqueio === null ||
-            processo.diasEmBloqueio === undefined
-              ? ""
-              : ` há ${plural(processo.diasEmBloqueio, "dia", "dias")}`
-          }: ${
-            processo.bloqueioMotivo ?? "motivo não informado"
-          }. Nenhuma etapa avança enquanto a pendência existir.`}
+          mensagem={
+            processo.pendenciasAbertas.length === 1
+              ? `Pendência aberta com ${
+                  processo.pendenciasAbertas[0].responsavelLabel
+                }${
+                  processo.diasEmBloqueio === null ||
+                  processo.diasEmBloqueio === undefined
+                    ? ""
+                    : ` há ${plural(processo.diasEmBloqueio, "dia", "dias")}`
+                }: ${
+                  processo.pendenciasAbertas[0].motivo || "motivo não informado"
+                }. Nenhuma etapa avança enquanto a pendência existir.`
+              : `${
+                  processo.pendenciasAbertas.length
+                } pendências abertas (a mais antiga: com ${
+                  processo.pendenciasAbertas[0].responsavelLabel
+                }${
+                  processo.diasEmBloqueio === null ||
+                  processo.diasEmBloqueio === undefined
+                    ? ""
+                    : ` há ${plural(processo.diasEmBloqueio, "dia", "dias")}`
+                } — ${
+                  processo.pendenciasAbertas[0].motivo || "motivo não informado"
+                }). Nenhuma etapa avança enquanto existir pendência.`
+          }
         />
       )}
 
@@ -1349,7 +1373,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
             {
               chave: "pendencias",
               texto: "Pendências",
-              contagem: processo.bloqueada ? 1 : 0,
+              contagem: processo.pendenciasAbertas.length,
             },
             {
               chave: "anexos",
@@ -1406,43 +1430,65 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
 
         {aba === "pendencias" && (
           <div className="space-y-4 px-5 py-4">
-            {processo.bloqueada ? (
-              <div className="rounded-lg border border-[#FEDF89] bg-[#FFFAEB] p-4">
-                <div className="flex items-start gap-3">
-                  <Icone
-                    nome="AlertTriangle"
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[#B54708]"
-                  />
-                  <div className="min-w-0 flex-1 space-y-2 text-sm text-[#B54708]">
-                    <p className="font-semibold">
-                      {processo.bloqueioResponsavelLabel
-                        ? `Travado com ${processo.bloqueioResponsavelLabel}`
-                        : "Pendência aberta"}
-                      {processo.diasEmBloqueio === null ||
-                      processo.diasEmBloqueio === undefined
-                        ? ""
-                        : ` há ${plural(processo.diasEmBloqueio, "dia", "dias")}`}
-                    </p>
-                    <p>{processo.bloqueioMotivo ?? "Motivo não informado."}</p>
-                    <p className="text-xs">
-                      Desde {dataHora(processo.bloqueioDesde)}
-                    </p>
-                    {permissoes.gerenciarBloqueio && !encerrado && (
-                      <Botao
-                        variante="secundario"
-                        icone="Unlock"
-                        disabled={ocupado}
-                        onClick={() => {
-                          setErroResolver("");
-                          setModalResolver(true);
-                        }}
-                      >
-                        Resolver pendência
-                      </Botao>
-                    )}
-                  </div>
+            {processo.pendenciasAbertas.length > 0 ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-gray-500">
+                    Cada pendência é independente: resolver uma não resolve as
+                    outras. O processo só destrava quando a última for resolvida.
+                  </p>
+                  {permissoes.gerenciarBloqueio && !encerrado && (
+                    <Botao
+                      variante="escuro"
+                      icone="AlertTriangle"
+                      disabled={ocupado}
+                      onClick={abrirPendencia}
+                    >
+                      Registrar pendência
+                    </Botao>
+                  )}
                 </div>
-              </div>
+
+                {processo.pendenciasAbertas.map((pendencia) => (
+                  <div
+                    key={pendencia.id}
+                    className="rounded-lg border border-[#FEDF89] bg-[#FFFAEB] p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <Icone
+                        nome="AlertTriangle"
+                        className="mt-0.5 h-4 w-4 shrink-0 text-[#B54708]"
+                      />
+                      <div className="min-w-0 flex-1 space-y-2 text-sm text-[#B54708]">
+                        <p className="font-semibold">
+                          Travado com {pendencia.responsavelLabel}
+                          {pendencia.diasBloqueio === null ||
+                          pendencia.diasBloqueio === undefined
+                            ? ""
+                            : ` há ${plural(pendencia.diasBloqueio, "dia", "dias")}`}
+                        </p>
+                        <p>{pendencia.motivo || "Motivo não informado."}</p>
+                        <p className="text-xs">
+                          Desde {dataHora(pendencia.desde)}
+                        </p>
+                        {permissoes.gerenciarBloqueio && !encerrado && (
+                          <Botao
+                            variante="secundario"
+                            icone="Unlock"
+                            disabled={ocupado}
+                            onClick={() => {
+                              setErroResolver("");
+                              setPendenciaResolver(pendencia);
+                            }}
+                          >
+                            Resolver pendência
+                          </Botao>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
             ) : (
               <div className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-center">
                 <p className="text-sm font-medium text-gray-900">
@@ -1450,7 +1496,8 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
                   Registre uma pendência quando o processo travar esperando
-                  cliente, escritório, comercial ou órgão externo. O tempo
+                  cliente, escritório, comercial ou órgão externo. Podem coexistir
+                  várias, cada uma com seu tempo de travamento. O tempo
                   travado passa a contar e aparece na lista.
                 </p>
                 {permissoes.gerenciarBloqueio && !encerrado && (
@@ -1719,7 +1766,7 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
       <ModalMotivo
         aberto={modalPendencia}
         titulo="Registrar pendência"
-        descricao="O processo fica travado e nenhuma etapa avança até a pendência ser resolvida."
+        descricao="A pendência entra na lista do processo. Várias podem coexistir, independentes entre si: nenhuma etapa avança até todas serem resolvidas."
         icone="AlertTriangle"
         rotulo="Motivo da pendência"
         minimo={MINIMO_MOTIVO}
@@ -1736,24 +1783,38 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
             opcoes={OPCOES_BLOQUEIO}
             value={responsavelPendencia}
             onChange={(e) => setResponsavelPendencia(e.target.value)}
-            ajuda="Travado com o cliente vira “Aguardando documentação”; nos outros casos, “Pendência identificada”."
+            ajuda="Cada pendência tem o seu responsável. Travado com o cliente vira “Aguardando documentação”; nos outros casos, “Pendência identificada”."
           />
         }
       />
 
       <ModalMotivo
-        aberto={modalResolver}
+        aberto={!!pendenciaResolver}
         titulo="Resolver pendência"
-        descricao="O processo volta a andar da etapa em que parou."
+        descricao={
+          pendenciaResolver
+            ? `A resolução vale só para esta pendência${
+                pendenciaResolver.motivo ? ` (${pendenciaResolver.motivo})` : ""
+              }.${
+                processo.pendenciasAbertas.length > 1
+                  ? ` As outras ${plural(
+                      processo.pendenciasAbertas.length - 1,
+                      "pendência continua",
+                      "pendências continuam"
+                    )} travando o processo.`
+                  : " O processo volta a andar da etapa em que parou."
+              }`
+            : "O processo volta a andar da etapa em que parou."
+        }
         icone="Unlock"
         rotulo="Detalhe da resolução"
         obrigatorio={false}
         textoConfirmar="Resolver pendência"
         erro={erroResolver}
         enviando={ocupado}
-        onFechar={() => setModalResolver(false)}
+        onFechar={() => setPendenciaResolver(null)}
         onConfirmar={resolverPendencia}
-        ajuda="Opcional. Fica no histórico junto com o tempo total que o processo passou travado."
+        ajuda="Opcional. Fica no histórico junto com o tempo que esta pendência ficou aberta."
       />
 
       {/* ----------------------------- Encerrar ---------------------------- */}
@@ -1801,10 +1862,14 @@ export default function LegalizacaoDetalheView({ id }: { id: string }) {
             </div>
           )}
 
-          {processo.bloqueada && (
+          {processo.pendenciasAbertas.length > 0 && (
             <Aviso
               tom="atencao"
-              mensagem="Existe pendência aberta. Resolva a pendência antes de encerrar, senão a ação é recusada."
+              mensagem={
+                processo.pendenciasAbertas.length === 1
+                  ? "Existe 1 pendência aberta. Resolva a pendência antes de encerrar, senão a ação é recusada."
+                  : `Existem ${processo.pendenciasAbertas.length} pendências abertas. Resolva todas antes de encerrar, senão a ação é recusada.`
+              }
             />
           )}
 

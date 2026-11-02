@@ -197,12 +197,34 @@ export type ResultadoRecalculo = {
 };
 
 /**
- * Recalcula e grava o status macro a partir da etapa e do bloqueio.
+ * Responsável que define o status macro quando há várias pendências abertas.
+ *
+ * Pendência com o CLIENTE prevalece: "Aguardando documentação do cliente" é o
+ * estado que manda cobrar, e escondê-lo atrás de uma pendência de terceiro
+ * faria a cobrança bater na pessoa errada. Sem pendência de cliente, vale a
+ * mais antiga — é a que há mais tempo trava o processo.
+ */
+export function responsavelPreponderante(
+  pendencias: ReadonlyArray<{ responsavel: string; desde: Date }>
+): string | null {
+  if (pendencias.length === 0) return null;
+  if (pendencias.some((p) => p.responsavel === "CLIENTE")) return "CLIENTE";
+  return [...pendencias].sort(
+    (a, b) => a.desde.getTime() - b.desde.getTime()
+  )[0].responsavel;
+}
+
+/**
+ * Recalcula e grava o status macro a partir da etapa e das pendências.
  *
  * Ninguém preenche status à mão: a coluna existe apenas para permitir filtro e
  * contagem no banco (o Kanban conta por coluna). Chamar SEMPRE depois de mexer
- * em etapa ou bloqueio, dentro da mesma transação — status gravado divergente da
- * etapa é o tipo de inconsistência que ninguém percebe até a reunião.
+ * em etapa ou pendência, dentro da mesma transação — status gravado divergente
+ * da etapa é o tipo de inconsistência que ninguém percebe até a reunião.
+ *
+ * Também sincroniza `bloqueada` (deriva de haver pendência aberta): ter um
+ * único ponto que grava o derivado evita a flag e a lista de pendências
+ * divergirem.
  *
  * Quando recebe `sessao` e o status muda, registra STATUS_ALTERADO, para as seis
  * rotas não repetirem o mesmo bloco.
@@ -219,28 +241,34 @@ export async function recalcularStatusProcesso(
       status: true,
       etapaAtual: true,
       bloqueada: true,
-      bloqueioResponsavel: true,
       // As etapas DO PROCESSO decidem onde ele termina: processo aberto antes de
       // o fluxo mudar continua com as etapas antigas.
       etapas: { select: { numero: true, chave: true } },
+      pendencias: {
+        where: { resolvidaEm: null },
+        select: { responsavel: true, desde: true },
+        orderBy: { desde: "asc" },
+      },
     },
   });
   if (!processo) throw new Error(`Processo não encontrado: ${processoId}`);
 
+  const abertas = processo.pendencias;
+  const bloqueada = abertas.length > 0;
   const novo = statusLegalizacao(processo.tipo, {
     etapaAtual: processo.etapaAtual,
-    bloqueada: processo.bloqueada,
-    bloqueioResponsavel: processo.bloqueioResponsavel,
+    bloqueada,
+    bloqueioResponsavel: responsavelPreponderante(abertas),
     etapas: processo.etapas,
   });
 
   const mudou = novo !== processo.status;
-  if (mudou) {
+  if (mudou || bloqueada !== processo.bloqueada) {
     await tx.processoLegalizacao.update({
       where: { id: processoId },
-      data: { status: novo },
+      data: { status: novo, bloqueada },
     });
-    if (sessao) {
+    if (mudou && sessao) {
       await registrarLogProcesso(tx, {
         processoId,
         acao: ACAO_LOG.STATUS_ALTERADO,

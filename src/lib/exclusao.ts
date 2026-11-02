@@ -139,6 +139,7 @@ export async function resumirExclusaoEmpresa(
     processos,
     etapasApuracao,
     etapasProcesso,
+    pendenciasProcesso,
     logs,
     historicoRegime,
     anexos,
@@ -147,6 +148,9 @@ export async function resumirExclusaoEmpresa(
     prisma.processoLegalizacao.count({ where: { empresaId } }),
     prisma.tarefaApuracaoEtapa.count({ where: { tarefa: { empresaId } } }),
     prisma.processoLegalizacaoEtapa.count({
+      where: { processo: { empresaId } },
+    }),
+    prisma.processoLegalizacaoPendencia.count({
       where: { processo: { empresaId } },
     }),
     prisma.tarefaLog.count({
@@ -179,6 +183,7 @@ export async function resumirExclusaoEmpresa(
       contagem(apuracoes, "competência", "competências"),
       contagem(processos, "processo de legalização", "processos de legalização"),
       contagem(etapasApuracao + etapasProcesso, "etapa", "etapas"),
+      contagem(pendenciasProcesso, "pendência de legalização", "pendências de legalização"),
       contagem(logs, "registro de histórico", "registros de histórico"),
       contagem(historicoRegime, "linha do histórico de regime", "linhas do histórico de regime"),
       contagem(anexos.length, "anexo", "anexos"),
@@ -277,8 +282,9 @@ export async function resumirExclusaoProcesso(
   });
   if (!processo) return null;
 
-  const [etapas, logs, anexos] = await Promise.all([
+  const [etapas, pendencias, logs, anexos] = await Promise.all([
     prisma.processoLegalizacaoEtapa.count({ where: { processoId } }),
+    prisma.processoLegalizacaoPendencia.count({ where: { processoId } }),
     prisma.tarefaLog.count({ where: { processoId } }),
     prisma.tarefaAnexo.findMany({
       where: { processoId },
@@ -324,6 +330,7 @@ export async function resumirExclusaoProcesso(
       .join(" · "),
     contagens: [
       contagem(etapas, "etapa", "etapas"),
+      contagem(pendencias, "pendência", "pendências"),
       contagem(logs, "registro de histórico", "registros de histórico"),
       contagem(anexos.length, "anexo", "anexos"),
     ],

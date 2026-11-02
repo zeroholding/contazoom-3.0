@@ -1159,10 +1159,10 @@ model ProcessoLegalizacao {
   etapaAtual Int    @default(0) @map("etapa_atual")
   status     String @default("AGUARDANDO_DOCUMENTACAO")
 
-  bloqueada           Boolean   @default(false)
-  bloqueioMotivo      String?   @map("bloqueio_motivo")
-  bloqueioDesde       DateTime? @map("bloqueio_desde")
-  bloqueioResponsavel String?   @map("bloqueio_responsavel")
+  /// Bloqueio ativo, DERIVADO: `true` enquanto existir pendência aberta em
+  /// `pendencias`. Mantido como coluna (com índice) para o filtro da lista;
+  /// recalculado na mesma transação que registra ou resolve pendência.
+  bloqueada Boolean @default(false)
 
   /// Protocolo no órgão de terceiro. É o primeiro dado que o cliente pergunta.
   protocoloExterno String? @map("protocolo_externo")
@@ -1180,10 +1180,11 @@ model ProcessoLegalizacao {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  empresa Empresa?                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  etapas  ProcessoLegalizacaoEtapa[]
-  logs    TarefaLog[]
-  anexos  TarefaAnexo[]
+  empresa    Empresa?                      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  etapas     ProcessoLegalizacaoEtapa[]
+  pendencias ProcessoLegalizacaoPendencia[]
+  logs       TarefaLog[]
+  anexos     TarefaAnexo[]
 
   @@index([empresaId])
   @@index([tipo])
@@ -1191,6 +1192,38 @@ model ProcessoLegalizacao {
   @@index([bloqueada])
   @@index([abertoEm])
   @@map("processo_legalizacao")
+}
+
+/// Pendência (bloqueio) de um processo de legalização.
+///
+/// Várias podem coexistir e são INDEPENDENTES: cada uma tem motivo,
+/// responsável, data de início e resolução próprios. Resolver uma não resolve
+/// as outras — o processo só destrava quando a última for resolvida.
+///
+/// Tabela própria (e não campos no processo) é o que permite "travado com o
+/// cliente E com a Junta Comercial" sem uma pendência apagar a outra.
+model ProcessoLegalizacaoPendencia {
+  id         String @id @default(cuid())
+  processoId String @map("processo_id")
+
+  motivo      String
+  /// CLIENTE, ESCRITORIO, COMERCIAL_CZ, TERCEIRO
+  responsavel String
+  /// Nascimento da pendência: é o começo da contagem de dias.
+  desde       DateTime @default(now())
+
+  resolvidaEm      DateTime? @map("resolvida_em")
+  /// Como foi resolvida. Opcional. Quem resolveu está no log do processo.
+  resolucaoDetalhe String?   @map("resolucao_detalhe")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  processo ProcessoLegalizacao @relation(fields: [processoId], references: [id], onDelete: Cascade)
+
+  @@index([processoId])
+  @@index([processoId, resolvidaEm])
+  @@map("processo_legalizacao_pendencia")
 }
 
 model ProcessoLegalizacaoEtapa {

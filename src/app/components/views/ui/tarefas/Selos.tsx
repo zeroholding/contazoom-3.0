@@ -467,19 +467,27 @@ export function SeloPlanoInterno({
  * Os dias são o ponto: "travado há 12 dias esperando o cliente" é o que resolve
  * reunião; "travado" sozinho não cobra ação de ninguém. O número vai em
  * numeral tabular para as linhas empilhadas ficarem comparáveis.
+ *
+ * `quantidade` cobre o caso de várias pendências abertas (legalização): o selo
+ * conta em vez de nomear um responsável, e os dias são os da mais antiga.
  */
 export function SeloBloqueio({
   responsavel,
   dias,
+  quantidade,
   className = "",
   peso = "medio",
 }: {
   responsavel: string | null | undefined;
   dias: number | null | undefined;
+  quantidade?: number;
   className?: string;
   peso?: PesoSelo;
 }) {
-  const quem = responsavel
+  const varias = (quantidade ?? 0) > 1;
+  const quem = varias
+    ? `${quantidade} pendências`
+    : responsavel
     ? BLOQUEIO_RESPONSAVEL_LABEL[responsavel] ?? responsavel
     : "Pendência";
   const tempo =

@@ -1427,20 +1427,11 @@ function CartaoProcesso({
           <div className="flex flex-wrap items-center gap-2">
             <SeloStatus status={item.status} curto />
             <SeloPrazo situacao={item.situacaoPrazo} dias={item.diasPrazo} />
-            {item.bloqueada && (
+            {item.pendenciasAbertas.length > 0 && (
               <SeloBloqueio
-                responsavel={item.bloqueioResponsavel}
-                dias={
-                  item.bloqueioDesde
-                    ? Math.max(
-                        0,
-                        Math.round(
-                          (Date.now() - new Date(item.bloqueioDesde).getTime()) /
-                            86_400_000
-                        )
-                      )
-                    : null
-                }
+                responsavel={item.pendenciasAbertas[0].responsavel}
+                dias={item.pendenciasAbertas[0].diasBloqueio}
+                quantidade={item.pendenciasAbertas.length}
               />
             )}
             {item.empresa && <SeloRegime regime={item.empresa.regime} />}
@@ -1488,9 +1479,14 @@ function CartaoProcesso({
             </p>
           )}
 
-          {item.bloqueada && item.bloqueioMotivo && (
-            <p className="truncate text-xs text-[#B54708]" title={item.bloqueioMotivo}>
-              {item.bloqueioMotivo}
+          {item.pendenciasAbertas.length > 0 && (
+            <p
+              className="truncate text-xs text-[#B54708]"
+              title={item.pendenciasAbertas[0].motivo}
+            >
+              {item.pendenciasAbertas.length > 1
+                ? `${item.pendenciasAbertas.length} pendências · ${item.pendenciasAbertas[0].motivo}`
+                : item.pendenciasAbertas[0].motivo}
             </p>
           )}
         </div>

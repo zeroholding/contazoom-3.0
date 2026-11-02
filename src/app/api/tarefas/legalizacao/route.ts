@@ -8,12 +8,18 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireInterno, podeCriarProcesso, negado } from "@/lib/api-guard";
 import {
+  BLOQUEIO_RESPONSAVEL_LABEL,
   TIPO_PROCESSO,
   TIPOS_PROCESSO_VALIDOS,
   TIPO_PROCESSO_LABEL,
   SITUACAO_ETAPA,
 } from "@/lib/tarefa-etapas";
-import { STATUS_VALIDOS, contagemPrazo, situacaoPrazo } from "@/lib/tarefa-status";
+import {
+  STATUS_VALIDOS,
+  contagemPrazo,
+  diasEmBloqueio,
+  situacaoPrazo,
+} from "@/lib/tarefa-status";
 import {
   criarProcesso,
   diasEmAberto,
@@ -108,6 +114,12 @@ export async function GET(req: NextRequest) {
             select: { numero: true, titulo: true, situacao: true, opcional: true },
             orderBy: { numero: "asc" },
           },
+          // Só as abertas, mais antiga primeiro: o cartão mostra a que há mais
+          // tempo trava o processo. Pendência resolvida não entra.
+          pendencias: {
+            where: { resolvidaEm: null },
+            orderBy: { desde: "asc" },
+          },
           // Contagem, não a lista: o cartão mostra "3 anexos", e trazer o
           // metadado de trinta arquivos por cartão só para exibir um número
           // carregaria a página à toa.
@@ -150,9 +162,14 @@ export async function GET(req: NextRequest) {
         protocoloExterno: processo.protocoloExterno,
         orgaoExterno: processo.orgaoExterno,
         bloqueada: processo.bloqueada,
-        bloqueioMotivo: processo.bloqueioMotivo,
-        bloqueioResponsavel: processo.bloqueioResponsavel,
-        bloqueioDesde: processo.bloqueioDesde,
+        pendenciasAbertas: processo.pendencias.map((p) => ({
+          id: p.id,
+          motivo: p.motivo,
+          responsavel: p.responsavel,
+          responsavelLabel: BLOQUEIO_RESPONSAVEL_LABEL[p.responsavel] ?? p.responsavel,
+          desde: p.desde,
+          diasBloqueio: diasEmBloqueio(p.desde, agora),
+        })),
         prazoEstimado: processo.prazoEstimado,
         situacaoPrazo: prazo.situacao,
         diasPrazo: prazo.dias,

@@ -1,13 +1,22 @@
 /**
- * Pendência (bloqueio) do processo de legalização.
+ * Pendências (bloqueios) do processo de legalização.
+ *
+ * POST   /api/tarefas/legalizacao/[id]/bloqueio — registra UMA pendência
+ * DELETE /api/tarefas/legalizacao/[id]/bloqueio — resolve UMA pendência
+ *         (corpo com `pendenciaId`; `detalhe` da resolução é opcional)
  *
  * Bloqueio não é posição no fluxo, é estado: o processo continua na etapa 5 e
  * bloqueado ao mesmo tempo. É isso que permite ler "está na etapa 5, travado há
  * 12 dias esperando a Junta Comercial", que é a informação que resolve reunião.
  *
+ * Várias pendências coexistem e são INDEPENDENTES: cada uma tem motivo,
+ * responsável e contagem de dias próprios. Resolver uma não resolve as outras —
+ * o processo só destrava quando a última for resolvida.
+ *
  * Em legalização o valor TERCEIRO é o mais usado: prazo de órgão público não é
  * controlável pelo escritório, e misturar essa espera com "cliente não mandou
- * documento" faria a cobrança bater na pessoa errada.
+ * documento" faria a cobrança bater na pessoa errada. Por isso o responsável é
+ * por pendência, não por processo.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -79,13 +88,7 @@ export async function POST(
   try {
     const processo = await prisma.processoLegalizacao.findUnique({
       where: { id },
-      select: {
-        id: true,
-        bloqueada: true,
-        bloqueioMotivo: true,
-        bloqueioDesde: true,
-        concluidoEm: true,
-      },
+      select: { id: true, concluidoEm: true },
     });
     if (!processo) {
       return erro("Processo não encontrado.", 404, "PROCESSO_NAO_ENCONTRADO");
@@ -97,27 +100,19 @@ export async function POST(
         "PROCESSO_ENCERRADO"
       );
     }
-    // Uma pendência por vez: o schema guarda um único bloqueio ativo, e
-    // sobrescrever apagaria desde quando o processo está travado — que é
-    // justamente o número que cobra ação.
-    if (processo.bloqueada) {
-      return erro(
-        "Já existe pendência ativa neste processo. Resolva a atual antes de registrar outra.",
-        409,
-        "BLOQUEIO_ATIVO"
-      );
-    }
 
     const resultado = await prisma.$transaction(async (tx) => {
       const agora = new Date();
 
-      await tx.processoLegalizacao.update({
-        where: { id },
+      // Pendências são independentes: registrar uma nova nunca exige resolver
+      // as anteriores. `bloqueada` e status macro são sincronizados pelo
+      // recálculo, dentro desta mesma transação.
+      const pendencia = await tx.processoLegalizacaoPendencia.create({
         data: {
-          bloqueada: true,
-          bloqueioMotivo: motivo,
-          bloqueioResponsavel: responsavel,
-          bloqueioDesde: agora,
+          processoId: id,
+          motivo,
+          responsavel,
+          desde: agora,
         },
       });
 
@@ -131,16 +126,17 @@ export async function POST(
 
       const status = await recalcularStatusProcesso(tx, id, sessao);
 
-      const atualizado = await tx.processoLegalizacao.findUnique({
-        where: { id },
+      const abertas = await tx.processoLegalizacaoPendencia.count({
+        where: { processoId: id, resolvidaEm: null },
       });
 
-      return { processo: atualizado, status };
+      return { pendencia, status, abertas };
     });
 
     return NextResponse.json({
-      processo: resultado.processo,
+      pendencia: resultado.pendencia,
       status: resultado.status.novo,
+      pendenciasAbertas: resultado.abertas,
     });
   } catch (e) {
     console.error("[legalizacao][bloqueio POST] falha ao registrar pendência:", e);
@@ -149,7 +145,7 @@ export async function POST(
 }
 
 /* -------------------------------------------------------------------------- */
-/*                        DELETE — resolve a pendência                        */
+/*                        DELETE — resolve UMA pendência                      */
 /* -------------------------------------------------------------------------- */
 
 export async function DELETE(
@@ -166,81 +162,83 @@ export async function DELETE(
 
   const corpo = await lerCorpo(req);
   if (!corpo) return erro("Corpo da requisição inválido.", 400, "CORPO_INVALIDO");
+
+  const pendenciaId = textoLimpo(corpo.pendenciaId);
+  if (!pendenciaId) {
+    return erro(
+      "Informe qual pendência resolver (pendenciaId).",
+      400,
+      "PENDENCIA_OBRIGATORIA"
+    );
+  }
   const detalheInformado = textoLimpo(corpo.detalhe);
 
   try {
-    const processo = await prisma.processoLegalizacao.findUnique({
-      where: { id },
+    const pendencia = await prisma.processoLegalizacaoPendencia.findUnique({
+      where: { id: pendenciaId },
       select: {
         id: true,
-        bloqueada: true,
-        bloqueioMotivo: true,
-        bloqueioDesde: true,
-        bloqueioResponsavel: true,
+        processoId: true,
+        motivo: true,
+        responsavel: true,
+        desde: true,
+        resolvidaEm: true,
       },
     });
-    if (!processo) {
-      return erro("Processo não encontrado.", 404, "PROCESSO_NAO_ENCONTRADO");
+    if (!pendencia || pendencia.processoId !== id) {
+      return erro("Pendência não encontrada neste processo.", 404, "PENDENCIA_NAO_ENCONTRADA");
     }
-    if (!processo.bloqueada) {
-      return erro(
-        "Este processo não tem pendência ativa.",
-        409,
-        "SEM_BLOQUEIO_ATIVO"
-      );
+    if (pendencia.resolvidaEm) {
+      return erro("Esta pendência já foi resolvida.", 409, "PENDENCIA_JA_RESOLVIDA");
     }
 
     const agora = new Date();
-    // A duração vai para o log porque o campo `bloqueioDesde` é limpo ao
-    // resolver: sem isso, "travou 18 dias na Junta" desapareceria do histórico e
-    // não haveria como medir onde o processo trava.
-    const dias = diasEmBloqueio(processo.bloqueioDesde, agora);
+    // A duração vai para o log junto do detalhe: é o que permite medir onde o
+    // processo trava, pendência a pendência.
+    const dias = diasEmBloqueio(pendencia.desde, agora);
     const partes = [
       dias === null
         ? "Duração não registrada"
         : `Pendência durou ${dias} ${dias === 1 ? "dia" : "dias"}`,
-      processo.bloqueioResponsavel
-        ? `aguardava: ${
-            BLOQUEIO_RESPONSAVEL_LABEL[processo.bloqueioResponsavel] ??
-            processo.bloqueioResponsavel
-          }`
-        : null,
-      processo.bloqueioMotivo ? `motivo: ${processo.bloqueioMotivo}` : null,
+      `aguardava: ${
+        BLOQUEIO_RESPONSAVEL_LABEL[pendencia.responsavel] ?? pendencia.responsavel
+      }`,
+      `motivo: ${pendencia.motivo}`,
       detalheInformado ? `resolução: ${detalheInformado}` : null,
     ].filter((p): p is string => Boolean(p));
 
     const resultado = await prisma.$transaction(async (tx) => {
-      await tx.processoLegalizacao.update({
-        where: { id },
+      await tx.processoLegalizacaoPendencia.update({
+        where: { id: pendencia.id },
         data: {
-          bloqueada: false,
-          bloqueioMotivo: null,
-          bloqueioResponsavel: null,
-          bloqueioDesde: null,
+          resolvidaEm: agora,
+          resolucaoDetalhe: detalheInformado,
         },
       });
 
       await registrarLogProcesso(tx, {
         processoId: id,
         acao: ACAO_LOG.BLOQUEIO_RESOLVIDO,
-        de: processo.bloqueioResponsavel,
+        de: pendencia.responsavel,
         detalhe: partes.join(" | "),
         sessao,
       });
 
+      // Recalcular é o que destrava o processo quando esta era a última
+      // pendência — e o mantém travado quando ainda restam outras.
       const status = await recalcularStatusProcesso(tx, id, sessao);
 
-      const atualizado = await tx.processoLegalizacao.findUnique({
-        where: { id },
+      const abertas = await tx.processoLegalizacaoPendencia.count({
+        where: { processoId: id, resolvidaEm: null },
       });
 
-      return { processo: atualizado, status };
+      return { status, abertas };
     });
 
     return NextResponse.json({
-      processo: resultado.processo,
       status: resultado.status.novo,
       diasBloqueado: dias,
+      pendenciasAbertas: resultado.abertas,
     });
   } catch (e) {
     console.error("[legalizacao][bloqueio DELETE] falha ao resolver pendência:", e);
