@@ -1,28 +1,24 @@
 /**
- * Conteúdo da landing pública.
+ * Conteúdo e dados da landing pública.
  *
- * A ÊNFASE É A CONTABILIDADE: o ContaZoom é, antes de tudo, o escritório
- * contábil (Simples Nacional e Lucro Presumido). O sistema de vendas dos
- * marketplaces aparece como adicional, numa seção só, depois dos serviços.
- *
- * Tudo aqui descreve o que existe hoje, conferido no código: as etapas da
- * apuração e da abertura de CNPJ vêm de src/lib/tarefa-etapas.ts, a apuração
- * pelo XML de docs/APURACAO_FISCAL_XML_COMO_FUNCIONA.md, os módulos do sistema
- * do menu lateral. O que não existe — preço, NFS-e lida do arquivo, integração
- * com Bling, cupons, etiqueta da Shopee e do TikTok — fica de fora de propósito:
- * promessa de landing que não se cumpre vira chamado de suporte no primeiro dia.
+ * POSICIONAMENTO: Contabilidade de quem vive e-commerce, com inteligência
+ * tributária por produto e gestão do lucro real.
+ * Sistema próprio de gestão gratuito e incluso na contratação.
  */
 
 import {
+  BadgeCheck,
   Building2,
   CircleHelp,
   Landmark,
   LayoutDashboard,
   ListChecks,
+  Percent,
+  ReceiptText,
   type LucideIcon,
 } from "lucide-react";
 
-/** Âncoras do cabeçalho, na mesma ordem em que as seções aparecem. */
+/** Âncoras do cabeçalho, na ordem da experiência do usuário */
 export const LINKS_SECOES: Array<{
   href: string;
   id: string;
@@ -30,10 +26,11 @@ export const LINKS_SECOES: Array<{
   descricao: string;
   Icone: LucideIcon;
 }> = [
-  { href: "#contabilidade", id: "contabilidade", rotulo: "Contabilidade", descricao: "Impostos apurados todo mês", Icone: Landmark },
-  { href: "#abertura", id: "abertura", rotulo: "Abertura de CNPJ", descricao: "Do formulário aos documentos oficiais", Icone: Building2 },
-  { href: "#como-funciona", id: "como-funciona", rotulo: "Como funciona", descricao: "Do primeiro contato à rotina do mês", Icone: ListChecks },
-  { href: "#sistema", id: "sistema", rotulo: "Sistema", descricao: "Vendas e margem dos marketplaces", Icone: LayoutDashboard },
+  { href: "#tributacao", id: "tributacao", rotulo: "Tributação", descricao: "Planejamento por produto", Icone: Percent },
+  { href: "#provas", id: "provas", rotulo: "Especialização", descricao: "Casos reais e equipe técnica", Icone: BadgeCheck },
+  { href: "#sistema", id: "sistema", rotulo: "Sistema", descricao: "Gratuito e incluso", Icone: LayoutDashboard },
+  { href: "#contabilidade", id: "contabilidade", rotulo: "O que inclui", descricao: "Rotina fiscal e guias", Icone: Landmark },
+  { href: "#planos", id: "planos", rotulo: "Planos", descricao: "Escopo e proposta transparente", Icone: ReceiptText },
   { href: "#duvidas", id: "duvidas", rotulo: "Dúvidas", descricao: "Perguntas frequentes", Icone: CircleHelp },
 ];
 
@@ -46,9 +43,8 @@ export const NOME_CANAL: Record<Canal, string> = {
 };
 
 /**
- * As cinco vendas de EXEMPLO. As mesmas linhas aparecem no painel da lupa e no
- * explorador de margem, então os números precisam fechar: margem = valor −
- * taxa − frete − imposto − CMV, imposto = 6% do valor.
+ * Vendas de EXEMPLO.
+ * Faturamento − Taxas − Frete − Imposto − CMV = Margem líquida
  */
 export type VendaExemplo = {
   canal: Canal;
@@ -61,9 +57,8 @@ export type VendaExemplo = {
   frete: number;
   imposto: number;
   cmv: number;
-  /** Linha miúda do painel da lupa (só legível ampliada). */
+  /** Linha miúda do painel da lupa */
   detalhe: string;
-  /** O que a venda conta, no explorador de margem. */
   leitura: string;
   estimado?: boolean;
 };
@@ -80,7 +75,7 @@ export const VENDAS_EXEMPLO: VendaExemplo[] = [
     frete: 18.45,
     imposto: 11.39,
     cmv: 71,
-    detalhe: "Premium · Coleta · comissão 12% · imposto 6% (R$ 11,39) · custo do SKU vigente na data da venda",
+    detalhe: "Premium · Coleta · comissão 12% · imposto 6% (R$ 11,39) · CMV do SKU na data da venda",
     leitura: "Venda saudável: mesmo com 12% de comissão e R$ 18,45 de frete, sobram R$ 66,27.",
   },
   {
@@ -95,7 +90,7 @@ export const VENDAS_EXEMPLO: VendaExemplo[] = [
     imposto: 7.79,
     cmv: 54.6,
     detalhe: "Kit: 3 × GT-500 a R$ 18,20 · comissão + taxa de serviço 22% · imposto 6% (R$ 7,79)",
-    leitura: "É um kit: o custo soma os três itens (3 × R$ 18,20), e comissão mais taxa de serviço levam 22% da venda.",
+    leitura: "Kit montado: o custo soma os três itens (3 × R$ 18,20), e as taxas somadas levam 22% da venda.",
   },
   {
     canal: "TT",
@@ -108,8 +103,8 @@ export const VENDAS_EXEMPLO: VendaExemplo[] = [
     frete: 6.3,
     imposto: 5.39,
     cmv: 32.4,
-    detalhe: "Financeiro estimado · vira o valor real quando o pedido liquidar · imposto 6% (R$ 5,39)",
-    leitura: "A taxa ainda é estimada. Quando o pedido liquidar, o ContaZoom troca pelo valor real do extrato.",
+    detalhe: "Financeiro estimado · liquidação automática pelo extrato · imposto 6% (R$ 5,39)",
+    leitura: "Taxa estimada atualizada automaticamente quando o pedido liquida no extrato oficial do TikTok.",
     estimado: true,
   },
   {
@@ -123,8 +118,8 @@ export const VENDAS_EXEMPLO: VendaExemplo[] = [
     frete: 24.9,
     imposto: 14.94,
     cmv: 148,
-    detalhe: "Clássico · Full · comissão 13% · imposto 6% (R$ 14,94)",
-    leitura: "A venda de maior valor da lista, mas o custo do produto leva 59% dela. Sobram só 11,6%.",
+    detalhe: "Clássico · Full · comissão 13% · imposto 6% (R$ 14,94) · remessa Full segregada do faturamento",
+    leitura: "Ticket alto, mas o custo do produto consome 59% da receita. Sobram 11,6% de margem.",
   },
   {
     canal: "ML",
@@ -137,8 +132,8 @@ export const VENDAS_EXEMPLO: VendaExemplo[] = [
     frete: 10.8,
     imposto: 2.39,
     cmv: 22.9,
-    detalhe: "Flex: repasse R$ 1,10 − custo R$ 11,90 do pacote = −R$ 10,80 · imposto 6% (R$ 2,39)",
-    leitura: "Prejuízo escondido: o Flex cobrou R$ 11,90 pelo pacote e repassou R$ 1,10. O frete levou 27% da venda.",
+    detalhe: "Flex: repasse R$ 1,10 − frete pacote R$ 11,90 = −R$ 10,80 · imposto 6% (R$ 2,39)",
+    leitura: "Margem negativa descoberta pelo sistema: o pacote Flex consumiu 27% da venda e gerou prejuízo.",
   },
 ];
 
@@ -148,12 +143,10 @@ export function margemDe(v: VendaExemplo): number {
   return centavos(v.valor - v.taxa - v.frete - v.imposto - v.cmv);
 }
 
-/** "1.234,56", sem símbolo. Mesmo resultado no servidor e no navegador. */
 export function moeda(n: number): string {
   return Math.abs(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Valor com o sinal de menos tipográfico (−), não o hífen. */
 export function comSinal(n: number, prefixo = ""): string {
   return `${n < 0 ? "−" : ""}${prefixo}${moeda(n)}`;
 }

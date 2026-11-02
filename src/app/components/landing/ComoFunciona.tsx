@@ -1,99 +1,125 @@
-import { CalendarClock, History, Landmark } from "lucide-react";
-import { IconeWhatsapp, Rotulo, Texto, Titulo, atraso } from "./comum";
+import { ArrowRight, CalendarClock, Check, FileCheck, History, Landmark, ShieldCheck, UserCheck } from "lucide-react";
+import { BotaoWhatsapp, IconeWhatsapp, Rotulo, Texto, Titulo, atraso } from "./comum";
 import { WHATSAPP_EXIBICAO } from "./contato";
 
 /**
- * 03 · Como funciona — do primeiro contato à rotina mensal do escritório.
+ * 06 · Como funciona — Como trocar de contador com facilidade
  *
- * O começo é uma conversa (contabilidade não se contrata criando conta sozinho),
- * a entrada de documentos é a etapa 1 de todo fluxo de apuração, e quem vai
- * abrir empresa entra pelo formulário de abertura.
+ * Explicação objetiva e tranquilizadora: a migração não para a operação de vendas
+ * e a Contazoom cuida da transição com o contador anterior.
  */
 
-const PASSOS = [
+const PASSOS_MIGRACAO = [
   {
-    titulo: "Fale com a gente",
-    texto: "Chame no WhatsApp e conte como é a sua empresa: o regime, as atividades e onde você vende.",
-  },
-  {
-    titulo: "Envie os documentos",
-    texto: "Quem já tem CNPJ envia os documentos da empresa. Quem vai abrir preenche o formulário online de abertura.",
-  },
-  {
-    titulo: "Receba as guias todo mês",
+    passo: 1,
+    titulo: "Diagnóstico inicial sem custos",
     texto:
-      "Você manda as notas e os documentos do mês, o escritório apura os impostos e a guia chega no seu e-mail e no seu painel.",
+      "Conversamos pelo WhatsApp para entender o regime tributário da sua empresa, os canais onde vende (Mercado Livre, Shopee, TikTok) e analisamos seu catálogo para identificar oportunidades.",
+  },
+  {
+    passo: 2,
+    titulo: "Nós alinhamos com o contador anterior",
+    texto:
+      "Você não precisa se desgastar. Cuidamos do pedido de transferência de responsabilidade técnica, recolhemos o histórico fiscal, arquivos contábeis e procurações na Receita e Estado.",
+  },
+  {
+    passo: 3,
+    titulo: "Conexão e onboarding no sistema",
+    texto:
+      "Você conecta suas contas de marketplaces no nosso sistema próprio em menos de 5 minutos via API oficial. Parametrizamos seus custos e dados da empresa.",
+  },
+  {
+    passo: 4,
+    titulo: "Rotina fiscal e contábil rodando",
+    texto:
+      "A partir do primeiro mês de competência, nosso time assume 100% da sua apuração fiscal, entrega das guias DAS/DARF e acompanhamento da sua margem.",
   },
 ];
 
 const GARANTIAS = [
   {
-    Icone: Landmark,
-    titulo: "Um fluxo por regime",
-    texto: "10 etapas no Simples Nacional e 14 no Lucro Presumido, sempre na mesma ordem.",
+    Icone: ShieldCheck,
+    titulo: "Zero interrupção nas vendas",
+    texto: "Suas lojas continuam faturando e emitindo NFe normalmente durante toda a migração.",
   },
   {
     Icone: CalendarClock,
-    titulo: "Prazo e responsável",
-    texto: "Cada competência tem prazo de entrega e alguém do escritório responsável por ela.",
+    titulo: "Prazos fiscais protegidos",
+    texto: "Acompanhamos de perto os vencimentos de obrigações para evitar qualquer pendência.",
   },
   {
-    Icone: History,
-    titulo: "Tudo registrado",
-    texto: "Toda alteração na apuração fica registrada no escritório, com autor e horário.",
+    Icone: UserCheck,
+    titulo: "Transição assistida",
+    texto: "Um analista dedicado acompanha sua empresa em cada etapa do processo de troca.",
   },
   {
     Icone: null,
-    titulo: "Atendimento no WhatsApp",
-    texto: `Fale direto com a equipe da ContaZoom pelo ${WHATSAPP_EXIBICAO}.`,
+    titulo: "Atendimento direto no WhatsApp",
+    texto: `Fale diretamente com os contadores da Contazoom pelo ${WHATSAPP_EXIBICAO}.`,
   },
 ];
 
 export default function ComoFunciona() {
   return (
-    <section id="como-funciona" className="scroll-mt-16 border-y border-[#EDEFF3] bg-[#F8F9FB] py-24 sm:py-32">
+    <section id="como-funciona" className="scroll-mt-16 border-y border-[#EDEFF3] bg-[#F8F9FB] py-20 sm:py-28">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
-        <div data-revelar="" className="max-w-[44rem]">
-          <Rotulo numero="03" texto="Como funciona" />
-          <Titulo>Do primeiro contato à rotina do mês.</Titulo>
-          <Texto>Você fala com a gente, envia os documentos e o escritório assume a rotina fiscal da sua empresa.</Texto>
+        <div className="grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-12">
+          <div data-revelar="" className="max-w-[46rem]">
+            <Rotulo numero="06" texto="Troca de contador" />
+            <Titulo>Trazer sua empresa para a Contazoom é simples. A gente cuida da migração.</Titulo>
+            <Texto>
+              Trocar de contabilidade não precisa ser uma dor de cabeça nem parar sua operação. Nós cuidamos
+              de toda a parte burocrática junto ao antigo contador enquanto você continua vendendo.
+            </Texto>
+          </div>
+          <div data-revelar="" style={atraso(100)}>
+            <BotaoWhatsapp mensagem="migracao" className="w-full sm:w-auto">
+              Quero trazer minha empresa para a Contazoom
+            </BotaoWhatsapp>
+          </div>
         </div>
 
-        <ol className="relative mt-14 grid gap-4 md:grid-cols-3 md:gap-5">
-          {/* Fio que liga os três passos no desktop. */}
-          <span
-            aria-hidden="true"
-            className="absolute left-[16%] right-[16%] top-[51px] hidden border-t-2 border-dashed border-[#FFD9BF] md:block"
-          />
-          {PASSOS.map((passo, i) => (
-            <li
-              key={passo.titulo}
+        {/* 4 Passos da migração */}
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {PASSOS_MIGRACAO.map((item, i) => (
+            <div
+              key={item.passo}
               data-revelar=""
-              style={atraso(i * 110)}
-              className="relative rounded-[22px] border border-[#EDEFF3] bg-white p-6 sm:p-7"
+              style={atraso(i * 90)}
+              className="relative flex flex-col rounded-[22px] border border-[#EDEFF3] bg-white p-6 shadow-[0_1px_3px_rgba(16,24,40,0.03)]"
             >
-              <span className="czl-num relative grid size-12 place-items-center rounded-full border-2 border-[#F26212] bg-white text-[18px] font-extrabold text-[#F26212]">
-                {i + 1}
-              </span>
-              <h3 className="mt-5 text-[19px] font-extrabold tracking-[-0.03em] text-[#14161B]">{passo.titulo}</h3>
-              <p className="mt-2 text-[15px] leading-[1.65] text-[#6B7280]">{passo.texto}</p>
-            </li>
+              <div className="flex items-center justify-between">
+                <span className="czl-num grid size-10 place-items-center rounded-full border-2 border-[#F26212] bg-[#FFF8F3] text-[16px] font-extrabold text-[#F26212]">
+                  {item.passo}
+                </span>
+                {i < PASSOS_MIGRACAO.length - 1 && (
+                  <ArrowRight className="hidden h-4 w-4 text-[#DCE0E7] lg:block" />
+                )}
+              </div>
+              <h3 className="mt-5 text-[17px] font-extrabold tracking-[-0.025em] text-[#14161B]">
+                {item.titulo}
+              </h3>
+              <p className="mt-2 text-[13.5px] leading-[1.6] text-[#6B7280]">
+                {item.texto}
+              </p>
+            </div>
           ))}
-        </ol>
+        </div>
 
-        <ul className="mt-6 grid gap-px overflow-hidden rounded-[22px] border border-[#EDEFF3] bg-[#EDEFF3] sm:grid-cols-2 lg:grid-cols-4">
+        {/* Garantias */}
+        <div className="mt-6 grid gap-px overflow-hidden rounded-[22px] border border-[#EDEFF3] bg-[#EDEFF3] sm:grid-cols-2 lg:grid-cols-4">
           {GARANTIAS.map(({ Icone, titulo, texto }, i) => (
-            <li key={titulo} data-revelar="" style={atraso(i * 70)} className="bg-white p-5 sm:p-6">
+            <div key={titulo} data-revelar="" style={atraso(i * 70)} className="bg-white p-5 sm:p-6">
               {Icone ? (
                 <Icone className="h-5 w-5 text-[#F26212]" aria-hidden="true" />
               ) : (
                 <IconeWhatsapp className="h-5 w-5 text-[#128C7E]" />
               )}
               <h3 className="mt-3 text-[15px] font-bold tracking-[-0.02em] text-[#14161B]">{titulo}</h3>
-              <p className="mt-1 text-[14px] leading-[1.6] text-[#6B7280]">{texto}</p>
-            </li>
+              <p className="mt-1 text-[13.5px] leading-[1.6] text-[#6B7280]">{texto}</p>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </section>
   );

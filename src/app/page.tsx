@@ -14,11 +14,11 @@ import LandingPage from "./components/landing/LandingPage";
  */
 
 const DESCRICAO =
-  "Escritório contábil para empresas do Simples Nacional e do Lucro Presumido: impostos apurados todo mês a partir das notas fiscais, guias no seu painel e abertura de CNPJ. E um sistema que mostra a margem de cada venda no Mercado Livre, na Shopee e no TikTok Shop.";
+  "Contabilidade especializada em e-commerce, com planejamento tributário por produto e gestão do lucro. Sistema de gestão próprio, gratuito e incluso, conectado por APIs oficiais ao Mercado Livre, à Shopee e ao TikTok Shop.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://contazoom.com.br"),
-  title: "ContaZoom | Contabilidade para quem vende na internet",
+  title: "ContaZoom | Contabilidade especializada em e-commerce",
   description: DESCRICAO,
   alternates: { canonical: "/" },
   openGraph: {
@@ -26,12 +26,12 @@ export const metadata: Metadata = {
     locale: "pt_BR",
     url: "/",
     siteName: "ContaZoom",
-    title: "ContaZoom | Dê zoom na contabilidade da sua empresa",
+    title: "ContaZoom | Contabilidade especializada em e-commerce",
     description: DESCRICAO,
   },
   twitter: {
     card: "summary",
-    title: "ContaZoom | Dê zoom na contabilidade da sua empresa",
+    title: "ContaZoom | Contabilidade especializada em e-commerce",
     description: DESCRICAO,
   },
 };

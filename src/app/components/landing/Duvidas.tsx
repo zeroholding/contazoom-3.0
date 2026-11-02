@@ -3,88 +3,102 @@ import { BotaoWhatsapp, Rotulo, Texto, Titulo } from "./comum";
 import { WHATSAPP_EXIBICAO } from "./contato";
 
 /**
- * 05 · Dúvidas. <details> nativo: abre com teclado, funciona sem JavaScript e o
- * buscador lê a resposta mesmo fechada.
+ * 09 · Dúvidas Frequentes
  *
- * Primeiro a contabilidade, que é o serviço; no fim, o sistema. As respostas
- * repetem o que o escritório faz de verdade (etapas em src/lib/tarefa-etapas.ts,
- * apuração pelo XML em docs/APURACAO_FISCAL_XML_COMO_FUNCIONA.md).
+ * Respostas diretas e transparentes sobre:
+ * - Gratuidade e inclusão do sistema em todos os planos
+ * - Análise tributária de produtos
+ * - Não obrigatoriedade de trocar de ERP
+ * - Gratuidade do diagnóstico inicial
+ * - Troca de contador sem atrito
+ * - Cálculo do lucro líquido
+ * - Abertura de CNPJ
  */
 
 export const PERGUNTAS = [
   {
-    pergunta: "Vocês fazem a contabilidade da minha empresa?",
+    pergunta: "O sistema de gestão está incluso em todos os planos?",
     resposta:
-      "Fazemos, para empresas do Simples Nacional e do Lucro Presumido. O ContaZoom tem escritório contábil próprio: todo mês a apuração segue um fluxo com prazo e responsável, e as guias chegam no seu e-mail e no seu painel, em Documentos.",
+      "Sim. Todos os clientes da contabilidade Contazoom têm acesso gratuito e ilimitado ao nosso sistema de gestão próprio, sem taxas de adesão, sem cobrança extra por módulos e sem limite artificial de pedidos ou usuários. A integração é direta pelas APIs oficiais do Mercado Livre, da Shopee e do TikTok Shop.",
   },
   {
-    pergunta: "O que entra na apuração do mês?",
+    pergunta: "Como funciona a análise dos produtos?",
     resposta:
-      "No Simples Nacional, o faturamento é apurado no PGDAS-D e a guia do DAS é gerada e conferida. No Lucro Presumido entram também a classificação e os lançamentos contábeis, PIS/COFINS, IRPJ/CSLL, ICMS ou ISS, as obrigações acessórias mensais e o balancete do período.",
+      "Avaliamos a classificação fiscal (NCM/CEST) do seu catálogo, as características da sua operação e o regime da empresa. Nosso foco é identificar produtos com benefícios fiscais (como alíquotas reduzidas ou tributação monofásica) e garantir que movimentações logísticas como remessas ao Full e devoluções fiquem fora da base de cálculo. O compromisso é com uma análise técnica e cuidadosa, dentro da lei.",
   },
   {
-    pergunta: "Como vocês chegam no meu faturamento?",
+    pergunta: "A análise inicial é gratuita?",
     resposta:
-      "Pelos XMLs das suas notas fiscais. A assinatura digital de cada nota é conferida, e só conta como faturamento o que é venda: remessa para o Full, devolução e nota cancelada ficam fora da conta. Notas de serviço (NFS-e) entram à parte.",
+      "Sim, 100% gratuita e sem compromisso. Analisamos sua tributação atual, o perfil do que você vende e como sua operação funciona antes de qualquer contratação, mostrando com clareza quais oportunidades existem no seu negócio.",
   },
   {
-    pergunta: "Onde eu recebo as guias?",
+    pergunta: "Preciso trocar o ERP que já uso (Bling, Tiny, etc.) para contratar a Contazoom?",
     resposta:
-      "No seu e-mail e no seu painel, em Documentos, separadas por ano e mês, junto com os impostos e os documentos da empresa.",
+      "Não. Você não precisa trocar nem abandonar o ERP que já utiliza para emitir notas ou controlar estoque. O sistema da Contazoom funciona integrado aos marketplaces via API para auditar seus pedidos, calcular a margem de contribuição real e alimentar a contabilidade fiscal com precisão.",
   },
   {
-    pergunta: "Vocês abrem o meu CNPJ?",
+    pergunta: "Como funciona a troca de contador? Preciso me indispor com o atual?",
     resposta:
-      "Abrimos. Você preenche um formulário online com os dados dos sócios e da empresa, e o envio gera um protocolo. Daí em diante o escritório cuida da viabilidade, do DBE na Receita Federal e do registro na Junta Comercial até os documentos oficiais. Também fazemos alteração cadastral, regularização, desenquadramento e encerramento de CNPJ.",
+      "Não precisa se preocupar. A Contazoom cuida de todo o processo de transição com o contador anterior: solicitamos o termo de transferência, o histórico fiscal, arquivos contábeis e procurações. Suas vendas e emissão de notas fiscais continuam funcionando normalmente sem nenhuma interrupção.",
   },
   {
-    pergunta: "O banco pediu uma declaração de faturamento. Vocês emitem?",
+    pergunta: "Como vocês chegam no meu faturamento apurado?",
     resposta:
-      "Emitimos a declaração dos últimos 12 meses, com número de protocolo, pronta para imprimir ou salvar em PDF.",
+      "Pela leitura direta dos XMLs das suas notas fiscais autorizadas na SEFAZ e pelas APIs dos marketplaces. Conferimos a assinatura digital de cada documento e separamos estritamente o que é venda do que é simples remessa para o Full ou devolução de mercadoria, evitando bitributação.",
   },
   {
-    pergunta: "Preciso usar o sistema de vendas?",
+    pergunta: "Como o sistema calcula o lucro líquido real?",
     resposta:
-      "Não. A contabilidade é o serviço. O sistema é um adicional para quem vende no Mercado Livre, na Shopee ou no TikTok Shop e quer ver a margem de cada venda, com comissão, frete, imposto e custo do produto já descontados.",
+      "O sistema parte do faturamento bruto e deduz automaticamente as comissões do marketplace, os fretes (inclusive custos e repasses do Flex/Full), os impostos da nota e o custo da mercadoria vendida (CMV) cadastrado por SKU. Com o registro das despesas operacionais da empresa, o painel consolida o lucro líquido real do mês.",
   },
   {
-    pergunta: "Preciso passar a senha da minha conta do marketplace?",
+    pergunta: "Vocês atendem Simples Nacional e Lucro Presumido?",
     resposta:
-      "Não. No sistema, você é levado ao site do Mercado Livre, da Shopee ou do TikTok Shop e autoriza o acesso por lá. Depois, dá para reconectar ou remover a conta quando quiser.",
+      "Sim, atendemos ambos os regimes. Avaliamos continuamente qual é o melhor enquadramento para a sua empresa conforme o crescimento do seu faturamento e o mix de produtos.",
   },
   {
-    pergunta: "O painel funciona no celular?",
+    pergunta: "Vocês fazem a abertura de CNPJ para quem vai começar?",
     resposta:
-      "Funciona. O painel tem um layout próprio para telas pequenas, com menu inferior, e pode ser adicionado à tela inicial do celular.",
+      "Sim! Realizamos a abertura completa do seu CNPJ com os CNAEs exatos para comércio eletrônico, registro na Junta Comercial, obtenção de Inscrição Estadual para emissão de NF-e e enquadramento tributário planejado.",
+  },
+  {
+    pergunta: "Onde eu recebo as guias de impostos?",
+    resposta:
+      "Suas guias (DAS no Simples, DARF/ICMS no Presumido) chegam com antecedência por e-mail e ficam sempre arquivadas e disponíveis para download no seu painel da Contazoom, organizadas por ano e mês.",
   },
 ];
 
 export default function Duvidas() {
   return (
-    <section id="duvidas" className="scroll-mt-16 border-t border-[#EDEFF3] bg-[#F8F9FB] py-24 sm:py-32">
+    <section id="duvidas" className="scroll-mt-16 bg-[#F8F9FB] py-20 sm:py-28">
       <div className="mx-auto grid max-w-[1200px] gap-12 px-5 sm:px-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20">
         <div data-revelar="">
-          <Rotulo numero="05" texto="Dúvidas" />
+          <Rotulo numero="09" texto="Dúvidas frequentes" />
           <Titulo>Perguntas antes de fechar com a gente.</Titulo>
           <Texto>
-            Se a sua não estiver aqui, chame no WhatsApp: <span className="czl-num font-semibold text-[#14161B]">{WHATSAPP_EXIBICAO}</span>.
+            Transparência desde o primeiro contato. Se você tiver qualquer outra pergunta, fale direto com
+            nossa equipe no WhatsApp: <span className="czl-num font-semibold text-[#14161B]">{WHATSAPP_EXIBICAO}</span>.
           </Texto>
-          <BotaoWhatsapp mensagem="duvida" className="mt-8 w-full sm:w-auto">
-            Tirar dúvida no WhatsApp
-          </BotaoWhatsapp>
+          <div className="mt-8">
+            <BotaoWhatsapp mensagem="duvida" className="w-full sm:w-auto">
+              Tirar dúvida no WhatsApp
+            </BotaoWhatsapp>
+          </div>
         </div>
 
-        <ul data-revelar="" className="divide-y divide-[#EDEFF3] overflow-hidden rounded-[22px] border border-[#EDEFF3] bg-white">
+        <ul data-revelar="" className="divide-y divide-[#EDEFF3] overflow-hidden rounded-[24px] border border-[#EDEFF3] bg-white shadow-[0_1px_3px_rgba(16,24,40,0.03)]">
           {PERGUNTAS.map(({ pergunta, resposta }) => (
             <li key={pergunta}>
               <details className="czl-duvida group">
-                <summary className="flex items-center justify-between gap-6 px-5 py-5 text-[16px] font-bold tracking-[-0.02em] text-[#14161B] transition-colors hover:bg-[#FCFCFD] sm:px-7">
+                <summary className="flex items-center justify-between gap-6 px-6 py-5 text-[16px] font-bold tracking-[-0.02em] text-[#14161B] transition-colors hover:bg-[#FCFCFD] sm:px-7">
                   {pergunta}
                   <span className="grid size-8 shrink-0 place-items-center rounded-full border border-[#EDEFF3] bg-white text-[#F26212] group-open:border-[#FFD9BF] group-open:bg-[#FFF2E9]">
                     <Plus className="czl-mais h-4 w-4" aria-hidden="true" />
                   </span>
                 </summary>
-                <p className="-mt-1 px-5 pb-6 pr-16 text-[15px] leading-[1.7] text-[#6B7280] sm:px-7 sm:pr-20">{resposta}</p>
+                <p className="-mt-1 px-6 pb-6 pr-16 text-[14.5px] leading-[1.7] text-[#6B7280] sm:px-7 sm:pr-20">
+                  {resposta}
+                </p>
               </details>
             </li>
           ))}

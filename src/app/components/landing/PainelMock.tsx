@@ -1,6 +1,8 @@
 import Image from "next/image";
 import {
+  ArrowRight,
   Boxes,
+  CheckCircle2,
   FolderOpen,
   LayoutDashboard,
   Megaphone,
@@ -20,15 +22,12 @@ import {
 import { type Canal, VENDAS_EXEMPLO, comSinal, margemDe, percentual } from "./dados";
 
 /**
- * Réplica do Dashboard para a primeira dobra da landing.
+ * Réplica do Dashboard para a landing.
  *
- * Os rótulos são os do painel de verdade (menu lateral, cartões de indicador,
- * colunas da Central de Vendas). Os números são de EXEMPLO e fecham entre si,
- * e são as mesmas vendas do explorador de margem mais abaixo.
+ * Exibe claramente a passagem do lucro líquido:
+ * Vendas → deduções e custos → despesas operacionais → resultado líquido.
  *
- * O componente é desenhado DUAS vezes pela `LupaPainel` (base e cópia ampliada),
- * então não pode ter `id` nem estado. A linha miúda de cada venda (7px) é
- * proposital: a olho nu ela é textura, e só a lupa a torna legível.
+ * Os rótulos e colunas representam o sistema real da Contazoom.
  */
 
 const LOGO: Record<Canal, (p: { className?: string }) => React.ReactElement> = {
@@ -111,9 +110,9 @@ function BarraLateral() {
       <div className="mt-auto rounded-[12px] border border-[#EDEFF3] bg-[#F8F9FB] p-2.5">
         <div className="flex items-center gap-1.5">
           <RefreshCw className="h-3 w-3 text-[#F26212]" strokeWidth={2.5} />
-          <span className="text-[10.5px] font-bold text-[#14161B]">Sincronizar vendas</span>
+          <span className="text-[10.5px] font-bold text-[#14161B]">Sincronização em tempo real</span>
         </div>
-        <p className="mt-0.5 text-[9px] text-[#6B7280]">Um clique para todos os canais</p>
+        <p className="mt-0.5 text-[9px] text-[#6B7280]">APIs oficiais de cada canal</p>
         <div className="mt-2 flex items-center gap-1.5">
           {(["ML", "SP", "TT"] as Canal[]).map((canal) => {
             const Logo = LOGO[canal];
@@ -123,7 +122,7 @@ function BarraLateral() {
               </span>
             );
           })}
-          <span className="ml-auto text-[9px] font-bold text-[#079455]">em dia</span>
+          <span className="ml-auto text-[9px] font-bold text-[#079455]">conectado</span>
         </div>
       </div>
     </aside>
@@ -134,7 +133,7 @@ function UltimasVendas() {
   return (
     <div className="rounded-[12px] border border-[#EDEFF3] bg-white">
       <div className="flex items-center justify-between border-b border-[#EDEFF3] px-3 py-2.5">
-        <p className="text-[12px] font-bold tracking-[-0.02em] text-[#14161B]">Últimas vendas</p>
+        <p className="text-[12px] font-bold tracking-[-0.02em] text-[#14161B]">Últimas vendas com margem por pedido</p>
         <p className="text-[9.5px] font-semibold text-[#9AA1AC]">Central de Vendas</p>
       </div>
       <div className={`${COLUNAS} border-b border-[#EDEFF3] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#9AA1AC]`}>
@@ -150,8 +149,6 @@ function UltimasVendas() {
         {VENDAS_EXEMPLO.map((v, i) => {
           const Logo = LOGO[v.canal];
           const margem = margemDe(v);
-          // Celular: quatro linhas bastam; a quarta (Suporte) sai para a da
-          // margem negativa continuar visível.
           const ocultaCelular = i === 3 ? "max-sm:hidden" : "";
           return (
             <li key={v.sku} className={`px-3 py-2 ${i < VENDAS_EXEMPLO.length - 1 ? "border-b border-[#F1F2F5]" : ""} ${ocultaCelular}`}>
@@ -242,7 +239,9 @@ function ColunaLateral() {
             </li>
           ))}
         </ul>
-        <p className="mt-2.5 text-[7px] leading-[9px] text-[#9AA1AC]">Margem de contribuição = faturamento − taxa − frete − CMV</p>
+        <p className="mt-2.5 text-[7px] leading-[9px] text-[#9AA1AC]">
+          Margem = faturamento − taxa − frete − imposto − CMV
+        </p>
       </div>
     </div>
   );
@@ -268,8 +267,8 @@ export default function PainelMock() {
         <div className="min-w-0 flex-1 bg-[#F8F9FB] p-3 sm:p-4">
           <div className="flex flex-wrap items-center gap-2">
             <div className="mr-auto">
-              <p className="text-[15px] font-extrabold tracking-[-0.03em] text-[#14161B] sm:text-[17px]">Dashboard</p>
-              <p className="text-[10px] text-[#6B7280]">Setembro de 2026 · todos os canais</p>
+              <p className="text-[15px] font-extrabold tracking-[-0.03em] text-[#14161B] sm:text-[17px]">Dashboard de Gestão</p>
+              <p className="text-[10px] text-[#6B7280]">Setembro de 2026 · visão consolidada de vendas e resultado</p>
             </div>
             <div className="hidden items-center gap-1 rounded-full border border-[#EDEFF3] bg-white p-0.5 md:flex">
               {["Hoje", "Últimos 7d", "Últimos 30d", "Este mês", "Mês passado"].map((p) => (
@@ -286,21 +285,46 @@ export default function PainelMock() {
             </span>
           </div>
 
+          {/* Passagem do Faturamento ao Lucro Líquido Real */}
           <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-4">
-            <Kpi rotulo="Faturamento Total" valor="R$ 248.390,40" nota="+12,4% vs mês anterior" notaCor="text-[#079455]">
+            <Kpi rotulo="1. Faturamento Total" valor="R$ 248.390,40" nota="+12,4% vs mês anterior" notaCor="text-[#079455]">
               <p className="czl-num mt-1.5 hidden gap-2 text-[7px] leading-[9px] text-[#9AA1AC] sm:flex">
                 <span>ML 141.180,22</span>
                 <span>Shopee 71.452,90</span>
                 <span>TikTok 35.757,28</span>
               </p>
             </Kpi>
-            <Kpi rotulo="Taxas das Plataformas" valor="−R$ 31.793,97" nota="12,8% do faturamento" className="max-md:hidden" />
-            <Kpi rotulo="Custo de Frete" valor="−R$ 19.126,06" nota="7,7% do faturamento" className="max-md:hidden" />
-            <Kpi rotulo="Lucro Bruto" valor="R$ 69.026,95" nota="27,8% do faturamento" notaCor="text-[#D9500A]" destaque foco="kpi">
-              <p className="mt-1.5 text-[7px] leading-[9px] text-[#B4683F]">
-                Receita líquida 197.470,37 − impostos 14.903,42 − CMV 113.540,00
+            <Kpi rotulo="2. Taxas & Fretes" valor="−R$ 50.920,03" nota="20,5% do faturamento" className="max-md:hidden">
+              <p className="czl-num mt-1.5 text-[7px] leading-[9px] text-[#9AA1AC]">
+                Comissões 31.793,97 + Fretes 19.126,06
               </p>
             </Kpi>
+            <Kpi rotulo="3. Custo Mercadorias (CMV)" valor="−R$ 113.540,00" nota="45,7% do faturamento" className="max-md:hidden">
+              <p className="czl-num mt-1.5 text-[7px] leading-[9px] text-[#9AA1AC]">
+                Custo histórico cadastrado por SKU
+              </p>
+            </Kpi>
+            <Kpi rotulo="4. Resultado Líquido Real" valor="R$ 60.606,95" nota="24,4% de margem líquida" notaCor="text-[#D9500A]" destaque foco="kpi">
+              <p className="mt-1.5 text-[7px] leading-[9px] text-[#B4683F]">
+                Faturamento − Taxas/Fretes − CMV − Imposto (14.903,42) − Despesas (8.420,00)
+              </p>
+            </Kpi>
+          </div>
+
+          {/* Faixa explicativa da passagem */}
+          <div className="mt-2 hidden items-center justify-between rounded-lg border border-[#EDEFF3] bg-white px-3 py-1.5 text-[9px] font-semibold text-[#6B7280] md:flex">
+            <span className="flex items-center gap-1 text-[#14161B]">
+              <span>Passagem transparente:</span>
+            </span>
+            <span>Vendas Brutas (248k)</span>
+            <span className="text-[#9AA1AC]">→</span>
+            <span>Taxas & Fretes (−50k)</span>
+            <span className="text-[#9AA1AC]">→</span>
+            <span>Custo Produtos (−113k)</span>
+            <span className="text-[#9AA1AC]">→</span>
+            <span>Impostos (−14,9k) & Despesas (−8,4k)</span>
+            <span className="text-[#9AA1AC]">→</span>
+            <span className="font-bold text-[#067647]">Lucro Líquido Real (60,6k)</span>
           </div>
 
           <div className="mt-2.5 grid gap-2.5 xl:grid-cols-[minmax(0,1fr)_224px]">

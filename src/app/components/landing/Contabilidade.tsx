@@ -1,53 +1,73 @@
-import { BookCheck, Calculator, FileCheck2, FileCode2, FolderOpen } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import {
+  BookCheck,
+  Calculator,
+  ChevronDown,
+  FileCheck2,
+  FileCode2,
+  FolderOpen,
+  Headphones,
+  ListChecks,
+  ShieldCheck,
+} from "lucide-react";
 import { BotaoWhatsapp, Rotulo, Texto, Titulo, atraso } from "./comum";
 import FluxoApuracao from "./FluxoApuracao";
 
 /**
- * 01 · Contabilidade — o serviço principal do ContaZoom: o escritório contábil
- * da casa, para o Simples Nacional e o Lucro Presumido.
+ * 05 · O que a contabilidade inclui — Entregas e atendimento
  *
- * O cliente NÃO vê o módulo de tarefas (papel USER, ver src/lib/papeis.ts), então
- * a copy fala do que o ESCRITÓRIO faz e do que CHEGA ao cliente (guias e
- * documentos por e-mail e no painel), nunca de "você acompanha cada etapa".
- * Os serviços repetem as etapas reais de src/lib/tarefa-etapas.ts.
+ * Foco comercial no que o cliente GANHA (tranquilidade fiscal, guias em dia,
+ * sem bitributação, atendimento rápido e documentos prontos).
+ * As etapas internas (10 do Simples e 14 do Presumido) ficam em uma área expansível
+ * como prova de organização técnica, sem roubar o espaço comercial.
  */
 
-const SERVICOS = [
+const ENTREGAS = [
   {
     Icone: Calculator,
-    titulo: "Impostos apurados todo mês",
+    titulo: "Apuração e guias com antecedência",
     texto:
-      "No Simples Nacional, o faturamento entra no PGDAS-D e a guia do DAS sai conferida. No Lucro Presumido, PIS/COFINS, IRPJ/CSLL e ICMS ou ISS, com as guias DARF, ICMS e ISS.",
+      "No Simples Nacional, seu DAS sai apurado no PGDAS-D com conferência rigorosa. No Lucro Presumido, guias DARF (IRPJ, CSLL, PIS, COFINS), ICMS e ISS entregues sem correria antes do vencimento.",
   },
   {
     Icone: FileCode2,
-    titulo: "Faturamento apurado pelo XML",
+    titulo: "Faturamento apurado diretamente pelos XMLs",
     texto:
-      "As notas fiscais entram aos milhares, num ZIP. A assinatura digital de cada XML é conferida, e só conta como faturamento o que é venda: remessa para o Full e devolução ficam fora da conta.",
+      "Análise lote a lote das notas fiscais. Segregação técnica entre vendas faturadas, devoluções e remessas para centros de distribuição (Full), evitando pagar tributos sobre o que não é receita.",
   },
   {
     Icone: FolderOpen,
-    titulo: "Guias e documentos no seu painel",
+    titulo: "Documentos e guias centralizados no painel",
     texto:
-      "Impostos, faturamento e documentos da empresa separados por ano e mês, no seu painel. A guia também chega por e-mail. Nada de caçar anexo.",
+      "Chega de procurar comprovantes no histórico de e-mails. Suas guias, notas e demonstrativos ficam organizados por ano e mês no painel web, além de notificações diretas no seu e-mail.",
   },
   {
     Icone: FileCheck2,
     titulo: "Declaração de faturamento de 12 meses",
     texto:
-      "O documento que o banco pede, com número de protocolo, pronto para imprimir ou salvar em PDF.",
+      "O documento oficial assinado que bancos, marketplaces e fornecedores exigem para liberação de crédito, linhas de capital de giro e aumento de limites.",
   },
   {
     Icone: BookCheck,
-    titulo: "Obrigações e balancete no Presumido",
+    titulo: "Balancetes e SPED no Lucro Presumido",
     texto:
-      "Lançamentos contábeis do período, envio das obrigações acessórias mensais, balancete e, se você quiser, relatórios gerenciais.",
+      "Escrituração contábil completa, conciliação bancária, entrega tempestiva de todas as obrigações acessórias (SPED, EFD, DCTF) e relatórios contábeis para tomada de decisão.",
+  },
+  {
+    Icone: Headphones,
+    titulo: "Suporte dedicado com contadores de e-commerce",
+    texto:
+      "Canal direto via WhatsApp com especialistas que entendem a rotina dos marketplaces, dúvidas sobre NFe, alíquotas estaduais (DIFAL) e regras fiscais.",
   },
 ];
 
 export default function Contabilidade() {
+  const [mostrarFluxo, setMostrarFluxo] = useState(false);
+
   return (
-    <section id="contabilidade" className="relative scroll-mt-16 overflow-hidden bg-[#0E1014] py-24 text-white sm:py-32">
+    <section id="contabilidade" className="relative scroll-mt-16 overflow-hidden bg-[#0E1014] py-20 text-white sm:py-28">
       <div aria-hidden="true" className="czl-papel-escuro pointer-events-none absolute inset-0" />
       <div
         aria-hidden="true"
@@ -60,47 +80,80 @@ export default function Contabilidade() {
 
       <div className="relative mx-auto max-w-[1200px] px-5 sm:px-8">
         <div data-revelar="" className="max-w-[48rem]">
-          <Rotulo numero="01" texto="Contabilidade" escuro />
-          <Titulo escuro>O mês da sua empresa fechado etapa por etapa, com prazo e responsável.</Titulo>
+          <Rotulo numero="05" texto="O que a contabilidade inclui" escuro />
+          <Titulo escuro>Tudo o que a sua empresa precisa para operar 100% regularizada e sem surpresas.</Titulo>
           <Texto escuro>
-            Cada regime tem o seu fluxo: 10 etapas no Simples Nacional, 14 no Lucro Presumido. O escritório
-            cuida de cada uma, e o que chega para você são as guias e os documentos do mês, no seu e-mail e
-            no seu painel.
+            Cuidamos de toda a rotina fiscal, contábil e de departamento pessoal da sua empresa. Você se dedica
+            a vender, precificar e escalar o seu e-commerce enquanto nosso time garante segurança tributária.
           </Texto>
         </div>
 
-        <div className="mt-14 grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-8">
-          <div data-revelar="">
-            <FluxoApuracao />
-          </div>
-
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            {SERVICOS.map(({ Icone, titulo, texto }, i) => (
-              <li
-                key={titulo}
-                data-revelar=""
-                style={atraso(80 + i * 80)}
-                className="flex flex-col gap-4 rounded-[20px] border border-white/10 bg-white/[0.04] p-5 sm:p-6 lg:flex-row lg:gap-5"
-              >
-                <span className="grid size-11 shrink-0 place-items-center rounded-[12px] bg-[#F26212]/15 text-[#FF9A5C]">
-                  <Icone className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <h3 className="text-[17px] font-bold tracking-[-0.025em] text-white">{titulo}</h3>
-                  <p className="mt-1.5 text-[14.5px] leading-[1.65] text-white/65">{texto}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+        {/* Grade de entregas de valor */}
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {ENTREGAS.map(({ Icone, titulo, texto }, i) => (
+            <div
+              key={titulo}
+              data-revelar=""
+              style={atraso(60 + i * 70)}
+              className="flex flex-col rounded-[22px] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-sm transition-colors hover:border-white/20 hover:bg-white/[0.06]"
+            >
+              <span className="grid size-11 place-items-center rounded-[12px] bg-[#F26212]/15 text-[#FF9A5C]">
+                <Icone className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <h3 className="mt-4 text-[17px] font-bold tracking-[-0.025em] text-white">{titulo}</h3>
+              <p className="mt-2 text-[14px] leading-[1.65] text-white/65">{texto}</p>
+            </div>
+          ))}
         </div>
 
+        {/* Área secundária/expansível para as 10 e 14 etapas internas */}
+        <div data-revelar="" className="mt-12 rounded-[24px] border border-white/10 bg-white/[0.03] p-5 sm:p-7">
+          <button
+            type="button"
+            onClick={() => setMostrarFluxo((v) => !v)}
+            aria-expanded={mostrarFluxo}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-[12px] bg-white/10 text-white">
+                <ListChecks className="h-5 w-5 text-[#FF9A5C]" />
+              </span>
+              <div>
+                <p className="text-[16px] font-bold text-white">
+                  Prova de organização interna: conheça nossas etapas de apuração
+                </p>
+                <p className="text-[13px] text-white/60">
+                  10 etapas no Simples Nacional e 14 no Lucro Presumido com responsáveis e prazos rigorosos no escritório.
+                </p>
+              </div>
+            </div>
+            <span className={`grid size-9 shrink-0 place-items-center rounded-full border border-white/15 bg-white/5 text-white transition-transform duration-200 ${mostrarFluxo ? "rotate-180" : ""}`}>
+              <ChevronDown className="h-4 w-4" />
+            </span>
+          </button>
+
+          {mostrarFluxo && (
+            <div className="mt-6 border-t border-white/10 pt-6">
+              <p className="mb-4 text-[13.5px] text-white/70">
+                Nosso time executa cada etapa em sequência para garantir que nenhum detalhe passe despercebido:
+              </p>
+              <FluxoApuracao />
+            </div>
+          )}
+        </div>
+
+        {/* Bloco de fechamento da seção */}
         <div data-revelar="" className="mt-12 flex flex-col items-start gap-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
           <div>
-            <p className="text-[18px] font-bold tracking-[-0.025em] text-white">Quer saber como fica o mês da sua empresa?</p>
-            <p className="mt-1 text-[14.5px] text-white/65">Conte o regime e as atividades, e a gente explica a rotina.</p>
+            <p className="text-[18px] font-bold tracking-[-0.025em] text-white">
+              Quer saber como fica a contabilidade para a sua faixa de faturamento?
+            </p>
+            <p className="mt-1 text-[14.5px] text-white/65">
+              Conte o seu regime tributário e onde vende. Enviamos uma proposta com escopo detalhado.
+            </p>
           </div>
           <BotaoWhatsapp mensagem="contabilidade" className="w-full shrink-0 sm:w-auto">
-            Falar no WhatsApp
+            Quero uma proposta de contabilidade
           </BotaoWhatsapp>
         </div>
       </div>

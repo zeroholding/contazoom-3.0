@@ -11,7 +11,7 @@
  *
  * Sem ninguém com o mouse em cima, a lupa passeia sozinha pelos três pontos que
  * contam a história (a venda que dá prejuízo, o detalhe miúdo de uma venda, o
- * lucro bruto). Com o mouse, ela segue o cursor. No toque, vai até onde o dedo
+ * resultado líquido). Com o mouse, ela segue o cursor. No toque, vai até onde o dedo
  * tocou. Quem pediu menos movimento recebe a lupa parada no primeiro ponto.
  */
 
