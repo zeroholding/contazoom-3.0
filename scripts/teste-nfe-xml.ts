@@ -418,6 +418,14 @@ check("6108 é venda", ehCfopDeVenda("6108"));
 check("6102 é venda", ehCfopDeVenda("6102"));
 check("5101 é venda", ehCfopDeVenda("5101"));
 check("5102 é venda", ehCfopDeVenda("5102"));
+check("5405 é venda (ST, substituído)", ehCfopDeVenda("5405"));
+check("6404 é venda (ST interestadual)", ehCfopDeVenda("6404"));
+check("5403 é venda (ST, substituto)", ehCfopDeVenda("5403"));
+check("5651 é venda (combustível)", ehCfopDeVenda("5651"));
+check("7101 é venda (exterior)", ehCfopDeVenda("7101"));
+check("5151 NÃO é venda (transferência)", !ehCfopDeVenda("5151"));
+check("6152 NÃO é venda (transferência)", !ehCfopDeVenda("6152"));
+check("5408 NÃO é venda (transferência com ST)", !ehCfopDeVenda("5408"));
 check("5949 NÃO é venda (outra saída)", !ehCfopDeVenda("5949"));
 check("6949 NÃO é venda (outra saída)", !ehCfopDeVenda("6949"));
 check("6905 NÃO é venda (remessa para depósito)", !ehCfopDeVenda("6905"));
@@ -428,6 +436,14 @@ console.log("\n8) Classificação de faturamento");
 
 check("venda normal SOMA", classificarFaturamento(VENDA_OK).contaFaturamento === true);
 check("NFC-e (modelo 65) SOMA", classificarFaturamento(comoVenda({ modelo: "65" })).contaFaturamento === true);
+check(
+  "venda com ST (5405) SOMA",
+  classificarFaturamento(comoVenda({ cfops: ["5405"] })).contaFaturamento === true,
+);
+check(
+  "venda com ST interestadual (6404) SOMA",
+  classificarFaturamento(comoVenda({ cfops: ["6404"] })).contaFaturamento === true,
+);
 check(
   "complementar SOMA",
   classificarFaturamento(comoVenda({ finalidade: "2" })).contaFaturamento === true,
@@ -447,7 +463,10 @@ const casos: Array<[string, Partial<EntradaClassificacao>, string]> = [
   ["sem CFOP não soma", { cfops: [] }, MOTIVO_EXCLUSAO.SEM_CFOP],
   ["remessa para o FULL não soma", { cfops: ["6949"] }, MOTIVO_EXCLUSAO.FORA_DA_FAIXA_DE_VENDA],
   ["remessa para depósito não soma", { cfops: ["6905"] }, MOTIVO_EXCLUSAO.FORA_DA_FAIXA_DE_VENDA],
+  ["transferência não soma", { cfops: ["5151"] }, MOTIVO_EXCLUSAO.FORA_DA_FAIXA_DE_VENDA],
+  ["transferência com ST não soma", { cfops: ["5408"] }, MOTIVO_EXCLUSAO.FORA_DA_FAIXA_DE_VENDA],
   ["CFOP misto não soma", { cfops: ["6108", "6949"] }, MOTIVO_EXCLUSAO.CFOP_MISTO],
+  ["venda com item de transferência é misto", { cfops: ["5405", "5151"] }, MOTIVO_EXCLUSAO.CFOP_MISTO],
 ];
 
 for (const [nome, mudancas, motivoEsperado] of casos) {
@@ -498,7 +517,8 @@ check("1202 é devolução de venda", ehCfopDeDevolucaoDeVenda("1202"));
 check("2202 é devolução de venda", ehCfopDeDevolucaoDeVenda("2202"));
 check("1201 é devolução de venda (produção própria)", ehCfopDeDevolucaoDeVenda("1201"));
 check("1208 NÃO é (devolução de transferência)", !ehCfopDeDevolucaoDeVenda("1208"));
-check("1411 NÃO é (devolve venda com ST, que não soma)", !ehCfopDeDevolucaoDeVenda("1411"));
+check("1411 É devolução de venda (devolve venda com ST, que soma na v3)", ehCfopDeDevolucaoDeVenda("1411"));
+check("3201 É devolução de venda (exterior)", ehCfopDeDevolucaoDeVenda("3201"));
 check("1949 NÃO é (retorno do FULL)", !ehCfopDeDevolucaoDeVenda("1949"));
 check("5202 NÃO é (devolução de compra, saída)", !ehCfopDeDevolucaoDeVenda("5202"));
 
@@ -533,8 +553,12 @@ check(
     comoDevolucao({ cfops: ["1949"] }).abateFaturamento === false,
 );
 check(
-  "devolução de venda com ST (1411) não abate: a venda 5.4xx nunca somou",
-  comoDevolucao({ cfops: ["1411"] }).abateFaturamento === false,
+  "devolução de venda com ST (1411) ABATE: a venda 5.405/6.404 soma na v3",
+  comoDevolucao({ cfops: ["1411"] }).abateFaturamento === true,
+);
+check(
+  "devolução de venda ao exterior (3201) ABATE",
+  comoDevolucao({ cfops: ["3201"] }).abateFaturamento === true,
 );
 check(
   "retorno do FULL (entrada, finalidade 1, 1949) segue ENTRADA",

@@ -30,6 +30,14 @@
  * FULL, e amanhã pode aparecer em outra coisa. Aceitar tudo menos uma lista de
  * exclusão faria toda saída desconhecida virar receita — errando PARA CIMA, que é
  * o pior lado para um número que vai assinado ao banco.
+ *
+ * CORREÇÃO v3 (NOAH MIX, base `cfop/Base Classificação CFOP - Sistema C.Z.xlsx`):
+ * a whitelist cobria só os grupos 5.1/6.1 e deixava de fora vendas com
+ * substituição tributária — 5.405 e 6.404 não somavam no faturamento. A regra
+ * passa a ser a classificação da base: famílias de venda + códigos explícitos de
+ * venda (ST, combustíveis, exportação) SOMAM; transferências, remessas e o
+ * genérico 5.949/6.949 NÃO somam; e devolução das vendas que somam ABATE —
+ * incluindo agora as devoluções das vendas com ST (1.410/1.411/2.410/2.411).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -55,8 +63,52 @@ export const STATUS_AUTORIZADA = "100";
  * ou de terceiros". Prefixo de dois dígitos cobre a faixa inteira (5101, 5102,
  * 5105, 5106, 6101, 6102, 6105, 6106, 6107, 6108) sem listar código por código —
  * e um código novo do mesmo grupo entra sozinho.
+ *
+ * As transferências (5.15x/6.15x) caem no prefixo e NÃO são venda: saem por
+ * `CFOPS_NAO_SOMA`, que tem precedência sobre os prefixos.
  */
 export const PREFIXOS_CFOP_VENDA = ["51", "61"] as const;
+
+/**
+ * Vendas com substituição tributária (grupos 5.4 e 6.4).
+ *
+ * É o que faltava no faturamento da NOAH MIX: 5.405 e 6.404 são venda — o
+ * ICMS-ST retido não muda a natureza da operação. Os códigos de TRANSFERÊNCIA
+ * com ST (5.408/5.409/6.408/6.409) ficam fora de propósito, em `CFOPS_NAO_SOMA`.
+ */
+export const CFOPS_VENDA_ST = [
+  "5401", "5402", "5403", "5405",
+  "6401", "6402", "6403", "6404",
+] as const;
+
+/** Venda de combustíveis/lubrificantes (grupos 5.6 e 6.6), da base de CFOP. */
+export const CFOPS_VENDA_COMBUSTIVEL = [
+  "5651", "5652", "5653", "5654", "5655", "5656", "5667",
+  "6651", "6652", "6653", "6654", "6655", "6656", "6667",
+] as const;
+
+/** Venda para o exterior (grupo 7.1), da base de CFOP. */
+export const CFOPS_VENDA_EXTERIOR = ["7101", "7102"] as const;
+
+/**
+ * Saídas que NÃO somam, mesmo caindo em família de venda (base de CFOP):
+ * transferências entre estabelecimentos, remessas e retornos que não são venda,
+ * e o genérico 5.949/6.949 ("outra saída não especificada", que a base manda
+ * não inferir como venda).
+ *
+ * A precedência é aqui: sem ela, as transferências 5.15x/6.15x somariam como
+ * venda só por caírem no prefixo 51/61.
+ */
+export const CFOPS_NAO_SOMA = [
+  // Transferências entre estabelecimentos (inclusive com ST e de ativo/material)
+  "5151", "5152", "5155", "5156", "5408", "5409", "5552", "5557",
+  "6151", "6152", "6155", "6156", "6408", "6409", "6552", "6557",
+  // Remessas e retornos que não são venda
+  "5901", "5904", "5905", "5906", "5910", "5911", "5915",
+  "6901", "6904", "6905", "6906", "6910", "6911", "6915",
+  // "Outra saída não especificada": genérico, não inferir venda
+  "5949", "6949",
+] as const;
 
 /**
  * CFOPs de devolução de VENDA: o cliente devolveu a mercadoria e a própria
@@ -68,20 +120,19 @@ export const PREFIXOS_CFOP_VENDA = ["51", "61"] as const;
  * só aparecem 1.202 e 2.202, tanto em "Devolução de mercadorias" quanto em "Retorno
  * de mercadoria não entregue" — nos dois casos a venda foi desfeita.
  *
- * LISTA FECHADA, de propósito. 1.208/1.209 devolvem TRANSFERÊNCIA, não venda. E
- * 1.410/1.411 devolvem venda com substituição tributária (5.4xx), que a apuração
- * não soma: abater a devolução de algo que nunca entrou no total tiraria o valor
- * de outra venda.
+ * v3: entram também 1.410/1.411 e 2.410/2.411 — devolução das vendas COM
+ * substituição tributária. Como 5.405/6.404 passaram a somar, a devolução delas
+ * tem de abater (a base destaca 1.411 como "importante para vendas originalmente
+ * em 5405/6404") — e 3.201/3.202, devolução de venda ao exterior.
+ *
+ * LISTA FECHADA, de propósito. 1.208/1.209 devolvem TRANSFERÊNCIA, não venda.
  */
 export const CFOPS_DEVOLUCAO_VENDA = [
-  "1201",
-  "1202",
-  "1203",
-  "1204",
-  "2201",
-  "2202",
-  "2203",
-  "2204",
+  "1201", "1202", "1203", "1204",
+  "1410", "1411",
+  "2201", "2202", "2203", "2204",
+  "2410", "2411",
+  "3201", "3202",
 ] as const;
 
 /** Modelos que a apuração soma. CT-e (57) e NFS-e (13) ficam fora por ora. */
@@ -100,8 +151,14 @@ export const MODELOS_APURADOS = ["55", "65"] as const;
  * faturamento do mês. Na v1 ela caía em ENTRADA e só ficava fora da soma. É a
  * única diferença entre as versões; os documentos já importados são levados para
  * a v2 por `src/lib/faturamento-regra-atual.ts`.
+ *
+ * v3 (nov/2026, NOAH MIX + base de CFOP): vendas com substituição tributária
+ * (5.401-5.405, 6.401-6.404) e as demais famílias de venda da base passam a
+ * SOMAR — 5.405 e 6.404 eram as que faltavam; transferências (5.15x/6.15x...)
+ * param de somar; e as devoluções das vendas com ST (1.410/1.411/2.410/2.411)
+ * e do exterior (3.201/3.202) passam a ABATER.
  */
-export const VERSAO_REGRA_FATURAMENTO = 2;
+export const VERSAO_REGRA_FATURAMENTO = 3;
 
 /* --------------------------------- Motivos -------------------------------- */
 
@@ -218,6 +275,12 @@ export type ResultadoClassificacao = {
 
 /** true quando o CFOP pertence ao grupo de venda. */
 export function ehCfopDeVenda(cfop: string): boolean {
+  // NÃO SOMA tem precedência sobre tudo: a transferência 5.151 cai no prefixo 51
+  // e não é venda.
+  if ((CFOPS_NAO_SOMA as readonly string[]).includes(cfop)) return false;
+  if ((CFOPS_VENDA_ST as readonly string[]).includes(cfop)) return true;
+  if ((CFOPS_VENDA_COMBUSTIVEL as readonly string[]).includes(cfop)) return true;
+  if ((CFOPS_VENDA_EXTERIOR as readonly string[]).includes(cfop)) return true;
   return PREFIXOS_CFOP_VENDA.some((prefixo) => cfop.startsWith(prefixo));
 }
 
@@ -316,7 +379,7 @@ export function classificarFaturamento(
   }
 
   // 7. Entrada emitida pela própria empresa que não é devolução de venda: compra,
-  // retorno de remessa (FULL), devolução de venda com ST.
+  // retorno de remessa (FULL), retorno de transferência.
   if (entrada.tipoOperacao === OPERACAO_ENTRADA) {
     return excluir(MOTIVO_EXCLUSAO.ENTRADA);
   }
