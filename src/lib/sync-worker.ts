@@ -14,7 +14,7 @@ import { dequeueSales, type QueuedSale, getQueueStats } from './redis-queue';
 import { sendProgressToUser } from './sse-progress';
 import { Decimal } from '@prisma/client/runtime/library';
 import { prepareSaleData } from '@/utils/sync-prepare-sale-data';
-import { devePreservarPrazoMeli } from './prazo-despacho';
+import { salvarLoteVendasMeli } from './save-meli-sales';
 
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 3;
@@ -331,83 +331,7 @@ async function saveSalesToDatabase(
                 continue;
             }
 
-            // Buscar IDs existentes para dividir em creates vs updates
-            const orderIds = validData.map((d) => d!.orderId);
-            const existingOrders = await prisma.meliVenda.findMany({
-                where: { orderId: { in: orderIds } },
-                select: { orderId: true, prazoDespachoOrigem: true, userId: true },
-            });
-
-            const existingByOrderId = new Map(
-                existingOrders.map((order) => [order.orderId, order])
-            );
-
-            const toCreate = validData.filter(
-                (d) => !existingByOrderId.has(d!.orderId)
-            );
-            // ISOLAMENTO ENTRE USUÁRIOS. `orderId` é único no banco inteiro, então
-            // quando a mesma conta do ML está conectada em dois usuários o pedido
-            // já existe na linha do OUTRO. Atualizar por `orderId` regravava a
-            // venda dele com o CMV e a margem calculados pelos SKUs deste usuário,
-            // sem trocar o dono. Aconteceu em produção com BRUXELAS e CINGAPURA.
-            // Só atualiza a linha que é deste usuário; a outra fica intocada.
-            const toUpdate = validData.filter(
-                (d) => existingByOrderId.get(d!.orderId)?.userId === userId
-            );
-            const deOutroUsuario = validData.length - toCreate.length - toUpdate.length;
-            if (deOutroUsuario > 0) {
-                console.warn(
-                    `[Sync] ${deOutroUsuario} pedido(s) já pertencem a outro usuário (conta ML conectada em duas contas do ContaZoom); não sobrescritos.`
-                );
-            }
-
-            // BATCH CREATE: insere m�ltiplos registros de uma vez
-            if (toCreate.length > 0) {
-                try {
-                    const createResult = await prisma.meliVenda.createMany({
-                    data: toCreate.map((d) => d!.createData),
-                    skipDuplicates: true, // Evita erro se j� existir
-                    });
-                    saved += createResult.count;
-                } catch (createError) {
-                    console.error(`[Sync] Erro em batch create:`, createError);
-                    errors += toCreate.length;
-                }
-            }
-
-            // BATCH UPDATE: atualiza m�ltiplos registros em uma transa��o
-            if (toUpdate.length > 0) {
-                try {
-                    await prisma.$transaction(
-                    toUpdate.map((d) => {
-                        const updateData = { ...d!.updateData };
-                        const origemExistente = existingByOrderId.get(
-                            d!.orderId
-                        )?.prazoDespachoOrigem;
-
-                        if (
-                            devePreservarPrazoMeli(
-                                origemExistente ?? null,
-                                String(updateData.prazoDespachoOrigem ?? "")
-                            )
-                        ) {
-                            delete updateData.prazoDespacho;
-                            delete updateData.prazoDespachoOrigem;
-                        }
-
-                        return prisma.meliVenda.update({
-                            where: { orderId: d!.orderId },
-                            data: { ...updateData, atualizadoEm: new Date() },
-                            select: { id: true },
-                        });
-                    })
-                    );
-                    saved += toUpdate.length;
-                } catch (updateError) {
-                    console.error(`[Sync] Erro em batch update:`, updateError);
-                    errors += toUpdate.length;
-                }
-            }
+            saved += await salvarLoteVendasMeli(userId, validData);
         } catch (batchError) {
             console.error(
                 `[Sync] Erro cr�tico no batch ${i}-${i + BATCH_SIZE}:`,

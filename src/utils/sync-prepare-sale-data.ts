@@ -6,7 +6,7 @@ import { adsTags, mapListingTypeToExposure } from "./meli-functions";
 import { extrairPrazoDespachoMeli } from "@/lib/prazo-despacho";
 
 /** Versão das regras que tornam seguro reutilizar um pedido ML já persistido. */
-export const ML_SYNC_RULE_VERSION = "ml-sync-v1";
+export const ML_SYNC_RULE_VERSION = "ml-sync-v2";
 
 type SkuCacheEntry = {
   custoUnitario: number | null;

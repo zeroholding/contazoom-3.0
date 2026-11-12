@@ -41,6 +41,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { salvarLoteVendasMeli } from "@/lib/save-meli-sales";
 import { assertSessionToken } from "@/lib/auth";
 import { refreshMeliAccountToken } from "@/lib/meli";
 import { calcularFreteAdjust } from "@/lib/frete";
@@ -61,7 +62,6 @@ import { roundCurrency, truncateJsonData, truncateString } from "@/utils/string-
 import { calculateMargemContribuicao } from "@/utils/calc-margem-contribuicao";
 import { adsTags, mapListingTypeToExposure } from "@/utils/meli-functions";
 import {
-  devePreservarPrazoMeli,
   extrairPrazoDespachoMeli,
 } from "@/lib/prazo-despacho";
 
@@ -1684,79 +1684,7 @@ async function saveVendasBatch(
           continue;
         }
 
-        // Buscar IDs existentes para dividir em creates vs updates
-        const orderIds = validData.map((d) => d!.orderId);
-        const existingOrders = await prisma.meliVenda.findMany({
-          where: { orderId: { in: orderIds } },
-          select: { orderId: true, prazoDespachoOrigem: true, userId: true },
-        });
-
-        const existingByOrderId = new Map(
-          existingOrders.map((order) => [order.orderId, order]),
-        );
-
-        const toCreate = validData.filter(
-          (d) => !existingByOrderId.has(d!.orderId)
-        );
-        // Isolamento entre usuários: mesma regra de `src/lib/sync-worker.ts`.
-        // Pedido que já pertence a OUTRO usuário (conta ML conectada em dois
-        // cadastros) não é regravado com o CMV e a margem deste.
-        const toUpdate = validData.filter(
-          (d) => existingByOrderId.get(d!.orderId)?.userId === userId
-        );
-        const deOutroUsuario = validData.length - toCreate.length - toUpdate.length;
-        if (deOutroUsuario > 0) {
-          console.warn(
-            `[Sync] ${deOutroUsuario} pedido(s) já pertencem a outro usuário (conta ML conectada em duas contas do ContaZoom); não sobrescritos.`
-          );
-        }
-
-        // BATCH CREATE: insere m�ltiplos registros de uma vez
-        if (toCreate.length > 0) {
-          try {
-            await prisma.meliVenda.createMany({
-              data: toCreate.map((d) => d!.createData),
-              skipDuplicates: true, // Evita erro se j� existir
-            });
-            saved += toCreate.length;
-          } catch (createError) {
-            console.error(`[Sync] Erro em batch create:`, createError);
-            errors += toCreate.length;
-          }
-        }
-
-        // BATCH UPDATE: atualiza m�ltiplos registros em uma transa��o
-        if (toUpdate.length > 0) {
-          try {
-            await prisma.$transaction(
-              toUpdate.map((d) => {
-                const updateData = { ...d!.updateData };
-                const origemExistente = existingByOrderId.get(
-                  d!.orderId,
-                )?.prazoDespachoOrigem;
-
-                if (
-                  devePreservarPrazoMeli(
-                    origemExistente ?? null,
-                    String(updateData.prazoDespachoOrigem ?? ""),
-                  )
-                ) {
-                  delete updateData.prazoDespacho;
-                  delete updateData.prazoDespachoOrigem;
-                }
-
-                return prisma.meliVenda.update({
-                  where: { orderId: d!.orderId },
-                  data: { ...updateData, atualizadoEm: new Date() },
-                });
-              })
-            );
-            saved += toUpdate.length;
-          } catch (updateError) {
-            console.error(`[Sync] Erro em batch update:`, updateError);
-            errors += toUpdate.length;
-          }
-        }
+        saved += await salvarLoteVendasMeli(userId, validData);
       } catch (batchError) {
         console.error(
           `[Sync] Erro cr�tico no batch ${i}-${i + batchSize}:`,
