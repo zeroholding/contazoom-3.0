@@ -70,6 +70,9 @@ model MeliAccount {
   user                        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   meliVendas                  MeliVenda[]
   fullStock                   MeliFullStock[]
+  promotions                  MlPromotion[]
+  promotionItems              MlPromotionItem[]
+  promotionSync               MlPromotionSync?
 
   @@unique([userId, ml_user_id], name: "userId_ml_user_id")
   @@map("meli_account")
@@ -2047,4 +2050,77 @@ model EmpresaSerieCanal {
   @@unique([empresaId, serie], name: "empresa_serie")
   @@index([empresaId])
   @@map("empresa_serie_canal")
+}
+
+model MlPromotion {
+  /// "{account_id}:{ml_user_id}:{type}:{id}"
+  uid           String    @id
+  promotionId   String    @map("promotion_id")
+  promotionType String    @map("promotion_type")
+  accountId String    @map("account_id")
+  name          String?
+  status        String?
+  startAt       DateTime? @map("start_at") @db.Timestamptz(6)
+  finishAt      DateTime? @map("finish_at") @db.Timestamptz(6)
+  deadlineAt    DateTime? @map("deadline_at") @db.Timestamptz(6)
+  benefits      Json?
+  isCurrent     Boolean   @default(true) @map("is_current")
+  firstSeenAt   DateTime  @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt    DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+
+  @@index([accountId])
+  @@index([isCurrent])
+  @@index([finishAt])
+  @@index([promotionId])
+  account MeliAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("ml_promotion")
+}
+
+model MlPromotionItem {
+  /// "{promotion_uid}:{item_id}"
+  uid            String    @id
+  promotionUid   String    @map("promotion_uid")
+  promotionId    String    @map("promotion_id")
+  promotionType  String    @map("promotion_type")
+  accountId String    @map("account_id")
+  itemId         String    @map("item_id")
+  status         String?
+  price          Decimal?  @db.Decimal(14, 2)
+  originalPrice  Decimal?  @map("original_price") @db.Decimal(14, 2)
+  tablePrice     Decimal?  @map("table_price") @db.Decimal(14, 2)
+  discountAmount Decimal?  @map("discount_amount") @db.Decimal(14, 2)
+  discountPct    Decimal?  @map("discount_pct") @db.Decimal(8, 4)
+  meliPct        Decimal?  @map("meli_pct") @db.Decimal(8, 4)
+  sellerPct      Decimal?  @map("seller_pct") @db.Decimal(8, 4)
+  startAt        DateTime? @map("start_at") @db.Timestamptz(6)
+  finishAt       DateTime? @map("finish_at") @db.Timestamptz(6)
+  offerId        String?   @map("offer_id")
+  title          String?
+  thumbnail      String?
+  permalink      String?
+  isCurrent      Boolean   @default(true) @map("is_current")
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+
+  @@index([promotionUid])
+  @@index([promotionId])
+  @@index([itemId])
+  @@index([accountId])
+  @@index([isCurrent])
+  @@index([finishAt])
+  account MeliAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("ml_promotion_item")
+}
+
+model MlPromotionSync {
+  accountId String    @id @map("account_id")
+  lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz(6)
+  lastError    String?   @map("last_error")
+  promotions   Int       @default(0)
+  items        Int       @default(0)
+
+  account MeliAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("ml_promotion_sync")
 }

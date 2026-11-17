@@ -34,6 +34,7 @@ const LABEL_POR_CAMINHO: Record<string, string> = {
   "/anuncios/mortos": "Anúncios Mortos",
   "/financeiro/configuracoes-frete": "Configuração de Frete",
   "/estoque-full": "Estoque Full",
+  "/promocoes": "Promoções",
   "/expedicao": "Expedição Geral",
   "/expedicao/mercado-livre": "Mercado Livre",
   "/expedicao/shopee": "Shopee",
