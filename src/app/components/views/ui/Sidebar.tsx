@@ -266,6 +266,7 @@ const NAV_ITEMS: Item[] = [
     ],
   },
   { href: "/estoque-full", label: "Estoque Full", icon: <CaixasIcon /> },
+  { href: "/promocoes", label: "Promoções", icon: <TicketIcon /> },
   { href: "/sku", label: "Gestão de SKU", icon: <TicketIcon /> },
   { href: "/documentos", label: "Documentos", icon: <DocumentsIcon /> },
   { href: "/contas", label: "Contas de plataforma", icon: <UsersIcon /> },

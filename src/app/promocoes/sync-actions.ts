@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { promotionsEnabled, promotionUser } from "@/lib/ml-promotions-session";
+import { promotionUser } from "@/lib/ml-promotions-session";
 import { syncAllPromotions, type PromotionSyncSummary } from "@/lib/ml-promotions-sync";
 
 export type PromotionSyncResult =
@@ -11,7 +11,6 @@ export type PromotionSyncResult =
 export async function syncPromotionsAction(): Promise<PromotionSyncResult> {
   const userId = await promotionUser();
   if (!userId) return { ok: false, error: "Entre novamente para sincronizar promoções." };
-  if (!promotionsEnabled()) return { ok: false, error: "Promoções em andamento." };
 
   try {
     const summary = await syncAllPromotions(userId);

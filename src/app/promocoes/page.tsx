@@ -30,8 +30,7 @@ import {
 import { KpiCard } from "./kpi-card";
 import { Thumbnail } from "./thumbnail.client";
 import { Cabecalho } from "@/app/components/views/comum/shell";
-import { promotionsEnabled, requirePromotionUser } from "@/lib/ml-promotions-session";
-import { PromocoesEmAndamento } from "./em-andamento";
+import { requirePromotionUser } from "@/lib/ml-promotions-session";
 import { formatCurrency, formatDate, formatInt } from "./format";
 import { finishSource, parsePromotionFilters, promoTypeLabel } from "@/lib/ml-promotions-query";
 import {
@@ -56,7 +55,6 @@ type PageProps = {
 
 export default async function PromocoesPage({ searchParams }: PageProps) {
   const userId = await requirePromotionUser();
-  if (!promotionsEnabled()) return <PromocoesEmAndamento />;
   const sp = await searchParams;
   const filters = parsePromotionFilters(sp);
 
