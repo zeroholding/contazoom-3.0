@@ -6,6 +6,10 @@
 @import "../styles/input-styles.css";
 
 :root {
+  --font-geist-sans: "Geist Variable";
+  --font-geist-mono: "Geist Mono Variable";
+  --font-jakarta: "Plus Jakarta Sans Variable";
+  --font-dm-sans: "DM Sans Variable";
     --background: #ffffff;
     --foreground: #171717;
     
