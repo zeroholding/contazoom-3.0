@@ -593,6 +593,7 @@ function CardVendido({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number;
         selos={
           <>
             {ml && <SeloStatus status={l.status} />}
+            {l.emPromocao && <Selo tom="bom">Em promoção</Selo>}
             {l.logisticType && <SeloEnvio tipo={l.logisticType} />}
             {ml && (
               <span className="inline-flex items-center gap-1.5 text-[12.5px] text-[var(--cz-texto-suave)]">
@@ -615,7 +616,7 @@ function CardVendido({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number;
                 {
                   rotulo: l.preco !== null && !l.precoConfirmado ? "Preço de tabela" : "Preço atual",
                   valor: l.preco === null ? "—" : brl(l.preco),
-                  nota: l.precoOriginal === null ? undefined : `Em promoção · Original ${brl(l.precoOriginal)}`,
+                  nota: l.precoOriginal === null ? undefined : `Preço original ${brl(l.precoOriginal)}`,
                 },
               ]
             : [
@@ -678,6 +679,7 @@ function CardVendido({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number;
           {l.canal === "ML" ? (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <SeloStatus status={l.status} />
+              {l.emPromocao && <Selo tom="bom">Em promoção</Selo>}
               <span className={`text-[12px] font-bold tabular-nums ${esgotado ? "text-rose-700" : "text-[var(--cz-texto)]"}`}>
                 {l.estoque === null ? "estoque —" : `${inteiro(l.estoque)} un.`}
               </span>
@@ -688,7 +690,7 @@ function CardVendido({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number;
               </span>
               {l.precoOriginal !== null && (
                 <span className="text-[11px] font-semibold text-emerald-700">
-                  Em promoção · Original <s>{brl(l.precoOriginal)}</s>
+                  Preço original <s>{brl(l.precoOriginal)}</s>
                 </span>
               )}
             </div>

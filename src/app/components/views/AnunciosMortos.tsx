@@ -733,6 +733,7 @@ function AnuncioParadoCard({ l }: { l: Linha }) {
         selos={
           <>
             <SeloStatus status={l.status} />
+            {l.emPromocao && <Selo tom="bom">Em promoção</Selo>}
             {l.logisticType && <SeloEnvio tipo={l.logisticType} />}
             {l.subStatus.includes("out_of_stock") && <Selo tom="alerta">pausado por falta de estoque</Selo>}
           </>
@@ -753,7 +754,7 @@ function AnuncioParadoCard({ l }: { l: Linha }) {
           {
             rotulo: l.preco !== null && !l.precoConfirmado ? "Preço de tabela" : "Preço atual",
             valor: l.preco === null ? "Não consultado" : brl(l.preco),
-            nota: l.precoOriginal === null ? undefined : `Em promoção · Original ${brl(l.precoOriginal)}`,
+            nota: l.precoOriginal === null ? undefined : `Preço original ${brl(l.precoOriginal)}`,
           },
         ]}
       />
@@ -781,6 +782,7 @@ function AnuncioParadoCard({ l }: { l: Linha }) {
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <SeloStatus status={l.status} />
+            {l.emPromocao && <Selo tom="bom">Em promoção</Selo>}
             {l.logisticType && <SeloEnvio tipo={l.logisticType} />}
             {l.subStatus.includes("out_of_stock") && <Selo tom="alerta">pausado por falta de estoque</Selo>}
           </div>
@@ -797,10 +799,10 @@ function AnuncioParadoCard({ l }: { l: Linha }) {
         <MetricaParado
           rotulo={l.preco !== null && !l.precoConfirmado ? "Preço de tabela" : "Preço atual"}
           valor={l.preco === null ? "Não consultado" : brl(l.preco)}
-          positivo={l.precoOriginal !== null}
+          positivo={l.emPromocao}
         />
         {l.precoOriginal !== null && (
-          <MetricaParado rotulo="Preço original" valor={`${brl(l.precoOriginal)} · Em promoção`} />
+          <MetricaParado rotulo="Preço original" valor={brl(l.precoOriginal)} />
         )}
       </dl>
 

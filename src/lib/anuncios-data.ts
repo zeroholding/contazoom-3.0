@@ -90,6 +90,7 @@ export type LinhaAnuncio = {
   preco: number | null;
   precoOriginal: number | null;
   precoConfirmado: boolean;
+  emPromocao: boolean;
   estoque: number | null;
   totalVendido: number | null;
   logisticType: string | null;
@@ -599,6 +600,7 @@ function montar(c: LinhaCrua): LinhaAnuncio {
     preco: null,
     precoOriginal: null,
     precoConfirmado: false,
+    emPromocao: false,
     estoque: null,
     totalVendido: null,
     logisticType: null,
@@ -843,6 +845,7 @@ export async function buscarAnuncios(
       linha.preco = preco.current;
       linha.precoOriginal = preco.original;
       linha.precoConfirmado = true;
+      linha.emPromocao = preco.onPromotion;
     }
   }
 

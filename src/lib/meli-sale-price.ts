@@ -1,18 +1,22 @@
 import { pMap } from "./concorrencia";
 
-export type MeliSalePrice = { current: number; original: number | null };
+export type MeliSalePrice = { current: number; original: number | null; onPromotion: boolean };
 type PriceRef = { accountId: string; itemId: string };
 type CacheEntry = { price: MeliSalePrice | null; expiresAt: number };
 const cache = new Map<string, CacheEntry>();
 
 export function parseMeliSalePrice(data: unknown): MeliSalePrice | null {
   if (!data || typeof data !== "object") return null;
-  const { amount, regular_amount: regular, currency_id: currency } = data as Record<string, unknown>;
+  const { amount, regular_amount: regular, currency_id: currency, metadata } = data as Record<string, unknown>;
   if (currency !== "BRL" || typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) return null;
-  return {
-    current: amount,
-    original: typeof regular === "number" && Number.isFinite(regular) && regular > amount ? regular : null,
-  };
+  const original = typeof regular === "number" && Number.isFinite(regular) && regular > amount
+    ? regular
+    : null;
+  const offer = metadata && typeof metadata === "object" ? metadata as Record<string, unknown> : {};
+  const hasPromotionMetadata = [offer.promotion_id, offer.promotion_type].some(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
+  return { current: amount, original, onPromotion: original !== null || hasPromotionMetadata };
 }
 
 export async function fetchMeliSalePrices(
