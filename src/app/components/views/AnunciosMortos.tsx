@@ -750,7 +750,11 @@ function AnuncioParadoCard({ l }: { l: Linha }) {
             valor: l.estoque === null ? "Não consultado" : `${inteiro(l.estoque)} un.`,
             tom: l.estoque === 0 ? "critico" : undefined,
           },
-          { rotulo: "Preço atual", valor: l.preco === null ? "Não consultado" : brl(l.preco) },
+          {
+            rotulo: l.preco !== null && !l.precoConfirmado ? "Preço de tabela" : "Preço atual",
+            valor: l.preco === null ? "Não consultado" : brl(l.preco),
+            nota: l.precoOriginal === null ? undefined : `Em promoção · Original ${brl(l.precoOriginal)}`,
+          },
         ]}
       />
     );
@@ -790,7 +794,14 @@ function AnuncioParadoCard({ l }: { l: Linha }) {
         <MetricaParado rotulo="Faturamento" valor={brl(l.faturamento)} positivo />
         <MetricaParado rotulo="Pedidos" valor={inteiro(l.pedidos)} />
         <MetricaParado rotulo="Estoque" valor={l.estoque === null ? "Não consultado" : `${inteiro(l.estoque)} un.`} critico={l.estoque === 0} />
-        <MetricaParado rotulo="Preço atual" valor={l.preco === null ? "Não consultado" : brl(l.preco)} />
+        <MetricaParado
+          rotulo={l.preco !== null && !l.precoConfirmado ? "Preço de tabela" : "Preço atual"}
+          valor={l.preco === null ? "Não consultado" : brl(l.preco)}
+          positivo={l.precoOriginal !== null}
+        />
+        {l.precoOriginal !== null && (
+          <MetricaParado rotulo="Preço original" valor={`${brl(l.precoOriginal)} · Em promoção`} />
+        )}
       </dl>
 
       <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-[var(--cz-hairline)] pt-3">

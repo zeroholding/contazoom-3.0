@@ -35,6 +35,8 @@ export type Linha = {
   status: string | null;
   subStatus: string[];
   preco: number | null;
+  precoOriginal: number | null;
+  precoConfirmado: boolean;
   /** O ESTOQUE REAL. `null` = não consultado; `0` = esgotado. */
   estoque: number | null;
   totalVendido: number | null;

@@ -612,7 +612,11 @@ function CardVendido({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number;
                   valor: l.estoque === null ? "—" : `${inteiro(l.estoque)} un.`,
                   tom: esgotado ? "critico" : undefined,
                 },
-                { rotulo: "Preço agora", valor: l.preco === null ? "—" : brl(l.preco) },
+                {
+                  rotulo: l.preco !== null && !l.precoConfirmado ? "Preço de tabela" : "Preço atual",
+                  valor: l.preco === null ? "—" : brl(l.preco),
+                  nota: l.precoOriginal === null ? undefined : `Em promoção · Original ${brl(l.precoOriginal)}`,
+                },
               ]
             : [
                 { rotulo: "Unidades", valor: inteiro(l.unidades) },
@@ -678,7 +682,15 @@ function CardVendido({ l, posicao, diasDoPeriodo }: { l: Linha; posicao: number;
                 {l.estoque === null ? "estoque —" : `${inteiro(l.estoque)} un.`}
               </span>
               <span className="text-[var(--cz-texto-fraco)]">·</span>
-              <span className="text-[12px] tabular-nums text-[var(--cz-texto-suave)]">{l.preco === null ? "preço —" : brl(l.preco)}</span>
+              <span className="text-[12px] tabular-nums text-[var(--cz-texto-suave)]">
+                {l.preco !== null && !l.precoConfirmado ? "Preço de tabela" : "Preço atual"}{" "}
+                {l.preco === null ? "—" : brl(l.preco)}
+              </span>
+              {l.precoOriginal !== null && (
+                <span className="text-[11px] font-semibold text-emerald-700">
+                  Em promoção · Original <s>{brl(l.precoOriginal)}</s>
+                </span>
+              )}
             </div>
           ) : (
             <p className="mt-1 text-[11.5px] text-[var(--cz-texto-suave)]">Dados atuais não disponíveis neste canal.</p>

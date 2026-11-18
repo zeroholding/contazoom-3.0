@@ -15,6 +15,8 @@
 import prisma from "@/lib/prisma";
 import { ITEM_ID_AUSENTE, ITEM_ID_SQL } from "@/lib/anuncios-backfill";
 import { buscarAnuncioInfo, type AnuncioInfo } from "@/lib/meli-anuncio-info";
+import { refreshMeliAccountToken } from "@/lib/meli";
+import { fetchMeliSalePrices } from "@/lib/meli-sale-price";
 import { SHOPEE_PAGO, TIKTOK_PAGO } from "@/lib/vendasStatus";
 
 function listaSqlEstatica(valores: readonly string[]): string {
@@ -86,6 +88,8 @@ export type LinhaAnuncio = {
   status: string | null;
   subStatus: string[];
   preco: number | null;
+  precoOriginal: number | null;
+  precoConfirmado: boolean;
   estoque: number | null;
   totalVendido: number | null;
   logisticType: string | null;
@@ -593,6 +597,8 @@ function montar(c: LinhaCrua): LinhaAnuncio {
     status: null,
     subStatus: [],
     preco: null,
+    precoOriginal: null,
+    precoConfirmado: false,
     estoque: null,
     totalVendido: null,
     logisticType: null,
@@ -811,6 +817,34 @@ export async function buscarAnuncios(
 
   if (!precisaHierarquia) await comHierarquia(userId, daPagina);
   if (!precisaTudo) daPagina = await enriquecerMl(userId, daPagina);
+  const refsPreco = daPagina.filter((linha) => linha.canal === "ML");
+  if (refsPreco.length > 0) {
+    const contas = await prisma.meliAccount.findMany({
+      where: {
+        userId,
+        id: { in: [...new Set(refsPreco.map((linha) => linha.accountId))] },
+        OR: [
+          { refresh_token_invalid_until: null },
+          { refresh_token_invalid_until: { lt: new Date() } },
+        ],
+      },
+    });
+    const contasPorId = new Map(contas.map((conta) => [conta.id, conta]));
+    const precos = await fetchMeliSalePrices(
+      refsPreco.filter((linha) => contasPorId.has(linha.accountId)),
+      async (id) => {
+        const conta = contasPorId.get(id);
+        return conta ? (await refreshMeliAccountToken(conta)).access_token : null;
+      },
+    );
+    for (const linha of refsPreco) {
+      const preco = precos.get(`${linha.accountId}:${linha.itemId}`);
+      if (!preco) continue;
+      linha.preco = preco.current;
+      linha.precoOriginal = preco.original;
+      linha.precoConfirmado = true;
+    }
+  }
 
   return {
     linhas: daPagina,
