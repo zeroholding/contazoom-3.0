@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { Boxes } from "lucide-react";
 import { useSmartDropdown } from "@/hooks/useSmartDropdown";
 
 interface HeaderGestaoSKUProps {
@@ -56,6 +58,10 @@ export default function HeaderGestaoSKU({
       </div>
 
       <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+        <Link href="/sku/estoque" className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border border-marca-borda bg-marca-suave px-3.5 text-sm font-semibold text-marca-forte hover:bg-marca-borda">
+          <Boxes size={17} aria-hidden />
+          Controle de estoque
+        </Link>
         <button type="button" onClick={onSKUsPendentes} disabled={isLoading} aria-label="Abrir SKUs pendentes" className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--cz-raio)] border border-amber-200 bg-amber-50 px-3.5 text-sm font-semibold text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M12 9v4m0 4h.01M10.3 4.3 2.7 18a2 2 0 0 0 1.8 3h15a2 2 0 0 0 1.8-3L13.7 4.3a2 2 0 0 0-3.4 0Z" /></svg>
           Pendências

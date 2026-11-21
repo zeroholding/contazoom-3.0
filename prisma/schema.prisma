@@ -600,6 +600,7 @@ model SKU {
   updatedAt      DateTime            @updatedAt @map("updated_at")
   user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   custoHistorico SKUCustoHistorico[]
+  estoqueMovimentos SkuEstoqueMovimento[]
 
   @@unique([userId, sku])
   @@index([userId])
@@ -608,6 +609,23 @@ model SKU {
   @@index([ativo])
   @@index([temEstoque])
   @@map("sku")
+}
+
+model SkuEstoqueMovimento {
+  id          String   @id @default(uuid())
+  skuId       String   @map("sku_id")
+  tipo        String
+  quantidade  BigInt
+  dataBase    DateTime @map("data_base") @db.Date
+  canal       String?
+  pedidoId    String?  @map("pedido_id")
+  observacao  String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  sku         SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+
+  @@unique([skuId, canal, pedidoId])
+  @@index([skuId, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("sku_estoque_movimento")
 }
 
 model SKUCustoHistorico {
